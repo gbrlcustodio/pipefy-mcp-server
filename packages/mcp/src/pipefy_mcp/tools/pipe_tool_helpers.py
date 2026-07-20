@@ -3,23 +3,29 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Literal, cast
 
-from pipefy_sdk import CardSearch, PipefyClient
+from pipefy_sdk import (
+    CardSearch,
+    PipefyClient,
+)
+from pipefy_sdk import (
+    filter_fields_by_definitions as _filter_fields_by_definitions,
+)
 from pipefy_sdk.models.comment import MAX_COMMENT_TEXT_LENGTH
 from pydantic import ValidationError
 from typing_extensions import TypedDict
 
-from pipefy_mcp.tools.destructive_tool_guard import (
-    DestructiveCancelledPayload,
-    DestructivePreviewPayload,
-)
-from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
-from pipefy_mcp.tools.tool_error_envelope import (
+from pipefy_mcp.core.tool_error_envelope import (
     ToolErrorDetail,
     ToolSuccessPayload,
     is_unified_envelope_enabled,
     tool_error,
     tool_success,
 )
+from pipefy_mcp.tools.destructive_tool_guard import (
+    DestructiveCancelledPayload,
+    DestructivePreviewPayload,
+)
+from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 
 
 class UserCancelledError(Exception):
@@ -413,35 +419,6 @@ def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
         message: User-visible failure reason.
     """
     return cast(DeleteCardErrorPayload, tool_error(message))
-
-
-def _filter_editable_field_definitions(field_definitions: list) -> list[dict]:
-    """Return only editable field definitions, preserving unknown shapes.
-
-    Note: Fields without an explicit 'editable' key are assumed to be editable
-    (defaults to True), matching Pipefy API behavior.
-    """
-    editable_fields: list[dict] = []
-    for field_def in field_definitions:
-        if not isinstance(field_def, dict):
-            continue
-        if field_def.get("editable", True):
-            editable_fields.append(field_def)
-    return editable_fields
-
-
-def _filter_fields_by_definitions(
-    fields: dict[str, object] | None, field_definitions: list[dict]
-) -> dict[str, object]:
-    """Filter provided field values to editable field IDs."""
-    if not fields:
-        return {}
-    editable_ids = {field_def["id"] for field_def in field_definitions}
-    return {
-        field_id: value
-        for field_id, value in fields.items()
-        if field_id in editable_ids
-    }
 
 
 def _merge_phase_and_start_form_field_values(

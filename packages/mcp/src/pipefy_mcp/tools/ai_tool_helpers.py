@@ -6,7 +6,7 @@ import logging
 import re
 from typing import Any, Literal, cast
 
-from pipefy_sdk import AiAgentGraphPayload
+from pipefy_sdk import AiAgentGraphPayload, BehaviorPayload
 from pipefy_sdk.ai_pipe_validation import (
     KNOWN_AI_ACTION_TYPES,
     build_field_slug_map,
@@ -17,17 +17,18 @@ from pipefy_sdk.ai_pipe_validation import (
     resolve_field_slugs_to_numeric,
     validate_behaviors_against_pipe,
 )
+from pydantic import ValidationError
 from typing_extensions import TypedDict
 
-from pipefy_mcp.tools.graphql_error_helpers import (
-    extract_error_strings,
-    strip_internal_api_diagnostic_markers,
-)
-from pipefy_mcp.tools.tool_error_envelope import (
+from pipefy_mcp.core.tool_error_envelope import (
     ToolErrorDetail,
     is_unified_envelope_enabled,
     tool_error,
     tool_success,
+)
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    strip_internal_api_diagnostic_markers,
 )
 
 logger = logging.getLogger(__name__)
@@ -203,7 +204,7 @@ def build_ai_tool_error(message: str) -> AiToolErrorPayload:
     """Generic AI-tool failure envelope.
 
     Does not alter ``message``; callers must pass user-safe text (sanitized when
-    the source is ``InternalApiClient`` / GraphQL errors with diagnostic suffixes).
+    the source is the Internal API executor / GraphQL errors with diagnostic suffixes).
 
     Args:
         message: User-visible failure reason.
@@ -280,20 +281,34 @@ def _summarize_behaviors(behaviors: list[dict[str, Any]]) -> str:
         if not isinstance(b, dict):
             lines.append(f"  [{i}] <malformed: {type(b).__name__}>")
             continue
-        name = b.get("name", "<unnamed>")
-        event = b.get("eventId") or b.get("event_id") or "?"
+
+        name = "<unnamed>"
+        event = "?"
         actions_desc: list[str] = []
 
-        ap = b.get("actionParams") or b.get("action_params")
-        if isinstance(ap, dict):
-            abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params")
-            if isinstance(abp, dict):
-                attrs = (
-                    abp.get("actionsAttributes") or abp.get("actions_attributes") or []
-                )
-                for a in attrs:
-                    if isinstance(a, dict):
-                        actions_desc.append(a.get("actionType", "?"))
+        try:
+            payload = BehaviorPayload.model_validate(b)
+        except ValidationError:
+            payload = None
+
+        if payload is not None:
+            name = payload.name or name
+            event = payload.event_id or event
+            abp = (
+                payload.action_params.ai_behavior_params
+                if payload.action_params
+                else None
+            )
+            for a in (abp.actions_attributes if abp else None) or []:
+                actions_desc.append(a.action_type or "?")
+        else:
+            # Typed parse failed (e.g. actionParams is a non-dict): fall back to
+            # best-effort scalar reads so the summary still names the behavior.
+            if isinstance(b.get("name"), str):
+                name = b["name"]
+            raw_event = b.get("eventId") or b.get("event_id")
+            if raw_event:
+                event = str(raw_event)
 
         actions_str = ", ".join(actions_desc) if actions_desc else "none"
         lines.append(f'  [{i}] "{name}" (event={event}, actions=[{actions_str}])')
@@ -306,7 +321,7 @@ def enrich_behavior_error(
 ) -> str:
     """Build an enriched error message with behavior context and actionable hints.
 
-    Extracts GraphQL messages, strips InternalApiClient-style ``[code=…]`` /
+    Extracts GraphQL messages, strips internal_api-style ``[code=…]`` /
     ``[correlation_id=…]`` markers from the primary line, appends a behavior
     summary, and matches known error patterns to actionable advice.
 

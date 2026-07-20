@@ -303,6 +303,37 @@ def parse_json_object(raw: str | None, option_name: str) -> dict[str, Any] | Non
     return parsed
 
 
+def merge_extra_attrs(
+    explicit: dict[str, Any],
+    extra: dict[str, Any] | None,
+    *,
+    reserved: frozenset[str],
+) -> dict[str, Any]:
+    """Merge ``--extra`` into attrs; skip reserved keys and null values."""
+    merged: dict[str, Any] = {}
+    for key, value in (extra or {}).items():
+        if key not in reserved and value is not None:
+            merged[key] = value
+    for key, value in explicit.items():
+        if value is not None:
+            merged[key] = value
+    return merged
+
+
+def probe_gate(probe: dict[str, Any]) -> dict[str, Any] | None:
+    """Gate a write on an access-probe result; return a failure dict or None.
+
+    Clean only when the probe is ``ok`` **and** carries no ``problem``: a probe
+    can return ``ok: true`` with a non-null ``problem`` when the API returns
+    partial data alongside GraphQL errors, and that partial denial must never be
+    read as full access. A non-clean gate returns the classified problem so the
+    write never runs (the CLI then exits 1 via ``exit_1_on_unsuccessful``).
+    """
+    if probe.get("ok") and "problem" not in probe:
+        return None
+    return {"success": False, **probe}
+
+
 def confirm_destructive(*, yes: bool, description: str, verb: str = "delete") -> None:
     """Prompt before a destructive action unless ``yes`` is True."""
     if yes:
@@ -318,6 +349,7 @@ def run_cli_command(
     *,
     exit_code_2_on_value_error: bool = True,
     format_transport_query_error: Callable[[TransportQueryError], str] | None = None,
+    exit_1_on_unsuccessful: bool = False,
 ) -> None:
     """Run an async coroutine factory with a configured client and render the result.
 
@@ -328,6 +360,9 @@ def run_cli_command(
         exit_code_2_on_value_error: Map ``ValueError`` to process exit code 2 (stderr).
         format_transport_query_error: Optional override for GraphQL transport errors
             (defaults to a single-line formatter).
+        exit_1_on_unsuccessful: After rendering, exit 1 when the result dict has
+            ``success`` falsy. For probe-style commands whose failure is data,
+            not an exception, but should still be scriptable via exit code.
     """
     pipefy_settings, auth = settings_and_auth_from_ctx(ctx)
     transport_fmt = format_transport_query_error or _format_transport_query_error
@@ -357,3 +392,9 @@ def run_cli_command(
         render_json(data)
     else:
         render_rich(data)
+    if (
+        exit_1_on_unsuccessful
+        and isinstance(data, dict)
+        and not data.get("success", True)
+    ):
+        raise typer.Exit(1)

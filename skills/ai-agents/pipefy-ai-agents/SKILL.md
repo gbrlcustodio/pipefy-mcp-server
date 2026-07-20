@@ -3,7 +3,8 @@ name: pipefy-ai-agents
 description: >
   Use this skill when the user wants to create, read, update, delete,
   or troubleshoot AI agents (conversational agents with behaviors).
-  Covers 7 MCP tools including pre-flight validation.
+  Covers 7 MCP tools including pre-flight validation, plus pipe-scoped
+  knowledge bases (list, plain text/document/data lookup CRUD, access probe) attached via dataSourceIds.
   For traditional automations and AI automations, see skills/automations/.
 tags: [pipefy, ai-agents, behaviors, conversational]
 ---
@@ -120,6 +121,34 @@ Use real values from `get_pipe` / `get_start_form_fields` for your org. Placehol
 { "pipeId": "900000301", "fieldsAttributes": [{ "fieldId": "title", "inputMode": "fill_with_ai", "value": "" }] }
 ```
 
+### 5b — Optional: capabilities and LLM provider
+
+Inside `actionParams.aiBehaviorParams` a behavior may also carry:
+
+- **`capabilitiesAttributes`** — advanced tools the behavior can use. Each entry is exactly `{ "capabilityType": "<type>", "enabled": true|false }` (both keys required, no extra keys — bare strings or `{ "type": ... }` are rejected).
+
+  | Product name | `capabilityType` |
+  |---|---|
+  | IDP / Intelligent Document Processing | `advanced_ocr` |
+  | Calculations & Analysis | `math_operations` |
+  | Web Search | `web_search` |
+  | Web Scraping | `web_scraping` |
+  | Max effort | `max_effort` |
+
+  `capabilityType` is not checked against a fixed set — any value passes through and the API validates the enum on write, so new capabilities work without a toolkit update. Validation checks **shape only, not entitlement** — a capability may still require organization-level enablement to have any effect, so a green pre-flight does not guarantee the capability is active for the org.
+- **`providerId`** / **`systemProviderId`** — pick the behavior's LLM provider. Set **at most one** (a behavior resolves to a single active provider). Discover valid IDs with `get_llm_providers` (CLI: `pipefy ai-provider list`): each provider carries `type` — use `providerId` for a custom (`byom`) provider and `systemProviderId` for a Pipefy-managed (`system`) one. `get_default_llm_provider` shows what a behavior falls back to when neither is set. IDs are also visible in the organization's AI settings in the Pipefy UI.
+
+  **Bring your own model (custom provider).** To back a behavior with your own vendor credentials, create a custom provider first, then use its `id` as `providerId`: `validate_llm_provider_access` (confirm read access — writes need the stronger `manage_ai_providers` org permission and an eligible plan, so a write may still be denied) → `create_llm_provider` with the configuration in a **local JSON file** (`configuration_file_path`; never inline — secrets are never logged or returned; the file's `provider` key selects the vendor). Manage it with `update_llm_provider` (send the **full** configuration; leave the `__REDACTED__` placeholders from `get_llm_providers` in place to keep existing secrets, or put a new value to rotate one), `set_llm_provider_active_status`, and `delete_llm_provider` (check `get_llm_provider_dependencies` first). Set the organization default with `set_default_llm_provider` (exactly one of `provider_id` / `system_provider_id`) or clear it with `reset_default_llm_provider`. CLI: `pipefy ai-provider create` / `update` / `delete` / `set-active-status` / `default set` / `default reset`.
+- **`dataSourceIds`** — knowledge base sources the behavior can draw on. Each ID is a knowledge base item ID from `get_ai_knowledge_bases` (CLI: `pipefy kb list`). Agents also carry an agent-level `data_source_ids`; the two are unioned. See [Knowledge bases](#knowledge-bases-data-sources) below for the create → attach flow.
+
+```json
+{
+  "instruction": "Extract totals from the attached invoice.",
+  "capabilitiesAttributes": [{ "capabilityType": "advanced_ocr", "enabled": true }],
+  "actionsAttributes": [ /* ... */ ]
+}
+```
+
 ### 6 — Validate (recommended for complex behaviors)
 
 `validate_ai_agent_behaviors(pipe_id, behaviors)` checks:
@@ -127,9 +156,9 @@ Use real values from `get_pipe` / `get_start_form_fields` for your org. Placehol
 - Phase IDs exist
 - Pipe relations exist for `create_connected_card`
 - Action types are valid
-- Behavior structure passes Pydantic validation
-- Service-account membership on cross-pipe targets when `PIPEFY_SERVICE_ACCOUNT_IDS` is set
+- Behavior structure passes Pydantic validation (including canonical `capabilitiesAttributes` shape and at most one of `providerId` / `systemProviderId`)
 - Field IDs are checked against start-form and phase fields, accepting both slug `id` and numeric `internal_id`. Placeholders like `%{field:<slug>}` or `%{field:<internal_id>}` are validated but **not rewritten** at this step.
+- Pass `data_source_ids` (agent-level) to also check knowledge base membership: it is unioned with each behavior's `dataSourceIds` and checked against the pipe's knowledge bases. Unknown IDs are **warnings only** (`valid` stays true); if the knowledge base list cannot be read, a single warning is added and the check is skipped.
 
 ### 7 — Create the agent
 
@@ -146,6 +175,52 @@ On create/update, slug `fieldId` values are resolved to numeric `internal_id`, `
 ### 9 — Verify
 
 `get_ai_agent(uuid)` to confirm behaviors match expectations.
+
+---
+
+## Knowledge bases (data sources)
+
+Knowledge bases are pipe-scoped data sources an agent draws on. Attach one by putting its ID in a behavior's `dataSourceIds` (or the agent-level `data_source_ids`). All knowledge base operations are scoped by the pipe **UUID** (`pipe_uuid`), not the numeric pipe ID — `get_pipe` returns the `uuid`.
+
+| Tool (MCP) | CLI | Read-only | Purpose |
+|------------|-----|-----------|---------|
+| `get_ai_knowledge_bases` | `pipefy kb list` | Yes | List every item on a pipe (plain texts, documents, data lookups); each has an `id` for `dataSourceIds` and a `type` (`knowledge_base_plain_texts`, `knowledge_base_documents`, or `data_lookups`). |
+| `get_ai_knowledge_base_plain_text` | `pipefy kb plain-text get` | Yes | Fetch one plain text with its content. |
+| `create_ai_knowledge_base_plain_text` | `pipefy kb plain-text create` | No | Create a plain text (`name`, `content` 1-3500, `description` 1-900 — all required). |
+| `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | No | Partial update; pass at least one of name/content/description. |
+| `delete_ai_knowledge_base_plain_text` | `pipefy kb plain-text delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `get_ai_knowledge_base_document` | `pipefy kb document get` | Yes | Fetch one document's metadata (`content` is the stored URL, not text). |
+| `create_ai_knowledge_base_document` | `pipefy kb document create` | No | Upload a local PDF in one shot (`file_path`/`--file`, `name`, `description` 1-900). `.pdf` + 20 MiB cap client-side; indexing is async. |
+| `update_ai_knowledge_base_document` | `pipefy kb document update` | No | Metadata-only update (name/description); no file replacement. |
+| `delete_ai_knowledge_base_document` | `pipefy kb document delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `get_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup get` | Yes | Fetch one data lookup; the payload never includes `conditions` — keep the definition client-side. |
+| `create_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup create` | No | Create a data lookup (`name`, `description` 1-900, `source_repo_id` numeric pipe ID, `output_fields` 1-30, `conditions` — all required). |
+| `update_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup update` | No | Full replacement: resend `source_repo_id`/`output_fields`/`conditions` every call; omitted `search_query` clears it; only name/description are partial. |
+| `delete_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `validate_knowledge_base_access` | `pipefy kb validate-access` | Yes | Probe read access before writes. |
+
+### Flow: validate-access → create plain text → attach
+
+1. **Probe access** — `validate_knowledge_base_access(pipe_uuid)` (CLI: `pipefy kb validate-access`). A green result proves read access only (`read_ai_agents`), never the `manage_ai_agents` entitlement writes need. The CLI create/update commands gate on this automatically; MCP callers should probe first (create/update do not auto-probe).
+2. **Create the source** — `create_ai_knowledge_base_plain_text(pipe_uuid, name, content, description)`. Limits fail fast client-side: `content` 1-3500 chars, `description` 1-900 chars (both required). Keep the returned `id`.
+3. **Attach** — add that `id` to a behavior's `dataSourceIds` (or the agent-level `data_source_ids`) when calling `create_ai_agent` / `update_ai_agent`. Validate first with `validate_ai_agent_behaviors(pipe_id, behaviors, data_source_ids=[...])` — unknown IDs surface as warnings.
+
+For a **PDF document** instead of plain text, use `create_ai_knowledge_base_document(pipe_uuid, name, description, file_path)` (CLI: `pipefy kb document create --file …`) at step 2. It uploads the local PDF in one shot; `.pdf` and the 20 MiB cap are enforced client-side, and indexing is asynchronous (the document may not be searchable immediately). The rest of the flow is identical — keep the returned `id` and attach it.
+
+### Data lookups: create with an AI-filled condition → attach → update (full replacement)
+
+A **data lookup** lets the agent search cards in a source pipe by conditions and return selected field values. Same flow as above at step 2, with three rules of its own:
+
+1. **Create** — `create_ai_knowledge_base_data_lookup(pipe_uuid, name, description, source_repo_id, output_fields, conditions)` (CLI: `pipefy kb data-lookup create --source-repo-id … --output-fields '[…]' --conditions '[…]'`). `source_repo_id` is the **numeric** ID of the source pipe (a UUID is accepted by the API but the lookup then breaks when the agent runs it). `output_fields` takes 1-30 field IDs (field slugs plus static fields like `id`, `title`, `created_at`). Each condition needs `field` + `operator` (opaque backend string, e.g. `"eq"`, `"contains"`) and is either **static** (string `value` required) or **AI-filled** — the AI asks the user for the value at runtime:
+
+   ```json
+   [{"field": "customer_email", "operator": "eq", "usingFillWithAi": true,
+     "inputName": "Customer email", "inputType": "text",
+     "inputDescription": "The customer's email address"}]
+   ```
+
+2. **Attach** — keep the returned `id` and add it to `dataSourceIds`, exactly as for the other kinds. **Also keep the definition you sent**: reads never return `conditions`, so your copy is the only complete record of the lookup.
+3. **Update replaces everything** — `update_ai_knowledge_base_data_lookup` requires `source_repo_id`, `output_fields`, and `conditions` on every call (the complete condition set, not a delta), and omitting `search_query` clears it. Only `name`/`description` keep their stored values when omitted.
 
 ---
 
@@ -215,7 +290,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
 - **`update_ai_agent` is full-replace, not patch.** Fetch existing behaviors with `get_ai_agent` first, merge, then update — otherwise existing behaviors are silently dropped.
 - **Behavior save is all-or-nothing (`RECORD_NOT_SAVED`).** One invalid behavior rejects the entire list. The MCP tool auto-validates the payload on failure; if structurally correct, the error indicates a pipe-level restriction (not your payload). Inform the user this pipe does not support AI agent behaviors and suggest alternatives.
 - **Partial-failure recovery.** If `create_ai_agent` returns a UUID but reports failure, call `update_ai_agent` with that UUID. Do NOT create a second agent.
-- **Cross-pipe `PERMISSION_DENIED`.** Behaviors with `create_connected_card` or cross-pipe `create_card` require the service account to be a member of **both** source and destination pipes. `validate_ai_agent_behaviors` catches this when `PIPEFY_SERVICE_ACCOUNT_IDS` is set; otherwise the API returns bare `PERMISSION_DENIED`. Recovery: `get_pipe_members` + `invite_members` on the destination pipe.
+- **Cross-pipe `PERMISSION_DENIED`.** Behaviors with `create_connected_card` or cross-pipe `create_card` require the service account to be a member of **both** source and destination pipes. When it is not, the API returns a bare `PERMISSION_DENIED`. Recovery: `get_pipe_members` + `invite_members` on the destination pipe.
 - **Phase transition rule on `move_card`.** Destination must be reachable from the source phase (`cards_can_be_moved_to_phases`). Both `validate_ai_agent_behaviors` and `create_ai_agent` / `update_ai_agent` enrich this error with `valid_destinations` and a hint that transition rules are editable in the Pipefy UI only.
 - **Maximum 5 behaviors per agent.** Adding a 6th rejects the whole save.
 - **Ghost agents.** An agent listed by `get_ai_agents` may return "Agent not found" on `get_ai_agent` — a Pipefy backend artifact, persists across sessions, do not retry.

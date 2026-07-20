@@ -15,11 +15,13 @@ def test_entrypoint(mocker):
 
 @pytest.mark.unit
 def test_help_skips_server(mocker, capsys):
-    """``--help`` must short-circuit before entering the stdio loop."""
+    """``--help`` prints usage and exits 0 before entering the stdio loop."""
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
-    main(["--help"])
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--help"])
 
+    assert excinfo.value.code == 0
     server_mock.assert_not_called()
     captured = capsys.readouterr()
     assert "pipefy-mcp-server" in captured.out
@@ -29,11 +31,13 @@ def test_help_skips_server(mocker, capsys):
 
 @pytest.mark.unit
 def test_version_skips_server(mocker, capsys):
-    """``--version`` must print the installed version and skip the server."""
+    """``--version`` prints the installed version, exits 0, and skips the server."""
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
-    main(["--version"])
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--version"])
 
+    assert excinfo.value.code == 0
     server_mock.assert_not_called()
     assert capsys.readouterr().out.strip() == __version__
 
@@ -50,3 +54,124 @@ def test_unknown_flag_still_starts_server(mocker):
     main(["--unknown-flag"])
 
     server_mock.assert_called_once()
+
+
+@pytest.mark.unit
+def test_profile_remote_passes_through(mocker):
+    """``--profile remote`` is resolved and the Settings handed to ``run_server``."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    main(["--profile", "remote"])
+
+    # Only the flags actually passed reach resolve_mcp_settings; the rest stay
+    # None so it applies the profile-derived transport and PIPEFY_MCP_* defaults.
+    resolve_mock.assert_called_once_with(
+        profile="remote", transport=None, host=None, port=None
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
+
+
+@pytest.mark.unit
+def test_explicit_transport_passes_through(mocker):
+    """``--transport`` is resolved alongside the profile (e.g. local over http)."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    main(["--profile", "local", "--transport", "http"])
+
+    resolve_mock.assert_called_once_with(
+        profile="local", transport="http", host=None, port=None
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
+
+
+@pytest.mark.unit
+def test_host_and_port_overrides(mocker):
+    """``--host`` / ``--port`` reach resolve_mcp_settings as overrides."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    main(["--profile", "remote", "--host", "0.0.0.0", "--port", "9001"])
+
+    resolve_mock.assert_called_once_with(
+        profile="remote", transport=None, host="0.0.0.0", port=9001
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
+
+
+@pytest.mark.unit
+def test_host_and_port_equals_form(mocker):
+    """``--host=`` / ``--port=`` forms are accepted too."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    main(["--profile", "remote", "--host=127.0.0.2", "--port=9002"])
+
+    resolve_mock.assert_called_once_with(
+        profile="remote", transport=None, host="127.0.0.2", port=9002
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad_port", ["abc", ""])
+def test_rejects_a_non_integer_port(mocker, bad_port):
+    """A non-integer ``--port`` exits with a usage error instead of crashing."""
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--profile", "remote", "--port", bad_port])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "flag,value", [("--profile", "bogus"), ("--transport", "carrier-pigeon")]
+)
+def test_rejects_unknown_choice(mocker, flag, value):
+    """An unknown ``--profile`` / ``--transport`` value exits 2, not a traceback."""
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main([flag, value])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()
+
+
+@pytest.mark.unit
+def test_rejects_remote_over_stdio(mocker):
+    """``--profile remote --transport stdio`` exits 2 without starting the server.
+
+    The rule lives once, in the McpSettings validator; main resolves the flags
+    and surfaces the resulting ValueError as a usage error before run_server.
+    """
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--profile", "remote", "--transport", "stdio"])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad_host", ["", "   ", "--host="])
+def test_rejects_an_empty_host(mocker, bad_host):
+    """An empty ``--host`` exits 2 instead of overriding the default with ''.
+
+    Without the guard, an empty value reaches ``resolve_mcp_settings`` as an
+    explicit init-kwarg, silently displacing the ``127.0.0.1`` default and later
+    tripping the bind-safety interlock with a misleading non-loopback error.
+    """
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+    argv = [bad_host] if bad_host.startswith("--host=") else ["--host", bad_host]
+
+    with pytest.raises(SystemExit) as excinfo:
+        main([*argv, "--transport", "http"])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()

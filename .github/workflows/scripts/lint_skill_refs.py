@@ -15,6 +15,7 @@ PIPEFY_CLI_ROOT_COMMANDS = frozenset(
     {
         "agent",
         "ai-automation",
+        "ai-provider",
         "attachment",
         "audit",
         "automation",
@@ -25,6 +26,7 @@ PIPEFY_CLI_ROOT_COMMANDS = frozenset(
         "field-condition",
         "graphql",
         "introspect",
+        "kb",
         "label",
         "member",
         "org",

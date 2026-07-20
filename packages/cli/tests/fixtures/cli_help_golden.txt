@@ -1,7 +1,7 @@
 ### HELP _
 Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 
- Pipefy CLI (GraphQL via pipefy-sdk).
+ Pipefy CLI (GraphQL via pipefy).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --base-url                                       TEXT  Override              │
@@ -36,6 +36,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ agent             AI Agents (repo-scoped).                                   │
 │ ai-automation     AI Automations (generate_with_ai).                         │
+│ ai-provider       LLM providers (organization-scoped: discovery reads and    │
+│                   provider writes).                                          │
 │ attachment        Attachment uploads (presigned URL + field update).         │
 │ audit             Pipe audit log exports.                                    │
 │ auth              Authenticate the CLI as your Pipefy user (browser-based    │
@@ -57,6 +59,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
+│ kb                AI knowledge bases (pipe-scoped: list, plain               │
+│                   text/document/data lookup CRUD, access probe).             │
 │ export            Bulk exports (automation jobs).                            │
 │ org               Organization operations.                                   │
 │ report-org        Organization reports.                                      │
@@ -243,17 +247,25 @@ Usage: pipefy agent validate-behaviors [OPTIONS]
  Dry-run behavior validation (``validate_ai_agent_behaviors``).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --pipe                          TEXT  Numeric pipe id. [required]         │
-│ *  --behaviors                     TEXT  JSON array of behavior objects.     │
-│                                          [required]                          │
-│    --strict         --no-strict          Pre-flight strictness: --strict     │
-│                                          (default) reports unknown           │
-│                                          actionType values as problems;      │
-│                                          --no-strict reports them as         │
-│                                          warnings only.                      │
-│                                          [default: strict]                   │
-│    --json       -j                                                           │
-│    --help                                Show this message and exit.         │
+│ *  --pipe                               TEXT  Numeric pipe id. [required]    │
+│ *  --behaviors                          TEXT  JSON array of behavior         │
+│                                               objects.                       │
+│                                               [required]                     │
+│    --strict              --no-strict          Pre-flight strictness:         │
+│                                               --strict (default) reports     │
+│                                               unknown actionType values as   │
+│                                               problems; --no-strict reports  │
+│                                               them as warnings only.         │
+│                                               [default: strict]              │
+│    --data-source-id                     TEXT  Agent-level knowledge base ID  │
+│                                               to attach (repeatable).        │
+│                                               Unioned with behavior-level    │
+│                                               dataSourceIds and checked      │
+│                                               against the pipe's knowledge   │
+│                                               bases; unknown IDs are         │
+│                                               warnings only.                 │
+│    --json            -j                                                      │
+│    --help                                     Show this message and exit.    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-automation
@@ -390,6 +402,287 @@ Usage: pipefy ai-automation validate-prompt [OPTIONS]
 │                               pipe catalog.                                  │
 │    --json       -j                                                           │
 │    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider
+Usage: pipefy ai-provider [OPTIONS] COMMAND [ARGS]...
+
+ LLM providers (organization-scoped: discovery reads and provider writes).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list                List custom (BYOM) and Pipefy-managed system LLM         │
+│                     providers (``get_llm_providers``).                       │
+│ models              List the model names a provider vendor exposes           │
+│                     (``get_available_ai_models``).                           │
+│ dependencies        List owners that depend on a provider                    │
+│                     (``get_llm_provider_dependencies``).                     │
+│ validate-access     Probe LLM provider read access                           │
+│                     (``validate_llm_provider_access``).                      │
+│ create              Create a custom (BYOM) LLM provider                      │
+│                     (``create_llm_provider``).                               │
+│ update              Update a custom (BYOM) LLM provider                      │
+│                     (``update_llm_provider``).                               │
+│ delete              Delete a custom (BYOM) LLM provider permanently          │
+│                     (``delete_llm_provider``).                               │
+│ set-active-status   Activate or deactivate a custom (BYOM) LLM provider      │
+│                     (``set_llm_provider_active_status``).                    │
+│ default             Organization default LLM provider (get / set / reset).   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/create
+Usage: pipefy ai-provider create [OPTIONS]
+
+ Create a custom (BYOM) LLM provider (``create_llm_provider``).
+
+ Configuration is read from the local JSON file, never inline; the created
+ provider is returned without its configuration. The ``provider`` key in the
+ file selects the vendor. Gated on the read-access probe. Requires the
+ ``manage_ai_providers`` organization permission and an eligible plan.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-uuid             TEXT  Organization UUID (not the numeric ID;       │
+│                                 `pipefy org get` shows both).                │
+│                                 [required]                                   │
+│ *  --name                 TEXT  Display name (required). [required]          │
+│ *  --config-file  -f      PATH  Local JSON file with the provider            │
+│                                 configuration object (secrets stay in the    │
+│                                 file; never passed inline). Supports ~       │
+│                                 expansion. Its `provider` key uses           │
+│                                 hyphenated vendor strings (amazon-bedrock,   │
+│                                 oracle-oci) — not the snake_case form        │
+│                                 `ai-provider models --provider-name` takes;  │
+│                                 the two are not interchangeable.             │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/default
+Usage: pipefy ai-provider default [OPTIONS] COMMAND [ARGS]...
+
+ Organization default LLM provider (get / set / reset).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get     Resolve the default LLM provider for an owner                        │
+│         (``get_default_llm_provider``).                                      │
+│ set     Set the organization's default LLM provider                          │
+│         (``set_default_llm_provider``).                                      │
+│ reset   Reset (clear) the organization's default LLM provider                │
+│         (``reset_default_llm_provider``).                                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/default/get
+Usage: pipefy ai-provider default get [OPTIONS]
+
+ Resolve the default LLM provider for an owner (``get_default_llm_provider``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --owner-id            TEXT  Owner identifier. For --owner-type            │
+│                                organization pass the numeric organization ID │
+│                                (not the UUID).                               │
+│                                [required]                                    │
+│    --owner-type          TEXT  One of: organization (default), assistant,    │
+│                                behavior.                                     │
+│                                [default: organization]                       │
+│    --json        -j            Print machine-readable JSON to stdout.        │
+│    --help                      Show this message and exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/default/reset
+Usage: pipefy ai-provider default reset [OPTIONS]
+
+ Reset (clear) the organization's default LLM provider
+ (``reset_default_llm_provider``).
+
+ Reversible via `pipefy ai-provider default set`. Like that command, it
+ authorizes against the credential's own organization, so it needs a
+ service-account credential bound to that organization (a bare personal token
+ is denied).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-id          TEXT  Numeric organization ID (not the UUID; `pipefy    │
+│                            org get` shows both).                             │
+│                            [required]                                        │
+│    --json    -j            Print machine-readable JSON to stdout.            │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/default/set
+Usage: pipefy ai-provider default set [OPTIONS]
+
+ Set the organization's default LLM provider (``set_default_llm_provider``).
+
+ Provide exactly one of --provider-id or --system-provider-id. Authorizes
+ against the credential's own organization, so it needs a service-account
+ credential bound to that organization (a bare personal token is denied); pass
+ that same organization's numeric id as --org-id.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-id                      TEXT  Numeric organization ID (not the      │
+│                                        UUID; `pipefy org get` shows both).   │
+│                                        [required]                            │
+│    --provider-id                 TEXT  Custom (BYOM) provider ID to make the │
+│                                        default.                              │
+│    --system-provider-id          TEXT  System provider ID to make the        │
+│                                        default.                              │
+│    --json                -j            Print machine-readable JSON to        │
+│                                        stdout.                               │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/delete
+Usage: pipefy ai-provider delete [OPTIONS]
+
+ Delete a custom (BYOM) LLM provider permanently (``delete_llm_provider``).
+
+ Check `pipefy ai-provider dependencies` first — owners that still reference
+ the provider are blockers.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                TEXT  Provider ID to delete. [required]               │
+│ *  --org-uuid          TEXT  Organization UUID (not the numeric ID; `pipefy  │
+│                              org get` shows both).                           │
+│                              [required]                                      │
+│    --yes       -y            Skip the confirmation prompt.                   │
+│    --json      -j            Print machine-readable JSON to stdout.          │
+│    --help                    Show this message and exit.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/dependencies
+Usage: pipefy ai-provider dependencies [OPTIONS]
+
+ List owners that depend on a provider (``get_llm_provider_dependencies``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --provider-id          TEXT     Provider ID (from `pipefy ai-provider     │
+│                                    list`).                                   │
+│                                    [required]                                │
+│ *  --org-uuid             TEXT     Organization UUID (not the numeric ID;    │
+│                                    `pipefy org get` shows both).             │
+│                                    [required]                                │
+│    --first                INTEGER  Page size. [default: 50]                  │
+│    --after                TEXT     Cursor from the previous page's           │
+│                                    page_info.endCursor.                      │
+│    --json         -j               Print machine-readable JSON to stdout.    │
+│    --help                          Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/list
+Usage: pipefy ai-provider list [OPTIONS]
+
+ List custom (BYOM) and Pipefy-managed system LLM providers
+ (``get_llm_providers``).
+
+ Each provider carries ``type`` (``byom`` or ``system``); ``configuration``
+ comes back with secret values redacted server-side. An empty system list can
+ mean system models are not enabled for the organization.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-uuid             TEXT     Organization UUID (not the numeric ID;    │
+│                                    `pipefy org get` shows both).             │
+│                                    [required]                                │
+│    --only-active                   Only return active custom providers       │
+│                                    (system providers unaffected).            │
+│    --first                INTEGER  Page size. [default: 50]                  │
+│    --after                TEXT     Cursor from the previous page's           │
+│                                    page_info.endCursor.                      │
+│    --json         -j               Print machine-readable JSON to stdout.    │
+│    --help                          Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/models
+Usage: pipefy ai-provider models [OPTIONS]
+
+ List the model names a provider vendor exposes (``get_available_ai_models``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --provider-name          TEXT  Provider vendor: openai, azure_openai,     │
+│                                   amazon_bedrock, custom, google_vertex_ai,  │
+│                                   oracle_oci, or anthropic. Snake_case here; │
+│                                   the `provider` key in the create/update    │
+│                                   --config-file uses the hyphenated form     │
+│                                   (amazon-bedrock) — not interchangeable.    │
+│                                   [required]                                 │
+│    --json           -j            Print machine-readable JSON to stdout.     │
+│    --help                         Show this message and exit.                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/set-active-status
+Usage: pipefy ai-provider set-active-status [OPTIONS]
+
+ Activate or deactivate a custom (BYOM) LLM provider
+ (``set_llm_provider_active_status``).
+
+ The provider's organization is resolved from the credential's own organization
+ context, so no organization argument is needed — which means this needs a
+ service-account credential bound to that organization (a bare personal token
+ is denied). Deactivating a provider owners depend on can break them — check
+ `pipefy ai-provider dependencies` first.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                        TEXT  Provider ID whose active status to set. │
+│                                      [required]                              │
+│ *  --active      --inactive          Activate (--active) or deactivate       │
+│                                      (--inactive) the provider.              │
+│                                      [required]                              │
+│    --json    -j                      Print machine-readable JSON to stdout.  │
+│    --help                            Show this message and exit.             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/update
+Usage: pipefy ai-provider update [OPTIONS]
+
+ Update a custom (BYOM) LLM provider (``update_llm_provider``).
+
+ Full configuration replacement: the file must hold the complete configuration
+ object. To keep an existing secret without re-supplying it, leave the
+ redaction placeholder that ``pipefy ai-provider list`` returned in place — the
+ backend preserves the stored secret for any value left as the placeholder. To
+ rotate a secret, put its new real value in the file. Gated on the read-access
+ probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                   TEXT  Provider ID to update (from `pipefy          │
+│                                 ai-provider list`).                          │
+│                                 [required]                                   │
+│ *  --org-uuid             TEXT  Organization UUID (not the numeric ID;       │
+│                                 `pipefy org get` shows both).                │
+│                                 [required]                                   │
+│ *  --config-file  -f      PATH  Local JSON file with the provider            │
+│                                 configuration object (secrets stay in the    │
+│                                 file; never passed inline). Supports ~       │
+│                                 expansion. Its `provider` key uses           │
+│                                 hyphenated vendor strings (amazon-bedrock,   │
+│                                 oracle-oci) — not the snake_case form        │
+│                                 `ai-provider models --provider-name` takes;  │
+│                                 the two are not interchangeable.             │
+│                                 [required]                                   │
+│    --name                 TEXT  New name (non-blank).                        │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/validate-access
+Usage: pipefy ai-provider validate-access [OPTIONS]
+
+ Probe LLM provider read access (``validate_llm_provider_access``).
+
+ A green probe proves read access only, never write entitlement. Exits 1 when
+ the probe classifies a failure (permission denied / not found / other), after
+ rendering the structured problem.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-uuid          TEXT  Organization UUID (not the numeric ID; `pipefy  │
+│                              org get` shows both).                           │
+│                              [required]                                      │
+│    --json      -j            Print machine-readable JSON to stdout.          │
+│    --help                    Show this message and exit.                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP attachment
@@ -871,6 +1164,7 @@ Usage: pipefy card [OPTIONS] COMMAND [ARGS]...
 │           updates).                                                          │
 │ delete    Delete a card permanently.                                         │
 │ move      Move a card to another phase.                                      │
+│ fill      Fill phase fields on a card (non-interactive).                     │
 │ comment   Card comments.                                                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
@@ -961,6 +1255,31 @@ Usage: pipefy card delete [OPTIONS] CARD_ID
 │ --yes   -y        Skip confirmation prompt.                                  │
 │ --json  -j                                                                   │
 │ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/fill
+Usage: pipefy card fill [OPTIONS] CARD_ID
+
+ Fill phase fields on a card (non-interactive).
+
+ Filters ``--fields`` to editable phase field IDs before ``update_card``.
+ Stricter than MCP ``fill_card_phase_fields`` when the phase reports no
+ editable fields (CLI no-ops; MCP may pass values through unfiltered).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    card_id      TEXT  Card id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --phase                  TEXT  Phase id whose fields to fill. [required]  │
+│ *  --fields                 TEXT  JSON object of field id to value, e.g.     │
+│                                   '{"campo":"v"}'. For ad-hoc updates        │
+│                                   without phase discovery, use `card update  │
+│                                   --field-updates` (JSON array).             │
+│                                   [required]                                 │
+│    --required-only                Only load required phase fields when       │
+│                                   resolving editable field ids.              │
+│    --json           -j                                                       │
+│    --help                         Show this message and exit.                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP card/find
@@ -1489,6 +1808,397 @@ Usage: pipefy introspect type [OPTIONS] NAME
 │ --help                      Show this message and exit.                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
+### HELP kb
+Usage: pipefy kb [OPTIONS] COMMAND [ARGS]...
+
+ AI knowledge bases (pipe-scoped: list, plain text/document/data lookup CRUD,
+ access probe).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list              List a pipe's knowledge base items                         │
+│                   (``get_ai_knowledge_bases``).                              │
+│ validate-access   Probe knowledge-base read access                           │
+│                   (``validate_knowledge_base_access``).                      │
+│ plain-text        Knowledge base plain texts.                                │
+│ document          Knowledge base documents (one-shot PDF upload).            │
+│ data-lookup       Knowledge base data lookups (search cards in a source      │
+│                   pipe).                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup
+Usage: pipefy kb data-lookup [OPTIONS] COMMAND [ARGS]...
+
+ Knowledge base data lookups (search cards in a source pipe).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get      Fetch one knowledge base data lookup                                │
+│          (``get_ai_knowledge_base_data_lookup``).                            │
+│ create   Create a knowledge base data lookup                                 │
+│          (``create_ai_knowledge_base_data_lookup``).                         │
+│ update   Update a knowledge base data lookup by replacing its full           │
+│          definition (``update_ai_knowledge_base_data_lookup``).              │
+│ delete   Delete a knowledge base data lookup permanently                     │
+│          (``delete_ai_knowledge_base_data_lookup``).                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup/create
+Usage: pipefy kb data-lookup create [OPTIONS]
+
+ Create a knowledge base data lookup
+ (``create_ai_knowledge_base_data_lookup``).
+
+ Gated on the read-access probe. The definition is validated client-side:
+ ``--source-repo-id`` must be numeric, ``--output-fields`` takes 1-30 field
+ IDs, and every condition is typed (static conditions need a string ``value``;
+ AI-filled ones need the input trio). Reads never return conditions, so keep
+ the definition you send as the source of truth.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid               TEXT  Pipe UUID (not the numeric ID; `pipefy    │
+│                                    pipe get` shows the uuid).                │
+│                                    [required]                                │
+│ *  --name                    TEXT  Display name (required). [required]       │
+│ *  --description             TEXT  Description (required, 1-900 characters). │
+│                                    [required]                                │
+│ *  --source-repo-id          TEXT  Numeric ID of the source pipe to look up  │
+│                                    data from.                                │
+│                                    [required]                                │
+│ *  --output-fields           TEXT  JSON array of field IDs whose values      │
+│                                    matching records return (1-30).           │
+│                                    [required]                                │
+│ *  --conditions              TEXT  JSON array of condition objects. Each     │
+│                                    needs field + operator, and either a      │
+│                                    string value (static) or                  │
+│                                    "usingFillWithAi": true with              │
+│                                    inputName/inputType/inputDescription      │
+│                                    (AI-filled).                              │
+│                                    [required]                                │
+│    --search-query            TEXT  Backend-defined search mode marker; leave │
+│                                    unset unless you know the backend value   │
+│                                    you need.                                 │
+│    --json            -j            Print machine-readable JSON to stdout.    │
+│    --help                          Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup/delete
+Usage: pipefy kb data-lookup delete [OPTIONS]
+
+ Delete a knowledge base data lookup permanently
+ (``delete_ai_knowledge_base_data_lookup``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base data lookup ID to delete.       │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --yes        -y            Skip the confirmation prompt.                  │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup/get
+Usage: pipefy kb data-lookup get [OPTIONS]
+
+ Fetch one knowledge base data lookup (``get_ai_knowledge_base_data_lookup``).
+
+ The payload never includes ``conditions`` (the API does not expose them on
+ reads); keep the lookup definition client-side. Exits 1 with ``success:
+ false`` when the API resolves no data lookup for the id (mirrors the MCP
+ tool's not-found handling).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base data lookup ID (from `pipefy kb │
+│                               list`).                                        │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup/update
+Usage: pipefy kb data-lookup update [OPTIONS]
+
+ Update a knowledge base data lookup by replacing its full definition
+ (``update_ai_knowledge_base_data_lookup``).
+
+ Every update rewrites the stored definition with exactly what this call
+ carries: ``--source-repo-id``, ``--output-fields``, and ``--conditions`` are
+ required every time, and omitting ``--search-query`` clears it. Only
+ ``--name``/``--description`` are partial. Gated on the read-access probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                      TEXT  Knowledge base data lookup ID to update.  │
+│                                    [required]                                │
+│ *  --pipe-uuid               TEXT  Pipe UUID (not the numeric ID; `pipefy    │
+│                                    pipe get` shows the uuid).                │
+│                                    [required]                                │
+│ *  --source-repo-id          TEXT  Numeric ID of the source pipe to look up  │
+│                                    data from.                                │
+│                                    [required]                                │
+│ *  --output-fields           TEXT  JSON array of field IDs whose values      │
+│                                    matching records return (1-30).           │
+│                                    [required]                                │
+│ *  --conditions              TEXT  JSON array of condition objects. Each     │
+│                                    needs field + operator, and either a      │
+│                                    string value (static) or                  │
+│                                    "usingFillWithAi": true with              │
+│                                    inputName/inputType/inputDescription      │
+│                                    (AI-filled). Pass the complete set, not a │
+│                                    delta.                                    │
+│                                    [required]                                │
+│    --search-query            TEXT  Backend-defined search mode marker; leave │
+│                                    unset unless you know the backend value   │
+│                                    you need. Omitted means cleared.          │
+│    --name                    TEXT  New name (non-blank).                     │
+│    --description             TEXT  New description (1-900 characters).       │
+│    --json            -j            Print machine-readable JSON to stdout.    │
+│    --help                          Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document
+Usage: pipefy kb document [OPTIONS] COMMAND [ARGS]...
+
+ Knowledge base documents (one-shot PDF upload).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get      Fetch one knowledge base document                                   │
+│          (``get_ai_knowledge_base_document``).                               │
+│ create   Create a knowledge base document from a local PDF                   │
+│          (``create_ai_knowledge_base_document``).                            │
+│ update   Update a knowledge base document's metadata                         │
+│          (``update_ai_knowledge_base_document``).                            │
+│ delete   Delete a knowledge base document permanently                        │
+│          (``delete_ai_knowledge_base_document``).                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document/create
+Usage: pipefy kb document create [OPTIONS]
+
+ Create a knowledge base document from a local PDF
+ (``create_ai_knowledge_base_document``).
+
+ One-shot: presigned URL, S3 PUT, then the create mutation. Gated on the
+ read-access probe. Client-side checks fail fast (``.pdf`` extension, 20 MiB
+ cap, description 1-900). Indexing is asynchronous, so the document may not be
+ searchable by agents immediately.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid            TEXT  Pipe UUID (not the numeric ID; `pipefy pipe  │
+│                                 get` shows the uuid).                        │
+│                                 [required]                                   │
+│ *  --file         -f      PATH  Local .pdf file to upload (<=20 MiB).        │
+│                                 Supports ~ expansion.                        │
+│                                 [required]                                   │
+│ *  --name                 TEXT  Display name (required). [required]          │
+│ *  --description          TEXT  Description (required, 1-900 characters).    │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document/delete
+Usage: pipefy kb document delete [OPTIONS]
+
+ Delete a knowledge base document permanently
+ (``delete_ai_knowledge_base_document``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base document ID to delete.          │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --yes        -y            Skip the confirmation prompt.                  │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document/get
+Usage: pipefy kb document get [OPTIONS]
+
+ Fetch one knowledge base document (``get_ai_knowledge_base_document``).
+
+ ``content`` is the stored document URL, not the extracted text. Exits 1 with
+ ``success: false`` when the API resolves no document for the id (mirrors the
+ MCP tool's not-found handling).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base document ID (from `pipefy kb    │
+│                               list`).                                        │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document/update
+Usage: pipefy kb document update [OPTIONS]
+
+ Update a knowledge base document's metadata
+ (``update_ai_knowledge_base_document``).
+
+ Metadata only (name/description); the PDF cannot be replaced. Provide at least
+ one of --name or --description. Gated on the read-access probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                   TEXT  Knowledge base document ID to update.        │
+│                                 [required]                                   │
+│ *  --pipe-uuid            TEXT  Pipe UUID (not the numeric ID; `pipefy pipe  │
+│                                 get` shows the uuid).                        │
+│                                 [required]                                   │
+│    --name                 TEXT  New name (non-blank).                        │
+│    --description          TEXT  New description (1-900 characters).          │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/list
+Usage: pipefy kb list [OPTIONS]
+
+ List a pipe's knowledge base items (``get_ai_knowledge_bases``).
+
+ Each item carries ``id`` (used in ``dataSourceIds``), ``type``, ``name``,
+ ``description``, and ``updatedAt``. No pagination; the full list is returned.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text
+Usage: pipefy kb plain-text [OPTIONS] COMMAND [ARGS]...
+
+ Knowledge base plain texts.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get      Fetch one knowledge base plain text with its content                │
+│          (``get_ai_knowledge_base_plain_text``).                             │
+│ create   Create a knowledge base plain text                                  │
+│          (``create_ai_knowledge_base_plain_text``).                          │
+│ update   Update a knowledge base plain text                                  │
+│          (``update_ai_knowledge_base_plain_text``).                          │
+│ delete   Delete a knowledge base plain text permanently                      │
+│          (``delete_ai_knowledge_base_plain_text``).                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text/create
+Usage: pipefy kb plain-text create [OPTIONS]
+
+ Create a knowledge base plain text (``create_ai_knowledge_base_plain_text``).
+
+ Gated on the read-access probe: fails with the classified problem if the
+ credential cannot read the pipe's knowledge bases. Client-side limits (content
+ 1-3500, description 1-900) fail fast before the mutation is sent.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid            TEXT  Pipe UUID (not the numeric ID; `pipefy pipe  │
+│                                 get` shows the uuid).                        │
+│                                 [required]                                   │
+│ *  --name                 TEXT  Display name (required). [required]          │
+│ *  --content              TEXT  Plain text content (required, 1-3500         │
+│                                 characters).                                 │
+│                                 [required]                                   │
+│ *  --description          TEXT  Description (required, 1-900 characters).    │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text/delete
+Usage: pipefy kb plain-text delete [OPTIONS]
+
+ Delete a knowledge base plain text permanently
+ (``delete_ai_knowledge_base_plain_text``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base plain text ID to delete.        │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --yes        -y            Skip the confirmation prompt.                  │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text/get
+Usage: pipefy kb plain-text get [OPTIONS]
+
+ Fetch one knowledge base plain text with its content
+ (``get_ai_knowledge_base_plain_text``).
+
+ Exits 1 with ``success: false`` when the API resolves no plain text for the id
+ (mirrors the MCP tool's not-found handling).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base plain text ID (from `pipefy kb  │
+│                               list`).                                        │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text/update
+Usage: pipefy kb plain-text update [OPTIONS]
+
+ Update a knowledge base plain text (``update_ai_knowledge_base_plain_text``).
+
+ Partial: only the fields you pass change. Provide at least one of --name,
+ --content, or --description. Gated on the read-access probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                   TEXT  Knowledge base plain text ID to update.      │
+│                                 [required]                                   │
+│ *  --pipe-uuid            TEXT  Pipe UUID (not the numeric ID; `pipefy pipe  │
+│                                 get` shows the uuid).                        │
+│                                 [required]                                   │
+│    --name                 TEXT  New name (non-blank).                        │
+│    --content              TEXT  New content (1-3500 characters).             │
+│    --description          TEXT  New description (1-900 characters).          │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/validate-access
+Usage: pipefy kb validate-access [OPTIONS]
+
+ Probe knowledge-base read access (``validate_knowledge_base_access``).
+
+ A green probe proves read access only (``read_ai_agents``), never write
+ entitlement. Exits 1 when the probe classifies a failure, after rendering the
+ structured problem.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
 ### HELP label
 Usage: pipefy label [OPTIONS] COMMAND [ARGS]...
 
@@ -1573,8 +2283,7 @@ Usage: pipefy member [OPTIONS] COMMAND [ARGS]...
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ list       List members of a pipe.                                           │
 │ invite     Invite users to a pipe.                                           │
-│ remove     Remove users from a pipe (same service-account guard as MCP when  │
-│            env is set).                                                      │
+│ remove     Remove users from a pipe.                                         │
 │ set-role   Set a member's role on a pipe.                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
@@ -1606,7 +2315,7 @@ Usage: pipefy member list [OPTIONS]
 ### HELP member/remove
 Usage: pipefy member remove [OPTIONS]
 
- Remove users from a pipe (same service-account guard as MCP when env is set).
+ Remove users from a pipe.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --pipe              TEXT  Pipe id. [required]                             │
@@ -1622,10 +2331,6 @@ Usage: pipefy member remove [OPTIONS]
 Usage: pipefy member set-role [OPTIONS]
 
  Set a member's role on a pipe.
-
- When ``PIPEFY_SERVICE_ACCOUNT_IDS`` includes ``--member``, the response gains
- a ``warning`` field reminding callers to preserve write permissions on that
- account (parity with the MCP ``set_role`` tool).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --pipe            TEXT  Pipe id. [required]                               │
@@ -1726,7 +2431,9 @@ Usage: pipefy phase create [OPTIONS]
 │                                  [required]                                  │
 │ *  --name         -n      TEXT   Phase display name. [required]              │
 │    --done                        Mark as a final/done phase.                 │
-│    --index                FLOAT  Optional position index within the pipe.    │
+│    --index                FLOAT  1-based insert among workflow phases; omit  │
+│                                  to append. Does not set Connections         │
+│                                  (UI-only).                                  │
 │    --description  -d      TEXT                                               │
 │    --json         -j                                                         │
 │    --help                        Show this message and exit.                 │
@@ -1809,12 +2516,15 @@ Usage: pipefy pipe [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get      Load a pipe by id (phases, labels, start form).                     │
-│ list     Search pipes across organizations (same as MCP ``search_pipes``).   │
-│ create   Create an empty pipe in an organization.                            │
-│ update   Update pipe settings (pass at least one attribute).                 │
-│ delete   Delete a pipe permanently.                                          │
-│ clone    Clone a pipe from a template pipe id.                               │
+│ get          Load a pipe by id (phases, labels, start form).                 │
+│ start-form   List start-form fields for card creation                        │
+│              (``get_start_form_fields``).                                    │
+│ list         Search pipes across organizations (same as MCP                  │
+│              ``search_pipes``).                                              │
+│ create       Create an empty pipe in an organization.                        │
+│ update       Update pipe settings (pass at least one attribute).             │
+│ delete       Delete a pipe permanently.                                      │
+│ clone        Clone a pipe from a template pipe id.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP pipe/clone
@@ -1887,6 +2597,20 @@ Usage: pipefy pipe list [OPTIONS]
 │ --json         -j                                                            │
 │ --help                                            Show this message and      │
 │                                                   exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe/start-form
+Usage: pipefy pipe start-form [OPTIONS] PIPE_ID
+
+ List start-form fields for card creation (``get_start_form_fields``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    pipe_id      TEXT  Pipe id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --required-only            Return only required fields.                      │
+│ --json           -j                                                          │
+│ --help                     Show this message and exit.                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP pipe/update
@@ -2405,8 +3129,9 @@ Usage: pipefy relation [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ pipe   Pipe-to-pipe relations.                                               │
-│ card   Card-to-card relations.                                               │
+│ pipe    Pipe-to-pipe relations.                                              │
+│ table   Table relations.                                                     │
+│ card    Card-to-card relations.                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP relation/card
@@ -2421,8 +3146,7 @@ Usage: pipefy relation card [OPTIONS] COMMAND [ARGS]...
 │ list     List parent and child relations for a card (raw                     │
 │          ``get_card_relations`` payload).                                    │
 │ create   Link two cards via an existing pipe relation.                       │
-│ delete   Remove a card relation (requires service-account credentials;       │
-│          internal API).                                                      │
+│ delete   Remove a card relation (Internal API, requires OAuth).              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP relation/card/create
@@ -2443,7 +3167,7 @@ Usage: pipefy relation card create [OPTIONS]
 ### HELP relation/card/delete
 Usage: pipefy relation card delete [OPTIONS]
 
- Remove a card relation (requires service-account credentials; internal API).
+ Remove a card relation (Internal API, requires OAuth).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --child           TEXT  Child card id. [required]                         │
@@ -2537,6 +3261,36 @@ Usage: pipefy relation pipe update [OPTIONS] RELATION_ID
 │    --extra          TEXT  JSON object merged into UpdatePipeRelationInput.   │
 │    --json   -j                                                               │
 │    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/table
+Usage: pipefy relation table [OPTIONS] COMMAND [ARGS]...
+
+ Table relations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   Load table relations by ID (Pipefy root ``table_relations``).         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/table/list
+Usage: pipefy relation table list [OPTIONS]
+
+ Load table relations by ID (Pipefy root ``table_relations``).
+
+ Do not pass a database table ID; only table relation identifiers (the link
+ object between tables). Obtain these IDs from the Pipefy UI, saved metadata,
+ or GraphQL/introspection; ``relation pipe list`` does not return them
+ (``get_pipe_relations`` is a different API).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --ids           TEXT  Comma-separated table relation ids (not database    │
+│                          table ids).                                         │
+│                          [required]                                          │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP report-org
@@ -2813,6 +3567,7 @@ Usage: pipefy table [OPTIONS] COMMAND [ARGS]...
 │ create   Create a database table.                                            │
 │ update   Update table attributes.                                            │
 │ delete   Delete a database table permanently.                                │
+│ field    Table field operations.                                             │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table/create
@@ -2843,6 +3598,73 @@ Usage: pipefy table delete [OPTIONS] TABLE_ID
 │ --yes   -y        Skip confirmation prompt.                                  │
 │ --json  -j                                                                   │
 │ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/field
+Usage: pipefy table field [OPTIONS] COMMAND [ARGS]...
+
+ Table field operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create   Create a field on a database table.                                 │
+│ update   Update a database table field.                                      │
+│ delete   Delete a database table field permanently.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/field/create
+Usage: pipefy table field create [OPTIONS] TABLE_ID
+
+ Create a field on a database table.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    table_id      TEXT  Table id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --label  -l      TEXT  Field label in the UI. [required]                  │
+│ *  --type   -t      TEXT  Pipefy field type (e.g. short_text, phone).        │
+│                           [required]                                         │
+│    --extra          TEXT  JSON object of extra CreateTableFieldInput fields. │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/field/delete
+Usage: pipefy table field delete [OPTIONS] FIELD_ID
+
+ Delete a database table field permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    field_id      TEXT  Table field id. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --table          TEXT  Table id containing this field. [required]         │
+│    --yes    -y            Skip confirmation prompt.                          │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/field/update
+Usage: pipefy table field update [OPTIONS] FIELD_ID
+
+ Update a database table field.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    field_id      TEXT  Table field id. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --table                              TEXT  Table id containing this field.   │
+│ --label        -l                    TEXT  New field label.                  │
+│ --description  -d                    TEXT  New field description.            │
+│ --required         --not-required          Whether the field is required.    │
+│ --options                            TEXT  JSON array or object of field     │
+│                                            options, if changing.             │
+│ --extra                              TEXT  JSON object merged into           │
+│                                            UpdateTableFieldInput.            │
+│ --json         -j                                                            │
+│ --help                                     Show this message and exit.       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table/get
@@ -2901,9 +3723,11 @@ Usage: pipefy usage [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ agents        AI agent usage for an org (``get_agents_usage``).              │
-│ automations   Automation usage for an org (``get_automations_usage``).       │
-│ credits       AI credit usage dashboard (``get_ai_credit_usage``).           │
+│ agents              AI agent usage for an org (``get_agents_usage``).        │
+│ automations         Automation usage for an org (``get_automations_usage``). │
+│ execution-metrics   Automation execution metrics                             │
+│                     (``get_automation_execution_metrics``).                  │
+│ credits             AI credit usage dashboard (``get_ai_credit_usage``).     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP usage/agents
@@ -2955,6 +3779,64 @@ Usage: pipefy usage credits [OPTIONS]
 │                                        [default: current_month]              │
 │    --json                -j                                                  │
 │    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP usage/execution-metrics
+Usage: pipefy usage execution-metrics [OPTIONS]
+
+ Automation execution metrics (``get_automation_execution_metrics``).
+
+ Returns metrics for the automations the token may read plus a
+ ``partial_errors`` list naming any that were denied, and a ``page_info`` for
+ paging with ``--after``.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org                    TEXT     Organization ID (numeric │
+│                                                     org id, same as in the   │
+│                                                     Pipefy URL).             │
+│                                                     [required]               │
+│    --automation          -a                TEXT     Automation ID to fetch   │
+│                                                     metrics for (repeat for  │
+│                                                     multiple; omit to fetch  │
+│                                                     all automations in the   │
+│                                                     organization).           │
+│    --repo                                  TEXT     Optional pipe/repo ID to │
+│                                                     scope the query.         │
+│    --action                                TEXT     Action ID to filter by   │
+│                                                     (repeat for multiple).   │
+│    --event                                 TEXT     Filter by trigger event: │
+│                                                     card_moved |             │
+│                                                     field_updated |          │
+│                                                     card_created | scheduler │
+│                                                     | sla_based |            │
+│                                                     card_left_phase |        │
+│                                                     card_inbox_received_ema… │
+│                                                     | all_children_in_phase  │
+│                                                     | http_response_received │
+│                                                     | manually_triggered.    │
+│    --active                  --inactive             Filter enabled           │
+│                                                     (--active) or disabled   │
+│                                                     (--inactive)             │
+│                                                     automations.             │
+│    --search                                TEXT     Free-text match on       │
+│                                                     automation name.         │
+│    --sort-by                               TEXT     Sort field: created_at | │
+│                                                     name.                    │
+│    --sort-order                            TEXT     Sort direction: asc |    │
+│                                                     desc.                    │
+│    --period                                TEXT     FIFTEEN_MINUTES |        │
+│                                                     SIXTY_MINUTES |          │
+│                                                     TWELVE_HOURS |           │
+│                                                     TWENTY_FOUR_HOURS        │
+│                                                     [default: SIXTY_MINUTES] │
+│    --first                                 INTEGER  Page size (1-50).        │
+│                                                     [default: 50]            │
+│    --after                                 TEXT     Cursor from a previous   │
+│                                                     page's                   │
+│                                                     page_info.endCursor.     │
+│    --json                -j                                                  │
+│    --help                                           Show this message and    │
+│                                                     exit.                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP webhook

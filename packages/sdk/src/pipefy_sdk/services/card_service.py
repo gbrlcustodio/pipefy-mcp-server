@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from httpx import Auth
-
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.card_queries import (
     CREATE_CARD_MUTATION,
     CREATE_COMMENT_MUTATION,
@@ -21,23 +19,17 @@ from pipefy_sdk.queries.card_queries import (
     UPDATE_FIELDS_VALUES_MUTATION,
 )
 from pipefy_sdk.services.types import CardSearch
-from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils.formatters import (
     convert_fields_to_array,
     convert_values_to_camel_case,
 )
 
 
-class CardService(BasePipefyClient):
+class CardService:
     """Service for Card-related operations."""
 
-    def __init__(
-        self,
-        settings: PipefySettings,
-        *,
-        auth: Auth,
-    ) -> None:
-        super().__init__(settings=settings, auth=auth)
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def create_card(
         self,
@@ -56,32 +48,34 @@ class CardService(BasePipefyClient):
             card_input["phase_id"] = str(phase_id)
         if title is not None:
             card_input["title"] = title
-        return await self.execute_query(CREATE_CARD_MUTATION, {"input": card_input})
+        return await self._executor.execute_query(
+            CREATE_CARD_MUTATION, {"input": card_input}
+        )
 
     async def create_comment(self, card_id: str | int, text: str) -> dict:
         """Create a text comment on the specified card."""
         variables = {"input": {"card_id": str(card_id), "text": text}}
-        return await self.execute_query(CREATE_COMMENT_MUTATION, variables)
+        return await self._executor.execute_query(CREATE_COMMENT_MUTATION, variables)
 
     async def update_comment(self, comment_id: str | int, text: str) -> dict:
         """Update an existing comment by its ID. Returns raw GraphQL response (see issue #23)."""
         variables = {"input": {"id": str(comment_id), "text": text}}
-        return await self.execute_query(UPDATE_COMMENT_MUTATION, variables)
+        return await self._executor.execute_query(UPDATE_COMMENT_MUTATION, variables)
 
     async def delete_comment(self, comment_id: str | int) -> dict:
         """Delete a comment by its ID. Returns raw GraphQL response (see issue #23)."""
         variables = {"input": {"id": str(comment_id)}}
-        return await self.execute_query(DELETE_COMMENT_MUTATION, variables)
+        return await self._executor.execute_query(DELETE_COMMENT_MUTATION, variables)
 
     async def delete_card(self, card_id: str | int) -> dict:
         """Delete a card by its ID."""
         variables = {"input": {"id": str(card_id)}}
-        return await self.execute_query(DELETE_CARD_MUTATION, variables)
+        return await self._executor.execute_query(DELETE_CARD_MUTATION, variables)
 
     async def get_card_relations(self, card_id: str | int) -> dict:
         """Load parent and child relations for a card (full lists; no pagination)."""
         variables = {"cardId": str(card_id)}
-        return await self.execute_query(GET_CARD_RELATIONS_QUERY, variables)
+        return await self._executor.execute_query(GET_CARD_RELATIONS_QUERY, variables)
 
     async def get_card(self, card_id: str | int, include_fields: bool = False) -> dict:
         """Get a card by its ID.
@@ -91,7 +85,7 @@ class CardService(BasePipefyClient):
             include_fields: If True, include the card's custom fields (name, value) in the response.
         """
         variables = {"card_id": str(card_id), "includeFields": include_fields}
-        return await self.execute_query(GET_CARD_QUERY, variables)
+        return await self._executor.execute_query(GET_CARD_QUERY, variables)
 
     async def get_cards(
         self,
@@ -122,7 +116,7 @@ class CardService(BasePipefyClient):
             variables["first"] = first
         if after is not None:
             variables["after"] = after
-        return await self.execute_query(GET_CARDS_QUERY, variables)
+        return await self._executor.execute_query(GET_CARDS_QUERY, variables)
 
     async def find_cards(
         self,
@@ -153,7 +147,7 @@ class CardService(BasePipefyClient):
             variables["first"] = first
         if after is not None:
             variables["after"] = after
-        return await self.execute_query(FIND_CARDS_QUERY, variables)
+        return await self._executor.execute_query(FIND_CARDS_QUERY, variables)
 
     async def move_card_to_phase(
         self, card_id: str | int, destination_phase_id: str | int
@@ -170,7 +164,9 @@ class CardService(BasePipefyClient):
                 "destination_phase_id": str(destination_phase_id),
             }
         }
-        return await self.execute_query(MOVE_CARD_TO_PHASE_MUTATION, variables)
+        return await self._executor.execute_query(
+            MOVE_CARD_TO_PHASE_MUTATION, variables
+        )
 
     async def update_card_field(
         self, card_id: str | int, field_id: str, new_value: Any
@@ -192,7 +188,7 @@ class CardService(BasePipefyClient):
                 "new_value": new_value,
             }
         }
-        return await self.execute_query(UPDATE_CARD_FIELD_MUTATION, variables)
+        return await self._executor.execute_query(UPDATE_CARD_FIELD_MUTATION, variables)
 
     async def update_card(
         self,
@@ -247,7 +243,7 @@ class CardService(BasePipefyClient):
             input_data["due_date"] = due_date
 
         variables = {"input": input_data}
-        return await self.execute_query(UPDATE_CARD_MUTATION, variables)
+        return await self._executor.execute_query(UPDATE_CARD_MUTATION, variables)
 
     async def _execute_update_fields_values(
         self, card_id: str | int, values: list[dict]
@@ -255,4 +251,6 @@ class CardService(BasePipefyClient):
         """Execute updateFieldsValues mutation (incremental mode)."""
         formatted_values = convert_values_to_camel_case(values)
         variables = {"input": {"nodeId": str(card_id), "values": formatted_values}}
-        return await self.execute_query(UPDATE_FIELDS_VALUES_MUTATION, variables)
+        return await self._executor.execute_query(
+            UPDATE_FIELDS_VALUES_MUTATION, variables
+        )

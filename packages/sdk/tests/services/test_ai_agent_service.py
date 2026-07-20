@@ -3,18 +3,17 @@
 import copy
 import re
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from _shared.ai_agent_test_payloads import (
     minimal_behavior_dict,
     mock_agent_with_behaviors,
 )
+from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
-from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.base_client import unwrap_relay_connection_nodes
 from pipefy_sdk.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_sdk.queries.ai_agent_queries import (
     DELETE_AI_AGENT_MUTATION,
@@ -26,7 +25,7 @@ from pipefy_sdk.services.ai_agent_service import (
     AiAgentService,
     inject_reference_ids,
 )
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 UUID_PATTERN = re.compile(r"%\{action:([a-f0-9-]{36})\}")
 
@@ -43,6 +42,21 @@ def test_update_ai_agent_mutation_includes_email_template_metadata_fields():
     printed = print_ast(UPDATE_AI_AGENT_MUTATION.document)
     assert "emailTemplateId" in printed
     assert "allowTemplateModifications" in printed
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "document",
+    [GET_AI_AGENT_QUERY.document, UPDATE_AI_AGENT_MUTATION.document],
+    ids=["get", "update"],
+)
+def test_ai_agent_selection_round_trips_capabilities_and_provider_ids(document):
+    printed = print_ast(document)
+    assert "capabilitiesAttributes" in printed
+    assert "capabilityType" in printed
+    assert "enabled" in printed
+    assert "providerId" in printed
+    assert "systemProviderId" in printed
 
 
 def _make_behavior_dict(instruction="", actions=None):
@@ -67,19 +81,14 @@ def _make_action_dict(name="Move card", action_type="move_card"):
     return {"name": name, "actionType": action_type, "metadata": {}}
 
 
-_MOCK_SETTINGS = PipefySettings(
-    base_url="https://api.pipefy.com",
-)
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
-
-
-def _create_mock_service(execute_return=None):
-    """Create an AiAgentService with mocked execute_query."""
-    service = AiAgentService(settings=_MOCK_SETTINGS, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
-        return_value=execute_return or {"createAiAgent": {"agent": {"uuid": "abc-123"}}}
+def _create_mock_service(execute_return=None, *, side_effect=None):
+    """Create an AiAgentService with a mocked GraphQL executor."""
+    executor = mock_executor(
+        execute_return or {"createAiAgent": {"agent": {"uuid": "abc-123"}}},
+        side_effect=side_effect,
     )
-    return service
+    service = AiAgentService(executor=executor)
+    return service, executor
 
 
 @pytest.mark.unit
@@ -251,7 +260,7 @@ def test_inject_reference_ids_instruction_with_existing_placeholders():
 @pytest.mark.asyncio
 async def test_create_agent_calls_execute_query_with_correct_variables():
     """create_agent calls execute_query with createAiAgent mutation and correct variables."""
-    service = _create_mock_service(
+    service, executor = _create_mock_service(
         {"createAiAgent": {"agent": {"uuid": "new-uuid-123"}}}
     )
     inp = CreateAiAgentInput(
@@ -263,8 +272,8 @@ async def test_create_agent_calls_execute_query_with_correct_variables():
 
     result = await service.create_agent(inp)
 
-    service.execute_query.assert_called_once()
-    call_args = service.execute_query.call_args
+    executor.execute_query.assert_called_once()
+    call_args = executor.execute_query.call_args
     variables = call_args[0][1]
 
     assert variables["agent"]["name"] == "My Agent"
@@ -278,7 +287,7 @@ async def test_create_agent_calls_execute_query_with_correct_variables():
 @pytest.mark.asyncio
 async def test_create_agent_returns_success_format():
     """create_agent returns agent_uuid and message in success format."""
-    service = _create_mock_service({"createAiAgent": {"agent": {"uuid": "xyz-789"}}})
+    service, _ = _create_mock_service({"createAiAgent": {"agent": {"uuid": "xyz-789"}}})
     inp = CreateAiAgentInput(
         name="Test",
         repo_uuid="repo-1",
@@ -298,7 +307,9 @@ async def test_create_agent_returns_success_format():
 @pytest.mark.asyncio
 async def test_update_agent_calls_execute_query_with_correct_variables():
     """update_agent calls execute_query with updateAiAgent mutation and correct variables."""
-    service = _create_mock_service({"updateAiAgent": {"agent": {"uuid": "agent-uuid"}}})
+    service, executor = _create_mock_service(
+        {"updateAiAgent": {"agent": {"uuid": "agent-uuid"}}}
+    )
     inp = UpdateAiAgentInput(
         uuid="agent-uuid",
         name="Updated Agent",
@@ -310,8 +321,8 @@ async def test_update_agent_calls_execute_query_with_correct_variables():
 
     result = await service.update_agent(inp)
 
-    service.execute_query.assert_called_once()
-    call_args = service.execute_query.call_args
+    executor.execute_query.assert_called_once()
+    call_args = executor.execute_query.call_args
     variables = call_args[0][1]
 
     assert variables["uuid"] == "agent-uuid"
@@ -328,7 +339,9 @@ async def test_update_agent_calls_execute_query_with_correct_variables():
 @pytest.mark.asyncio
 async def test_update_agent_calls_inject_reference_ids():
     """update_agent calls inject_reference_ids before building the payload."""
-    service = _create_mock_service({"updateAiAgent": {"agent": {"uuid": "agent-uuid"}}})
+    service, _ = _create_mock_service(
+        {"updateAiAgent": {"agent": {"uuid": "agent-uuid"}}}
+    )
     inp = UpdateAiAgentInput(
         uuid="agent-uuid",
         name="Agent",
@@ -348,8 +361,7 @@ async def test_update_agent_calls_inject_reference_ids():
 @pytest.mark.asyncio
 async def test_create_agent_propagates_execute_query_error():
     """create_agent propagates errors when execute_query raises."""
-    service = _create_mock_service()
-    service.execute_query = AsyncMock(side_effect=ValueError("GraphQL error"))
+    service, _ = _create_mock_service(side_effect=ValueError("GraphQL error"))
     inp = CreateAiAgentInput(
         name="Test",
         repo_uuid="repo-1",
@@ -365,8 +377,7 @@ async def test_create_agent_propagates_execute_query_error():
 @pytest.mark.asyncio
 async def test_update_agent_propagates_execute_query_error():
     """update_agent propagates errors when execute_query raises."""
-    service = _create_mock_service()
-    service.execute_query = AsyncMock(side_effect=RuntimeError("Network error"))
+    service, _ = _create_mock_service(side_effect=RuntimeError("Network error"))
     inp = UpdateAiAgentInput(
         uuid="agent-uuid",
         name="Agent",
@@ -382,7 +393,7 @@ async def test_update_agent_propagates_execute_query_error():
 @pytest.mark.asyncio
 async def test_create_agent_missing_uuid_returns_clear_error():
     """create_agent returns clear error when API response missing agent.uuid."""
-    service = _create_mock_service({"createAiAgent": {}})
+    service, _ = _create_mock_service({"createAiAgent": {}})
     inp = CreateAiAgentInput(
         name="Test",
         repo_uuid="repo-1",
@@ -398,7 +409,7 @@ async def test_create_agent_missing_uuid_returns_clear_error():
 @pytest.mark.asyncio
 async def test_update_agent_missing_uuid_returns_clear_error():
     """update_agent returns clear error when API response missing agent.uuid."""
-    service = _create_mock_service({"updateAiAgent": {"agent": {}}})
+    service, _ = _create_mock_service({"updateAiAgent": {"agent": {}}})
     inp = UpdateAiAgentInput(
         uuid="agent-uuid",
         name="Agent",
@@ -414,12 +425,12 @@ async def test_update_agent_missing_uuid_returns_clear_error():
 @pytest.mark.asyncio
 async def test_toggle_agent_status_enable_calls_execute_query():
     """toggle_agent_status(active=True) calls execute_query with correct variables and returns activation message."""
-    service = _create_mock_service({"updateAiAgentStatus": {"success": True}})
+    service, executor = _create_mock_service({"updateAiAgentStatus": {"success": True}})
 
     result = await service.toggle_agent_status("agent-uuid", True)
 
-    service.execute_query.assert_called_once()
-    call_args = service.execute_query.call_args
+    executor.execute_query.assert_called_once()
+    call_args = executor.execute_query.call_args
     variables = call_args[0][1]
     assert variables["uuid"] == "agent-uuid"
     assert variables["active"] is True
@@ -430,7 +441,7 @@ async def test_toggle_agent_status_enable_calls_execute_query():
 @pytest.mark.asyncio
 async def test_toggle_agent_status_disable_returns_correct_message():
     """toggle_agent_status(active=False) returns deactivation message."""
-    service = _create_mock_service({"updateAiAgentStatus": {"success": True}})
+    service, _ = _create_mock_service({"updateAiAgentStatus": {"success": True}})
 
     result = await service.toggle_agent_status("agent-uuid", False)
 
@@ -441,8 +452,7 @@ async def test_toggle_agent_status_disable_returns_correct_message():
 @pytest.mark.asyncio
 async def test_toggle_agent_status_propagates_error():
     """toggle_agent_status propagates errors when execute_query raises."""
-    service = _create_mock_service()
-    service.execute_query = AsyncMock(side_effect=RuntimeError("Network error"))
+    service, _ = _create_mock_service(side_effect=RuntimeError("Network error"))
 
     with pytest.raises(RuntimeError, match="Network error"):
         await service.toggle_agent_status("agent-uuid", True)
@@ -452,7 +462,7 @@ async def test_toggle_agent_status_propagates_error():
 @pytest.mark.asyncio
 async def test_toggle_agent_status_api_returns_failure():
     """toggle_agent_status raises ValueError when API returns success=False."""
-    service = _create_mock_service({"updateAiAgentStatus": {"success": False}})
+    service, _ = _create_mock_service({"updateAiAgentStatus": {"success": False}})
 
     with pytest.raises(ValueError, match="failed|unexpected"):
         await service.toggle_agent_status("agent-uuid", True)
@@ -476,12 +486,12 @@ async def test_get_agent_success():
         "disabledAt": None,
         "needReview": False,
     }
-    service = _create_mock_service({"aiAgent": agent_payload})
+    service, executor = _create_mock_service({"aiAgent": agent_payload})
 
     result = await service.get_agent("agent-1")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AI_AGENT_QUERY
     assert variables == {"uuid": "agent-1"}
     assert result == agent_payload
@@ -492,7 +502,7 @@ async def test_get_agent_success():
 async def test_get_agent_includes_behaviors_when_api_returns_them():
     """get_agent passes through the full behaviors list from the API response."""
     agent_payload = mock_agent_with_behaviors()
-    service = _create_mock_service({"aiAgent": agent_payload})
+    service, _ = _create_mock_service({"aiAgent": agent_payload})
 
     result = await service.get_agent("agent-with-behaviors")
 
@@ -524,7 +534,7 @@ async def test_get_agent_passes_through_null_behaviors():
         "needReview": False,
         "behaviors": None,
     }
-    service = _create_mock_service({"aiAgent": agent_payload})
+    service, _ = _create_mock_service({"aiAgent": agent_payload})
 
     result = await service.get_agent("agent-1")
 
@@ -534,7 +544,7 @@ async def test_get_agent_passes_through_null_behaviors():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agent_returns_empty_when_ai_agent_null():
-    service = _create_mock_service({"aiAgent": None})
+    service, _ = _create_mock_service({"aiAgent": None})
 
     result = await service.get_agent("missing")
 
@@ -544,10 +554,10 @@ async def test_get_agent_returns_empty_when_ai_agent_null():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agent_transport_error():
-    service = AiAgentService(settings=_MOCK_SETTINGS, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = AiAgentService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_agent("agent-1")
 
@@ -557,12 +567,12 @@ async def test_get_agent_transport_error():
 async def test_get_agents_success():
     rows = [{"uuid": "a1", "name": "N1"}, {"uuid": "a2", "name": "N2"}]
     connection = {"edges": [{"node": row} for row in rows]}
-    service = _create_mock_service({"aiAgents": connection})
+    service, executor = _create_mock_service({"aiAgents": connection})
 
     result = await service.get_agents("repo-uuid-99")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AI_AGENTS_QUERY
     assert variables == {"repoUuid": "repo-uuid-99"}
     assert result == rows
@@ -571,10 +581,10 @@ async def test_get_agents_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agents_transport_error():
-    service = AiAgentService(settings=_MOCK_SETTINGS, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "missing"}])
     )
+    service = AiAgentService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_agents("repo-1")
 
@@ -582,12 +592,12 @@ async def test_get_agents_transport_error():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_agent_success():
-    service = _create_mock_service({"deleteAiAgent": {"success": True}})
+    service, executor = _create_mock_service({"deleteAiAgent": {"success": True}})
 
     result = await service.delete_agent("agent-to-delete")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_AI_AGENT_MUTATION
     assert variables == {"uuid": "agent-to-delete"}
     assert result == {"success": True}
@@ -596,9 +606,9 @@ async def test_delete_agent_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_agent_transport_error():
-    service = AiAgentService(settings=_MOCK_SETTINGS, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )
+    service = AiAgentService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.delete_agent("agent-1")

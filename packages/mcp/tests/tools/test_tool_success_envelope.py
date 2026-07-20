@@ -1,6 +1,6 @@
 """Unit tests for ``tool_success``."""
 
-from pipefy_mcp.tools.tool_error_envelope import tool_success
+from pipefy_mcp.core.tool_error_envelope import tool_success
 
 
 def test_minimal_call_returns_only_success_true():

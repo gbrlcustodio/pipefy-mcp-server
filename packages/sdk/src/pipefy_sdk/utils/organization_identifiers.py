@@ -6,9 +6,11 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from graphql import DocumentNode
+
 from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_QUERY
 
-ExecuteQuery = Callable[[Any, dict[str, Any]], Awaitable[dict[str, Any]]]
+ExecuteQuery = Callable[[DocumentNode, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 def looks_like_uuid(value: str) -> bool:

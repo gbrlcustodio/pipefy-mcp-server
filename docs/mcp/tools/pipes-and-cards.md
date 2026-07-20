@@ -1,6 +1,6 @@
 # Pipes & Cards
 
-Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **37 tools.** (Card-to-card relation tools `get_card_relations` / `delete_card_relation` / `create_card_relation` are documented in [Connections & Relations](relations.md).)
+Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **40 tools.** (Card-to-card relation tools `get_card_relations` / `delete_card_relation` / `create_card_relation` are documented in [Connections & Relations](relations.md).)
 
 ## Cross-cutting patterns
 
@@ -47,7 +47,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | Group | Tools | Notes |
 |-------|-------|-------|
 | Pipe | `create_pipe`, `update_pipe`, `delete_pipe`, `clone_pipe` | `delete_pipe`: two-step — preview first, then `confirm=true`. |
-| Phase | `create_phase`, `update_phase`, `delete_phase` | Destructive deletes: confirm with the user. |
+| Phase | `create_phase`, `update_phase`, `delete_phase` | `create_phase` `index`: 1-based insert among `get_pipe` workflow phases; omit to append. Prefer `1+` (not `0`). Index sets order only - not Connections / `allowed_phases` (UI-only). Destructive deletes: confirm with the user. |
 | Phase transitions | `get_phase_allowed_move_targets` | Read-only; mirrors **Phase → Connections** (`cards_can_be_moved_to_phases`). Call before `move_card_to_phase`. Edges are configured in the Pipefy UI only. |
 | Phase field | `create_phase_field`, `update_phase_field`, `delete_phase_field` | `field_type` maps to API `type`; `field_id` may be a slug or numeric ID. |
 | Label | `create_label`, `update_label`, `delete_label` | `color` must be a hex string (e.g. `#FF0000`), not a name. |
@@ -94,6 +94,7 @@ create_card(
 
 get_phase_fields(phase_id)                     → learn phase field IDs
 fill_card_phase_fields(card_id, phase_id, fields={…}) → supply values
+pipefy card fill <card_id> --phase <phase_id> --fields '{"…"}'  → CLI equivalent (non-interactive)
 ```
 
 With `phase_id`, interactive clients may still elicit start-form fields when elicitation is supported; set `skip_elicitation=true` for agent workflows. When `fields` is non-empty, keys are filtered against both `get_phase_fields(phase_id)` and `get_start_form_fields(pipe_id)` so pipes that still require start-form values on `CreateCardInput` receive them alongside phase fields. Optional `title` is sent on `CreateCardInput` (no separate `update_card` on the happy path).

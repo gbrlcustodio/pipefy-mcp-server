@@ -15,6 +15,7 @@ from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.exceptions import PortalPermissionError
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_error_codes,
@@ -24,7 +25,6 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 _PORTAL_PERMISSION_GUIDANCE = (
@@ -101,7 +101,7 @@ def finalize_internal_api_mutation(
     mutation_key: str,
     failure_message: str,
 ) -> dict[str, object]:
-    """Map an internal_api mutation result to MCP success or failure payloads.
+    """Map an Internal API mutation result to MCP success or failure payloads.
 
     Args:
         result: Raw GraphQL response dict from the SDK.
@@ -126,7 +126,7 @@ async def run_sub_portal_internal_api_tool(
     mutation_key: str,
     failure_message: str,
 ) -> dict[str, object]:
-    """Shared shell for sub-portal internal_api write tools.
+    """Shared shell for sub-portal Internal API write tools.
 
     Args:
         ids: Tool ID parameters to validate (name -> raw value).

@@ -23,6 +23,7 @@ from pipefy_auth import (
     RevocationError,
     RevocationUnsupportedError,
     SessionDeleteError,
+    StoredSessionAuth,
     delete_session,
     ensure_fresh_session,
     keychain_backend_name,
@@ -37,23 +38,13 @@ from pipefy_sdk import MePayload, PipefySettings
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
     AuthContext,
-    detect_cli_sources,
+    DisplaySource,
+    detect_cli_auth_methods,
     get_authenticated_client,
+    to_display_source,
 )
 from pipefy_cli.commands._common import settings_and_auth_from_ctx
 from pipefy_cli.output import render_json
-
-# Locked JSON wire schema. Matches the policy ``name`` field produced by
-# :func:`pipefy_cli.auth.build_policies` (so the resolver's identifiers reach
-# the wire unchanged), plus an explicit ``"none"`` sentinel for the case where
-# no policy resolved.
-DisplaySource = Literal[
-    "flag-token",
-    "env-token",
-    "service-account",
-    "stored-session",
-    "none",
-]
 
 AuthSessionState = Literal["active", "refresh-expired", "needs-login", "n/a"]
 
@@ -429,34 +420,30 @@ def auth_status(
 ) -> None:
     """Print which auth source is active, the authenticated identity, and session expiry."""
     settings, auth = settings_and_auth_from_ctx(ctx)
-    detected_names = detect_cli_sources(auth)
-    # The locked JSON wire schema matches the policy names exactly; cast for
-    # typing only — values are already constrained by ``build_policies``.
-    detected: list[DisplaySource] = [
-        name  # type: ignore[misc]
-        for name in detected_names
+    auth_methods = detect_cli_auth_methods(auth)
+    detected_sources: list[DisplaySource] = [
+        to_display_source(method, auth.bearer_token) for method in auth_methods
     ]
-    source: DisplaySource = detected[0] if detected else "none"
-    report = AuthStatusReport(auth_source=source, detected_sources=detected)
-    # Surface masking env vars whenever a stored session exists — that's the
+    # Precedence-first, so the head is the active method and the same winner the
+    # resolver would pick, without a second resolve pass.
+    active = auth_methods[0] if auth_methods else None
+    source: DisplaySource = (
+        to_display_source(active, auth.bearer_token) if active else "none"
+    )
+    report = AuthStatusReport(auth_source=source, detected_sources=detected_sources)
+    # Surface masking env vars whenever a stored session exists: that's the
     # CI-overrides-keychain failure mode the field is for, and the higher-
     # precedence winner is the case where it matters.
-    if "stored-session" in detected:
+    if any(isinstance(method, StoredSessionAuth) for method in auth_methods):
         report.masking_env_vars = _session_masking_env_vars()
 
     try:
-        if source == "none":
+        if active is None:
             raise _StatusExit(report=report, exit_code=2)
-        if source == "stored-session":
-            if auth.oidc_client is None:
-                # ``stored-session`` only enters ``detected`` when ``oidc_client``
-                # is non-None (resolver gates the tier on it); reaching here
-                # means that invariant is broken.
-                raise RuntimeError(
-                    "stored-session detected without an OIDC client "
-                    "(resolver invariant broken)."
-                )
-            _populate_stored_session(report, auth.oidc_client)
+        # A StoredSessionAuth carries its OIDC client by construction, so
+        # populating session details needs no presence check.
+        if isinstance(active, StoredSessionAuth):
+            _populate_stored_session(report, active.oidc_client)
         _fetch_identity(report, settings, auth)
     except _StatusExit as exit_:
         _render(exit_.report, json_out=json_out)

@@ -7,9 +7,11 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk import PipefyId
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_tool_id,
@@ -25,12 +27,14 @@ class WebhookTools:
     """MCP tools for sending emails from card inboxes and managing webhooks."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_email_templates(
             repo_id: PipefyId,
+            ctx: Context,
             filter_by_name: str | None = None,
             first: int = 50,
             debug: bool = False,
@@ -46,6 +50,7 @@ class WebhookTools:
                 first: Max templates to return (default 50).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             rid, err = validate_tool_id(repo_id, "repo_id")
             if err is not None:
                 return err
@@ -70,9 +75,11 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_card_inbox_emails(
             card_id: PipefyId,
+            ctx: Context,
             email_type: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -86,6 +93,7 @@ class WebhookTools:
                 email_type: Optional filter: 'sent' or 'received' to get only that type.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             cid, err = validate_tool_id(card_id, "card_id")
             if err is not None:
                 return err
@@ -124,6 +132,7 @@ class WebhookTools:
             subject: str,
             body: str,
             from_: str,
+            ctx: Context,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -140,6 +149,7 @@ class WebhookTools:
                 extra_input: Optional extra CreateAndSendInboxEmailInput fields (html, cc, bcc).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             cid, err = validate_tool_id(card_id, "card_id")
             if err is not None:
                 return err
@@ -196,6 +206,7 @@ class WebhookTools:
         async def send_email_with_template(
             card_id: PipefyId,
             email_template_id: PipefyId,
+            ctx: Context,
             to: list[str] | None = None,
             from_: str | None = None,
             extra_input: dict[str, Any] | None = None,
@@ -215,6 +226,7 @@ class WebhookTools:
                 extra_input: Optional extra CreateAndSendInboxEmailInput fields (cc, bcc).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             cid, err = validate_tool_id(card_id, "card_id")
             if err is not None:
                 return err
@@ -259,6 +271,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_webhooks(
             ctx: Context[ServerSession, None],
@@ -274,6 +287,7 @@ class WebhookTools:
                 pipe_id: ID of the pipe.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"get_webhooks: pipe_id={pipe_id}")
             pid, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
@@ -300,6 +314,7 @@ class WebhookTools:
             pipe_id: PipefyId,
             url: str,
             actions: list[str],
+            ctx: Context,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -316,6 +331,7 @@ class WebhookTools:
                 extra_input: Optional extra CreateWebhookInput fields (name, filters, headers).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pid, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -363,6 +379,7 @@ class WebhookTools:
         )
         async def update_webhook(
             webhook_id: PipefyId,
+            ctx: Context,
             name: str | None = None,
             url: str | None = None,
             actions: list[str] | None = None,
@@ -383,6 +400,7 @@ class WebhookTools:
                 headers: Optional JSON object of custom HTTP headers for the webhook request.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             wid, err = validate_tool_id(webhook_id, "webhook_id")
             if err is not None:
                 return err
@@ -467,6 +485,7 @@ class WebhookTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             wid, err = validate_tool_id(webhook_id, "webhook_id")
             if err is not None:
                 return err

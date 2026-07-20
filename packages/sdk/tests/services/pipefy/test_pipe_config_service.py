@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
@@ -28,42 +28,30 @@ from pipefy_sdk.queries.pipe_config_queries import (
     UPDATE_PIPE_MUTATION,
 )
 from pipefy_sdk.services.pipe_config_service import PipeConfigService
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
-@pytest.fixture
-def mock_settings():
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
+def _make_service(return_value: dict):
+    executor = mock_executor(return_value)
+    service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
+    return service, executor
 
 
-def _make_service(mock_settings, return_value: dict):
-    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
-
-
-def _make_service_with_pipe(mock_settings, return_value: dict, pipe_service: AsyncMock):
-    service = PipeConfigService(
-        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
-    )
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
+def _make_service_with_pipe(return_value: dict, pipe_service: AsyncMock):
+    executor = mock_executor(return_value)
+    service = PipeConfigService(executor=executor, pipe_service=pipe_service)
+    return service, executor
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_sends_input_and_returns_payload(mock_settings):
-    service = _make_service(
-        mock_settings, {"createPipe": {"pipe": {"id": "1", "name": "Alpha"}}}
+async def test_create_pipe_sends_input_and_returns_payload():
+    service, executor = _make_service(
+        {"createPipe": {"pipe": {"id": "1", "name": "Alpha"}}}
     )
     result = await service.create_pipe("Alpha", 9001)
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_PIPE_MUTATION
     assert variables == {
         "input": {"name": "Alpha", "organization_id": "9001"},
@@ -73,13 +61,13 @@ async def test_create_pipe_sends_input_and_returns_payload(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_pipe_merges_id_and_non_none_attrs(mock_settings):
-    service = _make_service(
-        mock_settings, {"updatePipe": {"pipe": {"id": "2", "name": "Beta"}}}
+async def test_update_pipe_merges_id_and_non_none_attrs():
+    service, executor = _make_service(
+        {"updatePipe": {"pipe": {"id": "2", "name": "Beta"}}}
     )
     result = await service.update_pipe(2, name="Beta", icon="star", color=None)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_PIPE_MUTATION
     assert variables == {
         "input": {"id": "2", "name": "Beta", "icon": "star"},
@@ -89,24 +77,24 @@ async def test_update_pipe_merges_id_and_non_none_attrs(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_pipe_accepts_alphanumeric_id(mock_settings):
+async def test_update_pipe_accepts_alphanumeric_id():
     """Test update_pipe passes an alphanumeric ID through to GraphQL variables unchanged."""
-    service = _make_service(
-        mock_settings, {"updatePipe": {"pipe": {"id": "Yr5RUVCi", "name": "X"}}}
+    service, executor = _make_service(
+        {"updatePipe": {"pipe": {"id": "Yr5RUVCi", "name": "X"}}}
     )
     await service.update_pipe("Yr5RUVCi", name="X")
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables == {"input": {"id": "Yr5RUVCi", "name": "X"}}
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_pipe_sends_delete_input(mock_settings):
-    service = _make_service(mock_settings, {"deletePipe": {"success": True}})
+async def test_delete_pipe_sends_delete_input():
+    service, executor = _make_service({"deletePipe": {"success": True}})
     result = await service.delete_pipe(42)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_PIPE_MUTATION
     assert variables == {"input": {"id": "42"}}
     assert result == {"deletePipe": {"success": True}}
@@ -114,14 +102,13 @@ async def test_delete_pipe_sends_delete_input(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_clone_pipe_sends_template_ids_only(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_clone_pipe_sends_template_ids_only():
+    service, executor = _make_service(
         {"clonePipes": {"pipes": [{"id": "9", "name": "Clone"}]}},
     )
     result = await service.clone_pipe(303)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CLONE_PIPE_MUTATION
     assert variables == {"input": {"pipe_template_ids": ["303"]}}
     assert result == {"clonePipes": {"pipes": [{"id": "9", "name": "Clone"}]}}
@@ -129,11 +116,11 @@ async def test_clone_pipe_sends_template_ids_only(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_clone_pipe_includes_organization_when_provided(mock_settings):
-    service = _make_service(mock_settings, {"clonePipes": {"pipes": []}})
+async def test_clone_pipe_includes_organization_when_provided():
+    service, executor = _make_service({"clonePipes": {"pipes": []}})
     await service.clone_pipe(1, organization_id=88)
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables == {
         "input": {"pipe_template_ids": ["1"], "organization_id": "88"},
     }
@@ -141,11 +128,8 @@ async def test_clone_pipe_includes_organization_when_provided(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_phase_sends_pipe_id_name_done_and_optional_index(
-    mock_settings,
-):
-    service = _make_service(
-        mock_settings,
+async def test_create_phase_sends_pipe_id_name_done_and_optional_index():
+    service, executor = _make_service(
         {"createPhase": {"phase": {"id": "1", "name": "Backlog", "done": False}}},
     )
     result = await service.create_phase(
@@ -156,7 +140,7 @@ async def test_create_phase_sends_pipe_id_name_done_and_optional_index(
         description="Incoming",
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_PHASE_MUTATION
     assert variables == {
         "input": {
@@ -174,14 +158,13 @@ async def test_create_phase_sends_pipe_id_name_done_and_optional_index(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_phase_omits_optional_fields_when_not_set(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_create_phase_omits_optional_fields_when_not_set():
+    service, executor = _make_service(
         {"createPhase": {"phase": {"id": "2", "name": "Done", "done": True}}},
     )
     await service.create_phase(51, "Done", done=True)
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables == {
         "input": {"pipe_id": "51", "name": "Done", "done": True},
     }
@@ -189,14 +172,13 @@ async def test_create_phase_omits_optional_fields_when_not_set(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_merges_id_and_attrs(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_update_phase_merges_id_and_attrs():
+    service, executor = _make_service(
         {"updatePhase": {"phase": {"id": "3", "name": "Renamed", "done": True}}},
     )
     result = await service.update_phase(3, name="Renamed", description=None, done=True)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_PHASE_MUTATION
     assert variables == {
         "input": {"id": "3", "name": "Renamed", "done": True},
@@ -208,11 +190,11 @@ async def test_update_phase_merges_id_and_attrs(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_phase_sends_delete_input(mock_settings):
-    service = _make_service(mock_settings, {"deletePhase": {"success": True}})
+async def test_delete_phase_sends_delete_input():
+    service, executor = _make_service({"deletePhase": {"success": True}})
     result = await service.delete_phase(77)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_PHASE_MUTATION
     assert variables == {"input": {"id": "77"}}
     assert result == {"deletePhase": {"success": True}}
@@ -220,9 +202,8 @@ async def test_delete_phase_sends_delete_input(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_phase_field_sends_type_and_optional_attrs(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_create_phase_field_sends_type_and_optional_attrs():
+    service, executor = _make_service(
         {
             "createPhaseField": {
                 "phase_field": {
@@ -243,7 +224,7 @@ async def test_create_phase_field_sends_type_and_optional_attrs(mock_settings):
         required=True,
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_PHASE_FIELD_MUTATION
     assert variables == {
         "input": {
@@ -269,9 +250,8 @@ async def test_create_phase_field_sends_type_and_optional_attrs(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_field_merges_id_and_attrs(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_update_phase_field_merges_id_and_attrs():
+    service, executor = _make_service(
         {
             "updatePhaseField": {
                 "phase_field": {"id": "5", "label": "Renamed", "type": "short_text"},
@@ -280,7 +260,7 @@ async def test_update_phase_field_merges_id_and_attrs(mock_settings):
     )
     result = await service.update_phase_field(5, label="Renamed", description=None)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_PHASE_FIELD_MUTATION
     assert variables == {"input": {"id": "5", "label": "Renamed"}}
     assert result == {
@@ -292,9 +272,8 @@ async def test_update_phase_field_merges_id_and_attrs(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_field_accepts_string_slug(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_update_phase_field_accepts_string_slug():
+    service, executor = _make_service(
         {
             "updatePhaseField": {
                 "phase_field": {
@@ -307,7 +286,7 @@ async def test_update_phase_field_accepts_string_slug(mock_settings):
     )
     result = await service.update_phase_field("detalhe_mcp", label="Renamed")
 
-    _query, variables = service.execute_query.call_args[0]
+    _query, variables = executor.execute_query.call_args[0]
     assert variables == {"input": {"id": "detalhe_mcp", "label": "Renamed"}}
     assert result == {
         "updatePhaseField": {
@@ -322,7 +301,7 @@ async def test_update_phase_field_accepts_string_slug(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_field_resolves_slug_via_phase_id(mock_settings):
+async def test_update_phase_field_resolves_slug_via_phase_id():
     """Narrow resolver: ``phase_id`` injects the field's ``uuid`` for slug disambiguation."""
     pipe_svc = AsyncMock()
     pipe_svc.get_phase_fields = AsyncMock(
@@ -338,8 +317,7 @@ async def test_update_phase_field_resolves_slug_via_phase_id(mock_settings):
             ],
         },
     )
-    service = _make_service_with_pipe(
-        mock_settings,
+    service, executor = _make_service_with_pipe(
         {
             "updatePhaseField": {
                 "phase_field": {
@@ -359,7 +337,7 @@ async def test_update_phase_field_resolves_slug_via_phase_id(mock_settings):
     )
     pipe_svc.get_phase_fields.assert_awaited_once_with("343162749")
     pipe_svc.get_pipe.assert_not_called()
-    _q, variables = service.execute_query.call_args[0]
+    _q, variables = executor.execute_query.call_args[0]
     assert variables == {
         "input": {
             "id": "priority",
@@ -373,7 +351,7 @@ async def test_update_phase_field_resolves_slug_via_phase_id(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_field_resolves_slug_via_pipe_id(mock_settings):
+async def test_update_phase_field_resolves_slug_via_pipe_id():
     """Pipe-wide resolver: unique slug across pipe injects the field's ``uuid``."""
     pipe_svc = AsyncMock()
     pipe_svc.get_pipe = AsyncMock(
@@ -401,8 +379,7 @@ async def test_update_phase_field_resolves_slug_via_pipe_id(mock_settings):
             ],
         },
     )
-    service = _make_service_with_pipe(
-        mock_settings,
+    service, executor = _make_service_with_pipe(
         {
             "updatePhaseField": {
                 "phase_field": {
@@ -420,7 +397,7 @@ async def test_update_phase_field_resolves_slug_via_pipe_id(mock_settings):
         description="x",
         pipe_id="501",
     )
-    _q, variables = service.execute_query.call_args[0]
+    _q, variables = executor.execute_query.call_args[0]
     assert variables == {
         "input": {
             "id": "priority",
@@ -434,7 +411,7 @@ async def test_update_phase_field_resolves_slug_via_pipe_id(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_field_ambiguous_slug_raises(mock_settings):
+async def test_update_phase_field_ambiguous_slug_raises():
     pipe_svc = AsyncMock()
     pipe_svc.get_pipe = AsyncMock(
         return_value={
@@ -466,16 +443,16 @@ async def test_update_phase_field_ambiguous_slug_raises(mock_settings):
         return {"fields": [dup_field_b]}
 
     pipe_svc.get_phase_fields = AsyncMock(side_effect=_gf)
-    service = _make_service_with_pipe(mock_settings, {}, pipe_svc)
-    service.execute_query = AsyncMock()
+    service, executor = _make_service_with_pipe({}, pipe_svc)
+    executor.execute_query = AsyncMock()
     with pytest.raises(ValueError, match="uuid"):
         await service.update_phase_field("status", label="L", pipe_id="9")
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_field_parallel_phase_fetches_resolve_slug(mock_settings):
+async def test_update_phase_field_parallel_phase_fetches_resolve_slug():
     """``get_phase_fields`` runs concurrently for each phase (``asyncio.gather``)."""
     pipe_svc = AsyncMock()
     pipe_svc.get_pipe = AsyncMock(
@@ -504,8 +481,7 @@ async def test_update_phase_field_parallel_phase_fetches_resolve_slug(mock_setti
         return {"fields": []}
 
     pipe_svc.get_phase_fields = AsyncMock(side_effect=_gf)
-    service = _make_service_with_pipe(
-        mock_settings,
+    service, executor = _make_service_with_pipe(
         {
             "updatePhaseField": {
                 "phase_field": {"id": "priority", "label": "P", "type": "select"},
@@ -515,7 +491,7 @@ async def test_update_phase_field_parallel_phase_fetches_resolve_slug(mock_setti
     )
     await service.update_phase_field("priority", label="P", pipe_id="1")
     assert pipe_svc.get_phase_fields.await_count == 3
-    _q, variables = service.execute_query.call_args[0]
+    _q, variables = executor.execute_query.call_args[0]
     assert variables == {
         "input": {
             "id": "priority",
@@ -527,7 +503,7 @@ async def test_update_phase_field_parallel_phase_fetches_resolve_slug(mock_setti
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_field_slug_raises_when_any_phase_fetch_fails(mock_settings):
+async def test_update_phase_field_slug_raises_when_any_phase_fetch_fails():
     """Do not inject a single uuid if another phase's fields could not be loaded."""
     pipe_svc = AsyncMock()
     pipe_svc.get_pipe = AsyncMock(
@@ -556,18 +532,16 @@ async def test_update_phase_field_slug_raises_when_any_phase_fetch_fails(mock_se
         raise RuntimeError("network")
 
     pipe_svc.get_phase_fields = AsyncMock(side_effect=_gf)
-    service = _make_service_with_pipe(mock_settings, {}, pipe_svc)
-    service.execute_query = AsyncMock()
+    service, executor = _make_service_with_pipe({}, pipe_svc)
+    executor.execute_query = AsyncMock()
     with pytest.raises(ValueError, match="Could not load fields"):
         await service.update_phase_field("priority", label="L", pipe_id="9")
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_phase_field_slug_raises_when_zero_matches_and_partial_failure(
-    mock_settings,
-):
+async def test_update_phase_field_slug_raises_when_zero_matches_and_partial_failure():
     """Zero matches + at least one failed phase fetch is still ambiguous, not "not found"."""
     pipe_svc = AsyncMock()
     pipe_svc.get_pipe = AsyncMock(
@@ -586,20 +560,20 @@ async def test_update_phase_field_slug_raises_when_zero_matches_and_partial_fail
         raise RuntimeError("network")
 
     pipe_svc.get_phase_fields = AsyncMock(side_effect=_gf)
-    service = _make_service_with_pipe(mock_settings, {}, pipe_svc)
-    service.execute_query = AsyncMock()
+    service, executor = _make_service_with_pipe({}, pipe_svc)
+    executor.execute_query = AsyncMock()
     with pytest.raises(ValueError, match="Could not load fields"):
         await service.update_phase_field("missing_slug", label="L", pipe_id="9")
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_phase_field_sends_delete_input(mock_settings):
-    service = _make_service(mock_settings, {"deletePhaseField": {"success": True}})
+async def test_delete_phase_field_sends_delete_input():
+    service, executor = _make_service({"deletePhaseField": {"success": True}})
     result = await service.delete_phase_field(99)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_PHASE_FIELD_MUTATION
     assert variables == {"input": {"id": "99"}}
     assert result == {"deletePhaseField": {"success": True}}
@@ -607,24 +581,24 @@ async def test_delete_phase_field_sends_delete_input(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_phase_field_accepts_string_slug(mock_settings):
-    service = _make_service(mock_settings, {"deletePhaseField": {"success": True}})
+async def test_delete_phase_field_accepts_string_slug():
+    service, executor = _make_service({"deletePhaseField": {"success": True}})
     result = await service.delete_phase_field("prioridade")
 
-    _query, variables = service.execute_query.call_args[0]
+    _query, variables = executor.execute_query.call_args[0]
     assert variables == {"input": {"id": "prioridade"}}
     assert result == {"deletePhaseField": {"success": True}}
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_phase_field_includes_pipe_uuid_when_provided(mock_settings):
-    service = _make_service(mock_settings, {"deletePhaseField": {"success": True}})
+async def test_delete_phase_field_includes_pipe_uuid_when_provided():
+    service, executor = _make_service({"deletePhaseField": {"success": True}})
     result = await service.delete_phase_field(
         "prioridade", pipe_uuid="b3bba313-6b99-44dc-b17e-f192dc00bb21"
     )
 
-    _query, variables = service.execute_query.call_args[0]
+    _query, variables = executor.execute_query.call_args[0]
     assert variables == {
         "input": {
             "id": "prioridade",
@@ -636,14 +610,13 @@ async def test_delete_phase_field_includes_pipe_uuid_when_provided(mock_settings
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_label_sends_pipe_name_color(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_create_label_sends_pipe_name_color():
+    service, executor = _make_service(
         {"createLabel": {"label": {"id": "1", "name": "Bug", "color": "#FF0000"}}},
     )
     result = await service.create_label(20, "Bug", "#FF0000")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_LABEL_MUTATION
     assert variables == {
         "input": {"pipe_id": "20", "name": "Bug", "color": "#FF0000"},
@@ -659,58 +632,55 @@ async def test_create_label_sends_pipe_name_color(mock_settings):
     ("raw_color", "normalized_color"),
     [("#abc", "#AABBCC"), ("#ff0000", "#FF0000")],
 )
-async def test_create_label_normalizes_color(
-    mock_settings, raw_color, normalized_color
-):
-    service = _make_service(mock_settings, {"createLabel": {"label": {"id": "1"}}})
+async def test_create_label_normalizes_color(raw_color, normalized_color):
+    service, executor = _make_service({"createLabel": {"label": {"id": "1"}}})
     await service.create_label(20, "Bug", raw_color)
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables["input"]["color"] == normalized_color
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_label_rejects_non_hex_color(mock_settings):
-    service = _make_service(mock_settings, {})
+async def test_create_label_rejects_non_hex_color():
+    service, executor = _make_service({})
 
     with pytest.raises(ValueError, match="expected #RGB or #RRGGBB hex color"):
         await service.create_label(20, "Bug", "red")
 
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_label_normalizes_color(mock_settings):
-    service = _make_service(mock_settings, {"updateLabel": {"label": {"id": "2"}}})
+async def test_update_label_normalizes_color():
+    service, executor = _make_service({"updateLabel": {"label": {"id": "2"}}})
     await service.update_label(2, name="Feature", color="#abc")
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables["input"]["color"] == "#AABBCC"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_label_rejects_non_hex_color(mock_settings):
-    service = _make_service(mock_settings, {})
+async def test_update_label_rejects_non_hex_color():
+    service, executor = _make_service({})
 
     with pytest.raises(ValueError, match="expected #RGB or #RRGGBB hex color"):
         await service.update_label(2, name="Feature", color="blue")
 
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_label_merges_id_and_attrs(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_update_label_merges_id_and_attrs():
+    service, executor = _make_service(
         {"updateLabel": {"label": {"id": "2", "name": "Feature", "color": "blue"}}},
     )
     result = await service.update_label(2, name="Feature", color=None)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_LABEL_MUTATION
     assert variables == {"input": {"id": "2", "name": "Feature"}}
     assert result == {
@@ -720,11 +690,11 @@ async def test_update_label_merges_id_and_attrs(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_label_sends_delete_input(mock_settings):
-    service = _make_service(mock_settings, {"deleteLabel": {"success": True}})
+async def test_delete_label_sends_delete_input():
+    service, executor = _make_service({"deleteLabel": {"success": True}})
     result = await service.delete_label(3)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_LABEL_MUTATION
     assert variables == {"input": {"id": "3"}}
     assert result == {"deleteLabel": {"success": True}}
@@ -732,19 +702,19 @@ async def test_delete_label_sends_delete_input(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_propagates_execute_query_errors(mock_settings):
-    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=RuntimeError("upstream"))
+async def test_create_pipe_propagates_execute_query_errors():
+    executor = mock_executor(side_effect=RuntimeError("upstream"))
+    service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
 
     with pytest.raises(RuntimeError, match="upstream"):
         await service.create_pipe("X", 1)
 
-    service.execute_query.assert_awaited_once()
+    executor.execute_query.assert_awaited_once()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_field_condition_success(mock_settings):
+async def test_create_field_condition_success():
     expr = {
         "expressions": [
             {
@@ -755,8 +725,7 @@ async def test_create_field_condition_success(mock_settings):
         ],
     }
     act = [{"phaseFieldId": "308821043", "whenEvaluator": True}]
-    service = _make_service(
-        mock_settings,
+    service, executor = _make_service(
         {
             "createFieldCondition": {
                 "fieldCondition": {"id": "cond-1"},
@@ -771,7 +740,7 @@ async def test_create_field_condition_success(mock_settings):
         index=None,
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_FIELD_CONDITION_MUTATION
     assert variables == {
         "input": {
@@ -788,7 +757,7 @@ async def test_create_field_condition_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_field_condition_normalizes_actions_and_condition(mock_settings):
+async def test_create_field_condition_normalizes_actions_and_condition():
     """Service normalizes both legacy ``actionId: hidden`` and structural ids before sending."""
     expr = {
         "expressions": [
@@ -803,14 +772,13 @@ async def test_create_field_condition_normalizes_actions_and_condition(mock_sett
         "expressions_structure": [["0"]],
     }
     actions = [{"phaseFieldId": "1", "actionId": "hidden"}]
-    service = _make_service(
-        mock_settings,
+    service, executor = _make_service(
         {"createFieldCondition": {"fieldCondition": {"id": "cond-norm"}}},
     )
 
     await service.create_field_condition(99, expr, actions, name="R")
 
-    _, variables = service.execute_query.call_args[0]
+    _, variables = executor.execute_query.call_args[0]
     payload = variables["input"]
     assert payload["condition"]["expressions"][0].get("id") is None
     assert payload["condition"]["expressions"][0]["structure_id"] == 0
@@ -822,15 +790,14 @@ async def test_create_field_condition_normalizes_actions_and_condition(mock_sett
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_field_condition_rejects_reserved_phaseId_attr(mock_settings):
+async def test_create_field_condition_rejects_reserved_phaseId_attr():
     """``phaseId`` via ``**attrs`` raises instead of silently overriding the positional phase_id.
 
     Snake-case ``phase_id``, ``condition``, and ``actions`` cannot reach ``**attrs``
     at all — Python's call binding raises :class:`TypeError` first because those
     names collide with the explicit positional parameters.
     """
-    service = _make_service(
-        mock_settings,
+    service, executor = _make_service(
         {"createFieldCondition": {"fieldCondition": {"id": "x"}}},
     )
 
@@ -843,16 +810,16 @@ async def test_create_field_condition_rejects_reserved_phaseId_attr(mock_setting
             phaseId="override",
         )
 
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_field_condition_transport_error(mock_settings):
-    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_create_field_condition_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "invalid"}])
     )
+    service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
     with pytest.raises(TransportQueryError):
         await service.create_field_condition(
             "pf-1",
@@ -863,9 +830,8 @@ async def test_create_field_condition_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_field_condition_success(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_update_field_condition_success():
+    service, executor = _make_service(
         {
             "updateFieldCondition": {
                 "fieldCondition": {"id": "cond-2"},
@@ -878,7 +844,7 @@ async def test_update_field_condition_success(mock_settings):
         ignored=None,
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_FIELD_CONDITION_MUTATION
     assert variables == {
         "input": {"id": "cond-2", "name": "Updated label"},
@@ -890,10 +856,9 @@ async def test_update_field_condition_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_field_condition_normalizes_actions(mock_settings):
+async def test_update_field_condition_normalizes_actions():
     """Update normalizes ``actions`` (``hidden`` → ``hide``) when provided."""
-    service = _make_service(
-        mock_settings,
+    service, executor = _make_service(
         {"updateFieldCondition": {"fieldCondition": {"id": "c"}}},
     )
 
@@ -902,43 +867,42 @@ async def test_update_field_condition_normalizes_actions(mock_settings):
         actions=[{"phaseFieldId": "1", "actionId": "hidden"}],
     )
 
-    _, variables = service.execute_query.call_args[0]
+    _, variables = executor.execute_query.call_args[0]
     assert variables["input"]["actions"][0]["actionId"] == "hide"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_field_condition_rejects_reserved_id_attr(mock_settings):
+async def test_update_field_condition_rejects_reserved_id_attr():
     """The ``id`` key must come via the positional ``condition_id`` argument."""
-    service = _make_service(
-        mock_settings,
+    service, executor = _make_service(
         {"updateFieldCondition": {"fieldCondition": {"id": "c"}}},
     )
 
     with pytest.raises(ValueError, match="id"):
         await service.update_field_condition("c", id="other-id")
 
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_field_condition_transport_error(mock_settings):
-    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_update_field_condition_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
     )
+    service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
     with pytest.raises(TransportQueryError):
         await service.update_field_condition("missing-id", name=None, phase_id="88")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_field_condition_success(mock_settings):
-    service = _make_service(mock_settings, {"deleteFieldCondition": {"success": True}})
+async def test_delete_field_condition_success():
+    service, executor = _make_service({"deleteFieldCondition": {"success": True}})
     result = await service.delete_field_condition("cond-9")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_FIELD_CONDITION_MUTATION
     assert variables == {"input": {"id": "cond-9"}}
     assert result == {"success": True}
@@ -946,18 +910,18 @@ async def test_delete_field_condition_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_field_condition_transport_error(mock_settings):
-    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_delete_field_condition_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
     )
+    service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
     with pytest.raises(TransportQueryError):
         await service.delete_field_condition("cond-x")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_field_conditions_success(mock_settings):
+async def test_get_field_conditions_success():
     api_payload = {
         "phase": {
             "fieldConditions": [
@@ -978,10 +942,10 @@ async def test_get_field_conditions_success(mock_settings):
             ],
         },
     }
-    service = _make_service(mock_settings, api_payload)
+    service, executor = _make_service(api_payload)
     result = await service.get_field_conditions(404)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_FIELD_CONDITIONS_QUERY
     assert "actionId" in print_ast(GET_FIELD_CONDITIONS_QUERY.document)
     assert variables == {"phaseId": "404"}
@@ -990,7 +954,7 @@ async def test_get_field_conditions_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_field_condition_success(mock_settings):
+async def test_get_field_condition_success():
     api_payload = {
         "fieldCondition": {
             "id": "fc-2",
@@ -1000,10 +964,10 @@ async def test_get_field_condition_success(mock_settings):
             "actions": [{"actionId": "hide", "phaseFieldId": "pf-9"}],
         },
     }
-    service = _make_service(mock_settings, api_payload)
+    service, executor = _make_service(api_payload)
     result = await service.get_field_condition("fc-2")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_FIELD_CONDITION_QUERY
     assert "actionId" in print_ast(GET_FIELD_CONDITION_QUERY.document)
     assert variables == {"id": "fc-2"}
@@ -1012,10 +976,10 @@ async def test_get_field_condition_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_field_condition_transport_error(mock_settings):
-    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_field_condition_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
     )
+    service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
     with pytest.raises(TransportQueryError):
         await service.get_field_condition("missing")

@@ -12,6 +12,9 @@ Surface:
   literal-IP check (callers must follow up with the DNS gate).
 * :func:`assert_hostname_is_not_internal`: building block of the above;
   exposed for callers that already have a parsed hostname.
+* :func:`is_loopback_host`: predicate reporting whether a bind host keeps
+  a server reachable only from the local machine (``localhost`` or a
+  literal IP in ``127.0.0.0/8`` or ``::1``).
 * :func:`assert_hostname_resolves_to_public_ips`: asynchronous DNS gate.
   Resolves the hostname and rejects when any resolved IP is in a blocked
   range. Counter to DNS-rebinding attacks that point a public name at an
@@ -99,6 +102,33 @@ def assert_hostname_is_not_internal(hostname: str, *, context: str) -> None:
             f"{context}: {hostname!r} is in a blocked range "
             f"({_BLOCKED_RANGES_LABEL}) and is not allowed."
         )
+
+
+def is_loopback_host(host: str) -> bool:
+    """Report whether ``host`` binds a server to the local machine only.
+
+    Loopback means ``localhost`` or a literal IP in ``127.0.0.0/8`` or ``::1``.
+    ``0.0.0.0`` (and ``::``) is unspecified, not loopback, so it is reported as
+    non-loopback. A hostname that is not a literal IP (anything other than
+    ``localhost``) is reported as non-loopback: it is not resolved here, and
+    treating an unresolved name as reachable is the safe default for a
+    bind-safety gate.
+
+    Bracketed IPv6 literals (``[::1]``) are tolerated for callers passing a raw
+    URL host slot rather than ``urlparse(...).hostname``.
+    """
+    candidate = (host or "").strip().lower()
+    if candidate == "localhost":
+        return True
+    candidate = (
+        candidate[1:-1]
+        if candidate.startswith("[") and candidate.endswith("]")
+        else candidate
+    )
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return False
 
 
 def validate_https_url(

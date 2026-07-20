@@ -1,6 +1,6 @@
 [project]
 name = "pipefy-workspace"
-version = "0.2.0-beta.4"
+version = "0.3.0-alpha.1"
 description = "Development workspace for Pipefy MCP server, SDK, and CLI (not published as a single distribution)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,7 +13,7 @@ package = false
 members = ["packages/sdk", "packages/mcp", "packages/cli", "packages/auth", "packages/infra"]
 
 [tool.uv.sources]
-pipefy-sdk = { workspace = true }
+pipefy = { workspace = true }
 pipefy-mcp-server = { workspace = true }
 pipefy-cli = { workspace = true }
 pipefy-auth = { workspace = true }
@@ -21,12 +21,13 @@ pipefy-infra = { workspace = true }
 
 [dependency-groups]
 dev = [
-    "pipefy-sdk",
+    "pipefy",
     "pipefy-mcp-server",
     "pipefy-cli",
     "pipefy-auth",
     "pipefy-infra",
     "aiohttp>=3.11.16",
+    "import-linter>=2.1",
     "packaging>=24",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",

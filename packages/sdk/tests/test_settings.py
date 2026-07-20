@@ -99,6 +99,25 @@ def test_pipefy_settings_rejects_http_base_url():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("unsafe_base_url", "expected"),
+    [
+        ("https://localhost", "localhost"),
+        ("https://10.0.0.1", "private|loopback|link-local"),
+    ],
+)
+def test_pipefy_settings_rejects_internal_hosts(unsafe_base_url: str, expected: str):
+    """SSRF guard: HTTPS URLs aimed at internal hosts are rejected at construction.
+
+    The derived ``graphql_url`` / ``internal_api_url`` / ``interfaces_graphql_url``
+    inherit this host, so validating ``base_url`` once is the single gate; the
+    endpoint clients trust it rather than re-checking.
+    """
+    with pytest.raises(ValueError, match=expected):
+        PipefySettings(base_url=unsafe_base_url)
+
+
+@pytest.mark.unit
 def test_pipefy_settings_accepts_http_base_url_when_insecure():
     """`allow_insecure_urls=True` opens the door to http:// + localhost."""
     settings = PipefySettings(

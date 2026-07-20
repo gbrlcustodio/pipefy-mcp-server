@@ -6,6 +6,10 @@ import copy
 import re
 from typing import Any
 
+from pydantic import ValidationError
+
+from pipefy_sdk.models import BehaviorPayload
+
 _PLACEHOLDER_RE = re.compile(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}")
 _PIPEFY_FIELD_REF = re.compile(r"(?<!\%)\{field:([^}]+)\}")
 _PIPEFY_ACTION_UUID = re.compile(
@@ -151,15 +155,17 @@ def populate_referenced_field_ids(behavior: dict[str, Any]) -> None:
     subset and the non-empty guard would then prevent a second pass from filling
     in the resolved slugs.
 
-    Mutates ``behavior`` in place.
+    Runs after :func:`expand_behavior_placeholders` has normalized behavior keys to
+    their declared wire names, so it reads the declared ``actionParams`` /
+    ``aiBehaviorParams`` names only. Mutates ``behavior`` in place.
     """
-    ap = behavior.get("actionParams") or behavior.get("action_params")
+    ap = behavior.get("actionParams")
     if not isinstance(ap, dict):
         return
-    abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params")
+    abp = ap.get("aiBehaviorParams")
     if not isinstance(abp, dict):
         return
-    existing = abp.get("referencedFieldIds") or abp.get("referenced_field_ids")
+    existing = abp.get("referencedFieldIds")
     if isinstance(existing, list) and existing:
         return
     instruction = abp.get("instruction")
@@ -168,10 +174,10 @@ def populate_referenced_field_ids(behavior: dict[str, Any]) -> None:
 
 
 def _normalize_instruction_in_behavior(behavior: dict[str, Any]) -> None:
-    ap = behavior.get("actionParams") or behavior.get("action_params")
+    ap = behavior.get("actionParams")
     if not isinstance(ap, dict):
         return
-    abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params")
+    abp = ap.get("aiBehaviorParams")
     if not isinstance(abp, dict):
         return
     instr = abp.get("instruction")
@@ -180,15 +186,32 @@ def _normalize_instruction_in_behavior(behavior: dict[str, Any]) -> None:
 
 
 def _ensure_ai_behavior_instruction(behavior: dict[str, Any], instruction: str) -> None:
-    ap = behavior.get("actionParams") or behavior.get("action_params")
+    ap = behavior.get("actionParams")
     if not isinstance(ap, dict):
         ap = {}
         behavior["actionParams"] = ap
-    abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params")
+    abp = ap.get("aiBehaviorParams")
     if not isinstance(abp, dict):
         abp = {}
         ap["aiBehaviorParams"] = abp
     abp["instruction"] = instruction
+
+
+def _normalize_behavior_keys(behavior: dict[str, Any]) -> dict[str, Any]:
+    """Rewrite behavior keys to their declared wire names via the typed model.
+
+    Uses per-field aliases only (:class:`BehaviorPayload`): ``event_id`` →
+    ``eventId``, ``action_params.ai_behavior_params`` → ``actionParams.aiBehaviorParams``,
+    etc. Sibling/unknown keys and any remaining extras pass through verbatim
+    (``extra="allow"``) — never a blanket snake→camel conversion. Malformed input
+    that cannot be parsed is returned unchanged so expansion never raises here.
+    """
+    try:
+        return BehaviorPayload.model_validate(behavior).model_dump(
+            by_alias=True, exclude_none=True
+        )
+    except ValidationError:
+        return behavior
 
 
 def expand_behavior_placeholders(behavior: dict[str, Any]) -> dict[str, Any]:
@@ -213,6 +236,11 @@ def expand_behavior_placeholders(behavior: dict[str, Any]) -> dict[str, Any]:
         if k in result:
             instruction_tmpl = result.pop(k)
             break
+
+    # Normalize behavior keys to their declared wire names once, so the steps
+    # below read a single canonical key style instead of dual-alias branches.
+    result = _normalize_behavior_keys(result)
+
     if instruction_tmpl is not None:
         _ensure_ai_behavior_instruction(result, str(instruction_tmpl))
 

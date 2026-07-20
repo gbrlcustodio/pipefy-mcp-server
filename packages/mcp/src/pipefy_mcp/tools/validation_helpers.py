@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.core.tool_error_envelope import tool_error
 
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -93,6 +93,31 @@ def validate_optional_tool_id(
     if err is not None:
         return False, None, err
     return True, cleaned, None
+
+
+def validate_optional_tool_id_list(
+    values: list[str | int] | None,
+    label: str = "ids",
+) -> tuple[list[str] | None, dict[str, object] | None]:
+    """Validate an optional list of Pipefy IDs at the tool boundary.
+
+    ``None`` passes through as ``(None, None)``; a present list must be non-empty
+    and every element pass :func:`validate_tool_id`. Returns
+    ``(cleaned_ids, error_payload)``.
+    """
+    if values is None:
+        return None, None
+    if not values:
+        return None, tool_error(
+            f"Invalid '{label}': when provided, it must contain at least one ID."
+        )
+    cleaned: list[str] = []
+    for value in values:
+        cleaned_id, err = validate_tool_id(value, label)
+        if cleaned_id is None:
+            return None, err
+        cleaned.append(cleaned_id)
+    return cleaned, None
 
 
 def mutation_error_if_not_optional_dict(

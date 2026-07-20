@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, cast
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.models.ai_automation import (
     AutomationConditionInput,
     AutomationEventParamsInput,
@@ -185,8 +185,11 @@ def _raise_if_automation_mutation_has_errors(
         raise ValueError(text)
 
 
-class AutomationService(BasePipefyClient):
+class AutomationService:
     """Reads and mutations for traditional pipe automations (rules engine)."""
+
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def get_automation(self, automation_id: str) -> AutomationRuleRecord | None:
         """Fetch one automation by ID.
@@ -197,7 +200,7 @@ class AutomationService(BasePipefyClient):
         Returns:
             The automation row, or ``None`` when not found.
         """
-        payload = await self.execute_query(
+        payload = await self._executor.execute_query(
             GET_AUTOMATION_QUERY,
             {"id": str(automation_id)},
         )
@@ -225,7 +228,7 @@ class AutomationService(BasePipefyClient):
 
         org_id: str | None = organization_id
         if org_id is None and pipe_id is not None:
-            org_row = await self.execute_query(
+            org_row = await self._executor.execute_query(
                 GET_PIPE_ORGANIZATION_ID_QUERY,
                 {"id": str(pipe_id)},
             )
@@ -239,12 +242,12 @@ class AutomationService(BasePipefyClient):
             return []
 
         if pipe_id is None:
-            payload = await self.execute_query(
+            payload = await self._executor.execute_query(
                 GET_AUTOMATIONS_BY_ORG_QUERY,
                 {"organizationId": str(org_id)},
             )
         else:
-            payload = await self.execute_query(
+            payload = await self._executor.execute_query(
                 GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY,
                 {"organizationId": str(org_id), "repoId": str(pipe_id)},
             )
@@ -262,7 +265,7 @@ class AutomationService(BasePipefyClient):
         Args:
             pipe_id: Pipe ID.
         """
-        payload = await self.execute_query(
+        payload = await self._executor.execute_query(
             GET_AUTOMATION_ACTIONS_QUERY,
             {"repoId": str(pipe_id)},
         )
@@ -279,7 +282,7 @@ class AutomationService(BasePipefyClient):
         """
         # Pipefy's automationEvents query has no repoId filter as of 2026-03; wire pipe_id when API supports it.
         _ = pipe_id
-        payload = await self.execute_query(
+        payload = await self._executor.execute_query(
             GET_AUTOMATION_EVENTS_QUERY,
             {},
         )
@@ -292,7 +295,9 @@ class AutomationService(BasePipefyClient):
         self,
     ) -> list[AutomationEventAttributeRow]:
         """List official automation event attribute tokens for ``field_map.value`` templates."""
-        payload = await self.execute_query(GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY, {})
+        payload = await self._executor.execute_query(
+            GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY, {}
+        )
         raw = payload.get("automationEventAttributes")
         if raw is None:
             return []
@@ -335,7 +340,7 @@ class AutomationService(BasePipefyClient):
                 input_obj[key] = value
         if "active" not in input_obj:
             input_obj["active"] = True
-        raw = await self.execute_query(
+        raw = await self._executor.execute_query(
             CREATE_AUTOMATION_MUTATION,
             {"input": input_obj},
         )
@@ -497,7 +502,7 @@ class AutomationService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 input_obj[key] = value
-        raw = await self.execute_query(
+        raw = await self._executor.execute_query(
             UPDATE_AUTOMATION_MUTATION,
             {"input": input_obj},
         )
@@ -554,7 +559,7 @@ class AutomationService(BasePipefyClient):
         for key, value in (extra_input or {}).items():
             if value is not None:
                 input_obj[key] = value
-        raw_mutation = await self.execute_query(
+        raw_mutation = await self._executor.execute_query(
             CREATE_AUTOMATION_SIMULATION_MUTATION,
             {"input": input_obj},
         )
@@ -567,7 +572,7 @@ class AutomationService(BasePipefyClient):
         if raw_sid is None or (isinstance(raw_sid, str) and not raw_sid.strip()):
             raise ValueError("createAutomationSimulation returned no simulationId.")
         simulation_id = str(raw_sid).strip()
-        raw_query = await self.execute_query(
+        raw_query = await self._executor.execute_query(
             AUTOMATION_SIMULATION_QUERY,
             {"simulationId": simulation_id},
         )
@@ -592,7 +597,7 @@ class AutomationService(BasePipefyClient):
         Returns:
             ``{"success": bool}`` from the mutation payload.
         """
-        payload = await self.execute_query(
+        payload = await self._executor.execute_query(
             DELETE_AUTOMATION_MUTATION,
             {"input": {"id": automation_id}},
         )

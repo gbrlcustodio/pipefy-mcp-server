@@ -27,7 +27,7 @@ from mcp.server.fastmcp.tools.base import Tool
 from mcp.server.fastmcp.tools.tool_manager import ToolManager
 from pydantic import ValidationError
 
-from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.core.tool_error_envelope import tool_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable

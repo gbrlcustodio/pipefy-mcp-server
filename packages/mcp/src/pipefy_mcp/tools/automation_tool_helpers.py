@@ -13,6 +13,7 @@ from pipefy_sdk import (
 )
 from typing_extensions import TypedDict
 
+from pipefy_mcp.core.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_correlation_id,
@@ -21,7 +22,6 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     try_enrich_graphql_error,
     with_debug_suffix,
 )
-from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
 
 AutomationReadToolData = (
     AutomationRuleRecord
@@ -53,6 +53,9 @@ class AutomationSimulationSuccessPayload(TypedDict):
 class AutomationToolErrorPayload(TypedDict):
     success: Literal[False]
     error: ToolErrorDetail
+
+
+_AUTOMATION_REQUEST_FAILED = "Automation request failed."
 
 
 def build_automation_mutation_success_payload(
@@ -169,8 +172,10 @@ async def handle_automation_tool_graphql_error(
         return build_automation_error_payload(message=message, code=code)
 
     msgs = extract_error_strings(exc)
-    base = "; ".join(msgs) if msgs else "Automation request failed."
+    base = "; ".join(msgs) if msgs else _AUTOMATION_REQUEST_FAILED
     base = strip_internal_api_diagnostic_markers(base)
+    if not base.strip():
+        base = _AUTOMATION_REQUEST_FAILED
     base = with_debug_suffix(base, debug=debug, codes=codes, correlation_id=cid)
     return build_automation_error_payload(message=base, code=first_code)
 

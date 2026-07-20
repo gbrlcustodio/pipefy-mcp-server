@@ -7,23 +7,25 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk import PipefyId
 
+from pipefy_mcp.core.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_success,
+)
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
     validate_page_size,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.report_tool_helpers import (
     build_report_error_payload,
     build_report_mutation_success_payload,
     build_report_read_success_payload,
     handle_report_tool_graphql_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import (
-    is_unified_envelope_enabled,
-    tool_success,
-)
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 
@@ -38,12 +40,14 @@ class ReportTools:
     """MCP tools for reading, managing, and exporting pipe and organization reports."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_reports(
             pipe_uuid: str,
+            ctx: Context,
             first: int = 30,
             after: str | None = None,
             search: str | None = None,
@@ -62,6 +66,7 @@ class ReportTools:
                 order: Sort order, e.g. {"field": "name", "direction": "asc"}.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(pipe_uuid, "pipe_uuid")
             if err is not None:
                 return err
@@ -101,6 +106,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_report(
             ctx: Context[ServerSession, None],
@@ -118,6 +124,7 @@ class ReportTools:
                 report_id: Pipe report ID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"get_pipe_report: pipe_uuid={pipe_uuid}, report_id={report_id}"
             )
@@ -158,9 +165,11 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_report_columns(
             pipe_uuid: str,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Get available columns for a pipe report. Each item includes `name` (internal field id for `fields`) and `label`.
@@ -172,6 +181,7 @@ class ReportTools:
                 pipe_uuid: Pipe UUID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(pipe_uuid, "pipe_uuid")
             if err is not None:
                 return err
@@ -192,9 +202,11 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_report_filterable_fields(
             pipe_uuid: str,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Get filterable fields for a pipe report (nested groups; use `name` for filter fields).
@@ -205,6 +217,7 @@ class ReportTools:
                 pipe_uuid: Pipe UUID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(pipe_uuid, "pipe_uuid")
             if err is not None:
                 return err
@@ -225,9 +238,11 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_organization_report(
             report_id: PipefyId,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Get a single organization report by ID.
@@ -236,6 +251,7 @@ class ReportTools:
                 report_id: Organization report ID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
@@ -256,9 +272,11 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_organization_reports(
             organization_id: PipefyId,
+            ctx: Context,
             first: int = 30,
             after: str | None = None,
             debug: bool = False,
@@ -271,6 +289,7 @@ class ReportTools:
                 after: Cursor for next page.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(organization_id, "organization_id")
             if err is not None:
                 return err
@@ -305,9 +324,11 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_report_export(
             export_id: PipefyId,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Check the status of a pipe report export. Poll this after calling `export_pipe_report`. States: processing -> done (with fileURL) -> failed.
@@ -316,6 +337,7 @@ class ReportTools:
                 export_id: Pipe report export ID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(export_id, "export_id")
             if err is not None:
                 return err
@@ -336,9 +358,11 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_organization_report_export(
             export_id: PipefyId,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Check the status of an org report export. Poll this after calling `export_organization_report`.
@@ -347,6 +371,7 @@ class ReportTools:
                 export_id: Organization report export ID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(export_id, "export_id")
             if err is not None:
                 return err
@@ -371,6 +396,7 @@ class ReportTools:
         async def create_pipe_report(
             pipe_id: PipefyId,
             name: str,
+            ctx: Context,
             fields: list[str] | None = None,
             filter: dict | None = None,
             formulas: list[list[str]] | None = None,
@@ -390,6 +416,7 @@ class ReportTools:
                 formulas: Formula definitions (list of [field, operator, ...] tuples).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -420,6 +447,7 @@ class ReportTools:
         )
         async def update_pipe_report(
             report_id: PipefyId,
+            ctx: Context,
             name: str | None = None,
             color: str | None = None,
             fields: list[str] | None = None,
@@ -443,6 +471,7 @@ class ReportTools:
                 featured_field: Featured field name.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
@@ -494,6 +523,7 @@ class ReportTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
@@ -528,6 +558,7 @@ class ReportTools:
             organization_id: PipefyId,
             name: str,
             pipe_ids: list[str],
+            ctx: Context,
             fields: list[str] | None = None,
             filter: dict | None = None,
             debug: bool = False,
@@ -546,6 +577,7 @@ class ReportTools:
                 filter: Report filter (ReportCardsFilter shape).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(organization_id, "organization_id")
             if err is not None:
                 return err
@@ -580,6 +612,7 @@ class ReportTools:
         )
         async def update_organization_report(
             report_id: PipefyId,
+            ctx: Context,
             name: str | None = None,
             color: str | None = None,
             fields: list[str] | None = None,
@@ -602,6 +635,7 @@ class ReportTools:
                 pipe_ids: Pipe IDs to include.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
@@ -652,6 +686,7 @@ class ReportTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
@@ -685,6 +720,7 @@ class ReportTools:
         async def export_pipe_report(
             pipe_id: PipefyId,
             pipe_report_id: PipefyId,
+            ctx: Context,
             sort_by: dict | None = None,
             filter: dict | None = None,
             columns: list[str] | None = None,
@@ -704,6 +740,7 @@ class ReportTools:
                 columns: Column field IDs for the export file.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -738,6 +775,7 @@ class ReportTools:
         )
         async def export_organization_report(
             organization_id: PipefyId,
+            ctx: Context,
             organization_report_id: PipefyId | None = None,
             pipe_ids: list[PipefyId] | None = None,
             sort_by: dict | None = None,
@@ -761,6 +799,7 @@ class ReportTools:
                 columns: Column field IDs for the export file.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
                 return err
@@ -793,6 +832,7 @@ class ReportTools:
         )
         async def export_pipe_audit_logs(
             pipe_uuid: str,
+            ctx: Context,
             search_term: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -803,6 +843,7 @@ class ReportTools:
                 search_term: Optional filter on audit log content.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             err = _blank_field_error(pipe_uuid, "pipe_uuid")
             if err is not None:
                 return err

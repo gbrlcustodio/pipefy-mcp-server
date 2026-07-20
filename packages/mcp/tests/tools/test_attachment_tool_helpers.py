@@ -5,13 +5,13 @@ from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.models.attachment import UploadAttachmentToCardInput
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.attachment_tool_helpers import (
     build_upload_error_payload,
     build_upload_success_payload,
     format_s3_upload_failure,
     map_upload_error_to_message,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 
 @pytest.mark.unit

@@ -265,30 +265,6 @@ UPDATE_FIELDS_VALUES_MUTATION = gql(
     """
 )
 
-# ---------------------------------------------------------------------------
-# Internal API mutations
-#
-# ``deleteCardRelation`` is only available on the internal GraphQL schema
-# (core_api / internal_v1), not the public API. It runs through
-# ``InternalApiClient``, which accepts a ``gql()`` query like every other client.
-# ---------------------------------------------------------------------------
-
-INTERNAL_DELETE_CARD_RELATION_MUTATION = gql("""
-mutation deleteCardRelation(
-  $childId: ID!,
-  $parentId: ID!,
-  $sourceId: ID!
-) {
-  deleteCardRelation(input: {
-    child_id: $childId,
-    parent_id: $parentId,
-    source_id: $sourceId
-  }) {
-    success
-  }
-}
-""")
-
 __all__ = [
     "CREATE_CARD_MUTATION",
     "CREATE_COMMENT_MUTATION",
@@ -298,7 +274,6 @@ __all__ = [
     "GET_CARD_QUERY",
     "GET_CARD_RELATIONS_QUERY",
     "GET_CARDS_QUERY",
-    "INTERNAL_DELETE_CARD_RELATION_MUTATION",
     "MOVE_CARD_TO_PHASE_MUTATION",
     "UPDATE_CARD_FIELD_MUTATION",
     "UPDATE_CARD_MUTATION",

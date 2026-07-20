@@ -2,24 +2,16 @@
 
 from __future__ import annotations
 
-from httpx import Auth
-
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.me_queries import GET_ME_QUERY
 from pipefy_sdk.services.types import MePayload
-from pipefy_sdk.settings import PipefySettings
 
 
-class UserService(BasePipefyClient):
+class UserService:
     """GraphQL operations scoped to the authenticated user (`me`)."""
 
-    def __init__(
-        self,
-        settings: PipefySettings,
-        *,
-        auth: Auth,
-    ) -> None:
-        super().__init__(settings=settings, auth=auth)
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def get_me(self) -> MePayload | None:
         """Return the authenticated user's identity, or ``None`` when the schema permits.
@@ -27,7 +19,7 @@ class UserService(BasePipefyClient):
         ``me`` is a nullable root field in Pipefy's schema (verified via introspection).
         Callers should treat ``None`` as "no human identity available for this bearer".
         """
-        data = await self.execute_query(GET_ME_QUERY, {})
+        data = await self._executor.execute_query(GET_ME_QUERY, {})
         me = data["me"]
         if me is None:
             return None

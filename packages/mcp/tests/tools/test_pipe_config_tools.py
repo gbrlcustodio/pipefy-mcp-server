@@ -1,19 +1,18 @@
 """Tests for pipe configuration MCP tools (mocked PipefyClient)."""
 
 import asyncio
-import time
 from datetime import timedelta
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
+from pipefy_mcp.core.tool_error_envelope import tool_error, tool_error_message
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     DeletePipeErrorPayload,
@@ -24,8 +23,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     normalize_phase_cards_list,
 )
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 
 @pytest.mark.unit
@@ -101,9 +99,12 @@ def mock_pipe_config_client():
 
 @pytest.fixture
 def pipe_config_mcp_server(mock_pipe_config_client):
-    mcp = FastMCP("Pipe Config Tools Test")
-    PipeConfigTools.register(mcp, mock_pipe_config_client)
-    FieldConditionTools.register(mcp, mock_pipe_config_client)
+    mcp = build_tool_test_server(
+        "Pipe Config Tools Test",
+        PipeConfigTools.register,
+        mock_pipe_config_client,
+    )
+    FieldConditionTools.register(mcp)
     return mcp
 
 
@@ -586,41 +587,38 @@ async def test_delete_phase_preview_all_sublookups_fail(
 async def test_delete_phase_sublookups_run_in_parallel(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    """Four slow sub-lookups; wall time should be ~one delay, not four."""
+    """All four sub-lookups must be in flight at once, not awaited serially.
 
-    async def _slow_get_field_conditions(*_a, **_kw):
-        await asyncio.sleep(0.05)
-        return {"phase": {"fieldConditions": []}}
+    Each mock blocks on a shared four-party barrier, so a parallel ``gather``
+    releases it while a serial rewrite deadlocks at the first lookup; ``wait_for``
+    turns that deadlock into a clean failure. It is four because ``get_automations``
+    returns ``[]``, so the inner per-automation gather never adds a fifth party.
+    """
+    barrier = asyncio.Barrier(4)
 
-    async def _slow_get_automations(*_a, **_kw):
-        await asyncio.sleep(0.05)
-        return []
+    def _rendezvous(value):
+        async def _side_effect(*_a, **_kw):
+            await barrier.wait()
+            return value
 
-    async def _slow_get_phase_cards_count(*_a, **_kw):
-        await asyncio.sleep(0.05)
-        return 0
+        return _side_effect
 
-    async def _slow_get_phase_fields(*_a, **_kw):
-        await asyncio.sleep(0.05)
-        return {"fields": []}
-
-    mock_pipe_config_client.get_field_conditions.side_effect = (
-        _slow_get_field_conditions
+    mock_pipe_config_client.get_field_conditions.side_effect = _rendezvous(
+        {"phase": {"fieldConditions": []}}
     )
-    mock_pipe_config_client.get_automations.side_effect = _slow_get_automations
-    mock_pipe_config_client.get_phase_cards_count.side_effect = (
-        _slow_get_phase_cards_count
-    )
-    mock_pipe_config_client.get_phase_fields.side_effect = _slow_get_phase_fields
-    t0 = time.perf_counter()
+    mock_pipe_config_client.get_automations.side_effect = _rendezvous([])
+    mock_pipe_config_client.get_phase_cards_count.side_effect = _rendezvous(0)
+    mock_pipe_config_client.get_phase_fields.side_effect = _rendezvous({"fields": []})
+
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_phase",
-            {"phase_id": 55, "pipe_id": 1, "confirm": False},
+        result = await asyncio.wait_for(
+            session.call_tool(
+                "delete_phase",
+                {"phase_id": 55, "pipe_id": 1, "confirm": False},
+            ),
+            timeout=5.0,
         )
-    elapsed = time.perf_counter() - t0
     assert extract_payload(result)["success"] is False
-    assert elapsed < 0.15
 
 
 @pytest.mark.anyio

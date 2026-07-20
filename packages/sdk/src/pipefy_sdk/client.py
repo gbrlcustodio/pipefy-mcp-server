@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from httpx import Auth
 
+from pipefy_sdk import __version__
 from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
 from pipefy_sdk.automation_input import normalize_automation_input_keys
 from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
+from pipefy_sdk.graphql_executor import (
+    AuthenticatedExecutor,
+    GraphQLEndpoint,
+    GraphQLExecutor,
+)
+from pipefy_sdk.internal_api_errors import format_internal_api_error
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
     CreateAiAgentInput,
@@ -26,9 +35,8 @@ from pipefy_sdk.models.attachment import (
     AttachmentTarget,
     AttachmentUploadResult,
 )
-from pipefy_sdk.queries.card_queries import (
-    INTERNAL_DELETE_CARD_RELATION_MUTATION,
-)
+from pipefy_sdk.models.knowledge_base import DataLookupCondition
+from pipefy_sdk.services.advanced_automations_service import AdvancedAutomationsService
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_graphql_types import (
@@ -44,9 +52,16 @@ from pipefy_sdk.services.automation_graphql_types import (
 )
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
-from pipefy_sdk.services.internal_api_client import InternalApiClient
+from pipefy_sdk.services.knowledge_base_service import KnowledgeBaseService
+from pipefy_sdk.services.llm_provider_service import (
+    DEFAULT_PROVIDER_PAGE_SIZE,
+    LlmProviderService,
+)
 from pipefy_sdk.services.member_service import MemberService
-from pipefy_sdk.services.observability_service import ObservabilityService
+from pipefy_sdk.services.observability_service import (
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+    ObservabilityService,
+)
 from pipefy_sdk.services.organization_service import OrganizationService
 from pipefy_sdk.services.pipe_config_service import PipeConfigService
 from pipefy_sdk.services.pipe_service import (
@@ -64,83 +79,235 @@ from pipefy_sdk.services.table_service import (
     TableService,
 )
 from pipefy_sdk.services.types import (
+    ActiveLlmProviderPayload,
     AgentServiceResult,
     AiAgentGraphPayload,
     AutomationServiceResult,
     CardSearch,
+    KnowledgeBaseAccessProbeResult,
+    KnowledgeBaseDataLookupPayload,
+    KnowledgeBaseDeleteResult,
+    KnowledgeBaseDocumentPayload,
+    KnowledgeBasePayload,
+    KnowledgeBasePlainTextPayload,
+    LlmProviderMutationResult,
+    LlmProviderPayload,
+    LlmProvidersResult,
+    LlmProviderWritePayload,
     MePayload,
+    ProviderAccessProbeResult,
+    ProviderDependenciesResult,
     ToggleAgentStatusResult,
 )
 from pipefy_sdk.services.user_service import UserService
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.telemetry import ClientSurface, telemetry_headers
+
+
+@dataclass(frozen=True)
+class Executors:
+    """The three GraphQL executors a fully wired ``PipefyClient`` runs on."""
+
+    public: GraphQLExecutor
+    interfaces: GraphQLExecutor
+    internal: GraphQLExecutor
+
+
+@dataclass(frozen=True)
+class PipefyEndpoints:
+    """The three shared, auth-less GraphQL endpoints a Pipefy engine runs on.
+
+    Built once per process and reused across identities; each endpoint carries its
+    own schema cache. A per-request session binds an ``auth`` to these to get its
+    :class:`Executors`.
+    """
+
+    public: GraphQLEndpoint
+    interfaces: GraphQLEndpoint
+    internal: GraphQLEndpoint
+
+
+def build_endpoints(
+    settings: PipefySettings, *, surface: ClientSurface = "sdk"
+) -> PipefyEndpoints:
+    """Build one auth-less endpoint per Pipefy API endpoint from ``settings``.
+
+    This is the seam that resolves each endpoint URL from settings; the endpoints
+    take a ready URL and stay agnostic to endpoint topology and to identity. Only
+    the internal endpoint carries the ``[code=…][correlation_id=…]`` error
+    envelope; the others leave gql exceptions untouched.
+
+    The client telemetry headers are resolved once here from ``surface`` and the
+    package version, then shared by all three endpoints: every endpoint targets a
+    Pipefy API host, so each carries the same surface/version stamp. ``surface`` is
+    the caller's identity (the MCP server passes ``mcp``, the CLI ``cli``); direct
+    SDK use keeps the ``sdk`` default.
+    """
+    cache_schema = settings.gql_reuse_fetched_graphql_schema
+    headers = telemetry_headers(surface=surface, version=__version__)
+    return PipefyEndpoints(
+        public=GraphQLEndpoint(
+            url=settings.graphql_url, cache_schema=cache_schema, headers=headers
+        ),
+        interfaces=GraphQLEndpoint(
+            url=settings.interfaces_graphql_url,
+            cache_schema=cache_schema,
+            headers=headers,
+        ),
+        internal=GraphQLEndpoint(
+            url=settings.internal_api_url,
+            cache_schema=cache_schema,
+            headers=headers,
+            on_graphql_error=format_internal_api_error,
+        ),
+    )
+
+
+def _bind(endpoints: PipefyEndpoints, auth: Auth) -> Executors:
+    """Bind one identity's ``auth`` to shared endpoints, one executor each.
+
+    All three executors share the one ``auth`` instance so the OAuth token cache
+    is not duplicated across a session's endpoints.
+    """
+    return Executors(
+        public=AuthenticatedExecutor(endpoint=endpoints.public, auth=auth),
+        interfaces=AuthenticatedExecutor(endpoint=endpoints.interfaces, auth=auth),
+        internal=AuthenticatedExecutor(endpoint=endpoints.internal, auth=auth),
+    )
+
+
+def build_executors(
+    settings: PipefySettings, auth: Auth, *, surface: ClientSurface = "sdk"
+) -> Executors:
+    """Build shared endpoints and bind ``auth`` to them in one step.
+
+    Back-compat convenience over :func:`build_endpoints` + :func:`_bind`: it builds
+    the endpoints from ``settings`` and binds them to a single ``auth``. Callers
+    that want the endpoints once and many identities later use the engine instead.
+    """
+    return _bind(build_endpoints(settings, surface=surface), auth)
+
+
+@dataclass(frozen=True)
+class PipefyEngine:
+    """Process-scoped, auth-agnostic core: the shared endpoints and settings.
+
+    Hold one per process. Call :meth:`session` per request with the caller's
+    ``auth`` to get a cheap, identity-bound :class:`PipefyClient`. The endpoints
+    (and their schema caches) are shared across every session, so a future auth
+    transform (OBO exchange, a distinct downstream audience) is a change to the
+    ``auth`` the caller passes to :meth:`session`, not to the engine. ``settings``
+    rides along because it is process config the services need at wiring time (the
+    webhook service reads ``allow_insecure_urls`` / ``default_webhook_name``).
+    """
+
+    endpoints: PipefyEndpoints
+    settings: PipefySettings
+
+    @classmethod
+    def build(
+        cls, settings: PipefySettings, *, surface: ClientSurface = "sdk"
+    ) -> PipefyEngine:
+        """Build the shared endpoints from ``settings`` and hold both."""
+        return cls(build_endpoints(settings, surface=surface), settings)
+
+    def session(self, auth: Auth) -> PipefyClient:
+        """Bind ``auth`` to the shared endpoints and return an operation surface."""
+        return PipefyClient.from_executors(
+            _bind(self.endpoints, auth), settings=self.settings
+        )
 
 
 class PipefyClient:
-    """Facade client for Pipefy API operations (pure delegation)."""
+    """Facade client for Pipefy API operations (pure delegation).
+
+    A session in the engine/session split: an identity-bound surface over the
+    shared endpoints. Build one per request via :meth:`PipefyEngine.session`, or
+    directly through the back-compat constructor.
+    """
 
     def __init__(
         self,
         settings: PipefySettings,
         *,
         auth: Auth,
+        surface: ClientSurface = "sdk",
     ) -> None:
         """Build a facade wired with a pre-constructed ``httpx.Auth``.
+
+        Back-compat entry point: it builds the shared endpoints and binds ``auth``
+        in one step, converging on the same wiring as :meth:`PipefyEngine.session`.
 
         Args:
             settings: Pipefy endpoint configuration.
             auth: ``httpx.Auth`` that supplies the credentials for every GraphQL
                 call (construct via ``pipefy_auth.resolve`` or one of the bearer
                 adapters from ``pipefy_auth``).
+            surface: Client surface stamped into the telemetry headers. The
+                composition root passes its own (``mcp``/``cli``); direct SDK use
+                keeps the ``sdk`` default.
         """
-        self._pipe_service = PipeService(settings=settings, auth=auth)
-        self._card_service = CardService(settings=settings, auth=auth)
+        self._wire(build_executors(settings, auth, surface=surface), settings)
+
+    @classmethod
+    def from_executors(
+        cls, executors: Executors, *, settings: PipefySettings
+    ) -> PipefyClient:
+        """Build a session over prebuilt, already identity-bound executors.
+
+        The engine's per-request entry point: :meth:`PipefyEngine.session` binds an
+        identity's ``auth`` to the shared endpoints and hands the executors here,
+        along with the engine's ``settings`` for the services that need it.
+        """
+        client = cls.__new__(cls)
+        client._wire(executors, settings)
+        return client
+
+    def _wire(self, ex: Executors, settings: PipefySettings) -> None:
+        """Wire the domain services onto ``ex`` (the sole construction path)."""
+        self._internal_executor = ex.internal
+        self._pipe_service = PipeService(executor=ex.public)
+        self._card_service = CardService(executor=ex.public)
         self._pipe_config_service = PipeConfigService(
-            settings=settings, auth=auth, pipe_service=self._pipe_service
+            executor=ex.public, pipe_service=self._pipe_service
         )
-        self._table_service = TableService(settings=settings, auth=auth)
-        self._relation_service = RelationService(settings=settings, auth=auth)
+        self._table_service = TableService(executor=ex.public)
+        self._relation_service = RelationService(
+            executor=ex.public,
+            internal_executor=ex.internal,
+        )
         self._member_service = MemberService(
-            settings=settings,
-            auth=auth,
+            executor=ex.public,
             pipe_service=self._pipe_service,
         )
         self._webhook_service = WebhookService(
+            executor=ex.public,
             settings=settings,
-            auth=auth,
             card_service=self._card_service,
         )
-        self._automation_service = AutomationService(settings=settings, auth=auth)
-        self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
-        self._observability_service = ObservabilityService(settings=settings, auth=auth)
-        self._report_service = ReportService(settings=settings, auth=auth)
-        self._organization_service = OrganizationService(settings=settings, auth=auth)
-        self._user_service = UserService(settings=settings, auth=auth)
+        self._automation_service = AutomationService(executor=ex.public)
+        self._ai_agent_service = AiAgentService(executor=ex.public)
+        self._llm_provider_service = LlmProviderService(executor=ex.public)
+        self._knowledge_base_service = KnowledgeBaseService(executor=ex.public)
+        self._observability_service = ObservabilityService(executor=ex.public)
+        self._report_service = ReportService(executor=ex.public)
+        self._organization_service = OrganizationService(executor=ex.public)
+        self._user_service = UserService(executor=ex.public)
         self._attachment_service = AttachmentService(
-            settings=settings,
-            auth=auth,
+            executor=ex.public,
             card_service=self._card_service,
             table_service=self._table_service,
         )
-        self._introspection_service = SchemaIntrospectionService(
-            settings=settings, auth=auth
+        self._introspection_service = SchemaIntrospectionService(executor=ex.public)
+        self._advanced_automations_service = AdvancedAutomationsService(
+            internal_executor=ex.internal
         )
-        self._internal_api_client: InternalApiClient | None = None
-        self._portal_service = PortalService(settings=settings, auth=auth)
-
-    @property
-    def internal_api_available(self) -> bool:
-        """Whether the internal API client is configured (OAuth credentials present)."""
-        return self._internal_api_client is not None
-
-    def set_internal_api_client(self, client: InternalApiClient) -> None:
-        """Attach the internal API client (requires OAuth credentials).
-
-        Args:
-            client: Configured :class:`InternalApiClient` instance.
-        """
-        self._internal_api_client = client
-        self._portal_service.set_internal_api_client(client)
+        self._portal_service = PortalService(
+            public_executor=ex.public,
+            interfaces_executor=ex.interfaces,
+            internal_executor=ex.internal,
+        )
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -765,6 +932,290 @@ class PipefyClient:
         """Delete an AI Agent by UUID (permanent)."""
         return await self._ai_agent_service.delete_agent(agent_uuid)
 
+    async def get_llm_providers(
+        self,
+        organization_uuid: str,
+        *,
+        only_active: bool = False,
+        first: int = DEFAULT_PROVIDER_PAGE_SIZE,
+        after: str | None = None,
+    ) -> LlmProvidersResult:
+        """List the organization's LLM providers (custom + Pipefy-managed system)."""
+        return await self._llm_provider_service.get_llm_providers(
+            organization_uuid, only_active=only_active, first=first, after=after
+        )
+
+    async def get_available_ai_models(self, provider_name: str) -> list[str]:
+        """List the model names a provider vendor exposes (ProviderName enum)."""
+        return await self._llm_provider_service.get_available_ai_models(provider_name)
+
+    async def get_default_llm_provider(
+        self, owner_id: str, *, owner_type: str = "organization"
+    ) -> LlmProviderPayload:
+        """Resolve the default LLM provider for an owner (org default by default)."""
+        return await self._llm_provider_service.get_default_llm_provider(
+            owner_id, owner_type=owner_type
+        )
+
+    async def get_llm_provider_dependencies(
+        self,
+        provider_id: str,
+        organization_uuid: str,
+        *,
+        first: int = DEFAULT_PROVIDER_PAGE_SIZE,
+        after: str | None = None,
+    ) -> ProviderDependenciesResult:
+        """List the owners that depend on an LLM provider."""
+        return await self._llm_provider_service.get_llm_provider_dependencies(
+            provider_id, organization_uuid, first=first, after=after
+        )
+
+    async def validate_llm_provider_access(
+        self, organization_uuid: str
+    ) -> ProviderAccessProbeResult:
+        """Probe LLM provider read access; classifies errors instead of raising."""
+        return await self._llm_provider_service.validate_llm_provider_access(
+            organization_uuid
+        )
+
+    async def create_llm_provider(
+        self,
+        organization_uuid: str,
+        *,
+        name: str,
+        configuration_file_path: str | Path,
+    ) -> LlmProviderWritePayload:
+        """Create a custom (BYOM) LLM provider (configuration from a local JSON file)."""
+        return await self._llm_provider_service.create_llm_provider(
+            organization_uuid,
+            name=name,
+            configuration_file_path=configuration_file_path,
+        )
+
+    async def update_llm_provider(
+        self,
+        provider_id: str,
+        organization_uuid: str,
+        *,
+        configuration_file_path: str | Path,
+        name: str | None = None,
+    ) -> LlmProviderWritePayload:
+        """Update a custom (BYOM) LLM provider (full configuration replacement)."""
+        return await self._llm_provider_service.update_llm_provider(
+            provider_id,
+            organization_uuid,
+            configuration_file_path=configuration_file_path,
+            name=name,
+        )
+
+    async def delete_llm_provider(
+        self, provider_id: str, organization_uuid: str
+    ) -> LlmProviderMutationResult:
+        """Delete a custom (BYOM) LLM provider (permanent)."""
+        return await self._llm_provider_service.delete_llm_provider(
+            provider_id, organization_uuid
+        )
+
+    async def set_llm_provider_active_status(
+        self, provider_id: str, *, active: bool
+    ) -> LlmProviderMutationResult:
+        """Activate or deactivate a custom (BYOM) LLM provider."""
+        return await self._llm_provider_service.set_llm_provider_active_status(
+            provider_id, active=active
+        )
+
+    async def set_default_llm_provider(
+        self,
+        organization_id: str,
+        *,
+        provider_id: str | None = None,
+        system_provider_id: str | None = None,
+    ) -> ActiveLlmProviderPayload:
+        """Set the organization default provider (exactly one of provider/system id)."""
+        return await self._llm_provider_service.set_default_llm_provider(
+            organization_id,
+            provider_id=provider_id,
+            system_provider_id=system_provider_id,
+        )
+
+    async def reset_default_llm_provider(
+        self, organization_id: str
+    ) -> LlmProviderMutationResult:
+        """Reset (clear) the organization's default LLM provider assignment."""
+        return await self._llm_provider_service.reset_default_llm_provider(
+            organization_id
+        )
+
+    async def get_ai_knowledge_bases(
+        self, pipe_uuid: str
+    ) -> list[KnowledgeBasePayload]:
+        """List every knowledge base item on a pipe (plain text, docs, lookups)."""
+        return await self._knowledge_base_service.get_ai_knowledge_bases(pipe_uuid)
+
+    async def get_ai_knowledge_base_plain_text(
+        self, plain_text_id: str, pipe_uuid: str
+    ) -> KnowledgeBasePlainTextPayload:
+        """Fetch one pipe-scoped knowledge base plain text by id."""
+        return await self._knowledge_base_service.get_ai_knowledge_base_plain_text(
+            plain_text_id, pipe_uuid
+        )
+
+    async def create_ai_knowledge_base_plain_text(
+        self,
+        pipe_uuid: str,
+        *,
+        name: str,
+        content: str,
+        description: str,
+    ) -> KnowledgeBasePlainTextPayload:
+        """Create a pipe-scoped knowledge base plain text (limits enforced client-side)."""
+        return await self._knowledge_base_service.create_ai_knowledge_base_plain_text(
+            pipe_uuid, name=name, content=content, description=description
+        )
+
+    async def update_ai_knowledge_base_plain_text(
+        self,
+        plain_text_id: str,
+        pipe_uuid: str,
+        *,
+        name: str | None = None,
+        content: str | None = None,
+        description: str | None = None,
+    ) -> KnowledgeBasePlainTextPayload:
+        """Update a pipe-scoped knowledge base plain text (partial; validates given fields)."""
+        return await self._knowledge_base_service.update_ai_knowledge_base_plain_text(
+            plain_text_id,
+            pipe_uuid,
+            name=name,
+            content=content,
+            description=description,
+        )
+
+    async def delete_ai_knowledge_base_plain_text(
+        self, plain_text_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDeleteResult:
+        """Delete a pipe-scoped knowledge base plain text (permanent)."""
+        return await self._knowledge_base_service.delete_ai_knowledge_base_plain_text(
+            plain_text_id, pipe_uuid
+        )
+
+    async def get_ai_knowledge_base_document(
+        self, document_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDocumentPayload:
+        """Fetch one pipe-scoped knowledge base document by id."""
+        return await self._knowledge_base_service.get_ai_knowledge_base_document(
+            document_id, pipe_uuid
+        )
+
+    async def create_ai_knowledge_base_document(
+        self,
+        pipe_uuid: str,
+        *,
+        name: str,
+        description: str,
+        file_path: str | Path,
+    ) -> KnowledgeBaseDocumentPayload:
+        """Create a pipe-scoped knowledge base document from a local PDF (one-shot upload).
+
+        Reads the PDF (``.pdf`` and 20 MiB cap enforced client-side), uploads it
+        via a presigned URL, then runs the create mutation. Raises
+        ``KnowledgeBaseDocumentUploadError`` (with ``step``) on pipeline failure.
+        """
+        return await self._knowledge_base_service.create_ai_knowledge_base_document(
+            pipe_uuid, name=name, description=description, file_path=file_path
+        )
+
+    async def update_ai_knowledge_base_document(
+        self,
+        document_id: str,
+        pipe_uuid: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> KnowledgeBaseDocumentPayload:
+        """Update a knowledge base document's metadata (name/description; no file replacement)."""
+        return await self._knowledge_base_service.update_ai_knowledge_base_document(
+            document_id, pipe_uuid, name=name, description=description
+        )
+
+    async def delete_ai_knowledge_base_document(
+        self, document_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDeleteResult:
+        """Delete a pipe-scoped knowledge base document (permanent)."""
+        return await self._knowledge_base_service.delete_ai_knowledge_base_document(
+            document_id, pipe_uuid
+        )
+
+    async def get_ai_knowledge_base_data_lookup(
+        self, data_lookup_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Fetch one pipe-scoped knowledge base data lookup by id (reads never include conditions)."""
+        return await self._knowledge_base_service.get_ai_knowledge_base_data_lookup(
+            data_lookup_id, pipe_uuid
+        )
+
+    async def create_ai_knowledge_base_data_lookup(
+        self,
+        pipe_uuid: str,
+        *,
+        name: str,
+        description: str,
+        source_repo_id: str,
+        output_fields: list[str],
+        conditions: list[dict[str, Any] | DataLookupCondition],
+        search_query: str | None = None,
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Create a pipe-scoped knowledge base data lookup (definition validated client-side)."""
+        return await self._knowledge_base_service.create_ai_knowledge_base_data_lookup(
+            pipe_uuid,
+            name=name,
+            description=description,
+            source_repo_id=source_repo_id,
+            output_fields=output_fields,
+            conditions=conditions,
+            search_query=search_query,
+        )
+
+    async def update_ai_knowledge_base_data_lookup(
+        self,
+        data_lookup_id: str,
+        pipe_uuid: str,
+        *,
+        source_repo_id: str,
+        output_fields: list[str],
+        conditions: list[dict[str, Any] | DataLookupCondition],
+        search_query: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Update a knowledge base data lookup (full replacement of the definition)."""
+        return await self._knowledge_base_service.update_ai_knowledge_base_data_lookup(
+            data_lookup_id,
+            pipe_uuid,
+            source_repo_id=source_repo_id,
+            output_fields=output_fields,
+            conditions=conditions,
+            search_query=search_query,
+            name=name,
+            description=description,
+        )
+
+    async def delete_ai_knowledge_base_data_lookup(
+        self, data_lookup_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDeleteResult:
+        """Delete a pipe-scoped knowledge base data lookup (permanent)."""
+        return await self._knowledge_base_service.delete_ai_knowledge_base_data_lookup(
+            data_lookup_id, pipe_uuid
+        )
+
+    async def validate_knowledge_base_access(
+        self, pipe_uuid: str
+    ) -> KnowledgeBaseAccessProbeResult:
+        """Probe knowledge-base read access for a pipe; classifies errors instead of raising."""
+        return await self._knowledge_base_service.validate_knowledge_base_access(
+            pipe_uuid
+        )
+
     async def create_ai_agent(
         self, agent_input: CreateAiAgentInput
     ) -> AgentServiceResult:
@@ -954,19 +1405,9 @@ class PipefyClient:
         parent_id: str | int,
         source_id: str | int,
     ) -> dict:
-        """Delete a relation link between two cards (internal API, requires OAuth).
-
-        The ``deleteCardRelation`` mutation is not exposed on the public GraphQL
-        schema — only on the internal API (core_api / internal_v1).
-        """
-        assert self._internal_api_client is not None  # noqa: S101
-        return await self._internal_api_client.execute_query(
-            INTERNAL_DELETE_CARD_RELATION_MUTATION,
-            {
-                "childId": str(child_id),
-                "parentId": str(parent_id),
-                "sourceId": str(source_id),
-            },
+        """Delete a relation link between two cards (Internal API, requires OAuth)."""
+        return await self._relation_service.delete_card_relation(
+            child_id, parent_id, source_id
         )
 
     async def get_start_form_fields(
@@ -1217,6 +1658,14 @@ class PipefyClient:
             organization_id: Numeric organization ID.
         """
         return await self._organization_service.get_organization(organization_id)
+
+    async def get_advanced_automations_token(self, pipe_id: str | int) -> str:
+        """Mint a short-lived advanced-automations (iPaaS) access token for a pipe.
+
+        Requires automation-create permission on the pipe and iPaaS enabled on
+        the organization; the Internal API rejects the request otherwise.
+        """
+        return await self._advanced_automations_service.get_token(pipe_id)
 
     async def list_portals(
         self,
@@ -1775,6 +2224,60 @@ class PipefyClient:
         """
         return await self._observability_service.get_automations_usage(
             organization_uuid, filter_date, filters=filters, search=search, sort=sort
+        )
+
+    async def get_automation_execution_metrics(
+        self,
+        organization_id: str,
+        automation_ids: list[str] | None = None,
+        *,
+        repo_id: str | None = None,
+        action_ids: list[str] | None = None,
+        event_id: str | None = None,
+        active: bool | None = None,
+        search: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
+        period: str = "SIXTY_MINUTES",
+        first: int = AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+        after: str | None = None,
+    ) -> dict[str, Any]:
+        """Get execution metrics for automations within a rolling period.
+
+        Partial success: returns metrics for the automations this token may read
+        plus a ``partial_errors`` list naming any that failed. ``page_info``
+        carries the cursor for paging past the 50-automation max page.
+
+        Args:
+            organization_id: Numeric org id, not a UUID.
+            automation_ids: IDs to fetch metrics for. Omit to fetch every
+                automation in the organization (optionally narrowed by the
+                filters below).
+            repo_id: Optional pipe/repo ID to scope the query.
+            action_ids: Optional action IDs to filter by.
+            event_id: Optional trigger event, one of ``AUTOMATION_EVENT_IDS``.
+            active: Optional enabled/disabled filter.
+            search: Optional free-text match on automation name.
+            sort_by: Optional sort field, one of ``AUTOMATION_SORT_BY``.
+            sort_order: Optional sort direction, one of ``AUTOMATION_SORT_ORDER``.
+            period: One of ``AUTOMATION_EXECUTION_METRICS_PERIODS`` (default
+                SIXTY_MINUTES, the API default).
+            first: Page size (default and max 50).
+            after: Cursor from the previous page's ``page_info.endCursor``.
+        """
+        return await self._observability_service.get_automation_execution_metrics(
+            organization_id,
+            automation_ids,
+            repo_id=repo_id,
+            action_ids=action_ids,
+            event_id=event_id,
+            active=active,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            period=period,
+            first=first,
+            after=after,
         )
 
     async def get_ai_credit_usage(

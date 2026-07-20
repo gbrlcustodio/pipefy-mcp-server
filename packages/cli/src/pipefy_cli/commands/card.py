@@ -12,6 +12,9 @@ from pipefy_sdk import (
     PipefyClient,
     UpdateCommentInput,
     copy_card_search,
+    filter_editable_field_definitions,
+    filter_fields_by_definitions,
+    skipped_field_ids,
 )
 from pydantic import ValidationError
 
@@ -21,6 +24,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     format_card_get_transport_query_error,
+    parse_json_object,
     parse_json_value,
     resource_id_argument,
     run_cli_command,
@@ -362,6 +366,70 @@ def card_move(
 
     async def factory(client: PipefyClient):
         return await client.move_card_to_phase(card_id, phase_id)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@card_app.command("fill", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def card_fill(
+    ctx: typer.Context,
+    card_id: str = resource_id_argument(help="Card id."),
+    phase_id: str = typer.Option(
+        ...,
+        "--phase",
+        help="Phase id whose fields to fill.",
+    ),
+    fields_json: str = typer.Option(
+        ...,
+        "--fields",
+        help=(
+            'JSON object of field id to value, e.g. \'{"campo":"v"}\'. '
+            "For ad-hoc updates without phase discovery, use "
+            "`card update --field-updates` (JSON array)."
+        ),
+    ),
+    required_only: bool = typer.Option(
+        False,
+        "--required-only",
+        help="Only load required phase fields when resolving editable field ids.",
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """Fill phase fields on a card (non-interactive).
+
+    Filters ``--fields`` to editable phase field IDs before ``update_card``.
+    Stricter than MCP ``fill_card_phase_fields`` when the phase reports no
+    editable fields (CLI no-ops; MCP may pass values through unfiltered).
+    """
+
+    fields = parse_json_object(fields_json, "--fields") or {}
+
+    async def factory(client: PipefyClient):
+        if not fields:
+            return {"success": True, "message": "No fields to update."}
+
+        phase_fields_result = await client.get_phase_fields(phase_id, required_only)
+        expected_fields = filter_editable_field_definitions(
+            phase_fields_result.get("fields", [])
+        )
+        field_data = filter_fields_by_definitions(fields, expected_fields)
+        dropped = skipped_field_ids(fields, field_data)
+        if not field_data:
+            result: dict[str, Any] = {
+                "success": True,
+                "message": "No fields to update.",
+            }
+            if dropped:
+                result["skipped_field_ids"] = dropped
+            return result
+        field_updates = [
+            {"field_id": field_id, "value": value}
+            for field_id, value in field_data.items()
+        ]
+        api_response = await client.update_card(card_id, field_updates=field_updates)
+        if dropped:
+            return {**api_response, "skipped_field_ids": dropped}
+        return api_response
 
     run_cli_command(ctx, json_out, factory)
 

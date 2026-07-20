@@ -176,11 +176,33 @@ CREATE_CARD_RELATION_MUTATION = gql(
     """
 )
 
+# ``deleteCardRelation`` is only available on the internal GraphQL schema
+# (core_api / internal_v1), not the Public API. It runs through the Internal API
+# executor, which accepts a ``gql()`` query like every other executor.
+INTERNAL_DELETE_CARD_RELATION_MUTATION = gql(
+    """
+    mutation deleteCardRelation(
+      $childId: ID!,
+      $parentId: ID!,
+      $sourceId: ID!
+    ) {
+      deleteCardRelation(input: {
+        child_id: $childId,
+        parent_id: $parentId,
+        source_id: $sourceId
+      }) {
+        success
+      }
+    }
+    """
+)
+
 __all__ = [
     "CREATE_CARD_RELATION_MUTATION",
     "CREATE_PIPE_RELATION_MUTATION",
     "DELETE_PIPE_RELATION_MUTATION",
     "GET_PIPE_RELATIONS_QUERY",
     "GET_TABLE_RELATIONS_QUERY",
+    "INTERNAL_DELETE_CARD_RELATION_MUTATION",
     "UPDATE_PIPE_RELATION_MUTATION",
 ]

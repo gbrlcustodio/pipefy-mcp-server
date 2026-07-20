@@ -11,7 +11,7 @@ from pipefy_sdk.transition_hints import (
     format_allowed_destinations_phrase,
 )
 
-from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.core.tool_error_envelope import tool_error
 
 logger = logging.getLogger(__name__)
 

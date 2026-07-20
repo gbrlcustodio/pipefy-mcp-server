@@ -9,30 +9,23 @@ from typing import Any
 from gql import gql
 from gql.transport.exceptions import TransportQueryError
 from graphql import GraphQLError, GraphQLSyntaxError
-from httpx import Auth
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.introspection_queries import (
     INTROSPECT_MUTATION_QUERY,
     INTROSPECT_QUERY_QUERY,
     INTROSPECT_TYPE_QUERY,
     SCHEMA_TYPES_QUERY,
 )
-from pipefy_sdk.settings import PipefySettings
 
 logger = logging.getLogger(__name__)
 
 
-class SchemaIntrospectionService(BasePipefyClient):
+class SchemaIntrospectionService:
     """GraphQL schema introspection against the standard Pipefy endpoint."""
 
-    def __init__(
-        self,
-        settings: PipefySettings,
-        *,
-        auth: Auth,
-    ) -> None:
-        super().__init__(settings=settings, auth=auth)
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     _SCALAR_TYPE_NAMES = frozenset(
         {
@@ -54,7 +47,7 @@ class SchemaIntrospectionService(BasePipefyClient):
             type_name: GraphQL type name as defined in the schema.
             max_depth: How many levels of referenced types to resolve (default 1 = no recursion).
         """
-        data = await self.execute_query(
+        data = await self._executor.execute_query(
             INTROSPECT_TYPE_QUERY,
             {"typeName": type_name},
         )
@@ -123,7 +116,7 @@ class SchemaIntrospectionService(BasePipefyClient):
             query_constant: Pre-compiled ``gql()`` introspection query for the root type.
             max_depth: How many levels of referenced types to resolve (default 1).
         """
-        data = await self.execute_query(query_constant, {})
+        data = await self._executor.execute_query(query_constant, {})
         root_type = data.get("__type")
         if root_type is None:
             return {
@@ -182,7 +175,7 @@ class SchemaIntrospectionService(BasePipefyClient):
             keyword: Substring matched against each type's name and description.
             kind: Optional GraphQL type kind filter (e.g. OBJECT, INPUT_OBJECT, ENUM).
         """
-        data = await self.execute_query(SCHEMA_TYPES_QUERY, {})
+        data = await self._executor.execute_query(SCHEMA_TYPES_QUERY, {})
         schema = data.get("__schema") or {}
         types = schema.get("types") or []
         needle = keyword.lower()
@@ -225,7 +218,7 @@ class SchemaIntrospectionService(BasePipefyClient):
         other_type = "Mutation" if current_type == "Query" else "Query"
         try:
             query_constant = self._ROOT_TYPE_QUERIES[other_type]
-            data = await self.execute_query(query_constant, {})
+            data = await self._executor.execute_query(query_constant, {})
             root = data.get("__type")
             if root is None:
                 return None
@@ -262,7 +255,7 @@ class SchemaIntrospectionService(BasePipefyClient):
         except GraphQLSyntaxError as exc:
             return {"error": str(exc)}
         try:
-            return await self.execute_query(document, variables or {})
+            return await self._executor.execute_query(document, variables or {})
         except TransportQueryError as exc:
             errors = list(exc.errors) if exc.errors else [{"message": str(exc)}]
             for err in errors:

@@ -6,10 +6,9 @@ import logging
 from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
-from httpx import Auth
 from pipefy_infra import security
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
@@ -26,18 +25,19 @@ from pipefy_sdk.settings import PipefySettings
 logger = logging.getLogger(__name__)
 
 
-class WebhookService(BasePipefyClient):
+class WebhookService:
     """Send inbox emails and manage webhooks (list, create, update, delete)."""
 
     def __init__(
         self,
-        settings: PipefySettings,
         *,
-        auth: Auth,
-        card_service: CardService | None = None,
+        executor: GraphQLExecutor,
+        settings: PipefySettings,
+        card_service: CardService,
     ) -> None:
-        super().__init__(settings=settings, auth=auth)
-        self._card_service = card_service or CardService(settings=settings, auth=auth)
+        self._executor = executor
+        self._settings = settings
+        self._card_service = card_service
 
     async def get_email_templates(
         self,
@@ -56,7 +56,7 @@ class WebhookService(BasePipefyClient):
         variables: dict[str, Any] = {"repoId": str(repo_id), "first": first}
         if filter_by_name is not None and filter_by_name.strip():
             variables["filterByName"] = filter_by_name.strip()
-        return await self.execute_query(GET_EMAIL_TEMPLATES_QUERY, variables)
+        return await self._executor.execute_query(GET_EMAIL_TEMPLATES_QUERY, variables)
 
     async def get_parsed_email_template(
         self,
@@ -74,7 +74,9 @@ class WebhookService(BasePipefyClient):
         variables: dict[str, Any] = {"emailTemplateId": email_template_id}
         if card_uuid is not None and card_uuid.strip():
             variables["cardUuid"] = card_uuid.strip()
-        return await self.execute_query(GET_PARSED_EMAIL_TEMPLATE_QUERY, variables)
+        return await self._executor.execute_query(
+            GET_PARSED_EMAIL_TEMPLATE_QUERY, variables
+        )
 
     async def _resolve_repo_id(
         self, card_id: str, attrs: dict[str, Any]
@@ -138,7 +140,7 @@ class WebhookService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
             {"input": input_obj},
         )
@@ -218,20 +220,20 @@ class WebhookService(BasePipefyClient):
             **attrs: Extra CreateWebhookInput fields (name, filters, headers, etc.).
         """
         security.validate_https_url(
-            url, "url", allow_insecure=self.settings.allow_insecure_urls
+            url, "url", allow_insecure=self._settings.allow_insecure_urls
         )
         input_obj: dict[str, Any] = {
             "pipe_id": str(pipe_id),
             "url": url,
             "actions": actions,
-            "name": attrs.get("name", self.settings.default_webhook_name),
+            "name": attrs.get("name", self._settings.default_webhook_name),
         }
         for key, value in attrs.items():
             if key == "name":
                 continue
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_WEBHOOK_MUTATION,
             {"input": input_obj},
         )
@@ -242,7 +244,7 @@ class WebhookService(BasePipefyClient):
         Args:
             pipe_id: ID of the pipe.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_WEBHOOKS_QUERY,
             {"pipeId": str(pipe_id)},
         )
@@ -264,14 +266,14 @@ class WebhookService(BasePipefyClient):
             security.validate_https_url(
                 str(url_val),
                 "url",
-                allow_insecure=self.settings.allow_insecure_urls,
+                allow_insecure=self._settings.allow_insecure_urls,
             )
         for key, value in attrs.items():
             if key == "id":
                 continue
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             UPDATE_WEBHOOK_MUTATION,
             {"input": input_obj},
         )
@@ -282,7 +284,7 @@ class WebhookService(BasePipefyClient):
         Args:
             webhook_id: ID of the webhook to delete.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_WEBHOOK_MUTATION,
             {"input": {"id": webhook_id}},
         )
@@ -299,7 +301,7 @@ class WebhookService(BasePipefyClient):
             card_id: ID of the card with inbox.
             email_type: Optional filter: 'sent' | 'received'. When omitted, returns all.
         """
-        raw = await self.execute_query(
+        raw = await self._executor.execute_query(
             GET_CARD_INBOX_EMAILS_QUERY,
             {"card_id": str(card_id)},
         )

@@ -8,6 +8,40 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pipefy_cli.main import app
 
 
+def test_relation_table_relations_list_json(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("rel-tbl")
+    payload = {"table_relations": []}
+    mock_client = MagicMock()
+    mock_client.get_table_relations = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app, ["relation", "table", "list", "--ids", "10,20", "--json"]
+        )
+    assert result.exit_code == 0
+    mock_client.get_table_relations.assert_awaited_once_with(["10", "20"])
+
+
+def test_relation_table_relations_list_empty_ids_bad_parameter(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("rel-tbl-bad")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app, ["relation", "table", "list", "--ids", ",", "--json"]
+        )
+    assert result.exit_code == 2
+    mock_client.get_table_relations.assert_not_called()
+
+
 def test_relation_pipe_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("rel-p")
     payload = {"pipe": {"relations": []}}
@@ -20,64 +54,6 @@ def test_relation_pipe_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env)
         result = runner.invoke(app, ["relation", "pipe", "list", "10", "--json"])
     assert result.exit_code == 0
     mock_client.get_pipe_relations.assert_awaited_once_with("10")
-
-
-def test_relation_card_delete_requires_internal_api(
-    runner, clean_pipefy_env, saved_cwd, oauth_env
-):
-    oauth_env("rel-c")
-    mock_client = MagicMock()
-    mock_client.internal_api_available = False
-    with patch(
-        "pipefy_cli.commands._common.get_authenticated_client",
-        return_value=mock_client,
-    ):
-        result = runner.invoke(
-            app,
-            [
-                "relation",
-                "card",
-                "delete",
-                "--child",
-                "1",
-                "--parent",
-                "2",
-                "--source",
-                "3",
-                "--yes",
-                "--json",
-            ],
-        )
-    assert result.exit_code == 2
-    mock_client.delete_card_relation.assert_not_called()
-
-
-def test_member_remove_blocks_service_account(
-    runner, clean_pipefy_env, saved_cwd, oauth_env, monkeypatch
-):
-    oauth_env("mem-guard")
-    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_IDS", "svc-1")
-    mock_client = MagicMock()
-    with patch(
-        "pipefy_cli.commands._common.get_authenticated_client",
-        return_value=mock_client,
-    ):
-        result = runner.invoke(
-            app,
-            [
-                "member",
-                "remove",
-                "--pipe",
-                "44",
-                "--user-ids",
-                "svc-1",
-                "--yes",
-                "--json",
-            ],
-        )
-    assert result.exit_code == 2
-    assert "Cannot remove service account" in (result.stderr or "")
-    mock_client.remove_members_from_pipe.assert_not_called()
 
 
 def test_member_invite_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
@@ -177,7 +153,6 @@ def test_relation_card_delete_internal_api_json(
 ):
     oauth_env("rel-cc-del")
     mock_client = MagicMock()
-    mock_client.internal_api_available = True
     mock_client.delete_card_relation = AsyncMock(
         return_value={"deleteCardRelation": {}}
     )

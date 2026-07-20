@@ -179,7 +179,10 @@ On **create**, if the caller omits `condition`, the MCP layer supplies `DEFAULT_
 | `create_table_record` | `{ "tableId": "<table_id>", "fieldsAttributes": [...] }` (`pipeId` not required; MCP does not check table `fieldId` values against the pipe — use `get_table` / `get_table_record`.) |
 | `send_email_template` | `{ "emailTemplateId": "<template_id>" }` (optional: `allowTemplateModifications` boolean; MCP does not verify that the template ID exists.) |
 
-Optional inside `actionParams.aiBehaviorParams`: **`capabilitiesAttributes`** — list of capability entries (e.g. types `advanced_ocr`, `web_search`). Passed through to the API; the MCP does not deeply validate capability config.
+Optional inside `actionParams.aiBehaviorParams`:
+
+- **`capabilitiesAttributes`** — list of capability entries, each exactly `{ "capabilityType": "<type>", "enabled": true|false }`. Both keys are required and no other keys are accepted; legacy shapes (bare string lists, `{ "type": ... }`) are rejected. Common `capabilityType` values: `advanced_ocr` (product name IDP / Intelligent Document Processing), `math_operations` (Calculations & Analysis), `web_search`, `web_scraping`, `max_effort`. `capabilityType` is not checked against a fixed set — any value passes through and the API validates the enum on write. Validation checks shape only, not plan/feature entitlement — a capability may still require organization-level enablement to take effect.
+- **`providerId`** / **`systemProviderId`** — select the behavior's LLM provider; set at most one (reads resolve a single active provider). Discover IDs with `get_llm_providers` (see [LLM providers](llm-providers.md)): use `providerId` for a custom (`byom`) provider and `systemProviderId` for a Pipefy-managed (`system`) one. IDs are also visible in the organization's AI settings in the Pipefy UI.
 
 ### Optional `eventParams` (trigger filters)
 

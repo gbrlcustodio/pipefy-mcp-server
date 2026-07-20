@@ -154,7 +154,10 @@ def phase_create(
     index: float | None = typer.Option(
         None,
         "--index",
-        help="Optional position index within the pipe.",
+        help=(
+            "1-based insert among workflow phases; omit to append. "
+            "Does not set Connections (UI-only)."
+        ),
     ),
     description: str | None = typer.Option(None, "--description", "-d"),
     json_out: bool = typer.Option(False, "--json", "-j"),

@@ -10,10 +10,14 @@ from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
-    PipefyClient,
     PipefyId,
 )
 
+from pipefy_mcp.core.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error_message,
+    tool_success,
+)
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
@@ -25,6 +29,7 @@ from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
     validate_page_size,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.table_tool_helpers import (
     build_delete_table_error_payload,
     build_delete_table_success_payload,
@@ -35,11 +40,7 @@ from pipefy_mcp.tools.table_tool_helpers import (
     handle_table_tool_graphql_error,
     map_delete_table_error_to_message,
 )
-from pipefy_mcp.tools.tool_error_envelope import (
-    is_unified_envelope_enabled,
-    tool_error_message,
-    tool_success,
-)
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_optional_tool_id,
@@ -62,11 +63,13 @@ class TableTools:
     """MCP tools for database tables and records (reads and mutations)."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def search_tables(
+            ctx: Context,
             table_name: str | None = None,
             first: int = 100,
         ) -> dict[str, Any]:
@@ -104,6 +107,7 @@ class TableTools:
                                          100 for substring matches, fuzzy score otherwise.
                       And ``search_limits`` (``tables_first``, ``tables_has_next_page``).
             """
+            client = get_pipefy_client(ctx)
             nfirst, err = validate_page_size(first, max_size=_SEARCH_TABLES_FIRST_MAX)
             if err is not None:
                 return err
@@ -122,8 +126,9 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
-        async def get_table(table_id: PipefyId) -> dict[str, Any]:
+        async def get_table(table_id: PipefyId, ctx: Context) -> dict[str, Any]:
             """Load one database table: name, description, fields, and authorization.
 
             Use this after ``search_tables`` (or when you already have a table ID) to inspect
@@ -142,6 +147,7 @@ class TableTools:
                 ``authorization``). On validation or GraphQL errors, ``success: False`` with an
                 ``error`` message.
             """
+            client = get_pipefy_client(ctx)
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_table_read_error_payload(message=tool_error_message(err))
@@ -161,8 +167,9 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
-        async def get_tables(table_ids: list[PipefyId]) -> dict[str, Any]:
+        async def get_tables(table_ids: list[PipefyId], ctx: Context) -> dict[str, Any]:
             """Load several database tables by ID (same shape as get_table per table).
 
             IDs are **database table** ids, not table-**relation** ids (see ``get_table_relations``).
@@ -170,6 +177,7 @@ class TableTools:
             Args:
                 table_ids: Non-empty list of table IDs.
             """
+            client = get_pipefy_client(ctx)
             if not isinstance(table_ids, list) or not table_ids:
                 return build_table_read_error_payload(
                     message="Invalid 'table_ids': provide a non-empty list of IDs.",
@@ -197,9 +205,11 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_table_records(
             table_id: PipefyId,
+            ctx: Context,
             first: int = 50,
             after: str | None = None,
         ) -> dict[str, Any]:
@@ -222,6 +232,7 @@ class TableTools:
                 first: Page size (1–200, default 50).
                 after: Cursor from the previous page (`endCursor`), if any.
             """
+            client = get_pipefy_client(ctx)
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_table_read_error_payload(message=tool_error_message(err))
@@ -263,8 +274,9 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
-        async def get_table_record(record_id: PipefyId) -> dict[str, Any]:
+        async def get_table_record(record_id: PipefyId, ctx: Context) -> dict[str, Any]:
             """Load a single database table record with its field values.
 
             Use this when you have a record ID (e.g. from ``get_table_records`` or ``find_records``)
@@ -282,6 +294,7 @@ class TableTools:
                 ``table_record`` (``id``, ``title``, ``record_fields``). On errors,
                 ``success: False`` with ``error``.
             """
+            client = get_pipefy_client(ctx)
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
                 return build_table_read_error_payload(message=tool_error_message(err))
@@ -301,11 +314,13 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def find_records(
             table_id: PipefyId,
             field_id: str,
             field_value: str,
+            ctx: Context,
             first: int | None = None,
             after: str | None = None,
         ) -> dict[str, Any]:
@@ -323,6 +338,7 @@ class TableTools:
                 first: Optional page size for pagination (1-200 when set).
                 after: Optional cursor from ``pagination.end_cursor`` of a prior response.
             """
+            client = get_pipefy_client(ctx)
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_table_read_error_payload(message=tool_error_message(err))
@@ -385,6 +401,7 @@ class TableTools:
         async def create_table(
             name: str,
             organization_id: PipefyId,
+            ctx: Context,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -396,6 +413,7 @@ class TableTools:
                 extra_input: Additional `CreateTableInput` fields (e.g. description, authorization).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             if not isinstance(name, str) or not name.strip():
                 return build_table_mutation_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
@@ -434,6 +452,7 @@ class TableTools:
         )
         async def update_table(
             table_id: PipefyId,
+            ctx: Context,
             name: str | None = None,
             description: str | None = None,
             extra_input: Any | None = None,
@@ -448,6 +467,7 @@ class TableTools:
                 extra_input: Other `UpdateTableInput` keys to merge (e.g. public, icon).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_table_mutation_error_payload(
@@ -511,6 +531,7 @@ class TableTools:
                 confirm: When True, performs deletion after explicit user confirmation.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_delete_table_error_payload(message=tool_error_message(err))
@@ -580,6 +601,7 @@ class TableTools:
         async def create_table_record(
             table_id: PipefyId,
             fields: Any,
+            ctx: Context,
             title: str | None = None,
             extra_input: Any | None = None,
             debug: bool = False,
@@ -597,6 +619,7 @@ class TableTools:
                 extra_input: Other `CreateTableRecordInput` keys (e.g. label_ids).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_table_mutation_error_payload(
@@ -662,6 +685,7 @@ class TableTools:
         async def update_table_record(
             record_id: PipefyId,
             fields: dict[str, Any],
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Update a table record (title, due_date, status_id per Pipefy `UpdateTableRecordInput`).
@@ -675,6 +699,7 @@ class TableTools:
                 fields: Keys may include title, due_date, status_id (or statusId).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
                 return build_table_mutation_error_payload(
@@ -729,6 +754,7 @@ class TableTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
                 return build_table_mutation_error_payload(
@@ -765,6 +791,7 @@ class TableTools:
             record_id: PipefyId,
             field_id: PipefyId,
             value: Any,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Update a single custom field on a table record.
@@ -778,6 +805,7 @@ class TableTools:
                 value: New value (string/number/list as required by the field type).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
                 return build_table_mutation_error_payload(
@@ -817,6 +845,7 @@ class TableTools:
             table_id: PipefyId,
             label: str,
             field_type: str,
+            ctx: Context,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -837,6 +866,7 @@ class TableTools:
                 extra_input: Additional CreateTableFieldInput keys to merge (e.g. required, options).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_table_mutation_error_payload(
@@ -884,6 +914,7 @@ class TableTools:
         )
         async def update_table_field(
             field_id: PipefyId,
+            ctx: Context,
             table_id: PipefyId | None = None,
             label: str | None = None,
             description: str | None = None,
@@ -906,6 +937,7 @@ class TableTools:
                 extra_input: Other UpdateTableFieldInput keys to merge (e.g. table_id if not provided as parameter).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
                 return build_table_mutation_error_payload(
@@ -992,6 +1024,7 @@ class TableTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
                 return build_table_mutation_error_payload(

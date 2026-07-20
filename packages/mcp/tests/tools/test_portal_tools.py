@@ -8,16 +8,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 from pipefy_sdk.exceptions import PortalPermissionError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.portal_tools import PortalTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 _PORTAL_LIST_NODE = {
     "id": "portal-uuid-1",
@@ -143,9 +142,9 @@ def mock_portal_client():
 
 @pytest.fixture
 def portal_mcp_server(mock_portal_client):
-    mcp = FastMCP("Pipefy Portal Tools Test")
-    PortalTools.register(mcp, mock_portal_client)
-    return mcp
+    return build_tool_test_server(
+        "Pipefy Portal Tools Test", PortalTools.register, mock_portal_client
+    )
 
 
 @pytest.fixture

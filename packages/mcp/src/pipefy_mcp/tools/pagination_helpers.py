@@ -6,7 +6,7 @@ from typing import Any
 
 from typing_extensions import TypedDict
 
-from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.core.tool_error_envelope import tool_error
 
 __all__ = [
     "DEFAULT_PAGE_SIZE",

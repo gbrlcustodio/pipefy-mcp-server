@@ -2,18 +2,17 @@
 
 from datetime import timedelta
 from random import randint
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tools.conftest import build_tool_test_server
 
 
 @pytest.fixture
@@ -24,22 +23,13 @@ def mock_pipefy_client():
     return client
 
 
-@pytest.fixture(autouse=True)
-def mock_services_container(mocker, mock_pipefy_client):
-    container = Mock(ServicesContainer)
-    container.pipefy_client = mock_pipefy_client
-
-    return mocker.patch(
-        "pipefy_mcp.core.container.ServicesContainer.get_instance",
-        return_value=container,
-    )
-
-
 @pytest.fixture
 def mcp_server(mock_pipefy_client):
-    mcp = FastMCP("Field Condition Tools Test")
-    FieldConditionTools.register(mcp, mock_pipefy_client)
-    return mcp
+    return build_tool_test_server(
+        "Field Condition Tools Test",
+        FieldConditionTools.register,
+        mock_pipefy_client,
+    )
 
 
 @pytest.fixture

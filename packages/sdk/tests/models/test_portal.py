@@ -45,7 +45,7 @@ def test_create_portal_element_input_accepts_forms_with_data_sources() -> None:
 
 @pytest.mark.unit
 def test_create_portal_element_input_accepts_sub_portal_type() -> None:
-    """subPortal create validates metadata shape (empty until wired via internal_api)."""
+    """subPortal create validates metadata shape (empty until wired via the Internal API)."""
     element_input = CreatePortalElementInput(
         page_id=_PAGE_ID,
         type="subPortal",

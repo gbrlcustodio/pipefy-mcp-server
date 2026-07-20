@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from httpx import Auth
-
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.report_queries import (
     CREATE_ORGANIZATION_REPORT_MUTATION,
     CREATE_PIPE_REPORT_MUTATION,
@@ -26,19 +24,13 @@ from pipefy_sdk.queries.report_queries import (
     UPDATE_PIPE_REPORT_MUTATION,
 )
 from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
-from pipefy_sdk.settings import PipefySettings
 
 
-class ReportService(BasePipefyClient):
+class ReportService:
     """Read, CRUD, and export operations for pipe and organization reports."""
 
-    def __init__(
-        self,
-        settings: PipefySettings,
-        *,
-        auth: Auth,
-    ) -> None:
-        super().__init__(settings=settings, auth=auth)
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def get_pipe_reports(
         self,
@@ -71,7 +63,7 @@ class ReportService(BasePipefyClient):
             variables["reportId"] = report_id
         if order is not None:
             variables["order"] = order
-        return await self.execute_query(GET_PIPE_REPORTS_QUERY, variables)
+        return await self._executor.execute_query(GET_PIPE_REPORTS_QUERY, variables)
 
     async def get_pipe_report_columns(self, pipe_uuid: str) -> dict[str, Any]:
         """Get available columns for a pipe report.
@@ -79,7 +71,7 @@ class ReportService(BasePipefyClient):
         Args:
             pipe_uuid: Pipe UUID.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_PIPE_REPORT_COLUMNS_QUERY,
             {"pipeUuid": pipe_uuid},
         )
@@ -90,7 +82,7 @@ class ReportService(BasePipefyClient):
         Args:
             pipe_uuid: Pipe UUID.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_PIPE_REPORT_FILTERABLE_FIELDS_QUERY,
             {"pipeUuid": pipe_uuid},
         )
@@ -101,7 +93,7 @@ class ReportService(BasePipefyClient):
         Args:
             report_id: Organization report ID.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_ORGANIZATION_REPORT_QUERY,
             {"id": str(report_id)},
         )
@@ -126,7 +118,9 @@ class ReportService(BasePipefyClient):
         }
         if after is not None:
             variables["after"] = after
-        return await self.execute_query(GET_ORGANIZATION_REPORTS_QUERY, variables)
+        return await self._executor.execute_query(
+            GET_ORGANIZATION_REPORTS_QUERY, variables
+        )
 
     async def get_pipe_report_export(self, export_id: str) -> dict[str, Any]:
         """Check the status of a pipe report export.
@@ -134,7 +128,7 @@ class ReportService(BasePipefyClient):
         Args:
             export_id: Pipe report export ID.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_PIPE_REPORT_EXPORT_QUERY,
             {"id": export_id},
         )
@@ -145,7 +139,7 @@ class ReportService(BasePipefyClient):
         Args:
             export_id: Organization report export ID.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_ORGANIZATION_REPORT_EXPORT_QUERY,
             {"id": export_id},
         )
@@ -176,7 +170,7 @@ class ReportService(BasePipefyClient):
             input_obj["filter"] = prepared_filter
         if formulas is not None:
             input_obj["formulas"] = formulas
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_PIPE_REPORT_MUTATION, {"input": input_obj}
         )
 
@@ -214,7 +208,7 @@ class ReportService(BasePipefyClient):
         for key, value in optional_fields.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             UPDATE_PIPE_REPORT_MUTATION, {"input": input_obj}
         )
 
@@ -224,7 +218,7 @@ class ReportService(BasePipefyClient):
         Args:
             report_id: Pipe report ID.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_PIPE_REPORT_MUTATION, {"input": {"id": str(report_id)}}
         )
 
@@ -256,7 +250,7 @@ class ReportService(BasePipefyClient):
             input_obj["fields"] = fields
         if prepared_filter is not None:
             input_obj["filter"] = prepared_filter
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_ORGANIZATION_REPORT_MUTATION, {"input": input_obj}
         )
 
@@ -291,7 +285,7 @@ class ReportService(BasePipefyClient):
         for key, value in optional_fields.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             UPDATE_ORGANIZATION_REPORT_MUTATION, {"input": input_obj}
         )
 
@@ -301,7 +295,7 @@ class ReportService(BasePipefyClient):
         Args:
             report_id: Organization report ID.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_ORGANIZATION_REPORT_MUTATION, {"input": {"id": str(report_id)}}
         )
 
@@ -334,7 +328,7 @@ class ReportService(BasePipefyClient):
             input_obj["filter"] = prepared_filter
         if columns is not None:
             input_obj["columns"] = columns
-        return await self.execute_query(
+        return await self._executor.execute_query(
             EXPORT_PIPE_REPORT_MUTATION, {"input": input_obj}
         )
 
@@ -372,7 +366,7 @@ class ReportService(BasePipefyClient):
         for key, value in optional_fields.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             EXPORT_ORGANIZATION_REPORT_MUTATION, {"input": input_obj}
         )
 
@@ -391,6 +385,6 @@ class ReportService(BasePipefyClient):
         input_obj: dict[str, Any] = {"pipeUuid": pipe_uuid}
         if search_term is not None:
             input_obj["searchTerm"] = search_term
-        return await self.execute_query(
+        return await self._executor.execute_query(
             EXPORT_PIPE_AUDIT_LOGS_MUTATION, {"input": input_obj}
         )

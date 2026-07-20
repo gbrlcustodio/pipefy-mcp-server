@@ -54,3 +54,6 @@ scripts/*
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Local-only planning/scratch (may contain internal context)
+tmp/

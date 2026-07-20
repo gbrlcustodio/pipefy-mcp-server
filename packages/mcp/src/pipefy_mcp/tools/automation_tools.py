@@ -7,10 +7,11 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import CreateSendTaskAutomationInput, PipefyClient, PipefyId
+from pipefy_sdk import CreateSendTaskAutomationInput, PipefyId
 from pipefy_sdk.automation_preflight import AutomationPreflightError
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_error_payload,
     build_automation_mutation_success_payload,
@@ -20,7 +21,8 @@ from pipefy_mcp.tools.automation_tool_helpers import (
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_optional_tool_id,
@@ -42,9 +44,10 @@ class AutomationTools:
     """MCP tools for traditional (non-AI) pipe automations."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation(
             ctx: Context, automation_id: PipefyId
@@ -52,9 +55,11 @@ class AutomationTools:
             """Load one automation rule by ID, including trigger and action payloads.
 
             Use this to inspect or debug a specific rule, or before ``update_automation`` /
-            ``delete_automation``. Returned ``event_params`` and ``action_params`` (e.g.
-            ``aiParams`` with ``value`` / ``fieldIds`` / ``skillsIds``) align with
-            ``simulate_automation`` and ``create_automation`` inputs. For new rules, discover
+            ``delete_automation``. Returned ``event_params``, ``action_params`` (e.g.
+            ``aiParams`` with ``value`` / ``fieldIds`` / ``skillsIds``), and ``condition``
+            align with ``simulate_automation`` and ``create_automation`` inputs. A
+            ``condition`` with empty ``field_address`` / ``operation`` / ``value`` is the
+            API placeholder (no real filter), not a missing field. For new rules, discover
             ``event_id`` / ``action_id`` via ``get_automation_events`` and ``get_automation_actions``
             on the target pipe, then call ``create_automation``.
 
@@ -66,6 +71,7 @@ class AutomationTools:
                 ``None`` when not found). On validation or GraphQL errors, ``success: False`` with
                 ``error``.
             """
+            client = get_pipefy_client(ctx)
             aid, aid_err = validate_tool_id(automation_id, "automation_id")
             if aid_err is not None:
                 return aid_err
@@ -88,6 +94,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automations(
             ctx: Context,
@@ -114,6 +121,7 @@ class AutomationTools:
                 summaries returned by the API. On validation or GraphQL errors, ``success: False``
                 with ``error``.
             """
+            client = get_pipefy_client(ctx)
             ok_o, org, org_err = validate_optional_tool_id(
                 organization_id, "organization_id"
             )
@@ -142,6 +150,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_actions(
             ctx: Context,
@@ -165,6 +174,7 @@ class AutomationTools:
             Args:
                 pipe_id: Pipe ID.
             """
+            client = get_pipefy_client(ctx)
             pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
             if pid_err is not None:
                 return pid_err
@@ -185,6 +195,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_events(
             ctx: Context, pipe_id: PipefyId
@@ -198,6 +209,7 @@ class AutomationTools:
             Args:
                 pipe_id: Pipe ID (context for the agent; required by the tool).
             """
+            client = get_pipefy_client(ctx)
             pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
             if pid_err is not None:
                 return pid_err
@@ -218,6 +230,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_event_attributes(ctx: Context) -> dict[str, Any]:
             """List the official **event-scoped** ``field_map.value`` token catalog.
@@ -232,6 +245,7 @@ class AutomationTools:
             see ``create_automation`` docstring and
             ``docs/mcp/tools/automations-and-ai.md#common-value-tokens-copy_from``.
             """
+            client = get_pipefy_client(ctx)
             try:
                 rows = await client.get_automation_event_attributes()
             except Exception as exc:  # noqa: BLE001
@@ -284,6 +298,7 @@ class AutomationTools:
                 extra_input: Optional map of extra ``CreateAutomationSimulationInput`` fields (merged last).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
             if pid_err is not None:
                 return pid_err
@@ -420,6 +435,7 @@ class AutomationTools:
                 extra_input: Optional extra fields for the mutation input; top-level keys are snake_case (mirror ``get_automation`` output).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
             if pid_err is not None:
                 return pid_err
@@ -529,6 +545,7 @@ class AutomationTools:
                 event_params: Optional trigger filter payload (camelCase/snake_case as returned by catalog tools).
                 condition: Optional condition expressions payload.
             """
+            client = get_pipefy_client(ctx)
             try:
                 validated = CreateSendTaskAutomationInput(
                     pipe_id=pipe_id,
@@ -593,6 +610,7 @@ class AutomationTools:
                 extra_input: Optional fields to patch on the rule.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             rid, rid_err = validate_tool_id(automation_id, "automation_id")
             if rid_err is not None:
                 return rid_err
@@ -640,6 +658,7 @@ class AutomationTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             rid, rid_err = validate_tool_id(automation_id, "automation_id")
             if rid_err is not None:
                 return rid_err

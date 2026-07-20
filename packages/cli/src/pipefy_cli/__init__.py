@@ -1,7 +1,7 @@
-"""Typer CLI entry surface for Pipefy (pipefy-sdk)."""
+"""Typer CLI entry surface for Pipefy (pipefy)."""
 
 from __future__ import annotations
 
-__version__ = "0.2.0-beta.4"
+__version__ = "0.3.0-alpha.1"
 
 __all__ = ["__version__"]

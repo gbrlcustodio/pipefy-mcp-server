@@ -8,7 +8,10 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Literal
 
+from pydantic import ValidationError
+
 from pipefy_sdk.behavior_placeholders import populate_referenced_field_ids
+from pipefy_sdk.models import AiBehaviorParams, BehaviorPayload
 
 if TYPE_CHECKING:
     from pipefy_sdk.client import PipefyClient
@@ -16,6 +19,29 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 PHASE_FIELD_FETCH_CONCURRENCY = 8
+
+
+def _behavior_payload(behavior: Any) -> BehaviorPayload | None:
+    """Parse a raw behavior dict into the typed, casing-agnostic :class:`BehaviorPayload`.
+
+    Returns ``None`` for entries that are not dicts or fail to parse, so callers can
+    skip malformed behaviors instead of walking the dict with dual-alias branches.
+    """
+    if not isinstance(behavior, dict):
+        return None
+    try:
+        return BehaviorPayload.model_validate(behavior)
+    except ValidationError:
+        return None
+
+
+def _ai_behavior_params(behavior: Any) -> AiBehaviorParams | None:
+    """Return the typed ``aiBehaviorParams`` of a raw behavior dict, or ``None``."""
+    payload = _behavior_payload(behavior)
+    if payload is None or payload.action_params is None:
+        return None
+    return payload.action_params.ai_behavior_params
+
 
 KNOWN_AI_ACTION_TYPES = frozenset(
     {
@@ -70,14 +96,14 @@ def validate_behaviors_against_pipe(
     warnings: list[str] = []
 
     for i, b in enumerate(behaviors):
-        name = b.get("name", f"<behavior {i}>")
+        payload = _behavior_payload(b)
+        name = (payload.name if payload else None) or f"<behavior {i}>"
         prefix = f'Behavior [{i}] "{name}"'
 
-        ap = b.get("actionParams") or b.get("action_params") or {}
-        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-        attrs = abp.get("actionsAttributes") or abp.get("actions_attributes") or []
+        abp = _ai_behavior_params(b)
+        attrs = (abp.actions_attributes if abp else None) or []
 
-        ep = b.get("eventParams") or b.get("event_params") or {}
+        ep = (payload.event_params if payload else None) or {}
         to_phase = ep.get("to_phase_id") or ep.get("toPhaseId")
         if to_phase and str(to_phase) not in pipe_phase_ids:
             problems.append(
@@ -86,10 +112,8 @@ def validate_behaviors_against_pipe(
             )
 
         for j, action in enumerate(attrs):
-            if not isinstance(action, dict):
-                continue
-            action_type = action.get("actionType", "")
-            metadata = action.get("metadata") or {}
+            action_type = action.action_type or ""
+            metadata = action.metadata if isinstance(action.metadata, dict) else {}
 
             if action_type and action_type not in KNOWN_AI_ACTION_TYPES:
                 msg = (
@@ -174,18 +198,11 @@ def _extract_slug_field_ids_by_pipe(
     """
     slugs_by_pipe: dict[str, set[str]] = {}
     for b in behaviors:
-        if not isinstance(b, dict):
+        abp = _ai_behavior_params(b)
+        if abp is None:
             continue
-        ap = b.get("actionParams") or b.get("action_params") or {}
-        if not isinstance(ap, dict):
-            continue
-        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-        if not isinstance(abp, dict):
-            continue
-        for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
-            if not isinstance(a, dict):
-                continue
-            metadata = a.get("metadata") or {}
+        for a in abp.actions_attributes or []:
+            metadata = a.metadata if isinstance(a.metadata, dict) else {}
             pipe_id = str(metadata.get("pipeId", ""))
             if not pipe_id:
                 continue
@@ -218,16 +235,12 @@ def pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
         Set of pipe ID strings found in ``metadata.pipeId`` across all actions.
     """
     pids: set[str] = set()
-    ap = behavior.get("actionParams") or behavior.get("action_params") or {}
-    if not isinstance(ap, dict):
+    abp = _ai_behavior_params(behavior)
+    if abp is None:
         return pids
-    abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-    if not isinstance(abp, dict):
-        return pids
-    for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
-        if not isinstance(a, dict):
-            continue
-        pid = str((a.get("metadata") or {}).get("pipeId", ""))
+    for a in abp.actions_attributes or []:
+        metadata = a.metadata if isinstance(a.metadata, dict) else {}
+        pid = str(metadata.get("pipeId", ""))
         if pid:
             pids.add(pid)
     return pids
@@ -357,15 +370,10 @@ async def resolve_field_slugs_to_numeric(
     pipes_needed: set[str] = set(slugs_by_pipe.keys())
 
     for b in behaviors:
-        if not isinstance(b, dict):
+        abp = _ai_behavior_params(b)
+        if abp is None:
             continue
-        ap = b.get("actionParams") or b.get("action_params") or {}
-        if not isinstance(ap, dict):
-            continue
-        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-        if not isinstance(abp, dict):
-            continue
-        instr = abp.get("instruction")
+        instr = abp.instruction
         if isinstance(instr, str) and _instruction_has_non_numeric_field_tokens(instr):
             pipes_needed.update(pipe_ids_from_behavior(b))
 
@@ -387,31 +395,36 @@ async def resolve_field_slugs_to_numeric(
     if not slug_to_numeric:
         return behaviors
 
-    resolved = copy.deepcopy(behaviors)
-    for b in resolved:
-        if not isinstance(b, dict):
+    resolved: list[dict[str, Any]] = []
+    for b in behaviors:
+        # Deep-copy before parsing: pydantic keeps a reference to the input
+        # ``metadata`` dict, so mutating it in place would corrupt the caller's
+        # behavior. Parsing a copy keeps the original untouched.
+        b_copy = copy.deepcopy(b)
+        payload = _behavior_payload(b_copy)
+        abp = (
+            payload.action_params.ai_behavior_params
+            if payload and payload.action_params
+            else None
+        )
+        if abp is None:
+            resolved.append(b_copy)
             continue
-        ap = b.get("actionParams") or b.get("action_params") or {}
-        if not isinstance(ap, dict):
-            continue
-        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-        if not isinstance(abp, dict):
-            continue
-        for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
-            if not isinstance(a, dict):
+        for a in abp.actions_attributes or []:
+            metadata = a.metadata if isinstance(a.metadata, dict) else None
+            if metadata is None:
                 continue
-            for fa in (a.get("metadata") or {}).get("fieldsAttributes") or []:
+            for fa in metadata.get("fieldsAttributes") or []:
                 if not isinstance(fa, dict):
                     continue
                 fid = str(fa.get("fieldId", ""))
                 if fid in slug_to_numeric:
                     fa["fieldId"] = slug_to_numeric[fid]
-
-        instr = abp.get("instruction")
-        if isinstance(instr, str):
-            abp["instruction"] = _rewrite_instruction_field_tokens(
-                instr, slug_to_numeric
+        if isinstance(abp.instruction, str):
+            abp.instruction = _rewrite_instruction_field_tokens(
+                abp.instruction, slug_to_numeric
             )
+        resolved.append(payload.model_dump(by_alias=True, exclude_none=True))
 
     return resolved
 

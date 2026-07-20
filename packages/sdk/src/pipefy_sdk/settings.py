@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Self
 
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
-    NoDecode,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
@@ -22,7 +21,7 @@ _ORG_ID_PATTERN = r"^[0-9]+$"
 
 
 class PipefySettings(BaseSettings):
-    """Pipefy API connection and shared runtime knobs (MCP, CLI, scripts).
+    """Pipefy API connection and shared runtime knobs (CLI, scripts).
 
     Endpoint configuration only — credentials live on
     :class:`pipefy_auth.AuthSettings`. Consumers compose both side by side in
@@ -98,14 +97,6 @@ class PipefySettings(BaseSettings):
         ),
     )
 
-    service_account_ids: Annotated[list[str], NoDecode] = Field(
-        default_factory=list,
-        description=(
-            "Pipefy user IDs for service accounts: protected from removal in member tools; "
-            "used for proactive cross-pipe membership checks in validate_ai_agent_behaviors."
-        ),
-    )
-
     permission_denied_enrichment_timeout_seconds: float = Field(
         default=5.0,
         ge=0.1,
@@ -120,7 +111,7 @@ class PipefySettings(BaseSettings):
         default=False,
         description=(
             "When true (env: PIPEFY_GQL_REUSE_FETCHED_GRAPHQL_SCHEMA), the first GraphQL "
-            "request per BasePipefyClient fetches the remote schema via introspection, "
+            "request per GraphQLEndpoint fetches the remote schema via introspection, "
             "caches the GraphQLSchema in memory, and later requests reuse it so gql does "
             "not repeat the introspection round-trip. Default false avoids extra work and "
             "keeps a cold process fast; enable if profiling shows significant duplicate "
@@ -139,33 +130,12 @@ class PipefySettings(BaseSettings):
         ),
     )
 
-    mcp_unified_envelope: bool = Field(
-        default=True,
-        description=(
-            "When true (env: PIPEFY_MCP_UNIFIED_ENVELOPE), migrated MCP tools return "
-            "{success, data, message?, pagination?}. When false, legacy shapes. "
-            "Read at call time, not cached at import."
-        ),
-    )
-
     @field_validator("base_url", "org_id", mode="before")
     @classmethod
     def _strip_str(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip()
         return value
-
-    @field_validator("service_account_ids", mode="before")
-    @classmethod
-    def _coerce_service_account_ids(cls, value: object) -> list[str]:
-        if value is None or value == "":
-            return []
-        if isinstance(value, list):
-            return [str(item).strip() for item in value if str(item).strip()]
-        if isinstance(value, str):
-            return [part.strip() for part in value.split(",") if part.strip()]
-        msg = "service_account_ids must be a list or a comma-separated string"
-        raise ValueError(msg)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

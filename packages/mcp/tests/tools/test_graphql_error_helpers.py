@@ -42,10 +42,9 @@ def mock_client():
 
 
 @pytest.fixture(autouse=True)
-def _isolate_sa_ids(monkeypatch):
-    """Default: no service_account_ids configured (tests opt in explicitly)."""
+def _mock_settings(monkeypatch):
+    """Stub settings so enrichment reads a fixed timeout budget."""
     mock_settings = MagicMock()
-    mock_settings.pipefy.service_account_ids = []
     mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
     monkeypatch.setattr(settings_mod, "settings", mock_settings)
 
@@ -105,7 +104,6 @@ class TestEnrichPermissionDeniedError:
         import asyncio
 
         mock_settings = MagicMock()
-        mock_settings.pipefy.service_account_ids = []
         mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 0.1
         monkeypatch.setattr(settings_mod, "settings", mock_settings)
 
@@ -147,61 +145,8 @@ class TestEnrichPermissionDeniedError:
         assert "Target Pipe" in result
         assert "invite_members" in result
 
-    async def test_sa_ids_configured_and_sa_not_in_members_returns_enrichment(
-        self, mock_client, monkeypatch
-    ):
-        """When service_account_ids is configured and the SA is NOT among
-        the pipe's members, enrichment must report the missing membership
-        even if the members list is non-empty (bug reproduction)."""
-        mock_settings = MagicMock()
-        mock_settings.pipefy.service_account_ids = ["sa-42"]
-        mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
-        monkeypatch.setattr(settings_mod, "settings", mock_settings)
-
-        exc = _make_permission_denied_exc()
-        mock_client.get_pipe_members.return_value = {
-            "pipe": {
-                "name": "Target Pipe",
-                "members": [
-                    {"user": {"id": "other-user-1"}, "role_name": "admin"},
-                    {"user": {"id": "other-user-2"}, "role_name": "member"},
-                ],
-            }
-        }
-        result = await enrich_permission_denied_error(exc, ["200"], mock_client)
-        assert result is not None
-        assert "Target Pipe" in result
-        assert "invite_members" in result
-
-    async def test_sa_ids_configured_and_sa_is_member_returns_none(
-        self, mock_client, monkeypatch
-    ):
-        """When service_account_ids is configured and the SA IS among the
-        pipe's members, enrichment must return None (no false positive)."""
-        mock_settings = MagicMock()
-        mock_settings.pipefy.service_account_ids = ["sa-42"]
-        mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
-        monkeypatch.setattr(settings_mod, "settings", mock_settings)
-
-        exc = _make_permission_denied_exc()
-        mock_client.get_pipe_members.return_value = {
-            "pipe": {
-                "name": "Target Pipe",
-                "members": [
-                    {"user": {"id": "sa-42"}, "role_name": "admin"},
-                    {"user": {"id": "other-user"}, "role_name": "member"},
-                ],
-            }
-        }
-        result = await enrich_permission_denied_error(exc, ["200"], mock_client)
-        assert result is None
-
-    async def test_sa_ids_not_configured_falls_back_to_empty_check(
-        self,
-        mock_client,
-    ):
-        """When service_account_ids is empty (autouse default), fallback to
-        the original logic: non-empty members list → None (no enrichment)."""
+    async def test_non_empty_members_returns_none(self, mock_client):
+        """A pipe with members present yields no enrichment."""
         exc = _make_permission_denied_exc()
         mock_client.get_pipe_members.return_value = {
             "pipe": {

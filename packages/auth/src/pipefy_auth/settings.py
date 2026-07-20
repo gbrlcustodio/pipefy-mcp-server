@@ -5,7 +5,7 @@ Owns every value that describes *how* to authenticate against Pipefy:
 * ``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` / ``PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET``
   — OAuth2 client-credentials grant inputs (legacy ``PIPEFY_OAUTH_CLIENT`` /
   ``_SECRET`` names still honoured via :class:`AliasChoices`).
-* ``PIPEFY_AUTH_URL`` — full OIDC issuer URL for the stored-session tier
+* ``PIPEFY_AUTH_URL``: full OIDC issuer URL for the stored-session method
   (default ``https://signin.pipefy.com/realms/pipefy``).
 * ``PIPEFY_AUTH_CLIENT_ID`` — OIDC public client id (defaults to
   :data:`pipefy_auth.identity.DEFAULT_AUTH_CLIENT_ID`).
@@ -212,7 +212,7 @@ class AuthSettings(BaseSettings):
         pattern=_OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices("PIPEFY_TOKEN"),
         description=(
-            "Pre-issued bearer for the static-token tier (env: PIPEFY_TOKEN). "
+            "Pre-issued bearer for the static-token method (env: PIPEFY_TOKEN). "
             "When set, outranks both the service-account triple and any stored session."
         ),
     )
@@ -247,7 +247,7 @@ class AuthSettings(BaseSettings):
         default=DEFAULT_AUTH_URL,
         pattern=security.URL_SHAPE_PATTERN,
         description=(
-            "OIDC issuer URL for the stored-session tier "
+            "OIDC issuer URL for the stored-session method "
             "(env: PIPEFY_AUTH_URL). Defaults to "
             f"'{DEFAULT_AUTH_URL}' (canonical Pipefy production IdP). Set to "
             "the full issuer URL for a non-prod IdP."
@@ -294,7 +294,7 @@ class AuthSettings(BaseSettings):
         default=False,
         description=(
             "When true (env: PIPEFY_DISABLE_STORED_SESSION), the stored-session "
-            "tier is never probed: ``to_oidc_client()`` returns None, tier "
+            "method is never probed: ``to_oidc_client()`` returns None, method "
             "resolution skips the keychain, and ``pipefy auth login`` refuses. "
             "Use to avoid the keychain backend-discovery cost on cold start "
             "(headless Linux, CI) or to opt out of OS-keychain storage entirely."
@@ -316,7 +316,7 @@ class AuthSettings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def service_account_url(self) -> str:
-        """OAuth 2.0 token endpoint for the service-account tier."""
+        """OAuth 2.0 token endpoint for the service-account method."""
         return f"{self.base_url.rstrip('/')}/oauth/token"
 
     def to_service_account(self) -> ServiceAccount | None:
@@ -337,7 +337,7 @@ class AuthSettings(BaseSettings):
         """Project the OIDC fields into an :class:`OidcClient`.
 
         Returns ``None`` when :attr:`disable_stored_session` is set: callers
-        treat that as "the stored-session tier is off" without inspecting any
+        treat that as "the stored-session method is off" without inspecting any
         OIDC field. Otherwise returns a real client because ``auth_url`` has
         a non-empty default.
         """
@@ -375,4 +375,139 @@ class AuthSettings(BaseSettings):
         return self
 
 
-__all__ = ["AuthSettings"]
+class JwtValidationSettings(BaseSettings):
+    """How this process validates an inbound bearer when it acts as a resource server.
+
+    :class:`AuthSettings` configures the *outbound* side: how this process
+    authenticates *to* Pipefy. This is the inbound counterpart that feeds
+    :class:`~pipefy_auth.JwtValidator`. It is a separate model, not fields on
+    :class:`AuthSettings`, because only a transport running the OAuth
+    resource-server profile (today, the MCP ``--remote`` HTTP transport) consumes
+    it: a CLI that only authenticates outbound never carries resource-server knobs.
+
+    ``issuer_url`` is an override. Left unset, the consumer falls back to the
+    issuer this process already logs into (the :class:`OidcClient` issuer): in a
+    single-realm deployment the IdP that signs caller tokens is the same one we
+    authenticate to, so it need not be configured twice. Set it only when inbound
+    and outbound issuers diverge (token exchange, multi-tenant federation).
+
+    ``env_prefix="PIPEFY_JWT_"`` keeps these distinct from ``AuthSettings``'
+    ``PIPEFY_*`` vars; ``allow_insecure_urls`` is the one exception, aliased to the
+    shared ``PIPEFY_ALLOW_INSECURE_URLS`` so the whole auth domain has a single
+    insecure-URL posture rather than a per-model toggle.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="PIPEFY_JWT_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            PipefyTomlConfigSource(settings_cls),
+            file_secret_settings,
+        )
+
+    @field_validator("issuer_url", "audience", "jwks_uri", mode="before")
+    @classmethod
+    def _strip_str(cls, value: object) -> object:
+        # Mirror AuthSettings._strip_str: normalize once here so _validate_urls
+        # and _validate_audience read already-stripped values (env-var whitespace
+        # must not survive into jwt.decode's exact iss/aud compare).
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    issuer_url: str | None = Field(
+        default=None,
+        description=(
+            "Override for the inbound OIDC issuer that signs caller tokens "
+            "(env: PIPEFY_JWT_ISSUER_URL). Left unset, the consumer falls back "
+            "to the issuer this process logs into; set it only when inbound and "
+            "outbound issuers diverge. The JWKS endpoint is resolved from the "
+            "issuer's discovery document unless jwks_uri is given."
+        ),
+    )
+
+    audience: str | None = Field(
+        default=None,
+        description=(
+            "Expected token audience (env: PIPEFY_JWT_AUDIENCE). Required when "
+            "verify_audience is true."
+        ),
+    )
+
+    verify_audience: bool = Field(
+        default=False,
+        description=(
+            "When true (env: PIPEFY_JWT_VERIFY_AUDIENCE), reject tokens whose "
+            "aud does not include audience. Defaults false for the same-audience "
+            "interim, which runs before the IdP issues an aud claim."
+        ),
+    )
+
+    jwks_uri: str | None = Field(
+        default=None,
+        description=(
+            "Explicit JWKS endpoint override (env: PIPEFY_JWT_JWKS_URI). When "
+            "unset, resolved from the issuer's discovery document."
+        ),
+    )
+
+    allow_insecure_urls: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
+        description=(
+            "When true (env: PIPEFY_ALLOW_INSECURE_URLS, shared with the outbound "
+            "side), inbound-validation URLs may use http:// and internal hosts; "
+            "local development only."
+        ),
+    )
+
+    def resolve_issuer_url(self, default: str | None) -> str | None:
+        """The inbound issuer: the explicit override, else ``default`` (the login issuer)."""
+        return self.issuer_url or default
+
+    @model_validator(mode="after")
+    def _validate_urls(self) -> Self:
+        # Shape-check both URL fields (already stripped by _strip_str). A realm
+        # path is allowed, so only a query or fragment (which would corrupt URL
+        # building) is rejected.
+        for label in ("issuer_url", "jwks_uri"):
+            value = getattr(self, label)
+            if value is None:
+                continue
+            security.assert_url_has_no_query_or_fragment(value, field_label=label)
+            security.validate_https_url(
+                value, label, allow_insecure=self.allow_insecure_urls
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_audience(self) -> Self:
+        # verify_audience with no audience has nothing to check against: the two
+        # env vars only make sense together. Fail fast at construction (like
+        # _validate_urls) so the illegal pair never reaches the AudiencePolicy
+        # fold at the resource-server composition root. audience is already
+        # stripped by _strip_str, so a whitespace-only value collapses to "".
+        if self.verify_audience and not self.audience:
+            raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
+        return self
+
+
+__all__ = ["AuthSettings", "JwtValidationSettings"]

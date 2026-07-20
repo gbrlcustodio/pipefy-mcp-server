@@ -123,6 +123,17 @@ GET_AUTOMATION_QUERY = gql(
                 to_phase_id
                 url
             }
+            condition {
+                id
+                expressions {
+                    id
+                    structure_id
+                    field_address
+                    operation
+                    value
+                }
+                expressions_structure
+            }
         }
     }
     """

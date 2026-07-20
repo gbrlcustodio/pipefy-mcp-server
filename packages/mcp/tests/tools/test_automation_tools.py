@@ -64,6 +64,19 @@ async def test_get_automation_success(
         "action_params": {
             "aiParams": {"value": "Run prompt", "fieldIds": ["1"], "skillsIds": []},
         },
+        "condition": {
+            "id": "c1",
+            "expressions": [
+                {
+                    "id": "e1",
+                    "structure_id": "0",
+                    "field_address": "900000101",
+                    "operation": "equals",
+                    "value": "yes",
+                }
+            ],
+            "expressions_structure": [[0]],
+        },
     }
 
     async with automation_session as session:
@@ -76,6 +89,7 @@ async def test_get_automation_success(
     assert payload["data"] == mock_automation_client.get_automation.return_value
     assert payload["data"]["event_params"]["kindOfSla"] == "due_date"
     assert payload["data"]["action_params"]["aiParams"]["value"] == "Run prompt"
+    assert payload["data"]["condition"]["expressions"][0]["operation"] == "equals"
 
 
 @pytest.mark.anyio

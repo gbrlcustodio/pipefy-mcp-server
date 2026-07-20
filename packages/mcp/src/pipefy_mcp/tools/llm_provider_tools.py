@@ -153,7 +153,9 @@ class LlmProviderTools:
             Args:
                 provider_name: Provider vendor enum value: `openai`, `azure_openai`,
                     `amazon_bedrock`, `custom`, `google_vertex_ai`, `oracle_oci`,
-                    or `anthropic`. The API validates membership.
+                    or `anthropic`. The API validates membership. Snake_case here; the
+                    `configuration.provider` key for `create_llm_provider` / `update_llm_provider`
+                    uses the hyphenated form (`amazon-bedrock`) — not interchangeable.
             """
             client = get_pipefy_client(ctx)
             err = _blank_error(provider_name, "provider_name")
@@ -318,6 +320,11 @@ class LlmProviderTools:
             `google-vertex-ai`, `oracle-oci`, `custom`); vendor/model validity and
             credentials are checked server-side (the backend runs a live credential
             test), so a bad key or model surfaces as a backend rejection.
+
+            These hyphenated vendor strings are specific to this file. `get_available_ai_models`
+            takes the same vendors as `provider_name` in snake_case (`amazon_bedrock`,
+            `azure_openai`, `google_vertex_ai`, `oracle_oci`); do not copy a value across the
+            two surfaces — a snake_case `provider` here is rejected as an invalid adapter.
 
             Args:
                 organization_uuid: Organization UUID (not the numeric ID; `get_organization` returns both).

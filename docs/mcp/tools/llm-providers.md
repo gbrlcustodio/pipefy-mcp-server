@@ -51,6 +51,8 @@ Custom-provider configuration is secret-bearing (API keys, cloud credentials). T
 
 The configuration is a JSON object whose `provider` key selects the vendor (`openai`, `anthropic`, `amazon-bedrock`, `azure-openai`, `google-vertex-ai`, `oracle-oci`, `custom`). The toolkit treats it as an opaque object: **vendor/model membership and credential validity are validated server-side**, including a live credential test call. So an invalid key, an unsupported model, or a vendor that can't do a requested capability surfaces as a backend rejection, not a client-side error. Use `get_available_ai_models` to discover valid model names for a vendor.
 
+**Vendor strings are surface-specific and not interchangeable.** The `configuration.provider` key here uses hyphens (`amazon-bedrock`, `azure-openai`, `google-vertex-ai`, `oracle-oci`), while `get_available_ai_models` takes the same vendor as `provider_name` in snake_case (`amazon_bedrock`, `azure_openai`, `google_vertex_ai`, `oracle_oci`). Single-word vendors (`openai`, `anthropic`, `custom`) are identical on both. Do not copy a value from one surface into the other: a snake_case `configuration.provider` is rejected as an invalid adapter, and a hyphenated `provider_name` is rejected by the models lookup.
+
 Example `configuration.json` (placeholders only — never commit real secrets):
 
 ```json

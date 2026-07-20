@@ -31,7 +31,9 @@ _ORG_UUID_HELP = "Organization UUID (not the numeric ID; `pipefy org get` shows 
 _ORG_ID_HELP = "Numeric organization ID (not the UUID; `pipefy org get` shows both)."
 _CONFIG_FILE_HELP = (
     "Local JSON file with the provider configuration object (secrets stay in the "
-    "file; never passed inline). Supports ~ expansion."
+    "file; never passed inline). Supports ~ expansion. Its `provider` key uses "
+    "hyphenated vendor strings (amazon-bedrock, oracle-oci) — not the snake_case "
+    "form `ai-provider models --provider-name` takes; the two are not interchangeable."
 )
 
 
@@ -91,7 +93,9 @@ def ai_provider_models(
         "--provider-name",
         help=(
             "Provider vendor: openai, azure_openai, amazon_bedrock, custom, "
-            "google_vertex_ai, oracle_oci, or anthropic."
+            "google_vertex_ai, oracle_oci, or anthropic. Snake_case here; the "
+            "`provider` key in the create/update --config-file uses the hyphenated "
+            "form (amazon-bedrock) — not interchangeable."
         ),
     ),
     json_out: bool = typer.Option(

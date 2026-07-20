@@ -450,7 +450,11 @@ Usage: pipefy ai-provider create [OPTIONS]
 │ *  --config-file  -f      PATH  Local JSON file with the provider            │
 │                                 configuration object (secrets stay in the    │
 │                                 file; never passed inline). Supports ~       │
-│                                 expansion.                                   │
+│                                 expansion. Its `provider` key uses           │
+│                                 hyphenated vendor strings (amazon-bedrock,   │
+│                                 oracle-oci) — not the snake_case form        │
+│                                 `ai-provider models --provider-name` takes;  │
+│                                 the two are not interchangeable.             │
 │                                 [required]                                   │
 │    --json         -j            Print machine-readable JSON to stdout.       │
 │    --help                       Show this message and exit.                  │
@@ -600,7 +604,10 @@ Usage: pipefy ai-provider models [OPTIONS]
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --provider-name          TEXT  Provider vendor: openai, azure_openai,     │
 │                                   amazon_bedrock, custom, google_vertex_ai,  │
-│                                   oracle_oci, or anthropic.                  │
+│                                   oracle_oci, or anthropic. Snake_case here; │
+│                                   the `provider` key in the create/update    │
+│                                   --config-file uses the hyphenated form     │
+│                                   (amazon-bedrock) — not interchangeable.    │
 │                                   [required]                                 │
 │    --json           -j            Print machine-readable JSON to stdout.     │
 │    --help                         Show this message and exit.                │
@@ -650,7 +657,11 @@ Usage: pipefy ai-provider update [OPTIONS]
 │ *  --config-file  -f      PATH  Local JSON file with the provider            │
 │                                 configuration object (secrets stay in the    │
 │                                 file; never passed inline). Supports ~       │
-│                                 expansion.                                   │
+│                                 expansion. Its `provider` key uses           │
+│                                 hyphenated vendor strings (amazon-bedrock,   │
+│                                 oracle-oci) — not the snake_case form        │
+│                                 `ai-provider models --provider-name` takes;  │
+│                                 the two are not interchangeable.             │
 │                                 [required]                                   │
 │    --name                 TEXT  New name (non-blank).                        │
 │    --json         -j            Print machine-readable JSON to stdout.       │

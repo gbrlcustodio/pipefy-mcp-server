@@ -15,7 +15,11 @@ from pathlib import Path
 import typer
 from pipefy_sdk import PipefyClient
 
-from pipefy_cli.commands._common import confirm_destructive, run_cli_command
+from pipefy_cli.commands._common import (
+    confirm_destructive,
+    probe_gate,
+    run_cli_command,
+)
 
 ai_provider_app = typer.Typer(
     help="LLM providers (organization-scoped: discovery reads and provider writes).",
@@ -35,21 +39,6 @@ _CONFIG_FILE_HELP = (
     "hyphenated vendor strings (amazon-bedrock, oracle-oci) — not the snake_case "
     "form `ai-provider models --provider-name` takes; the two are not interchangeable."
 )
-
-
-async def _provider_probe_gate(client: PipefyClient, org_uuid: str) -> dict | None:
-    """Gate a write on the read-access probe; return a failure dict or None.
-
-    Treats the gate as clean only when the probe is ``ok`` **and** carries no
-    ``problem``: a probe can return ``ok: true`` with a non-null ``problem`` when
-    the API returns partial data alongside GraphQL errors, and that partial denial
-    must never be read as full access. A non-clean gate returns the classified
-    problem so the write never runs and the CLI exits 1.
-    """
-    probe = await client.validate_llm_provider_access(org_uuid)
-    if probe.get("ok") and "problem" not in probe:
-        return None
-    return {"success": False, **probe}
 
 
 @ai_provider_app.command("list")
@@ -211,7 +200,7 @@ def ai_provider_create(
     """
 
     async def factory(client: PipefyClient):
-        gate = await _provider_probe_gate(client, org_uuid)
+        gate = probe_gate(await client.validate_llm_provider_access(org_uuid))
         if gate is not None:
             return gate
         provider = await client.create_llm_provider(
@@ -248,7 +237,7 @@ def ai_provider_update(
     """
 
     async def factory(client: PipefyClient):
-        gate = await _provider_probe_gate(client, org_uuid)
+        gate = probe_gate(await client.validate_llm_provider_access(org_uuid))
         if gate is not None:
             return gate
         provider = await client.update_llm_provider(

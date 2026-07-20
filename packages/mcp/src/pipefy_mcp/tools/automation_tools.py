@@ -55,9 +55,11 @@ class AutomationTools:
             """Load one automation rule by ID, including trigger and action payloads.
 
             Use this to inspect or debug a specific rule, or before ``update_automation`` /
-            ``delete_automation``. Returned ``event_params`` and ``action_params`` (e.g.
-            ``aiParams`` with ``value`` / ``fieldIds`` / ``skillsIds``) align with
-            ``simulate_automation`` and ``create_automation`` inputs. For new rules, discover
+            ``delete_automation``. Returned ``event_params``, ``action_params`` (e.g.
+            ``aiParams`` with ``value`` / ``fieldIds`` / ``skillsIds``), and ``condition``
+            align with ``simulate_automation`` and ``create_automation`` inputs. A
+            ``condition`` with empty ``field_address`` / ``operation`` / ``value`` is the
+            API placeholder (no real filter), not a missing field. For new rules, discover
             ``event_id`` / ``action_id`` via ``get_automation_events`` and ``get_automation_actions``
             on the target pipe, then call ``create_automation``.
 

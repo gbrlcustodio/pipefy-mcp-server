@@ -223,8 +223,13 @@ def confirm(prompt: str, *, assume_yes: bool) -> None:
 
 
 def tag_exists(tag: str) -> bool:
-    remote = capture(["git", "ls-remote", "--tags", "origin", tag])
-    return bool(remote)
+    """Whether ``tag`` already exists on origin."""
+    return bool(capture(["git", "ls-remote", "--tags", "origin", tag]))
+
+
+def local_tag_exists(tag: str) -> bool:
+    """Whether ``tag`` already exists in the local repository."""
+    return bool(capture(["git", "tag", "--list", tag]))
 
 
 # A tag push does not create the workflow run synchronously — GitHub registers
@@ -233,13 +238,12 @@ _RUN_APPEAR_TIMEOUT_S = 90
 _RUN_POLL_INTERVAL_S = 3
 
 
-def _find_release_run_id(tag: str) -> str:
-    """Return the newest Release-workflow run id for ``tag``, or an empty string.
+def _release_run_ids(tag: str) -> list[str]:
+    """Release-workflow run ids for ``tag``, newest first.
 
     The Release workflow runs only on ``v*`` tag pushes, so its runs carry the
     tag as ``headBranch``; filtering on ``headBranch == <tag>`` isolates this
-    release's run from any other tag's, and ``gh`` lists newest first so a
-    re-pushed tag resolves to its latest run.
+    tag's runs from any other tag's.
     """
     runs = capture(
         [
@@ -258,26 +262,34 @@ def _find_release_run_id(tag: str) -> str:
             f'.[] | select(.headBranch == "{tag}") | .databaseId',
         ]
     )
-    lines = runs.splitlines()
-    return lines[0] if lines else ""
+    return runs.splitlines()
 
 
-def watch_release_workflow(tag: str) -> None:
+def _newest_run_id(tag: str, exclude: frozenset[str]) -> str:
+    """Newest Release run id for ``tag`` not in ``exclude``, or an empty string."""
+    for run_id in _release_run_ids(tag):  # newest first
+        if run_id not in exclude:
+            return run_id
+    return ""
+
+
+def watch_release_workflow(tag: str, *, exclude: frozenset[str] = frozenset()) -> None:
     """Block until the Release workflow run for ``tag`` finishes, failing on failure.
 
-    Polls for the run to appear (the push does not create it synchronously)
-    before handing off to ``gh run watch``, which streams progress and exits
-    non-zero if the run fails.
+    Polls for a run not in ``exclude`` — the runs that already existed before
+    this push — so a re-cut of the same tag waits for its genuinely new run
+    rather than attaching to a prior completed one. Hands off to
+    ``gh run watch``, which streams progress and exits non-zero on failure.
     """
     print(f"Waiting for the Release workflow run for {tag} to appear...")
     deadline = time.monotonic() + _RUN_APPEAR_TIMEOUT_S
-    run_id = _find_release_run_id(tag)
+    run_id = _newest_run_id(tag, exclude)
     while not run_id and time.monotonic() < deadline:
         time.sleep(_RUN_POLL_INTERVAL_S)
-        run_id = _find_release_run_id(tag)
+        run_id = _newest_run_id(tag, exclude)
     if not run_id:
         raise ReleaseError(
-            f"No Release workflow run appeared for {tag} within "
+            f"No new Release workflow run appeared for {tag} within "
             f"{_RUN_APPEAR_TIMEOUT_S}s. Check the Actions tab."
         )
     run(["gh", "run", "watch", run_id, "--exit-status"])
@@ -294,6 +306,12 @@ def publish(*, assume_yes: bool) -> None:
     tag = f"v{version}"
     if tag_exists(tag):
         raise ReleaseError(f"Tag {tag} already exists on origin")
+    if local_tag_exists(tag):
+        raise ReleaseError(
+            f"Tag {tag} exists locally (likely from an earlier interrupted "
+            f"publish) but not on origin. Delete it with 'git tag -d {tag}' "
+            "and re-run."
+        )
 
     confirm(
         f"About to tag {tag}, push to origin, and publish to PyPI. "
@@ -301,11 +319,16 @@ def publish(*, assume_yes: bool) -> None:
         assume_yes=assume_yes,
     )
 
-    run(["git", "tag", tag])
+    # Push main before tagging so a rejected main push never leaves a dangling
+    # local tag to trip the next attempt.
     run(["git", "push", "origin", "main"])
+    run(["git", "tag", tag])
+    # Snapshot runs that already exist for this tag (from a prior cut) so the
+    # watcher waits for the run this push creates, not a stale completed one.
+    prior_runs = frozenset(_release_run_ids(tag))
     run(["git", "push", "origin", tag])
 
-    watch_release_workflow(tag)
+    watch_release_workflow(tag, exclude=prior_runs)
     verify(tag)
     print(f"\nReleased {tag}.")
     print_release_links(tag, version)

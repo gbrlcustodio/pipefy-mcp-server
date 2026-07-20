@@ -96,6 +96,15 @@ def test_compute_target_version(monkeypatch) -> None:
     )
 
 
+def test_newest_run_id_skips_excluded(monkeypatch) -> None:
+    # gh lists newest first; the snapshot of prior runs must be skipped so a
+    # re-cut of the same tag waits for its genuinely new run.
+    monkeypatch.setattr(_release, "_release_run_ids", lambda tag: ["300", "200", "100"])
+    assert _release._newest_run_id("v1", frozenset()) == "300"
+    assert _release._newest_run_id("v1", frozenset({"300"})) == "200"
+    assert _release._newest_run_id("v1", frozenset({"300", "200", "100"})) == ""
+
+
 def test_compute_target_version_rejects_unknown(monkeypatch) -> None:
     monkeypatch.setattr(_release.bump_version, "read_sdk_version", lambda: "0.3.0")
     with pytest.raises(_release.ReleaseError):

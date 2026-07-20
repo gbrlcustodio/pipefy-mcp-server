@@ -109,10 +109,13 @@ tier, not in `settings.py`, which keeps the mcp SDK out of the config boundary.
 The HTTP transport emits allowlisted JSON lines on stderr for hosted **debugging**
 (`pipefy_mcp/observability/`): one `http_request` line per request and one
 `tool_call` line per tool invocation (via `tool_log_middleware`). Fields are
-privacy-bounded (no bearer, no argument values, no query string, no exception
-messages). Stdio does **not** install the structured emitter: under stdio,
-stdout is the JSON-RPC wire, and local installs should not arm that
-process-global handler.
+privacy-bounded: **excluded** are bearer tokens, argument values, query strings,
+and exception messages; **included** on `http_request` lines are the caller's
+`sub` and `client_id` when an authenticated bearer is present (attribution for
+hosted debugging). `tool_call` lines deliberately omit `sub` until a consumer
+needs it (see Tool-call middleware); they still carry `client_id` when available.
+Stdio does **not** install the structured emitter: under stdio, stdout is the
+JSON-RPC wire, and local installs should not arm that process-global handler.
 
 Wiring lives in `wire_hosted_observability` (`observability/wiring.py`): it calls
 `streamable_http_app()` once, attaches request middleware, and returns the Starlette app.

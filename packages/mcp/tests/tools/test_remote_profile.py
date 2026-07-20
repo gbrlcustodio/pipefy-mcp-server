@@ -95,8 +95,9 @@ REMOTE_SEED = frozenset(
         # pipe / card / field / member / webhook / portal reads (#441): read tools
         # that reach the API with the request-scoped bearer and are governed by API
         # permissions; no filesystem or per-user process-global settings reads. The
-        # relation reads may hit Pipefy's Internal API, which receives whatever
-        # credential the caller already carries (nothing service-account-specific).
+        # relation reads use the public GraphQL API only and the portal reads use
+        # the Interfaces schema; Pipefy's Internal API is reached only by mutations
+        # such as delete_card_relation, which stay withheld.
         "get_card_relations",
         "get_card_inbox_emails",
         "get_field_condition",

@@ -39,6 +39,79 @@ REMOTE_SEED = frozenset(
         "introspect_query",
         "introspect_mutation",
         "introspect_type",
+        # AI agent & automation reads (#437): read/validate tools that reach the
+        # API with the request-scoped bearer and are governed by API permissions;
+        # no filesystem or per-user process-global settings reads.
+        "get_ai_agent",
+        "get_ai_agents",
+        "get_ai_agent_logs",
+        "get_ai_agent_log_details",
+        "get_agents_usage",
+        "validate_ai_agent_behaviors",
+        "get_ai_automation",
+        "get_ai_automations",
+        "validate_ai_automation_prompt",
+        "get_ai_credit_usage",
+        "get_available_ai_models",
+        # knowledge base & LLM provider reads (#438): read/validate tools that
+        # reach the API with the request-scoped bearer and are governed by API
+        # permissions; no filesystem or per-user process-global settings reads.
+        "get_ai_knowledge_bases",
+        "get_ai_knowledge_base_plain_text",
+        "get_ai_knowledge_base_document",
+        "get_ai_knowledge_base_data_lookup",
+        "validate_knowledge_base_access",
+        "get_llm_providers",
+        "get_llm_provider_dependencies",
+        "get_default_llm_provider",
+        "validate_llm_provider_access",
+        # traditional automation reads (#439): read/log tools that reach the API
+        # with the request-scoped bearer and are governed by API permissions; no
+        # filesystem or per-user process-global settings reads. The export CSV
+        # tool downloads in-memory (no local file) with per-call size caps.
+        "get_automation",
+        "get_automations",
+        "get_automation_actions",
+        "get_automation_events",
+        "get_automation_event_attributes",
+        "get_automation_execution_metrics",
+        "get_automation_logs",
+        "get_automation_logs_by_repo",
+        "get_automations_usage",
+        "get_automation_jobs_export",
+        "get_automation_jobs_export_csv",
+        # report reads (#440): read/status tools that reach the API with the
+        # request-scoped bearer and are governed by API permissions; no filesystem
+        # or per-user process-global settings reads. The export tools poll export
+        # status (a GraphQL query returning a fileURL string), not a local write.
+        "get_organization_report",
+        "get_organization_reports",
+        "get_organization_report_export",
+        "get_pipe_report",
+        "get_pipe_reports",
+        "get_pipe_report_columns",
+        "get_pipe_report_filterable_fields",
+        "get_pipe_report_export",
+        # pipe / card / field / member / webhook / portal reads (#441): read tools
+        # that reach the API with the request-scoped bearer and are governed by API
+        # permissions; no filesystem or per-user process-global settings reads. The
+        # relation reads use the public GraphQL API only and the portal reads use
+        # the Interfaces schema; Pipefy's Internal API is reached only by mutations
+        # such as delete_card_relation, which stay withheld.
+        "get_card_relations",
+        "get_card_inbox_emails",
+        "get_field_condition",
+        "get_field_conditions",
+        "get_labels",
+        "get_pipe_members",
+        "get_pipe_relations",
+        "get_phase_allowed_move_targets",
+        "get_phase_cards_count",
+        "get_table_relations",
+        "get_webhooks",
+        "get_email_templates",
+        "get_portal",
+        "list_portals",
     }
 )
 

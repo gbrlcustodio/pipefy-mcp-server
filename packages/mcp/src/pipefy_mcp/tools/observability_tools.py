@@ -22,6 +22,7 @@ from pipefy_mcp.tools.observability_tool_helpers import (
     build_observability_read_success_payload,
     handle_observability_tool_graphql_error,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
@@ -72,6 +73,7 @@ class ObservabilityTools:
     def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_ai_agent_logs(
             repo_uuid: str,
@@ -123,6 +125,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_ai_agent_log_details(
             log_uuid: str,
@@ -159,6 +162,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_logs(
             automation_id: PipefyId,
@@ -210,6 +214,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_logs_by_repo(
             repo_id: PipefyId,
@@ -261,6 +266,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_agents_usage(
             organization_uuid: PipefyId,
@@ -315,6 +321,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automations_usage(
             organization_uuid: PipefyId,
@@ -369,6 +376,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_ai_credit_usage(
             organization_uuid: PipefyId,
@@ -412,6 +420,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_execution_metrics(
             organization_id: PipefyId,
@@ -557,6 +566,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_jobs_export(
             export_id: PipefyId,
@@ -590,6 +600,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_jobs_export_csv(
             export_id: PipefyId,

@@ -80,6 +80,18 @@ REMOTE_SEED = frozenset(
         "get_automations_usage",
         "get_automation_jobs_export",
         "get_automation_jobs_export_csv",
+        # report reads (#440): read/status tools that reach the API with the
+        # request-scoped bearer and are governed by API permissions; no filesystem
+        # or per-user process-global settings reads. The export tools poll export
+        # status (a GraphQL query returning a fileURL string), not a local write.
+        "get_organization_report",
+        "get_organization_reports",
+        "get_organization_report_export",
+        "get_pipe_report",
+        "get_pipe_reports",
+        "get_pipe_report_columns",
+        "get_pipe_report_filterable_fields",
+        "get_pipe_report_export",
     }
 )
 

@@ -569,7 +569,13 @@ class PipeConfigTools:
                 pipe_id: Pipe that will contain the phase.
                 name: Phase name.
                 done: When True, marks a final/done phase.
-                index: Optional position index within the pipe.
+                index: Optional 1-based insert position among workflow phases
+                    returned by ``get_pipe``. Omit to append after existing
+                    phases. Prefer ``1`` or higher for normal layout; ``0``
+                    creates a phase that does not appear in ``get_pipe``'s
+                    ``phases`` list. Index only sets order - it does not
+                    configure Phase Connections / ``allowed_phases`` (UI-only);
+                    call ``get_phase_allowed_move_targets`` before moves.
                 description: Optional phase description.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """

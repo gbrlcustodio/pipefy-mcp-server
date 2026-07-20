@@ -39,9 +39,9 @@ Tables, records (rows), schema columns (table fields), and attachments for Pipef
 
 | Tool (MCP) | CLI | Purpose |
 |------------|-----|---------|
-| `create_table_field` | `pipefy field create --table <id>` | Add a column to a table schema. |
-| `update_table_field` | `pipefy field update <id>` | Rename or reorder a column. |
-| `delete_table_field` | `pipefy field delete <id> --table <id>` | **Two-step destructive.** Now requires `table_id`. |
+| `create_table_field` | `pipefy table field create <table_id> --label <name> --type <type>` | Add a column to a table schema. |
+| `update_table_field` | `pipefy table field update <field_id> --table <table_id> --label <name>` | Rename or change column settings (`--description`, `--required`, `--options`). |
+| `delete_table_field` | `pipefy table field delete <field_id> --table <table_id>` | **Two-step destructive.** Requires `table_id`. |
 
 ---
 
@@ -122,5 +122,5 @@ Never delete in a single call.
 
 ## See also
 
-- [skills/relations/pipefy-relations/SKILL.md](skills/relations/pipefy-relations/SKILL.md) — connect tables to pipes (and the table-relation ID namespace gotcha).
-- [skills/introspection/pipefy-introspection/SKILL.md](skills/introspection/pipefy-introspection/SKILL.md) — discover field input schemas.
+- [skills/relations/pipefy-relations/SKILL.md](../../relations/pipefy-relations/SKILL.md) — connect tables to pipes (and the table-relation ID namespace gotcha).
+- [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — discover field input schemas.

@@ -7,7 +7,6 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     CreateAiAutomationInput,
-    PipefyClient,
     PipefyId,
     UpdateAiAutomationInput,
 )
@@ -17,6 +16,7 @@ from pipefy_sdk.ai_preflight import (
 )
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_automation_success,
@@ -29,7 +29,8 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     handle_automation_tool_graphql_error,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
     validate_tool_id,
@@ -40,11 +41,12 @@ class AiAutomationTools:
     """Declares MCP tools for AI Automation create and update."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         """Register AI Automation tools on the MCP server."""
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def validate_ai_automation_prompt(
             ctx: Context,
@@ -83,6 +85,7 @@ class AiAutomationTools:
                 issues, ``warnings`` lists non-blocking notices, ``field_map`` maps
                 referenced numeric IDs to field labels.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"validate_ai_automation_prompt: pipe_id={pipe_id}, "
                 f"field_ids={field_ids}, event_id={event_id}"
@@ -124,6 +127,7 @@ class AiAutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_ai_automation(
             ctx: Context,
@@ -148,6 +152,7 @@ class AiAutomationTools:
                 empty when not found). On validation or GraphQL errors, ``success: False`` with
                 ``error``.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"get_ai_automation: automation_id={automation_id}")
             aid, err = validate_tool_id(automation_id, "automation_id")
             if err is not None:
@@ -171,6 +176,7 @@ class AiAutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_ai_automations(
             ctx: Context,
@@ -197,6 +203,7 @@ class AiAutomationTools:
                 automation summaries. On validation or GraphQL errors, ``success: False`` with
                 ``error``.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"get_ai_automations: pipe_id={pipe_id}, organization_id={organization_id}"
             )
@@ -255,6 +262,7 @@ class AiAutomationTools:
                 On success, a mutation success payload. On validation or GraphQL errors,
                 ``success: False`` with ``error``.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"delete_ai_automation: automation_id={automation_id}")
 
             rid, rid_err = validate_tool_id(automation_id, "automation_id")
@@ -328,6 +336,7 @@ class AiAutomationTools:
                 condition: Optional trigger condition dict. Omit to use the built-in placeholder (empty expression list) so Pipefy always receives a condition on create. Pass a dict to set a custom condition.
                 debug: When True, append GraphQL error codes and correlation_id to create failures.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"create_ai_automation: name={name}, event_id={event_id}, pipe_id={pipe_id}"
             )
@@ -396,6 +405,7 @@ class AiAutomationTools:
                 condition: New trigger condition dict. Omit to leave the automation's condition unchanged; pass a dict to replace it.
                 debug: When True, append GraphQL error codes and correlation_id to update failures.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"update_ai_automation: automation_id={automation_id}")
 
             try:

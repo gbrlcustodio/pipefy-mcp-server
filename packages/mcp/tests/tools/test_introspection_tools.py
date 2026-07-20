@@ -5,14 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tools.conftest import build_tool_test_server
 
 
 @pytest.fixture
@@ -28,9 +28,11 @@ def mock_introspection_client():
 
 @pytest.fixture
 def introspection_mcp_server(mock_introspection_client):
-    mcp = FastMCP("Pipefy Introspection Tools Test")
-    IntrospectionTools.register(mcp, mock_introspection_client)
-    return mcp
+    return build_tool_test_server(
+        "Pipefy Introspection Tools Test",
+        IntrospectionTools.register,
+        mock_introspection_client,
+    )
 
 
 @pytest.fixture

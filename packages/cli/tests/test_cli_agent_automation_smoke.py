@@ -6,6 +6,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from _shared.ai_agent_test_payloads import minimal_behavior_dict
 from typer.testing import CliRunner
 
 from pipefy_cli.main import app
@@ -63,6 +64,66 @@ def test_agent_validate_behaviors_json(
     assert r.exit_code == 0
     body = json.loads(r.stdout)
     assert body.get("success") is True
+
+
+def _behavior_with_ai_params(**ai_behavior_params) -> dict:
+    behavior = minimal_behavior_dict()
+    behavior["actionParams"]["aiBehaviorParams"].update(ai_behavior_params)
+    return behavior
+
+
+def test_agent_create_rejects_legacy_capability_shape(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("ag-cap")
+    behavior = _behavior_with_ai_params(
+        capabilitiesAttributes=[{"type": "advanced_ocr"}]
+    )
+    r = runner.invoke(
+        app,
+        [
+            "agent",
+            "create",
+            "--repo-uuid",
+            "repo-1",
+            "--name",
+            "Agent",
+            "--instruction",
+            "Purpose",
+            "--pipe",
+            "1",
+            "--behaviors",
+            json.dumps([behavior]),
+        ],
+    )
+    assert r.exit_code != 0
+    assert "capabilityType" in r.stderr
+
+
+def test_agent_create_rejects_both_provider_ids(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("ag-prov")
+    behavior = _behavior_with_ai_params(providerId="prov-1", systemProviderId="sys-1")
+    r = runner.invoke(
+        app,
+        [
+            "agent",
+            "create",
+            "--repo-uuid",
+            "repo-1",
+            "--name",
+            "Agent",
+            "--instruction",
+            "Purpose",
+            "--pipe",
+            "1",
+            "--behaviors",
+            json.dumps([behavior]),
+        ],
+    )
+    assert r.exit_code != 0
+    assert "at most one" in r.stderr
 
 
 def test_ai_automation_validate_prompt_json(
@@ -169,6 +230,32 @@ def test_usage_credits_invokes_client(
         )
     assert r.exit_code == 0
     mock_client.get_ai_credit_usage.assert_awaited_once()
+
+
+def test_usage_execution_metrics_invokes_client(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("usage-em")
+    mock_client = MagicMock()
+    mock_client.get_automation_execution_metrics = AsyncMock(
+        return_value={"automations": [], "partial_errors": [], "page_info": {}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "usage",
+                "execution-metrics",
+                "--organization",
+                "1",
+                "--json",
+            ],
+        )
+    assert r.exit_code == 0
+    mock_client.get_automation_execution_metrics.assert_awaited_once()
 
 
 def test_org_get_json(runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env):

@@ -20,13 +20,21 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from _shared.live_settings import require_live_creds
+from _shared.live_settings import pipefy_live_configured, require_live_creds
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
-from pipefy_mcp.server import mcp as mcp_server
+from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
+
+# Building the app now resolves the Pipefy credential (the runtime wires its
+# client at construction), so this credential-dependent module skips itself
+# when no live creds are configured rather than failing at collection.
+if not pipefy_live_configured():
+    pytest.skip("live MCP tests require Pipefy credentials", allow_module_level=True)
+
+mcp_server = build_pipefy_mcp_server(settings)
 
 
 @pytest.mark.integration
@@ -34,7 +42,7 @@ from pipefy_mcp.settings import settings
 async def test_live_pipeclaw_mcp_introspect_type_create_pipe_input(extract_payload):
     """Full stack: MCP tool -> introspection -> GraphQL (read-only)."""
     require_live_creds()
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=60),
@@ -62,7 +70,7 @@ async def test_live_pipeclaw_mcp_get_pipe(extract_payload):
             "Set PIPE_BUILDING_LIVE_PIPE_ID to a pipe you can read (optional live check)"
         )
     pipe_id = int(pipe_id_raw)
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=60),
@@ -86,7 +94,7 @@ async def test_live_pipeclaw_mcp_create_pipe(extract_payload):
             "Set PIPE_BUILDING_LIVE_ORG_ID to run a live create_pipe (writes to Pipefy)"
         )
     org_id = int(org_raw)
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=90),
@@ -114,7 +122,7 @@ async def test_live_pipeclaw_mcp_create_label_hex_color(extract_payload):
     if not pipe_raw:
         pytest.skip("Set PIPE_BUILDING_LIVE_PIPE_ID for create_label live test")
     pipe_id = int(pipe_raw)
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=90),

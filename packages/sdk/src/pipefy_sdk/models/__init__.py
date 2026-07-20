@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from pipefy_sdk.models.ai_agent import (
+    AiBehaviorActionAttributes,
+    AiBehaviorActionParams,
+    AiBehaviorCapabilityAttributes,
+    AiBehaviorParams,
     BehaviorInput,
+    BehaviorPayload,
     CreateAiAgentInput,
     UpdateAiAgentInput,
 )
@@ -30,6 +35,7 @@ from pipefy_sdk.models.comment import (
     DeleteCommentInput,
     UpdateCommentInput,
 )
+from pipefy_sdk.models.knowledge_base import DataLookupCondition
 from pipefy_sdk.models.member_invite import MemberInvite
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
@@ -39,6 +45,10 @@ from pipefy_sdk.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_sdk.models.validators import NonBlankStr, PipefyId
 
 __all__ = [
+    "AiBehaviorActionAttributes",
+    "AiBehaviorActionParams",
+    "AiBehaviorCapabilityAttributes",
+    "AiBehaviorParams",
     "Attachment",
     "AttachmentTarget",
     "AttachmentUploadError",
@@ -47,12 +57,14 @@ __all__ = [
     "AutomationConditionInput",
     "AutomationEventParamsInput",
     "BehaviorInput",
+    "BehaviorPayload",
     "CardTarget",
     "CommentInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
     "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
+    "DataLookupCondition",
     "DeleteCommentInput",
     "MemberInvite",
     "NonBlankStr",

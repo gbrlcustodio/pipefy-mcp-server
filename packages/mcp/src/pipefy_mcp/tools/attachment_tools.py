@@ -13,7 +13,6 @@ from pipefy_sdk import (
     AttachmentUploadError,
     AttachmentUploadResult,
     CardTarget,
-    PipefyClient,
     PipefyId,
     TableRecordTarget,
     UploadAttachmentToCardInput,
@@ -27,13 +26,14 @@ from pipefy_mcp.tools.attachment_tool_helpers import (
     format_s3_upload_failure,
     map_upload_error_to_message,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 
 class AttachmentTools:
     """MCP tools for orchestrated attachment uploads (presigned URL, S3 PUT, field update)."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         def _upload_error_envelope(exc: AttachmentUploadError) -> dict[str, Any]:
             if exc.step == "file_read":
                 # Preserve the original LocalFileError message (no type prefix or
@@ -66,11 +66,10 @@ class AttachmentTools:
                 **extra,
             )
 
-        # GATED:SELF_HOSTED. This tool accepts only file_path in the
-        # local-subprocess profile. Under a self-hosted profile it would also
-        # accept a file_url, behind a capability flag, with SSRF + size-cap
-        # guards initialized from injected settings (not from a fresh
-        # PipefySettings() env read).
+        # Left unmarked for the remote profile: this tool reads a local
+        # file_path, which has no meaning on a hosted server. The hosted-safe
+        # input path (client-supplied file_url with SSRF and size guards) is
+        # tracked in #305; the tool gets meta=REMOTE only once that ships.
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
@@ -100,6 +99,7 @@ class AttachmentTools:
                 file_name: File name including extension. Optional; defaults to the path's basename.
                 content_type: Optional MIME type; sent with the S3 upload and presigned request.
             """
+            client = get_pipefy_client(ctx)
             try:
                 data = UploadAttachmentToCardInput(
                     organization_id=organization_id,
@@ -140,8 +140,8 @@ class AttachmentTools:
 
             return _success_envelope(result, data.field_id, {"card_id": data.card_id})
 
-        # GATED:SELF_HOSTED. Same gate as upload_attachment_to_card above;
-        # file_url support would land here too under a hosted profile.
+        # Left unmarked for the remote profile, same as upload_attachment_to_card
+        # above (reads a local file_path); hosted-safe input path tracked in #305.
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
@@ -171,6 +171,7 @@ class AttachmentTools:
                 file_name: File name including extension. Optional; defaults to the path's basename.
                 content_type: Optional MIME type for storage.
             """
+            client = get_pipefy_client(ctx)
             try:
                 data = UploadAttachmentToTableRecordInput(
                     organization_id=organization_id,

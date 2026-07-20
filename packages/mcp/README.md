@@ -1,18 +1,14 @@
 # pipefy-mcp-server
 
-MCP server for Pipefy — **152 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy-sdk`](../sdk/README.md) for all GraphQL and API logic.
+MCP server for Pipefy — **182 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy`](../sdk/README.md) for all GraphQL and API logic.
 
-## Install (pre-launch, v0.1 → v0.5)
+## Install
 
 ```sh
-uvx \
-  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
-  --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp" \
-  --refresh pipefy-mcp-server
+uvx pipefy-mcp-server
 ```
 
-The `--with pipefy-sdk` / `pipefy-auth` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uvx pipefy-mcp-server`.
+`pipefy-mcp-server` and its workspace dependencies (`pipefy`, `pipefy-auth`, `pipefy-infra`) are published to PyPI, so `uvx` resolves the whole set from there. While the toolkit ships only pre-release versions (the 0.x line), `uvx` resolves the latest pre-release automatically; once a stable release exists it resolves that instead. Do not pass a global `--prerelease allow`: it also lets transitive dependencies jump to their own pre-releases, which can pull a broken build.
 
 For per-client wiring (Claude Code / Cursor / Claude Desktop / Codex), see [root `README.md#installation`](../../README.md#installation).
 
@@ -44,11 +40,7 @@ Useful when you want to wire the server without editing `~/.claude.json` by hand
 
 ```bash
 claude mcp add --scope project pipefy \
-  -- uvx \
-       --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
-       --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
-       --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp" \
-       pipefy-mcp-server
+  -- uvx pipefy-mcp-server
 ```
 
 Then (repeat for each key you need):
@@ -112,7 +104,7 @@ This form also works as a per-project `.mcp.json` if your team shares a clone. C
 
 ## Tools
 
-**152 tools** across ten domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
+**182 tools** across thirteen domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
 
 ## Development
 

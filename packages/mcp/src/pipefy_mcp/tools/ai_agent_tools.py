@@ -5,6 +5,7 @@ from __future__ import annotations
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
+    BehaviorPayload,
     CreateAiAgentInput,
     PipefyClient,
     PipefyId,
@@ -17,7 +18,6 @@ from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
 from pipefy_sdk.ai_preflight import validate_ai_agent_behaviors_sdk
 from pydantic import ValidationError
 
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_agent_partial_failure,
@@ -41,6 +41,8 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
     extract_error_strings,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
 
@@ -66,16 +68,18 @@ def _extract_pipe_id_from_behaviors(behaviors: list[dict]) -> str | None:
     for b in behaviors:
         if not isinstance(b, dict):
             continue
-        ap = b.get("actionParams") or b.get("action_params") or {}
-        if not isinstance(ap, dict):
+        try:
+            payload = BehaviorPayload.model_validate(b)
+        except ValidationError:
             continue
-        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-        if not isinstance(abp, dict):
+        abp = (
+            payload.action_params.ai_behavior_params if payload.action_params else None
+        )
+        if abp is None:
             continue
-        for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
-            if not isinstance(a, dict):
-                continue
-            pid = (a.get("metadata") or {}).get("pipeId")
+        for a in abp.actions_attributes or []:
+            metadata = a.metadata if isinstance(a.metadata, dict) else {}
+            pid = metadata.get("pipeId")
             if pid:
                 return str(pid)
     return None
@@ -85,7 +89,7 @@ class AiAgentTools:
     """Declares MCP tools for AI Agent CRUD and status."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         """Register AI Agent tools on the MCP server."""
 
         def error_payload_from_exception(exc: BaseException) -> dict:
@@ -94,7 +98,7 @@ class AiAgentTools:
             return build_ai_tool_error(text)
 
         async def _enrich_with_validation(
-            exc: BaseException, behaviors: list[dict]
+            exc: BaseException, behaviors: list[dict], client: PipefyClient
         ) -> str:
             """Enrich an error with validation context for RECORD_NOT_SAVED.
 
@@ -206,8 +210,18 @@ class AiAgentTools:
               - ``send_email_template`` → ``{"emailTemplateId": "<template_id>"}``;
                 optional ``allowTemplateModifications`` (boolean).
 
-            Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` (list of strings), e.g.
-            ``advanced_ocr``, ``web_search`` — pass-through; the API validates capability types.
+            Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` — a list of
+            capability entries, each exactly ``{"capabilityType": "<type>", "enabled": true|false}``
+            (legacy string lists / ``{"type": ...}`` / extra keys are rejected). Common types:
+            ``advanced_ocr`` (product name IDP / Intelligent Document Processing),
+            ``math_operations`` (Calculations & Analysis), ``web_search``, ``web_scraping``,
+            ``max_effort``; unknown types pass through — the API validates the enum and
+            entitlement on write (a capability may require organization-level enablement).
+
+            Optional ``actionParams.aiBehaviorParams.providerId`` / ``systemProviderId`` select the
+            behavior's LLM provider; set at most one. Discover IDs with ``get_llm_providers``
+            (``providerId`` for a custom/byom provider, ``systemProviderId`` for a
+            Pipefy-managed/system one).
 
             Optional ``eventParams`` per behavior (filters when the trigger fires):
               - ``field_updated`` event → ``{"triggerFieldIds": ["<field_id>"]}`` to fire only on specific fields.
@@ -251,6 +265,7 @@ class AiAgentTools:
                     ``get_phase_fields(phase_id)`` for ``triggerFieldIds`` / ``destinationPhaseId``.
                 data_source_ids: Optional knowledge-source IDs (same as ``update_ai_agent``).
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"create_ai_agent: name={name}, repo_uuid={repo_uuid}, "
                 f"instruction_len={len(instruction)}, behaviors_count={len(behaviors)}, "
@@ -312,7 +327,7 @@ class AiAgentTools:
                     ]
                 pipe_ids = collect_pipe_ids_from_behaviors(resolved)
                 perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
-                error_text = await _enrich_with_validation(exc, resolved)
+                error_text = await _enrich_with_validation(exc, resolved, client)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return build_create_agent_partial_failure(
@@ -362,8 +377,9 @@ class AiAgentTools:
               - ``send_email_template`` → ``{"emailTemplateId": "<template_id>"}``;
                 optional ``allowTemplateModifications`` (boolean).
 
-            Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` (list of strings), e.g.
-            ``advanced_ocr``, ``web_search`` — pass-through; the API validates capability types.
+            Optional ``capabilitiesAttributes`` / ``providerId`` / ``systemProviderId`` inside
+            ``actionParams.aiBehaviorParams`` — same rules as ``create_ai_agent``; see its
+            docstring.
 
             Args:
                 uuid: UUID of the agent to update.
@@ -380,6 +396,7 @@ class AiAgentTools:
                     Discover via: ``get_automation_events(pipe_id)`` and ``get_phase_fields(phase_id)``.
                 data_source_ids: Optional list of data source IDs.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"update_ai_agent: uuid={uuid}, behaviors_count={len(behaviors)}"
             )
@@ -421,7 +438,7 @@ class AiAgentTools:
                     ]
                 pipe_ids = collect_pipe_ids_from_behaviors(resolved)
                 perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
-                error_text = await _enrich_with_validation(exc, resolved)
+                error_text = await _enrich_with_validation(exc, resolved, client)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return build_ai_tool_error(error_text)
@@ -448,6 +465,7 @@ class AiAgentTools:
                 uuid: UUID of the agent to enable/disable.
                 active: True to activate, False to deactivate.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"toggle_ai_agent_status: uuid={uuid}, active={active}")
             agent_uuid = uuid.strip()
             if not agent_uuid:
@@ -464,6 +482,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_ai_agent(ctx: Context, uuid: str) -> dict:
             """Get an AI Agent by UUID with full behavior configuration.
@@ -481,6 +500,7 @@ class AiAgentTools:
             Args:
                 uuid: Agent UUID.
             """
+            client = get_pipefy_client(ctx)
             agent_uuid = uuid.strip()
             await ctx.debug(f"get_ai_agent: uuid={agent_uuid}")
             if not agent_uuid:
@@ -495,6 +515,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_ai_agents(ctx: Context, repo_uuid: str) -> dict:
             """List all AI Agents for a pipe. Use before creating an agent to avoid duplicates.
@@ -502,6 +523,7 @@ class AiAgentTools:
             Args:
                 repo_uuid: UUID of the pipe.
             """
+            client = get_pipefy_client(ctx)
             pipe_uuid = repo_uuid.strip()
             await ctx.debug(f"get_ai_agents: repo_uuid={pipe_uuid}")
             if not pipe_uuid:
@@ -528,6 +550,7 @@ class AiAgentTools:
                 uuid: Agent UUID.
                 confirm: Must be ``True`` to run the delete mutation.
             """
+            client = get_pipefy_client(ctx)
             agent_uuid = uuid.strip()
             await ctx.debug(f"delete_ai_agent: uuid={agent_uuid}")
             if not agent_uuid:
@@ -555,12 +578,14 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def validate_ai_agent_behaviors(
             ctx: Context,
             pipe_id: PipefyId,
             behaviors: list[dict],
             strict_unknown_action_types: bool = True,
+            data_source_ids: list[str] | None = None,
         ) -> dict:
             """Dry-run validation of AI Agent behaviors against a pipe's fields, phases, and relations.
 
@@ -579,7 +604,12 @@ class AiAgentTools:
             pipe field-ID checks on its metadata.
 
             Runs Pydantic model validation (same as the mutation tools) plus cross-references
-            against live pipe data. Does not persist anything.
+            against live pipe data. Does not persist anything. Model validation rejects
+            malformed ``capabilitiesAttributes`` entries (each must be
+            ``{"capabilityType": "<type>", "enabled": true|false}``) and a behavior that sets
+            both ``providerId`` and ``systemProviderId``. ``capabilityType`` values are not
+            checked against a known-enum set — any value passes through and the API validates
+            the enum on write (capabilities may also require organization-level enablement).
 
             Field IDs are matched against start-form fields and phase fields (via
             ``get_phase_fields`` per phase), accepting both slug ``id`` and numeric
@@ -613,7 +643,14 @@ class AiAgentTools:
                     ``fieldId`` values (slug or ``internal_id``).
                 strict_unknown_action_types: When ``True`` (default), unknown ``actionType`` values
                     are reported in ``problems``. When ``False``, they appear in ``warnings`` only.
+                data_source_ids: Optional agent-level knowledge base IDs to attach. These are
+                    unioned with each behavior's ``actionParams.aiBehaviorParams.dataSourceIds``
+                    and checked against the pipe's knowledge bases (via ``get_ai_knowledge_bases``);
+                    unknown IDs produce **warnings** only (``valid`` stays true). If the knowledge
+                    base list cannot be read, a single warning is added and the membership check is
+                    skipped. Discover valid IDs via ``get_ai_knowledge_bases(pipe_uuid)``.
             """
+            client = get_pipefy_client(ctx)
             pid = str(pipe_id).strip()
             await ctx.debug(
                 f"validate_ai_agent_behaviors: pipe_id={pid}, "
@@ -626,8 +663,8 @@ class AiAgentTools:
                 client,
                 pid,
                 behaviors,
-                service_account_ids=settings.pipefy.service_account_ids,
                 strict_unknown_action_types=strict_unknown_action_types,
+                data_source_ids=data_source_ids,
             )
             if not result.get("success"):
                 probs = result.get("problems") or []

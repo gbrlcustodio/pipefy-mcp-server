@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import ValidationError
+
 from pipefy_sdk.client import PipefyClient
+from pipefy_sdk.models import BehaviorPayload
 from pipefy_sdk.transition_hints import (
     TRANSITION_RULES_HINT,
     format_allowed_destinations_phrase,
@@ -55,26 +58,29 @@ async def collect_ai_behavior_move_transition_problems(
         return cache[phase_id_str]
 
     for i, b in enumerate(behaviors):
-        event_id = str(b.get("event_id") or b.get("eventId") or "")
+        try:
+            payload = BehaviorPayload.model_validate(b)
+        except ValidationError:
+            continue
+        event_id = str(payload.event_id or "")
         if event_id != "card_moved":
             continue
-        ep = b.get("eventParams") or b.get("event_params") or {}
+        ep = payload.event_params or {}
         src = ep.get("to_phase_id") or ep.get("toPhaseId")
         if not src:
             continue
         src_s = str(src)
-        bname = b.get("name", f"<behavior {i}>")
+        bname = payload.name or f"<behavior {i}>"
         prefix = f'Behavior [{i}] "{bname}"'
 
-        ap = b.get("actionParams") or b.get("action_params") or {}
-        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-        attrs = abp.get("actionsAttributes") or abp.get("actions_attributes") or []
+        abp = (
+            payload.action_params.ai_behavior_params if payload.action_params else None
+        )
+        attrs = (abp.actions_attributes if abp else None) or []
         for j, action in enumerate(attrs):
-            if not isinstance(action, dict):
+            if action.action_type != "move_card":
                 continue
-            if action.get("actionType") != "move_card":
-                continue
-            meta = action.get("metadata") or {}
+            meta = action.metadata if isinstance(action.metadata, dict) else {}
             dest = meta.get("destinationPhaseId")
             if not dest:
                 continue

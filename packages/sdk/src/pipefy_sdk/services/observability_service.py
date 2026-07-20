@@ -8,13 +8,14 @@ from zipfile import BadZipFile
 import httpx
 from openpyxl.utils.exceptions import InvalidFileException
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor, GraphQLResult
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
     GET_AGENTS_USAGE_QUERY,
     GET_AI_AGENT_LOG_DETAILS_QUERY,
     GET_AI_AGENT_LOGS_QUERY,
     GET_AI_CREDIT_USAGE_QUERY,
+    GET_AUTOMATION_EXECUTION_METRICS_QUERY,
     GET_AUTOMATION_JOBS_EXPORT_QUERY,
     GET_AUTOMATION_LOGS_BY_REPO_QUERY,
     GET_AUTOMATION_LOGS_QUERY,
@@ -25,8 +26,11 @@ from pipefy_sdk.services.observability_export_csv import (
     xlsx_first_sheet_to_csv_limited,
 )
 from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
+from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 _DEFAULT_PAGE_SIZE = 30
+
+AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE: int = 50
 
 
 DateRange = TypedDict("DateRange", {"from": str, "to": str})
@@ -91,8 +95,160 @@ def _build_usage_variables(
     return variables
 
 
-class ObservabilityService(BasePipefyClient):
+def _build_sort_criteria(
+    sort_by: str | None, sort_order: str | None
+) -> dict[str, str] | None:
+    """Assemble an ``AutomationSortCriteria`` input, or ``None`` when unset.
+
+    Each field is included only when provided, so a caller may sort by field
+    alone, order alone, or both.
+    """
+    sort: dict[str, str] = {}
+    if sort_by is not None:
+        sort["by"] = sort_by
+    if sort_order is not None:
+        sort["order"] = sort_order
+    return sort or None
+
+
+def _build_execution_metrics_variables(
+    organization_id: str,
+    automation_ids: list[str] | None,
+    *,
+    repo_id: str | None,
+    period: str,
+    first: int,
+    after: str | None,
+    action_ids: list[str] | None = None,
+    event_id: str | None = None,
+    active: bool | None = None,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
+) -> dict[str, Any]:
+    """Build the execution-metrics variables, omitting optional filters that are ``None``."""
+    variables: dict[str, Any] = {
+        "organizationId": organization_id,
+        "period": period,
+        "first": first,
+    }
+    if automation_ids is not None:
+        variables["automationIds"] = automation_ids
+    if repo_id is not None:
+        variables["repoId"] = repo_id
+    if action_ids is not None:
+        variables["actionIds"] = action_ids
+    if event_id is not None:
+        variables["eventId"] = event_id
+    if active is not None:
+        variables["active"] = active
+    if search is not None:
+        variables["search"] = search
+    sort = _build_sort_criteria(sort_by, sort_order)
+    if sort is not None:
+        variables["sort"] = sort
+    if after is not None:
+        variables["after"] = after
+    return variables
+
+
+def _partial_error(err: dict[str, Any]) -> dict[str, Any]:
+    """Project one raw GraphQL error dict onto the per-automation failure shape."""
+    extensions = err.get("extensions") or {}
+    return {
+        "automation_id": extensions.get("automation_id"),
+        "code": extensions.get("code"),
+        "message": err.get("message"),
+        "correlation_id": extensions.get("correlation_id"),
+    }
+
+
+def _normalize_execution_metrics_result(result: GraphQLResult) -> dict[str, Any]:
+    """Split a partial ``automations.executionMetrics`` response into nodes and errors.
+
+    The sole failure decision for this query: a missing or null ``automations``
+    connection means the lookup itself failed (bad org, no org access, or a fully
+    null response), so it raises ``ValueError``. An empty ``edges`` list (every
+    requested automation denied) stays a partial success. ``page_info`` carries
+    the connection's ``pageInfo`` for cursor paging.
+    """
+    connection = result.data.get("automations")
+    if connection is None:
+        message = result.errors[0].get("message") if result.errors else None
+        raise ValueError(message or "Query failed.")
+    automations = unwrap_relay_connection_nodes(connection)
+    partial_errors = [_partial_error(err) for err in result.errors]
+    page_info = connection.get("pageInfo") if isinstance(connection, dict) else None
+    return {
+        "automations": automations,
+        "partial_errors": partial_errors,
+        "page_info": page_info,
+    }
+
+
+class ObservabilityService:
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
+
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
+
+    async def get_automation_execution_metrics(
+        self,
+        organization_id: str,
+        automation_ids: list[str] | None = None,
+        *,
+        repo_id: str | None = None,
+        action_ids: list[str] | None = None,
+        event_id: str | None = None,
+        active: bool | None = None,
+        search: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
+        period: str = "SIXTY_MINUTES",
+        first: int = AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+        after: str | None = None,
+    ) -> dict[str, Any]:
+        """Get execution metrics for automations within a rolling period.
+
+        Partial success: returns metrics for the automations this token may read
+        plus a ``partial_errors`` list naming any that failed. ``page_info``
+        carries the cursor for paging past the 50-automation max page.
+
+        Args:
+            organization_id: Numeric org id, not a UUID.
+            automation_ids: IDs to fetch metrics for. ``None`` fetches every
+                automation in the organization (optionally narrowed by the
+                filters below).
+            repo_id: Optional pipe/repo ID to scope the query.
+            action_ids: Optional action IDs to filter by.
+            event_id: Optional trigger event, one of ``AUTOMATION_EVENT_IDS``.
+            active: Optional enabled/disabled filter.
+            search: Optional free-text match on automation name.
+            sort_by: Optional sort field, one of ``AUTOMATION_SORT_BY``.
+            sort_order: Optional sort direction, one of ``AUTOMATION_SORT_ORDER``.
+            period: One of ``AUTOMATION_EXECUTION_METRICS_PERIODS`` (default
+                SIXTY_MINUTES, the API default).
+            first: Page size (default and max 50).
+            after: Cursor from the previous page's ``page_info.endCursor``.
+        """
+        variables = _build_execution_metrics_variables(
+            organization_id,
+            automation_ids,
+            repo_id=repo_id,
+            period=period,
+            first=first,
+            after=after,
+            action_ids=action_ids,
+            event_id=event_id,
+            active=active,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        result = await self._executor.execute(
+            GET_AUTOMATION_EXECUTION_METRICS_QUERY, variables
+        )
+        return _normalize_execution_metrics_result(result)
 
     async def get_ai_agent_logs(
         self,
@@ -120,7 +276,7 @@ class ObservabilityService(BasePipefyClient):
             status=status,
             search_term=search_term,
         )
-        return await self.execute_query(GET_AI_AGENT_LOGS_QUERY, variables)
+        return await self._executor.execute_query(GET_AI_AGENT_LOGS_QUERY, variables)
 
     async def get_ai_agent_log_details(self, log_uuid: str) -> dict[str, Any]:
         """Get detailed AI agent execution log with tracing nodes.
@@ -128,7 +284,7 @@ class ObservabilityService(BasePipefyClient):
         Args:
             log_uuid: UUID of the AI agent log entry.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_AI_AGENT_LOG_DETAILS_QUERY, {"uuid": log_uuid}
         )
 
@@ -158,7 +314,7 @@ class ObservabilityService(BasePipefyClient):
             status=status,
             search_term=search_term,
         )
-        return await self.execute_query(GET_AUTOMATION_LOGS_QUERY, variables)
+        return await self._executor.execute_query(GET_AUTOMATION_LOGS_QUERY, variables)
 
     async def get_automation_logs_by_repo(
         self,
@@ -186,7 +342,9 @@ class ObservabilityService(BasePipefyClient):
             status=status,
             search_term=search_term,
         )
-        return await self.execute_query(GET_AUTOMATION_LOGS_BY_REPO_QUERY, variables)
+        return await self._executor.execute_query(
+            GET_AUTOMATION_LOGS_BY_REPO_QUERY, variables
+        )
 
     async def get_agents_usage(
         self,
@@ -208,7 +366,7 @@ class ObservabilityService(BasePipefyClient):
             sort: SortCriteria (field + direction).
         """
         resolved = await resolve_organization_uuid(
-            self.execute_query, organization_uuid
+            self._executor.execute_query, organization_uuid
         )
         variables = _build_usage_variables(
             resolved,
@@ -217,7 +375,7 @@ class ObservabilityService(BasePipefyClient):
             search=search,
             sort=sort,
         )
-        return await self.execute_query(GET_AGENTS_USAGE_QUERY, variables)
+        return await self._executor.execute_query(GET_AGENTS_USAGE_QUERY, variables)
 
     async def get_automations_usage(
         self,
@@ -239,7 +397,7 @@ class ObservabilityService(BasePipefyClient):
             sort: SortCriteria (field + direction).
         """
         resolved = await resolve_organization_uuid(
-            self.execute_query, organization_uuid
+            self._executor.execute_query, organization_uuid
         )
         variables = _build_usage_variables(
             resolved,
@@ -248,7 +406,9 @@ class ObservabilityService(BasePipefyClient):
             search=search,
             sort=sort,
         )
-        return await self.execute_query(GET_AUTOMATIONS_USAGE_QUERY, variables)
+        return await self._executor.execute_query(
+            GET_AUTOMATIONS_USAGE_QUERY, variables
+        )
 
     async def get_ai_credit_usage(
         self,
@@ -263,9 +423,9 @@ class ObservabilityService(BasePipefyClient):
             period: PeriodFilter enum value (current_month, last_month, last_3_months).
         """
         resolved = await resolve_organization_uuid(
-            self.execute_query, organization_uuid
+            self._executor.execute_query, organization_uuid
         )
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_AI_CREDIT_USAGE_QUERY,
             {"organizationUuid": resolved, "period": period},
         )
@@ -282,7 +442,7 @@ class ObservabilityService(BasePipefyClient):
             period: PeriodFilter enum value (current_month, last_month, last_3_months). Sent as
                 GraphQL input field ``filter`` (Pipefy schema no longer exposes ``period`` on this input).
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
             {"input": {"organizationId": str(organization_id), "filter": period}},
         )
@@ -293,7 +453,7 @@ class ObservabilityService(BasePipefyClient):
         Args:
             export_id: Export id returned by ``createAutomationJobsExport`` (same as ``automationJobsExport.id``).
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_AUTOMATION_JOBS_EXPORT_QUERY,
             {"id": export_id},
         )

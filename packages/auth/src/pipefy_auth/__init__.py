@@ -9,10 +9,9 @@ artifacts surfaced here to the SDK.
 
 from __future__ import annotations
 
-__version__ = "0.2.0-beta.4"
+__version__ = "0.3.0-beta.1"
 
 from pipefy_auth.bearer import (
-    CallableBearerAuth,
     RefreshableBearerAuth,
     StaticBearerAuth,
 )
@@ -29,14 +28,15 @@ from pipefy_auth.refresh import (
     refresh_access_token,
 )
 from pipefy_auth.resolver import (
-    SERVICE_ACCOUNT_TIER,
-    STATIC_TOKEN_TIER,
-    STORED_SESSION_TIER,
+    ResolvedAuth,
     ServiceAccount,
-    detect_pipefy_tiers,
+    ServiceAccountAuth,
+    StaticTokenAuth,
+    StoredSessionAuth,
+    build_httpx_auth,
+    detect_pipefy_auth_methods,
     missing_auth_message,
     resolve_pipefy_auth,
-    tier_for,
 )
 from pipefy_auth.responses import OAuthErrorResponse, TokenResponse
 from pipefy_auth.revoke import (
@@ -44,7 +44,7 @@ from pipefy_auth.revoke import (
     RevocationUnsupportedError,
     revoke_session,
 )
-from pipefy_auth.settings import AuthSettings
+from pipefy_auth.settings import AuthSettings, JwtValidationSettings
 from pipefy_auth.storage import (
     SessionDeleteError,
     StoredSession,
@@ -55,12 +55,23 @@ from pipefy_auth.storage import (
     load_session,
     store_session,
 )
+from pipefy_auth.verification import (
+    AudiencePolicy,
+    JwtValidator,
+    RequireAudience,
+    SkipAudience,
+    TokenValidationError,
+)
 
 __all__ = [
+    "AudiencePolicy",
     "AuthSettings",
-    "CallableBearerAuth",
+    "JwtValidationSettings",
+    "RequireAudience",
+    "SkipAudience",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",
+    "JwtValidator",
     "LoginError",
     "LoginResult",
     "OAuthErrorResponse",
@@ -70,18 +81,21 @@ __all__ = [
     "RefreshableBearerAuth",
     "RevocationError",
     "RevocationUnsupportedError",
-    "SERVICE_ACCOUNT_TIER",
-    "STATIC_TOKEN_TIER",
-    "STORED_SESSION_TIER",
+    "ResolvedAuth",
     "ServiceAccount",
+    "ServiceAccountAuth",
     "SessionDeleteError",
     "StaticBearerAuth",
+    "StaticTokenAuth",
     "StoredSession",
+    "StoredSessionAuth",
     "TokenResponse",
+    "TokenValidationError",
     "__version__",
+    "build_httpx_auth",
     "configure_keychain_backend",
     "delete_session",
-    "detect_pipefy_tiers",
+    "detect_pipefy_auth_methods",
     "ensure_fresh_session",
     "fetch_provider_metadata",
     "keychain_backend_name",
@@ -93,5 +107,4 @@ __all__ = [
     "revoke_session",
     "run_login",
     "store_session",
-    "tier_for",
 ]

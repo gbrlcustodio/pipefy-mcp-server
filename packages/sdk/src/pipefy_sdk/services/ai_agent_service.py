@@ -6,12 +6,7 @@ import copy
 import uuid
 from typing import Any
 
-from httpx import Auth
-
-from pipefy_sdk.base_client import (
-    BasePipefyClient,
-    unwrap_relay_connection_nodes,
-)
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_sdk.queries.ai_agent_queries import (
     CREATE_AI_AGENT_MUTATION,
@@ -26,7 +21,7 @@ from pipefy_sdk.services.types import (
     AiAgentGraphPayload,
     ToggleAgentStatusResult,
 )
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 
 def inject_reference_ids(behaviors: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -59,22 +54,11 @@ def inject_reference_ids(behaviors: list[dict[str, Any]]) -> list[dict[str, Any]
     return result
 
 
-class AiAgentService(BasePipefyClient):
+class AiAgentService:
     """Service for AI Agent CRUD via GraphQL."""
 
-    def __init__(
-        self,
-        settings: PipefySettings,
-        *,
-        auth: Auth,
-    ) -> None:
-        """Initialize the GraphQL client.
-
-        Args:
-            settings: Pipefy API settings.
-            auth: Optional shared OAuth handler (see :class:`BasePipefyClient`).
-        """
-        super().__init__(settings=settings, auth=auth)
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def create_agent(self, agent_input: CreateAiAgentInput) -> AgentServiceResult:
         """Create an AI Agent (empty, no behaviors).
@@ -92,7 +76,9 @@ class AiAgentService(BasePipefyClient):
             }
         }
 
-        response = await self.execute_query(CREATE_AI_AGENT_MUTATION, variables)
+        response = await self._executor.execute_query(
+            CREATE_AI_AGENT_MUTATION, variables
+        )
 
         agent = response.get("createAiAgent", {}).get("agent")
         if not agent or "uuid" not in agent:
@@ -132,7 +118,9 @@ class AiAgentService(BasePipefyClient):
             },
         }
 
-        response = await self.execute_query(UPDATE_AI_AGENT_MUTATION, variables)
+        response = await self._executor.execute_query(
+            UPDATE_AI_AGENT_MUTATION, variables
+        )
 
         agent = response.get("updateAiAgent", {}).get("agent")
         if not agent or "uuid" not in agent:
@@ -159,7 +147,9 @@ class AiAgentService(BasePipefyClient):
             ValueError: When the API reports failure.
         """
         variables = {"uuid": agent_uuid, "active": active}
-        response = await self.execute_query(TOGGLE_AI_AGENT_STATUS_MUTATION, variables)
+        response = await self._executor.execute_query(
+            TOGGLE_AI_AGENT_STATUS_MUTATION, variables
+        )
 
         result = response.get("updateAiAgentStatus", {})
         if not result.get("success"):
@@ -180,7 +170,9 @@ class AiAgentService(BasePipefyClient):
         Returns:
             ``aiAgent`` fields when found; empty dict when the API returns null or a non-object.
         """
-        response = await self.execute_query(GET_AI_AGENT_QUERY, {"uuid": agent_uuid})
+        response = await self._executor.execute_query(
+            GET_AI_AGENT_QUERY, {"uuid": agent_uuid}
+        )
         agent = response.get("aiAgent")
         return agent if isinstance(agent, dict) else {}
 
@@ -193,7 +185,7 @@ class AiAgentService(BasePipefyClient):
         Returns:
             List of agent dicts from `aiAgents`.
         """
-        response = await self.execute_query(
+        response = await self._executor.execute_query(
             GET_AI_AGENTS_QUERY, {"repoUuid": repo_uuid}
         )
         return unwrap_relay_connection_nodes(response.get("aiAgents"))
@@ -207,7 +199,7 @@ class AiAgentService(BasePipefyClient):
         Returns:
             Dict with `success` bool from `deleteAiAgent`.
         """
-        response = await self.execute_query(
+        response = await self._executor.execute_query(
             DELETE_AI_AGENT_MUTATION, {"uuid": agent_uuid}
         )
         payload = response.get("deleteAiAgent", {})

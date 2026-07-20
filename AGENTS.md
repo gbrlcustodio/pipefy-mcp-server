@@ -8,21 +8,55 @@
 - **`docs/parity.md`** — MCP tool ↔ CLI command parity matrix. Source of truth for coverage and deferrals.
 - **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
 - **`docs/dependencies.md`** — Rationale for runtime dependencies.
+- **`docs/architecture.md`**: Intra-package layering (domain, adapter, composition root), type ownership at boundaries, ports, and the alternative-constructor guide.
 - **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior).
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
-- **`docs/sdk/README.md`** — Using `pipefy-sdk` as a library.
+- **`docs/sdk/README.md`** — Using `pipefy` as a library.
 - **`skills/AGENTS.md`** — Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.
 
 ## Project structure
 
 ```
-packages/sdk/   → pipefy-sdk        (Vendor API SDK — GraphQL, models, services)
-packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle; depends on pipefy-sdk)
-packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy-sdk)
+packages/sdk/   → pipefy            (Vendor API SDK — GraphQL, models, services; dist named `pipefy`, import module `pipefy_sdk`)
+packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle; depends on pipefy)
+packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy)
 skills/         → agent skills catalog (Markdown; no Python package)
 ```
 
-**Vendor API SDK** means the GraphQL-facing library (`pipefy-sdk`) used by both MCP and CLI, distinct from app glue or generic shared helpers.
+**Vendor API SDK** means the GraphQL-facing library (`pipefy`) used by both MCP and CLI, distinct from app glue or generic shared helpers.
+
+## Import namespace migration: `pipefy_sdk` → `pipefy`
+
+The SDK distribution is named `pipefy`, but its import module is still `pipefy_sdk`. The
+import module is being renamed to `pipefy` gradually, so the distribution and import names
+converge. New code should target `pipefy`; existing `pipefy_sdk` imports are migrated in
+small batches rather than one sweep.
+
+The mechanism that lets both paths work during the transition is a `sys.modules` alias. The
+real code lives at the new location and the old name is aliased to the *same module object*,
+so `import pipefy_sdk` keeps resolving. Once code moves under a `pipefy/` package:
+
+```python
+# src/pipefy_sdk/__init__.py (transitional shim)
+import sys
+
+import pipefy as _pipefy
+
+sys.modules[__name__] = _pipefy
+```
+
+Rules for the migration:
+
+- Do NOT shim with `from pipefy import *`. That re-imports and creates two copies of every
+  class under two names, which breaks `isinstance` checks and module-level singletons. The
+  `sys.modules` alias preserves a single module identity; use it.
+- Migrate call sites incrementally. New code imports `pipefy`; touch old `pipefy_sdk` imports
+  as you pass through their files.
+- Add a lint/grep guard so new `pipefy_sdk` imports fail once the migration starts, so the old
+  surface only ever shrinks.
+- On completion: remove the shim, repoint the ruff banned-api paths (`pipefy_sdk.services`,
+  `pipefy_sdk.queries` → `pipefy.services`/`.queries`), move `__version__` into
+  `pipefy/__init__.py`, and rename the directory `packages/sdk` → `packages/pipefy`.
 
 ## Build, test, and development
 
@@ -53,6 +87,33 @@ Runtime type checks belong only at a trust boundary, where untyped or external d
 - A `dict`-typed tool arg (for example `filter: dict | None`) validates the container but not its nested values. Validating that nested, un-schema'd structure (the job of `validate_report_cards_filter`) is legitimate boundary work, not defensive noise.
 
 When a type-related failure looks plausible, the fix is a type checker in CI, not a per-function guard.
+
+### Parse, don't validate
+
+The boundary check should return a type that carries its result, not a bool or a bare raise that the interior re-derives. Validation that only raises throws away what it learned: the value flows on with its original loose type, so every downstream caller re-checks or re-normalizes it. Parsing turns loose input into a precise type once, and that type carries the proof, so the interior is total.
+
+In practice:
+
+- pydantic-settings models are the parse step for env vars: raw `os.environ` strings in, a typed `PipefySettings` / `AuthSettings` out, illegal values rejected at construction. Normalize there (strip, `rstrip('/')`, lowercase) so no consumer re-normalizes the same field later.
+- Prefer a closed sum type over a bag of optionals when inputs are mutually exclusive or co-dependent. `pipefy_auth.resolve_pipefy_auth` returns a `ResolvedAuth` (`StaticTokenAuth | ServiceAccountAuth | StoredSessionAuth`), so the winning credential tier is kept in the type; `build_httpx_auth` is then total over it, with no `None` branch and no fallthrough. Recovering the decision after the fact (an `isinstance` reverse lookup that maps a built `httpx.Auth` back to its tier name) is the anti-pattern this replaces.
+- Make illegal states unrepresentable instead of checking for them downstream. A cross-field rule such as "verify_audience requires audience" is a sum type wearing two fields; co-dependent credentials are one optional value, not two independent optionals that a helper later re-assembles.
+
+A function that accepts the parsed type may assume the guarantee and must not re-check it. This pairs with the boundary rule above: that one says where to validate, this one says what the check should hand back.
+
+### Parsed types are self-guaranteeing
+
+A parsed type rejects invalid construction itself; it does not rely on the pipeline that usually builds it. Its constructor enforces every invariant it claims, so holding an instance is proof it is valid and a hand-written instance cannot be invalid. The domain name is the guarantee, not the resolver that happens to produce it.
+
+- A recurring (value + invariant) pair earns a dedicated leaf type rather than a bare `str`, so every field holding one inherits the guarantee instead of re-checking it. A one-off invariant stays with its owner.
+- When validity depends on a policy, carry the policy as part of the value so the constructor has the context to judge it.
+- A runtime-erased alias does not qualify: it disappears at runtime, so an invalid value still constructs. Reach for a type whose constructor actually runs.
+- Settings models stay pure data readers. A cross-field rule fails fast at construction, not through a projection method a consumer must remember to call, which makes the parse optional and invites a silent `None`.
+
+### Composition: the per-app runtime
+
+Parsed types are decisions and cost no I/O to build. Effects (keychain reads, network, building clients or verifiers) live in a per-application runtime built once at startup: the single place raw settings become domain types and wired resources. Downstream depends on the runtime or the types it holds, never on raw settings or an ad-hoc resolve. The runtime lives in the app package; shared packages export parsed types and resolvers, not app wiring or effects. Whether an app wires eagerly (fail fast at boot) or keeps effectful members lazy is a per-app choice.
+
+The layer model this sits inside (domain, adapter, composition root), the rule that domain types do not carry framework or SDK types, and where an alternative constructor lives (classmethod on the type versus free factory in the adapter) are in [`docs/architecture.md`](docs/architecture.md). Intra-package layering is enforced by import-linter in `packages/mcp`; the inter-package direction is enforced by ruff `TID251`.
 
 ## Testing
 - `pytest-asyncio`, `pytest-cov`, `pytest-mock`.

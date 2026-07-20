@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
-__version__ = "0.2.0-beta.4"
+__version__ = "0.3.0-beta.1"
 
-from pipefy_sdk.client import PipefyClient
+from pipefy_sdk.client import PipefyClient, PipefyEngine
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
+from pipefy_sdk.field_filters import (
+    filter_editable_field_definitions,
+    filter_fields_by_definitions,
+    skipped_field_ids,
+)
+from pipefy_sdk.graphql_problem import (
+    GraphQLProblem,
+    GraphQLProblemKind,
+    classify_exception,
+    classify_graphql_error_dicts,
+)
 from pipefy_sdk.models import (
     Attachment,
     AttachmentTarget,
@@ -15,12 +26,14 @@ from pipefy_sdk.models import (
     AutomationConditionInput,
     AutomationEventParamsInput,
     BehaviorInput,
+    BehaviorPayload,
     CardTarget,
     CommentInput,
     CreateAiAgentInput,
     CreateAiAutomationInput,
     CreatePortalElementInput,
     CreateSendTaskAutomationInput,
+    DataLookupCondition,
     DeleteCommentInput,
     MemberInvite,
     NonBlankStr,
@@ -35,26 +48,44 @@ from pipefy_sdk.models import (
     infer_content_type,
 )
 from pipefy_sdk.models.form import create_form_model
+from pipefy_sdk.queries.observability_queries import (
+    AUTOMATION_EVENT_IDS,
+    AUTOMATION_EXECUTION_METRICS_PERIODS,
+    AUTOMATION_SORT_BY,
+    AUTOMATION_SORT_ORDER,
+)
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
     AutomationEventRow,
     AutomationRuleRecord,
     AutomationRuleSummary,
 )
-from pipefy_sdk.services.internal_api_client import InternalApiClient
-from pipefy_sdk.services.member_service import (
-    format_service_account_removal_block_message,
-    service_account_removal_blocked_user_ids,
-)
 from pipefy_sdk.services.observability_export_csv import download_bytes, stream_bytes
+from pipefy_sdk.services.observability_service import (
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+)
 from pipefy_sdk.services.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
 )
 from pipefy_sdk.services.types import (
+    ActiveLlmProviderPayload,
     AiAgentGraphPayload,
     CardSearch,
+    KnowledgeBaseAccessProbeResult,
+    KnowledgeBaseDataLookupPayload,
+    KnowledgeBaseDeleteResult,
+    KnowledgeBaseDocumentPayload,
+    KnowledgeBaseDocumentUploadError,
+    KnowledgeBasePayload,
+    KnowledgeBasePlainTextPayload,
+    LlmProviderMutationResult,
+    LlmProviderPayload,
+    LlmProvidersResult,
+    LlmProviderWritePayload,
     MePayload,
+    ProviderAccessProbeResult,
+    ProviderDependenciesResult,
     copy_card_search,
 )
 from pipefy_sdk.settings import PipefySettings
@@ -62,6 +93,11 @@ from pipefy_sdk.settings import PipefySettings
 __all__ = [
     "__version__",
     "AiAgentGraphPayload",
+    "AUTOMATION_EVENT_IDS",
+    "AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE",
+    "AUTOMATION_EXECUTION_METRICS_PERIODS",
+    "AUTOMATION_SORT_BY",
+    "AUTOMATION_SORT_ORDER",
     "Attachment",
     "AttachmentTarget",
     "AttachmentUploadError",
@@ -76,6 +112,7 @@ __all__ = [
     "AutomationRuleRecord",
     "AutomationRuleSummary",
     "BehaviorInput",
+    "BehaviorPayload",
     "CardSearch",
     "CardTarget",
     "CommentInput",
@@ -83,14 +120,35 @@ __all__ = [
     "CreateAiAutomationInput",
     "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
+    "DataLookupCondition",
     "DeleteCommentInput",
+    "GraphQLProblem",
+    "GraphQLProblemKind",
+    "KnowledgeBaseAccessProbeResult",
+    "KnowledgeBaseDataLookupPayload",
+    "KnowledgeBaseDeleteResult",
+    "KnowledgeBaseDocumentPayload",
+    "KnowledgeBaseDocumentUploadError",
+    "KnowledgeBasePayload",
+    "KnowledgeBasePlainTextPayload",
+    "ActiveLlmProviderPayload",
+    "LlmProviderMutationResult",
+    "LlmProviderPayload",
+    "LlmProvidersResult",
+    "LlmProviderWritePayload",
+    "ProviderAccessProbeResult",
+    "ProviderDependenciesResult",
+    "classify_exception",
+    "classify_graphql_error_dicts",
     "download_bytes",
-    "InternalApiClient",
+    "filter_editable_field_definitions",
+    "filter_fields_by_definitions",
     "MePayload",
     "MemberInvite",
     "NonBlankStr",
     "PipefyAPIError",
     "PipefyClient",
+    "PipefyEngine",
     "PipefyError",
     "PipefyId",
     "PipefySettings",
@@ -103,8 +161,7 @@ __all__ = [
     "UploadAttachmentToTableRecordInput",
     "copy_card_search",
     "create_form_model",
-    "format_service_account_removal_block_message",
     "infer_content_type",
-    "service_account_removal_blocked_user_ids",
+    "skipped_field_ids",
     "stream_bytes",
 ]

@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from mcp import ClientSession
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.context import RequestContext
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -18,13 +17,16 @@ from mcp.types import (
 )
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.auth import RequestScopedIdentity
+from pipefy_mcp.core.runtime import McpRuntime
+from pipefy_mcp.core.tool_error_envelope import tool_error, tool_error_message
+from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     DeleteCardErrorPayload,
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
+from tools.conftest import build_tool_test_server
 
 # =============================================================================
 # Fixtures
@@ -33,10 +35,9 @@ from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
 
 @pytest.fixture
 def mcp_server(mock_pipefy_client):
-    mcp = FastMCP("Pipefy MCP Test Server")
-    PipeTools.register(mcp, mock_pipefy_client)
-
-    return mcp
+    return build_tool_test_server(
+        "Pipefy MCP Test Server", PipeTools.register, mock_pipefy_client
+    )
 
 
 @pytest.fixture
@@ -61,7 +62,6 @@ def mock_pipefy_client():
     client.delete_card_relation = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}
     )
-    client.internal_api_available = True
     client.update_card = AsyncMock()
     client.get_pipe_members = AsyncMock()
 
@@ -69,13 +69,15 @@ def mock_pipefy_client():
 
 
 @pytest.fixture(autouse=True)
-def mock_services_container(mocker, mock_pipefy_client):
-    container = Mock(ServicesContainer)
-    container.pipefy_client = mock_pipefy_client
+def mock_mcp_runtime(mocker, mock_pipefy_client):
+    runtime = Mock(McpRuntime)
+    runtime.pipefy_client = mock_pipefy_client
 
+    # build_pipefy_mcp_server constructs McpRuntime once; patch it where the
+    # server module looks it up so the built runtime is this mock.
     return mocker.patch(
-        "pipefy_mcp.core.container.ServicesContainer.get_instance",
-        return_value=container,
+        "pipefy_mcp.server.McpRuntime",
+        return_value=runtime,
     )
 
 
@@ -260,12 +262,17 @@ class TestCreateCardTool:
             "createCard": {"card": {"id": "789"}}
         }
 
-        mcp = FastMCP("Pipefy MCP Test Server")
-        PipeTools.register(mcp, mock_pipefy_client)
+        mcp = build_tool_test_server(
+            "Pipefy MCP Test Server", PipeTools.register, mock_pipefy_client
+        )
+
+        runtime = McpRuntime(settings, RequestScopedIdentity())
+        runtime.session_for_request = lambda _req: mock_pipefy_client
 
         ctx = MagicMock()
         ctx.debug = AsyncMock()
         ctx.session = SimpleNamespace(client_params=SimpleNamespace())
+        ctx.request_context = SimpleNamespace(lifespan_context=runtime, request=None)
 
         result = await mcp._tool_manager.call_tool(
             "create_card",
@@ -2597,31 +2604,6 @@ class TestDeleteCardRelation:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "did not succeed" in tool_error_message(payload).lower()
-
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_not_configured_returns_service_account_message(
-        self,
-        client_session,
-        mock_pipefy_client,
-        extract_payload,
-    ) -> None:
-        """delete_card_relation requires internal API (service-account) credentials."""
-        mock_pipefy_client.internal_api_available = False
-        async with client_session as session:
-            result = await session.call_tool(
-                "delete_card_relation",
-                {
-                    "child_id": "1",
-                    "parent_id": "2",
-                    "source_id": "3",
-                    "confirm": True,
-                },
-            )
-        assert result.isError is False
-        mock_pipefy_client.delete_card_relation.assert_not_called()
-        payload = extract_payload(result)
-        assert payload["success"] is False
-        assert "service-account credentials" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

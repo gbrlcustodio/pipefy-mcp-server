@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pipefy_auth import StaticBearerAuth
+from _shared.mock_clients import mock_executor
 
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.services.card_service import CardService
@@ -10,15 +10,6 @@ from pipefy_sdk.services.pipe_service import PipeService
 from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
 )
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
-
-
-def _mock_settings() -> PipefySettings:
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
 
 
 def _make_facade_client(execute_return_value: dict):
@@ -26,22 +17,17 @@ def _make_facade_client(execute_return_value: dict):
 
     Returns (client, mock_execute_query) so tests can inspect call args.
     """
-    settings = _mock_settings()
+    executor = mock_executor(execute_return_value)
+
     client = PipefyClient.__new__(PipefyClient)
-    client._pipe_service = PipeService(settings=settings, auth=_TEST_AUTH)
-    client._card_service = CardService(settings=settings, auth=_TEST_AUTH)
-    client._pipe_config_service = PipeConfigService(settings=settings, auth=_TEST_AUTH)
-    client._introspection_service = SchemaIntrospectionService(
-        settings=settings, auth=_TEST_AUTH
+    client._pipe_service = PipeService(executor=executor)
+    client._card_service = CardService(executor=executor)
+    client._pipe_config_service = PipeConfigService(
+        executor=executor, pipe_service=client._pipe_service
     )
+    client._introspection_service = SchemaIntrospectionService(executor=executor)
 
-    mock_execute = AsyncMock(return_value=execute_return_value)
-    client._pipe_service.execute_query = mock_execute
-    client._card_service.execute_query = mock_execute
-    client._pipe_config_service.execute_query = mock_execute
-    client._introspection_service.execute_query = mock_execute
-
-    return client, mock_execute
+    return client, executor.execute_query
 
 
 @pytest.mark.unit
@@ -541,7 +527,7 @@ async def test_update_card_incremental_mode_value_format_conversion():
 
 
 # ============================================================================
-# Regression tests for remaining public API methods (lock compatibility)
+# Regression tests for remaining Public API methods (lock compatibility)
 # ============================================================================
 
 

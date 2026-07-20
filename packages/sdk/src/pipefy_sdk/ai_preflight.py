@@ -16,6 +16,7 @@ from pipefy_sdk.ai_pipe_validation import (
     collect_field_ids_for_pipe,
     fetch_pipe_validation_context,
     phase_field_fetch_warning,
+    pipe_ids_from_behavior,
     validate_behaviors_against_pipe,
 )
 from pipefy_sdk.behavior_placeholders import expand_behaviors_placeholders
@@ -29,7 +30,6 @@ _PROMPT_FIELD_TOKEN_RE = re.compile(r"%\{(\d+)\}")
 GENERATE_WITH_AI_ACTION_ID = "generate_with_ai"
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30.0
-MEMBERSHIP_CHECK_TIMEOUT_SECONDS = 5.0
 MAX_CROSS_PIPE_FIELD_FETCH = 100
 
 
@@ -241,13 +241,93 @@ def _behavior_input_validation_problems(exc: ValidationError) -> list[str]:
     return problems if problems else [str(exc)]
 
 
+def _behavior_data_source_ids(behavior: dict[str, Any]) -> list[str]:
+    """Extract ``actionParams.aiBehaviorParams.dataSourceIds`` from a behavior dict.
+
+    Accepts both camelCase and snake_case keys (behaviors arrive in either shape).
+    """
+    action_params = behavior.get("actionParams") or behavior.get("action_params")
+    if not isinstance(action_params, dict):
+        return []
+    ai_params = action_params.get("aiBehaviorParams") or action_params.get(
+        "ai_behavior_params"
+    )
+    if not isinstance(ai_params, dict):
+        return []
+    ids = ai_params.get("dataSourceIds") or ai_params.get("data_source_ids")
+    if not isinstance(ids, list):
+        return []
+    return [stripped for i in ids if (stripped := str(i).strip())]
+
+
+def _collect_configured_data_source_ids(
+    behaviors: list[dict[str, Any]],
+    agent_data_source_ids: list[str] | None,
+) -> set[str]:
+    """Union of agent-level and behavior-level configured data source ids."""
+    configured = {
+        stripped
+        for did in agent_data_source_ids or []
+        if (stripped := str(did).strip())
+    }
+    for behavior in behaviors:
+        configured.update(_behavior_data_source_ids(behavior))
+    return configured
+
+
+async def _data_source_membership_warnings(
+    client: PipefyClient,
+    pipe_id: str,
+    configured_ids: set[str],
+) -> list[str]:
+    """Warn (never block) for configured data source ids not on the pipe.
+
+    The knowledge base list is pipe-UUID-scoped, so this resolves the pipe UUID
+    first. A failed list probe (permission, feature, transport) yields a single
+    warning and skips every per-id membership claim, so an inability to read the
+    knowledge base is never reported as a broken reference.
+    """
+    try:
+        pipe_data = await client.get_pipe(pipe_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("data-source membership: pipe fetch failed: %s", exc)
+        return [
+            f"Could not verify data source membership: failed to load pipe {pipe_id}."
+        ]
+    pipe_uuid = (pipe_data.get("pipe") or {}).get("uuid")
+    if not pipe_uuid:
+        return [
+            "Could not verify data source membership: pipe "
+            f"{pipe_id} has no uuid in the response."
+        ]
+    try:
+        knowledge_bases = await client.get_ai_knowledge_bases(str(pipe_uuid))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("data-source membership: kb list failed: %s", exc)
+        return [
+            "Could not verify data source membership: knowledge base list "
+            f"probe failed ({exc})."
+        ]
+    known_ids = {
+        str(kb.get("id"))
+        for kb in knowledge_bases
+        if isinstance(kb, dict) and kb.get("id")
+    }
+    missing = sorted(cid for cid in configured_ids if cid not in known_ids)
+    return [
+        f"data_source id '{cid}' is not a knowledge base of pipe {pipe_id}; "
+        "attaching it may fail. Verify with get_ai_knowledge_bases."
+        for cid in missing
+    ]
+
+
 async def validate_ai_agent_behaviors_sdk(
     client: PipefyClient,
     pipe_id: str,
     behaviors: list[dict[str, Any]],
     *,
-    service_account_ids: list[str] | None = None,
     strict_unknown_action_types: bool = True,
+    data_source_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Mirror MCP ``validate_ai_agent_behaviors`` (read-only).
 
@@ -255,8 +335,12 @@ async def validate_ai_agent_behaviors_sdk(
         client: Authenticated Pipefy client.
         pipe_id: Numeric pipe id for field/phase/relation context.
         behaviors: Raw behavior dicts (1-5).
-        service_account_ids: Optional user ids for cross-pipe membership checks.
         strict_unknown_action_types: When False, unknown action types become warnings only.
+        data_source_ids: Optional agent-level knowledge base ids. These are unioned
+            with each behavior's ``actionParams.aiBehaviorParams.dataSourceIds`` and
+            checked against the pipe's knowledge bases; unknown ids yield warnings
+            only (``valid`` stays true). A failed list probe skips the membership
+            check with a single warning.
     """
     pid = str(pipe_id).strip()
     if not pid:
@@ -332,15 +416,8 @@ async def validate_ai_agent_behaviors_sdk(
     target_pipe_ids: set[str] = set()
     if related_pipe_ids is not None:
         for b in behaviors:
-            ap = b.get("actionParams") or b.get("action_params") or {}
-            abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-            for a in (
-                abp.get("actionsAttributes") or abp.get("actions_attributes") or []
-            ):
-                if not isinstance(a, dict):
-                    continue
-                meta_pipe = str((a.get("metadata") or {}).get("pipeId", ""))
-                if meta_pipe and meta_pipe != pid:
+            for meta_pipe in pipe_ids_from_behavior(b):
+                if meta_pipe != pid:
                     target_pipe_ids.add(meta_pipe)
 
     target_pipe_list = sorted(target_pipe_ids)
@@ -396,36 +473,6 @@ async def validate_ai_agent_behaviors_sdk(
                         phase_field_fetch_warning(failed_phases, pipe_id=tpid)
                     )
 
-    membership_problems: list[str] = []
-    sa_ids = service_account_ids or []
-    sa_set = set(sa_ids)
-    if sa_set and target_pipe_list:
-        try:
-            member_results = await asyncio.wait_for(
-                asyncio.gather(
-                    *(client.get_pipe_members(tpid) for tpid in target_pipe_list),
-                    return_exceptions=True,
-                ),
-                timeout=MEMBERSHIP_CHECK_TIMEOUT_SECONDS,
-            )
-            for tpid, mresult in zip(target_pipe_list, member_results):
-                if isinstance(mresult, BaseException):
-                    continue
-                members = (mresult.get("pipe") or {}).get("members") or []
-                member_ids = {
-                    str(m.get("user", {}).get("id", ""))
-                    for m in members
-                    if isinstance(m, dict)
-                }
-                if not sa_set & member_ids:
-                    membership_problems.append(
-                        f"Service account is not a member of target pipe "
-                        f"{tpid}. Use invite_members to add it before "
-                        f"creating the agent."
-                    )
-        except (TimeoutError, asyncio.TimeoutError):
-            logger.debug("Membership check timed out; skipping SA verification")
-
     unknown_action_types = "error" if strict_unknown_action_types else "warning"
     problems, helper_warnings = validate_behaviors_against_pipe(
         behaviors,
@@ -439,8 +486,19 @@ async def validate_ai_agent_behaviors_sdk(
     transition_problems = await collect_ai_behavior_move_transition_problems(
         client, behaviors
     )
-    problems = [*problems, *transition_problems, *membership_problems]
+    problems = [*problems, *transition_problems]
     warnings = [*tool_warnings, *helper_warnings]
+
+    configured_data_source_ids = _collect_configured_data_source_ids(
+        behaviors, data_source_ids
+    )
+    if configured_data_source_ids:
+        warnings = [
+            *warnings,
+            *await _data_source_membership_warnings(
+                client, pid, configured_data_source_ids
+            ),
+        ]
 
     if problems:
         msg = f"Found {len(problems)} problem(s) in behaviors."

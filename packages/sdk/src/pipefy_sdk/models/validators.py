@@ -6,9 +6,20 @@ from typing import Annotated
 
 from pydantic import BeforeValidator, Field
 
+
+def _strip_if_str(v: object) -> object:
+    """Strip strings; pass anything else through for the ``str`` core check.
+
+    ``BeforeValidator(str.strip)`` would raise a raw ``TypeError`` on non-string
+    input, escaping pydantic's error collection; passing the value through lets
+    the field's ``str`` type reject it as a normal ``ValidationError``.
+    """
+    return v.strip() if isinstance(v, str) else v
+
+
 NonBlankStr = Annotated[
     str,
-    BeforeValidator(str.strip),
+    BeforeValidator(_strip_if_str),
     Field(min_length=1, description="Non-empty string after stripping whitespace"),
 ]
 

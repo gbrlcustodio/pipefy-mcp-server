@@ -23,7 +23,6 @@ from pipefy_cli.commands._common import (
     parse_json_value,
     resource_id_argument,
     run_cli_command,
-    settings_and_token,
 )
 
 agent_app = typer.Typer(help="AI Agents (repo-scoped).", no_args_is_help=True)
@@ -144,14 +143,11 @@ def agent_create(
     except ValidationError as exc:
         raise typer.BadParameter(str(exc)) from exc
 
-    pipefy_settings, _token = settings_and_token(ctx)
-
     async def factory(client: PipefyClient):
         pre = await validate_ai_agent_behaviors_sdk(
             client,
             pipe.strip(),
             [b.model_dump(by_alias=True) for b in validated.behaviors],
-            service_account_ids=pipefy_settings.service_account_ids,
             strict_unknown_action_types=strict_unknown,
         )
         _raise_if_preflight_blocks(pre)
@@ -233,14 +229,11 @@ def agent_update(
     except ValidationError as exc:
         raise typer.BadParameter(str(exc)) from exc
 
-    pipefy_settings, _token = settings_and_token(ctx)
-
     async def factory(client: PipefyClient):
         pre = await validate_ai_agent_behaviors_sdk(
             client,
             pipe.strip(),
             [b.model_dump(by_alias=True) for b in validated.behaviors],
-            service_account_ids=pipefy_settings.service_account_ids,
             strict_unknown_action_types=strict_unknown,
         )
         _raise_if_preflight_blocks(pre)
@@ -349,19 +342,27 @@ def agent_validate_behaviors(
             "values as problems; --no-strict reports them as warnings only."
         ),
     ),
+    data_source_id: list[str] = typer.Option(
+        [],
+        "--data-source-id",
+        help=(
+            "Agent-level knowledge base ID to attach (repeatable). Unioned with "
+            "behavior-level dataSourceIds and checked against the pipe's knowledge "
+            "bases; unknown IDs are warnings only."
+        ),
+    ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Dry-run behavior validation (``validate_ai_agent_behaviors``)."""
     behavior_list = _parse_behaviors_json(behaviors)
-    pipefy_settings, _token = settings_and_token(ctx)
 
     async def factory(client: PipefyClient):
         return await validate_ai_agent_behaviors_sdk(
             client,
             pipe.strip(),
             behavior_list,
-            service_account_ids=pipefy_settings.service_account_ids,
             strict_unknown_action_types=strict_unknown,
+            data_source_ids=data_source_id or None,
         )
 
     run_cli_command(ctx, json_out, factory)

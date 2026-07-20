@@ -4,7 +4,7 @@ import pytest
 from pipefy_sdk import PipefySettings
 from pydantic import ValidationError
 
-from pipefy_mcp.settings import Settings
+from pipefy_mcp.settings import IpaasSettings, McpSettings, Settings
 
 
 @pytest.mark.unit
@@ -13,37 +13,6 @@ def test_internal_api_url_derived_from_base_url(monkeypatch):
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://custom.pipefy.com")
     settings = Settings()
     assert settings.pipefy.internal_api_url == "https://custom.pipefy.com/internal_api"
-
-
-@pytest.mark.unit
-def test_service_account_ids_defaults_to_empty_list():
-    assert PipefySettings().service_account_ids == []
-
-
-@pytest.mark.unit
-def test_service_account_ids_accepts_list_and_strips_whitespace():
-    settings = PipefySettings(service_account_ids=["  id1  ", "id2"])
-    assert settings.service_account_ids == ["id1", "id2"]
-
-
-@pytest.mark.unit
-def test_service_account_ids_accepts_comma_separated_string():
-    settings = PipefySettings(service_account_ids="alpha, beta ,gamma")
-    assert settings.service_account_ids == ["alpha", "beta", "gamma"]
-
-
-@pytest.mark.unit
-def test_service_account_ids_from_env_comma_separated(monkeypatch):
-    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_IDS", "user-1,user-2, user-3 ")
-    settings = Settings()
-    assert settings.pipefy.service_account_ids == ["user-1", "user-2", "user-3"]
-
-
-@pytest.mark.unit
-def test_service_account_ids_empty_env_is_empty_list(monkeypatch):
-    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_IDS", "")
-    settings = Settings()
-    assert settings.pipefy.service_account_ids == []
 
 
 @pytest.mark.unit
@@ -183,3 +152,212 @@ def test_settings_does_not_route_unprefixed_env_into_auth(monkeypatch, leak_env_
     assert settings.auth.static_token is None
     assert settings.auth.service_account_client_id is None
     assert settings.auth.service_account_client_secret is None
+
+
+@pytest.mark.unit
+def test_mcp_settings_defaults():
+    """MCP knobs default to the local stdio profile."""
+    mcp = McpSettings()
+    assert mcp.unified_envelope is True
+    assert mcp.profile == "local"
+    assert mcp.transport == "stdio"
+    assert mcp.host == "127.0.0.1"
+    assert mcp.port == 8000
+    assert mcp.log_level == "INFO"
+
+
+@pytest.mark.unit
+def test_mcp_settings_log_level_from_env_normalizes_case(monkeypatch):
+    monkeypatch.setenv("PIPEFY_MCP_LOG_LEVEL", "warning")
+    assert Settings().mcp.log_level == "WARNING"
+
+
+@pytest.mark.unit
+def test_mcp_settings_log_level_rejects_unknown_value():
+    with pytest.raises(ValidationError):
+        McpSettings(log_level="verbose")
+
+
+@pytest.mark.unit
+def test_mcp_settings_loads_from_pipefy_mcp_env(monkeypatch):
+    """The ``PIPEFY_MCP_*`` env vars keep working after the move out of PipefySettings."""
+    monkeypatch.setenv("PIPEFY_MCP_PROFILE", "remote")
+    monkeypatch.setenv("PIPEFY_MCP_TRANSPORT", "http")
+    monkeypatch.setenv("PIPEFY_MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("PIPEFY_MCP_PORT", "9100")
+    monkeypatch.setenv("PIPEFY_MCP_UNIFIED_ENVELOPE", "false")
+
+    mcp = Settings().mcp
+    assert mcp.profile == "remote"
+    assert mcp.transport == "http"
+    assert mcp.host == "0.0.0.0"
+    assert mcp.port == 9100
+    assert mcp.unified_envelope is False
+
+
+@pytest.mark.unit
+def test_mcp_transport_defaults_from_profile(monkeypatch):
+    """An unset transport follows the profile: local->stdio, remote->http."""
+    monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
+    assert McpSettings(profile="local").transport == "stdio"
+    assert McpSettings(profile="remote").transport == "http"
+
+
+@pytest.mark.unit
+def test_mcp_local_profile_may_run_over_http():
+    """'local' is valid over either wire; an explicit http transport is honored."""
+    assert McpSettings(profile="local", transport="http").transport == "http"
+
+
+@pytest.mark.unit
+def test_mcp_remote_over_stdio_is_rejected():
+    """'remote' has no stdio equivalent (no per-request bearer), so it is refused."""
+    with pytest.raises(ValidationError, match="requires the 'http' transport"):
+        McpSettings(profile="remote", transport="stdio")
+
+
+# --- bind-safety interlock (auth posture, not bind interface) ----------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
+def test_mcp_local_http_refuses_non_loopback_bind(host):
+    """The unauthenticated 'local' profile refuses a non-loopback HTTP bind."""
+    with pytest.raises(ValidationError, match="non-loopback HTTP bind"):
+        McpSettings(profile="local", transport="http", host=host)
+
+
+@pytest.mark.unit
+def test_mcp_local_http_non_loopback_allowed_with_escape_hatch():
+    """The escape hatch opts in to an unauthenticated non-loopback bind."""
+    settings = McpSettings(
+        profile="local",
+        transport="http",
+        host="0.0.0.0",
+        allow_insecure_http_bind=True,
+    )
+    assert settings.host == "0.0.0.0"
+
+
+@pytest.mark.unit
+def test_mcp_local_http_escape_hatch_from_env(monkeypatch):
+    """The escape hatch is settable via PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND."""
+    monkeypatch.setenv("PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND", "true")
+    settings = McpSettings(profile="local", transport="http", host="0.0.0.0")
+    assert settings.allow_insecure_http_bind is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "127.0.0.2"])
+def test_mcp_local_http_allows_loopback_bind(host):
+    """Loopback covers all of 127.0.0.0/8 and ::1, not just literal 127.0.0.1."""
+    assert McpSettings(profile="local", transport="http", host=host).host == host
+
+
+@pytest.mark.unit
+def test_mcp_local_stdio_ignores_a_non_loopback_host():
+    """stdio never binds, so a non-loopback host is not checked."""
+    settings = McpSettings(profile="local", transport="stdio", host="0.0.0.0")
+    assert settings.host == "0.0.0.0"
+
+
+@pytest.mark.unit
+def test_mcp_remote_binds_any_host_without_the_escape_hatch():
+    """The authenticated 'remote' profile binds a non-loopback host unrestricted.
+
+    Its per-request bearer is the control, so bind interface is irrelevant. The
+    resource-server requirement is a separate runtime check, not this validator.
+    """
+    settings = McpSettings(profile="remote", transport="http", host="0.0.0.0")
+    assert settings.host == "0.0.0.0"
+    assert settings.allow_insecure_http_bind is False
+
+
+# --- transport allowlist fields (DNS-rebinding host/Origin allowlist) ---------
+
+
+@pytest.mark.unit
+def test_mcp_allowlists_default_to_none():
+    """Unset allowlists stay None so the builder can preserve FastMCP's default."""
+    mcp = McpSettings()
+    assert mcp.allowed_hosts is None
+    assert mcp.allowed_origins is None
+
+
+@pytest.mark.unit
+def test_mcp_allowed_hosts_from_env_parses_json(monkeypatch):
+    """PIPEFY_MCP_ALLOWED_HOSTS is a JSON array, like RS required_scopes."""
+    monkeypatch.setenv("PIPEFY_MCP_ALLOWED_HOSTS", '["mcp.pipefy.com", "mcp:8000"]')
+    assert Settings().mcp.allowed_hosts == ["mcp.pipefy.com", "mcp:8000"]
+
+
+@pytest.mark.unit
+def test_mcp_allowed_origins_from_env_parses_json(monkeypatch):
+    monkeypatch.setenv("PIPEFY_MCP_ALLOWED_ORIGINS", '["https://mcp.pipefy.com"]')
+    assert Settings().mcp.allowed_origins == ["https://mcp.pipefy.com"]
+
+
+@pytest.mark.unit
+def test_mcp_allowlist_trims_surrounding_whitespace():
+    """Each entry is trimmed; localhost is kept (no SSRF gate on operator entries)."""
+    mcp = McpSettings(
+        allowed_hosts=[" mcp.pipefy.com ", "localhost"],
+        allowed_origins=["  https://mcp.pipefy.com  "],
+    )
+    assert mcp.allowed_hosts == ["mcp.pipefy.com", "localhost"]
+    assert mcp.allowed_origins == ["https://mcp.pipefy.com"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("field", ["allowed_hosts", "allowed_origins"])
+def test_mcp_allowlist_rejects_a_blank_entry(field):
+    """A blank/whitespace entry is a config error, not a silently-dropped value.
+
+    Dropping it would hide the typo, and for allowed_origins could collapse the
+    list to the strict reject-all-Origin posture, so the settings boundary refuses.
+    """
+    with pytest.raises(ValidationError, match="blank entry"):
+        McpSettings(**{field: ["ok", "   "]})
+
+
+@pytest.mark.unit
+def test_mcp_explicit_empty_allowlist_is_preserved():
+    """An explicit [] is a deliberate value (reject-all-Origin), not a blank entry."""
+    mcp = McpSettings(allowed_hosts=[], allowed_origins=[])
+    assert mcp.allowed_hosts == []
+    assert mcp.allowed_origins == []
+
+
+# --- iPaaS (Advanced Automations) settings ------------------------------------
+
+
+@pytest.mark.unit
+def test_ipaas_settings_work_out_of_the_box():
+    """The default is Pipefy's canonical public PKCE client: no env, no secret."""
+    settings = IpaasSettings()
+    assert settings.configured is True
+    assert settings.oauth_client_id
+    assert settings.oauth_client_secret is None
+    assert settings.url == "https://ipaas.pipefy.com"
+
+
+@pytest.mark.unit
+def test_ipaas_settings_blank_client_id_disables():
+    assert IpaasSettings(oauth_client_id="").configured is False
+    assert IpaasSettings(oauth_client_id="  ").configured is False
+
+
+@pytest.mark.unit
+def test_ipaas_settings_url_normalized_and_https_enforced():
+    assert IpaasSettings(url="https://ipaas.test/ ").url == "https://ipaas.test"
+    with pytest.raises(ValidationError):
+        IpaasSettings(url="http://ipaas.test")
+
+
+@pytest.mark.unit
+def test_ipaas_settings_from_env(monkeypatch):
+    monkeypatch.setenv("PIPEFY_IPAAS_OAUTH_CLIENT_ID", "custom-client")
+    monkeypatch.setenv("PIPEFY_IPAAS_OAUTH_CLIENT_SECRET", "custom-secret")
+    settings = IpaasSettings()
+    assert settings.oauth_client_id == "custom-client"
+    assert settings.oauth_client_secret == "custom-secret"

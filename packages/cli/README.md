@@ -1,27 +1,20 @@
 # pipefy-cli
 
-Typer-based CLI for Pipefy. Exposes all MCP tool capabilities as terminal commands and scripts. Depends on [`pipefy-sdk`](../sdk/README.md) for GraphQL calls.
+Typer-based CLI for Pipefy. Exposes all MCP tool capabilities as terminal commands and scripts. Depends on [`pipefy`](../sdk/README.md) for GraphQL calls.
 
-## Install (pre-launch, v0.1 → v0.5)
+## Install
 
 ```sh
-uvx \
-  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
-  --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/cli" \
-  --refresh pipefy-cli
+uvx --from pipefy-cli pipefy --help
 ```
 
 Or persistently:
 
 ```sh
-uv tool install \
-  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
-  "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/cli"
+uv tool install pipefy-cli
 ```
 
-The `--with` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uv tool install pipefy-cli`.
+`pipefy-cli` and its dependencies (`pipefy`, `pipefy-auth`) are published to PyPI, so `uv` resolves the whole set from there. While the toolkit ships only pre-release versions (the 0.x line), `uv` resolves the latest pre-release automatically; once a stable release exists it resolves that instead. Do not pass a global `--prerelease allow`: it also lets transitive dependencies jump to their own pre-releases, which can pull a broken build. The console script is `pipefy`, so `uvx --from pipefy-cli` runs it as `pipefy`.
 
 ## Quick start
 

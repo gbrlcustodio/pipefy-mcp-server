@@ -1,28 +1,18 @@
 """Tests for member MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
-import pipefy_mcp.settings as _settings_mod
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.member_tools import MemberTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
-
-@pytest.fixture(autouse=True)
-def _isolate_sa_ids(monkeypatch):
-    """Ensure .env service_account_ids don't leak into tests.
-
-    Tests that need specific SA IDs override via their own monkeypatch.
-    """
-    monkeypatch.setattr(_settings_mod.settings.pipefy, "service_account_ids", [])
+from tools.conftest import build_tool_test_server
 
 
 @pytest.fixture
@@ -37,9 +27,9 @@ def mock_member_client():
 
 @pytest.fixture
 def member_mcp_server(mock_member_client):
-    mcp = FastMCP("Member Tools Test")
-    MemberTools.register(mcp, mock_member_client)
-    return mcp
+    return build_tool_test_server(
+        "Member Tools Test", MemberTools.register, mock_member_client
+    )
 
 
 @pytest.fixture
@@ -161,97 +151,6 @@ async def test_invite_members_graphql_error(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid email" in tool_error_message(payload)
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_remove_member_from_pipe_blocks_protected_service_account(
-    member_session, mock_member_client, extract_payload
-):
-    """IDs in PIPEFY_SERVICE_ACCOUNT_IDS cannot be removed via MCP."""
-    mock_member_client.remove_members_from_pipe.return_value = {
-        "removeMembersFromPipe": {"success": True}
-    }
-
-    with patch("pipefy_mcp.tools.member_tools.settings") as mock_settings:
-        mock_settings.pipefy.service_account_ids = ["sa-user-1"]
-        async with member_session as session:
-            result = await session.call_tool(
-                "remove_member_from_pipe",
-                {
-                    "pipe_id": "100",
-                    "user_ids": ["sa-user-1", "regular-user"],
-                    "confirm": True,
-                },
-            )
-
-    mock_member_client.remove_members_from_pipe.assert_not_awaited()
-    assert result.isError is False
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "sa-user-1" in tool_error_message(payload)
-    assert "service account" in tool_error_message(payload).lower()
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_remove_member_from_pipe_allows_non_service_account_when_list_configured(
-    member_session, mock_member_client, extract_payload
-):
-    mock_member_client.remove_members_from_pipe.return_value = {
-        "removeMembersFromPipe": {"success": True}
-    }
-    mock_member_client.get_pipe_members.return_value = {"pipe": {"members": []}}
-
-    with patch("pipefy_mcp.tools.member_tools.settings") as mock_settings:
-        mock_settings.pipefy.service_account_ids = ["sa-user-1"]
-        async with member_session as session:
-            result = await session.call_tool(
-                "remove_member_from_pipe",
-                {
-                    "pipe_id": "100",
-                    "user_ids": ["regular-user"],
-                    "confirm": True,
-                },
-            )
-
-    mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
-        "100", ["regular-user"]
-    )
-    assert result.isError is False
-    payload = extract_payload(result)
-    assert payload["success"] is True
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_remove_member_from_pipe_skips_sa_guard_when_list_empty(
-    member_session, mock_member_client, extract_payload
-):
-    """Unset / empty PIPEFY_SERVICE_ACCOUNT_IDS must not block removals."""
-    mock_member_client.remove_members_from_pipe.return_value = {
-        "removeMembersFromPipe": {"success": True}
-    }
-    mock_member_client.get_pipe_members.return_value = {"pipe": {"members": []}}
-
-    with patch("pipefy_mcp.tools.member_tools.settings") as mock_settings:
-        mock_settings.pipefy.service_account_ids = []
-        async with member_session as session:
-            result = await session.call_tool(
-                "remove_member_from_pipe",
-                {
-                    "pipe_id": "100",
-                    "user_ids": ["would-be-sa-id"],
-                    "confirm": True,
-                },
-            )
-
-    mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
-        "100", ["would-be-sa-id"]
-    )
-    assert result.isError is False
-    payload = extract_payload(result)
-    assert payload["success"] is True
 
 
 @pytest.mark.anyio
@@ -528,105 +427,6 @@ async def test_set_role_success(member_session, mock_member_client, extract_payl
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_set_role_warns_when_target_is_protected_service_account(
-    member_session, mock_member_client, extract_payload
-):
-    mock_member_client.set_role.return_value = {
-        "setRole": {
-            "member": {
-                "role_name": "admin",
-                "user": {"id": "sa-42", "email": "bot@x.com"},
-            }
-        }
-    }
-
-    with patch("pipefy_mcp.tools.member_tools.settings") as mock_settings:
-        mock_settings.pipefy.service_account_ids = ["sa-42"]
-        async with member_session as session:
-            result = await session.call_tool(
-                "set_role",
-                {
-                    "pipe_id": "pipe-1",
-                    "member_id": "sa-42",
-                    "role_name": "admin",
-                },
-            )
-
-    assert result.isError is False
-    mock_member_client.set_role.assert_awaited_once_with("pipe-1", "sa-42", "admin")
-    payload = extract_payload(result)
-    assert payload["success"] is True
-    assert "warning" in payload
-    assert "service account" in payload["warning"].lower()
-    assert "write permissions" in payload["warning"].lower()
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_set_role_no_warning_for_non_service_account_when_list_configured(
-    member_session, mock_member_client, extract_payload
-):
-    mock_member_client.set_role.return_value = {
-        "setRole": {
-            "member": {
-                "role_name": "member",
-                "user": {"id": "user-9", "email": "human@x.com"},
-            }
-        }
-    }
-
-    with patch("pipefy_mcp.tools.member_tools.settings") as mock_settings:
-        mock_settings.pipefy.service_account_ids = ["sa-only"]
-        async with member_session as session:
-            result = await session.call_tool(
-                "set_role",
-                {
-                    "pipe_id": "pipe-1",
-                    "member_id": "user-9",
-                    "role_name": "member",
-                },
-            )
-
-    assert result.isError is False
-    payload = extract_payload(result)
-    assert payload["success"] is True
-    assert "warning" not in payload
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_set_role_no_warning_when_protected_list_empty(
-    member_session, mock_member_client, extract_payload
-):
-    mock_member_client.set_role.return_value = {
-        "setRole": {
-            "member": {
-                "role_name": "admin",
-                "user": {"id": "could-be-sa", "email": "x@x.com"},
-            }
-        }
-    }
-
-    with patch("pipefy_mcp.tools.member_tools.settings") as mock_settings:
-        mock_settings.pipefy.service_account_ids = []
-        async with member_session as session:
-            result = await session.call_tool(
-                "set_role",
-                {
-                    "pipe_id": "pipe-1",
-                    "member_id": "could-be-sa",
-                    "role_name": "admin",
-                },
-            )
-
-    assert result.isError is False
-    payload = extract_payload(result)
-    assert payload["success"] is True
-    assert "warning" not in payload
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_rejects_missing_email_or_role(
     member_session, mock_member_client, extract_payload
 ):
@@ -659,30 +459,6 @@ async def test_remove_member_preview_does_not_call_mutation(
     assert payload.get("requires_confirmation") is True
     assert "1 member(s)" in payload["resource"]
     assert "pipe 100" in payload["resource"]
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_remove_member_blocks_multiple_service_accounts_with_plural_message(
-    member_session, mock_member_client, extract_payload
-):
-    """The plural SA-blocked branch has its own wording and must trigger when >1 SA is targeted."""
-    with patch("pipefy_mcp.tools.member_tools.settings") as mock_settings:
-        mock_settings.pipefy.service_account_ids = ["sa-a", "sa-b"]
-        async with member_session as session:
-            result = await session.call_tool(
-                "remove_member_from_pipe",
-                {
-                    "pipe_id": "100",
-                    "user_ids": ["sa-a", "sa-b", "regular"],
-                    "confirm": True,
-                },
-            )
-    mock_member_client.remove_members_from_pipe.assert_not_awaited()
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "sa-a, sa-b" in tool_error_message(payload)
-    assert "service accounts" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio

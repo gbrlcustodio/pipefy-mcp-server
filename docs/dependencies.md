@@ -2,7 +2,7 @@
 
 This document explains **why** the main third-party packages exist across the **uv workspace**. Values and pins live in each package’s `pyproject.toml` (`packages/sdk`, `packages/mcp`, `packages/cli`). Install commands live in the root [`README.md#installation`](../README.md#installation); env-var and `config.toml` reference is at [`docs/config.md`](config.md).
 
-## pipefy-sdk (`packages/sdk`)
+## pipefy (`packages/sdk`)
 
 | Dependency | Role |
 | --- | --- |
@@ -20,7 +20,7 @@ This document explains **why** the main third-party packages exist across the **
 
 | Dependency | Role |
 | --- | --- |
-| `pipefy-sdk` | All GraphQL and domain logic (facade + services). |
+| `pipefy` | All GraphQL and domain logic (facade + services). |
 | `mcp[cli]` | MCP protocol server runtime and CLI entry for `pipefy-mcp-server`. |
 | `httpx` | Attachment downloads and any direct HTTP outside `gql` (same family as the SDK). |
 | `pydantic` / `pydantic-settings` | Tool inputs and server settings. |
@@ -29,7 +29,7 @@ This document explains **why** the main third-party packages exist across the **
 
 | Dependency | Role |
 | --- | --- |
-| `pipefy-sdk` | Same GraphQL facade as MCP; CLI is a thin Typer layer. |
+| `pipefy` | Same GraphQL facade as MCP; CLI is a thin Typer layer. |
 | `typer` | Command groups, options, and exit-code mapping. |
 | `rich` | Human-readable tables and summaries when `--json` is not used. |
 | `pydantic-settings` | Loads `PIPEFY_*` the same way as MCP/SDK. |

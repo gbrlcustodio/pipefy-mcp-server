@@ -1,6 +1,6 @@
 # Observability
 
-Monitor AI agent and automation execution, usage stats, credit consumption, and export job history. **10 tools.**
+Monitor AI agent and automation execution, usage stats, credit consumption, and export job history. **11 tools.**
 
 Read-only observability tools use `readOnlyHint=True`. The async export mutation (`export_automation_jobs`) does not.
 
@@ -15,6 +15,7 @@ Read-only observability tools use `readOnlyHint=True`. The async export mutation
 | **Single automation logs** | `automation_id` — **not** the pipe id | `get_automations` with `pipe_id` lists rules and their `id` values. |
 | **Organization for usage queries** | `organization_uuid` — org **UUID** | `get_organization(organization_id)` returns the `uuid` directly. Alternatively: `execute_graphql` with `pipe(id: $id) { organization { uuid } }`. |
 | **Organization for credit dashboard** | `organization_uuid` in the tool | **UUID** or **numeric org id** (string); numeric ids are resolved server-side before calling the API. |
+| **Organization for execution metrics** | `organization_id` on `get_automation_execution_metrics` | Numeric org id (same as URLs / exports); optional `automation_ids` from `get_automations`. |
 | **Organization for export** | `organization_id` on `export_automation_jobs` | Numeric org id (as used in URLs / exports); differs from the usage tools’ UUID parameter name. |
 
 Empty lists (`totalCount: 0`) are valid: the pipe or automation may have no recent executions in what the API returns.
@@ -38,6 +39,12 @@ Empty lists (`totalCount: 0`) are valid: the pipe or automation may have no rece
 1. `get_agents_usage` and `get_automations_usage` need the org **UUID** and ISO8601 `filter_date_from` / `filter_date_to` values.  
 2. `get_ai_credit_usage` accepts org UUID **or** numeric org id; `period` is `current_month`, `last_month`, or `last_3_months`.  
 3. **`get_automations_usage` `usage`** is an **execution count** (runs), not AI credits. **`get_agents_usage` `usage`** aligns with AI credit consumption for agents — compare with `get_ai_credit_usage` for the dashboard view, not with automation run totals.
+
+**Per-automation execution metrics (rolling window)**  
+1. Call `get_automation_execution_metrics(organization_id=…)` with the numeric org id. Omit `automation_ids` to fetch every automation in the org (optionally narrowed by `repo_id`, `action_ids`, `event_id`, `active`, `search`).  
+2. `period` is one of `FIFTEEN_MINUTES`, `SIXTY_MINUTES` (default), `TWELVE_HOURS`, `TWENTY_FOUR_HOURS`.  
+3. A page holds at most 50 automations; pass `page_info.endCursor` back as `after` for the next page.  
+4. Partial success is normal: metrics for permitted automations plus `partial_errors` for denied ids — not a hard failure.
 
 **Automation jobs export (async file)**  
 1. `export_automation_jobs(organization_id, period)` → read `result.createAutomationJobsExport.automationJobsExport.id`.  
@@ -68,6 +75,7 @@ Empty lists (`totalCount: 0`) are valid: the pipe or automation may have no rece
 | `get_agents_usage` | Yes | AI agent usage stats for an org within a date range. `filter_date_from` / `filter_date_to` (ISO8601). Optional `filters`, `search`, `sort`. Returns total **AI credits** consumed and per-agent breakdown. Requires org **UUID** (see Identifiers). |
 | `get_automations_usage` | Yes | Automation usage stats for an org. Same date-range and filter inputs as `get_agents_usage`. Returns total **execution count** and per-automation breakdown (not the same unit as AI credits). Requires org **UUID**. |
 | `get_ai_credit_usage` | Yes | AI credit dashboard for an org: credit limit, total consumption, per-resource breakdown (AI Agents vs Assistants), addon status. `organization_uuid` may be the org UUID or the **numeric organization id** (string). `period`: `current_month`, `last_month`, or `last_3_months`. |
+| `get_automation_execution_metrics` | Yes | Per-automation rolling-window metrics (`totalRuns`, `successRate`, `failureRate`, `averageDuration`, `lastRun`). Uses numeric `organization_id`; optional `automation_ids` / filters / sort; paginated (`first` ≤ 50, `after`). Partial success returns `partial_errors` for denied ids. |
 
 ## Automation export tools
 

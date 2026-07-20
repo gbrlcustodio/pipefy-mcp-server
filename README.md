@@ -36,9 +36,9 @@ Open-source toolkit for **Pipefy** developers: a Model Context Protocol (MCP) se
 
 | Component | Package / path | Purpose |
 |-----------|----------------|---------|
-| **MCP server** | `pipefy-mcp-server` | Exposes **152** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others). |
+| **MCP server** | `pipefy-mcp-server` | Exposes **182** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others). |
 | **CLI** | `pipefy-cli` | Terminal commands aligned with MCP capabilities; see [`docs/parity.md`](docs/parity.md). |
-| **SDK** | `pipefy-sdk` | Vendor GraphQL client, services, and models shared by MCP and CLI. |
+| **SDK** | `pipefy` | Vendor GraphQL client, services, and models shared by MCP and CLI. |
 | **Skills** | [`skills/`](skills/) | Markdown playbooks (Anthropic Skills format) for common Pipefy workflows. |
 
 Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues) · **dev@pipefy.com**
@@ -47,13 +47,13 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 ## Installation
 
-> Pre-1.0 ships from this git repo via `uvx` and `uv tool install`. PyPI becomes the canonical source at **v1.0**. The current beta line is **`v0.2.0-beta.*`** (first tag: [`v0.2.0-beta.1`](https://github.com/pipefy/ai-toolkit/releases/tag/v0.2.0-beta.1)). Two install paths: the **Quick install** script below (resolves the latest GitHub Release at runtime and runs `uv tool install` for you), or **Claude Code** via the plugin marketplace.
+> Pre-1.0 ships pre-release builds to PyPI on every tag; `uvx` and `uv tool install` resolve them. A stable PyPI release becomes the default at **v1.0**. The current pre-release line is **`v0.3.0-alpha.*`** (first tag: [`v0.3.0-alpha.1`](https://github.com/pipefy/ai-toolkit/releases/tag/v0.3.0-alpha.1)). Two install paths: the **Quick install** script below (resolves the latest GitHub Release at runtime and runs `uv tool install` for you), or **Claude Code** via the plugin marketplace.
 >
-> The CLI snippets below pin **`@latest`**, a moving git tag the release flow updates to point at the most recent release. To pin a specific version, swap `@latest` for a version tag (e.g. `@v0.2.0-beta.2`). The `--with pipefy-sdk @ ...#subdirectory=packages/sdk` / `pipefy-auth @ ...#subdirectory=packages/auth` flags are required pre-1.0: this repo is a uv workspace, and the workspace members are not yet published to PyPI, so uv needs them named explicitly. The flags go away at v1.0 (PyPI install).
+> The CLI snippets below install `pipefy-cli` from PyPI, which resolves `pipefy` and `pipefy-auth` transitively (no explicit `--with` needed). While the toolkit ships only pre-release versions (the 0.x line), `uv` resolves the latest pre-release automatically; to pin a specific one, use `pipefy-cli==X.Y.Z` (PEP 440 form, e.g. `pipefy-cli==0.3.0a1`). Do not pass a global `--prerelease allow`: it also lets transitive dependencies jump to their own pre-releases, which can pull a broken build.
 
 Two auth paths:
 
-- **Human OAuth (interactive)**: `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Works anywhere the `pipefy` CLI is on PATH (`uv tool install` once, any client can invoke it). Claude Code additionally exposes it as the `/pipefy:login` slash command via the plugin marketplace. Pipe membership is whatever the signed-in user already has.
+- **Human OAuth (interactive)**: `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Works anywhere the `pipefy` CLI is on PATH (`uv tool install` once, any client can invoke it). Claude Code additionally exposes it as the `/pipefy:pipefy-login` slash command via the plugin marketplace. Pipe membership is whatever the signed-in user already has.
 - **Service account (unattended / CI)**: provision a Service Account in [Pipefy Admin](https://app.pipefy.com/) (Admin → Service Accounts) and add that account to every pipe the tools should touch. Wire `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` into the client config below.
 
 Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
@@ -83,30 +83,23 @@ After install, run `pipefy auth login` to authenticate (`--device` on headless s
 /plugin marketplace add pipefy/ai-toolkit
 /plugin install pipefy
 /pipefy:install
-/pipefy:login
+/pipefy:pipefy-login
 ```
 
-`/plugin install pipefy` registers the MCP server and the `/pipefy:install` + `/pipefy:login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecParam` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).
+`/plugin install pipefy` registers the MCP server and the `/pipefy:install` + `/pipefy:pipefy-login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:pipefy-login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecParam` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ### CLI
 
 Ad-hoc:
 
 ```sh
-uvx \
-  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
-  --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/cli" \
-  pipefy-cli --help
+uvx --from pipefy-cli pipefy --help
 ```
 
 Permanent install:
 
 ```sh
-uv tool install \
-  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
-  "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/cli"
+uv tool install pipefy-cli
 pipefy --install-completion bash    # or zsh, fish
 pipefy auth login                   # browser OAuth, session in OS keychain
 ```
@@ -135,11 +128,11 @@ Deprecation and semver (post-1.0): [`docs/DEPRECATION.md`](docs/DEPRECATION.md).
 
 ## Repository layout
 
-`uv` workspace with three Python packages and a skills catalog. **`pipefy-sdk`** is the vendor GraphQL layer; MCP and CLI depend on it and do not import each other.
+`uv` workspace with three Python packages and a skills catalog. **`pipefy`** is the vendor GraphQL layer; MCP and CLI depend on it and do not import each other.
 
 | Path | Distribution | Role |
 |------|--------------|------|
-| [`packages/sdk/`](packages/sdk/) | `pipefy-sdk` | GraphQL transport, services, queries, Pydantic models. [Package README](packages/sdk/README.md) |
+| [`packages/sdk/`](packages/sdk/) | `pipefy` | GraphQL transport, services, queries, Pydantic models. [Package README](packages/sdk/README.md) |
 | [`packages/mcp/`](packages/mcp/) | `pipefy-mcp-server` | MCP tool registration and server lifecycle. [Package README](packages/mcp/README.md) |
 | [`packages/cli/`](packages/cli/) | `pipefy-cli` | Typer CLI (`pipefy` command). [Package README](packages/cli/README.md) |
 | [`skills/`](skills/) | — | Agent skill playbooks. [Catalog](skills/README.md) |
@@ -148,7 +141,7 @@ Deprecation and semver (post-1.0): [`docs/DEPRECATION.md`](docs/DEPRECATION.md).
 
 ## MCP server
 
-The server registers **152 tools** across ten domains. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py).
+The server registers **182 tools** across thirteen domains. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py).
 
 Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clients show to models). Per-area reference docs cover parameters, edge cases, and cross-cutting behavior.
 
@@ -161,7 +154,10 @@ Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clien
 | **Relations** | 8 | Pipe and card relations. | [docs](docs/mcp/tools/relations.md) |
 | **Reports** | 17 | Pipe and organization reports, async exports. | [docs](docs/mcp/tools/reports.md) |
 | **Automations & AI** | 23 | Automations, AI automations, AI agents, validators. | [docs](docs/mcp/tools/automations-and-ai.md) |
-| **Observability** | 10 | Logs, usage, credits, job exports. | [docs](docs/mcp/tools/observability.md) |
+| **LLM providers** | 11 | Discovery reads (custom + Pipefy-managed providers, vendor model lists, owner defaults, dependencies, read-access probe) plus custom-provider writes: create/update/delete, active-status toggle, and organization default set/reset. | [docs](docs/mcp/tools/llm-providers.md) |
+| **Knowledge bases** | 14 | Pipe-scoped AI knowledge bases: list all items, plain text / document (one-shot PDF upload) / data lookup CRUD, and a read-access probe. Attach sources to agents/behaviors via `dataSourceIds`. | [docs](docs/mcp/tools/knowledge-bases.md) |
+| **iPaaS** | 4 | Lazy discovery, invocation, and app-connection setup for a pipe's iPaaS (Advanced Automations) workspace (`get_ipaas_tools`, `call_ipaas_tool`, plus the connection meta-tools). | [docs](docs/mcp/tools/ipaas.md) |
+| **Observability** | 11 | Logs, usage, credits, execution metrics, job exports. | [docs](docs/mcp/tools/observability.md) |
 | **Members, email & webhooks** | 11 | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |
 | **Organization** | 1 | Organization metadata. | [docs](docs/mcp/tools/organization.md) |
 | **Portals** | 20 | Portal read/CRUD, pages, elements, sub-portals (publish/unpublish). | [docs](docs/mcp/tools/portal.md) |
@@ -225,6 +221,19 @@ npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server
 ```
 
 **Adding an MCP tool:** implement under `packages/mcp/src/pipefy_mcp/tools/`, register in `ToolRegistry`, add the name to `PIPEFY_TOOL_NAMES`, and ship the matching CLI command (or document a deferral in `docs/parity.md`). See [`AGENTS.md`](AGENTS.md) for the full TDD workflow.
+
+### Test the Claude Code plugin from a local checkout
+
+The [Claude Code install](#claude-code) adds the marketplace from the `pipefy/ai-toolkit` GitHub repo, which tracks `main`. To run **your local branch** (e.g. `dev`) as the plugin instead, point the marketplace at your clone:
+
+```text
+/plugin marketplace add /absolute/path/to/ai-toolkit
+/plugin install pipefy@pipefy
+```
+
+Whatever is checked out in that clone — any branch — is what loads. Use the `plugin@marketplace` form (`pipefy@pipefy`) since the marketplace and the plugin share the name `pipefy`. After editing plugin files (skills, commands), run `/reload-plugins` to pick up changes without restarting.
+
+> **Already installed the GitHub version?** A marketplace named `pipefy` can be registered only once, and a marketplace declared in `~/.claude/settings.json` under `extraKnownMarketplaces` is locked — `/plugin marketplace add` becomes a no-op (`already on disk — declared in user settings`) and keeps pointing at GitHub. Run `/plugin marketplace remove pipefy` first (or delete that `extraKnownMarketplaces` entry), **then** add the local path.
 
 ---
 

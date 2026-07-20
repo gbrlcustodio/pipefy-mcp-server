@@ -28,26 +28,9 @@ from _shared.live_settings import (
 )
 from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk.client import build_executors
 from pipefy_sdk.exceptions import PortalPermissionError
-from pipefy_sdk.services.internal_api_client import InternalApiClient
-from pipefy_sdk.services.portal_service import (
-    INTERNAL_API_CLIENT_NOT_CONFIGURED,
-    PortalService,
-)
-
-
-def _skip_or_fail_internal_api_error(exc: BaseException, *, context: str) -> None:
-    """Skip live API flakes; fail when internal_api was never wired."""
-    if isinstance(exc, ValueError) and str(exc) == INTERNAL_API_CLIENT_NOT_CONFIGURED:
-        pytest.fail(
-            f"{context}: PortalService internal_api client was not wired "
-            "(PipefyClient.set_internal_api_client must forward to PortalService).",
-            pytrace=False,
-        )
-    if isinstance(exc, ValueError):
-        pytest.skip(f"{context} (internal_api): {exc}")
-    pytest.skip(f"{context} (internal_api): {exc}")
-
+from pipefy_sdk.services.portal_service import PortalService
 
 _PORTAL_ORG_SKIP = (
     "Set PIPEFY_PORTAL_ORG_UUID to an org where the token has manage_portals."
@@ -56,19 +39,13 @@ _PORTAL_ORG_SKIP = (
 
 @pytest.fixture
 def live_portal_service() -> PortalService:
-    """PortalService with live Interfaces + internal_api for sub-portal mutations."""
+    """PortalService with live Interfaces + Internal API for sub-portal mutations."""
     require_live_creds()
-    settings = live_pipefy_settings()
-    auth = live_resolved_auth()
-    internal = InternalApiClient(
-        url=settings.internal_api_url,
-        auth=auth,
-        allow_insecure_urls=settings.allow_insecure_urls,
-    )
+    ex = build_executors(live_pipefy_settings(), live_resolved_auth())
     return PortalService(
-        settings=settings,
-        auth=auth,
-        internal_api_client=internal,
+        public_executor=ex.public,
+        interfaces_executor=ex.interfaces,
+        internal_executor=ex.internal,
     )
 
 
@@ -313,7 +290,7 @@ async def test_live_create_portal_element_on_bootstrapped_page(
 async def test_live_publish_sub_portal_cycle(
     live_portal_service: PortalService,
 ) -> None:
-    """Publish then unpublish a sub-portal on a templated forms element (internal_api)."""
+    """Publish then unpublish a sub-portal on a templated forms element (Internal API)."""
     org_uuid = _require_portal_org_uuid()
     sub_portal_uuid: str | None = None
 
@@ -358,11 +335,6 @@ async def test_live_publish_sub_portal_cycle(
             pytest.skip(
                 f"publish_sub_portal failed on org {org_uuid} (internal_api): {exc}"
             )
-        except ValueError as exc:
-            _skip_or_fail_internal_api_error(
-                exc,
-                context=f"publish_sub_portal failed on org {org_uuid}",
-            )
 
         after_publish = await live_portal_service.get_portal(portal_uuid)
         published_after_attach = _sub_portal_published(after_publish, sub_portal_uuid)
@@ -377,11 +349,6 @@ async def test_live_publish_sub_portal_cycle(
         except TransportQueryError as exc:
             pytest.skip(
                 f"unpublish_sub_portal failed on org {org_uuid} (internal_api): {exc}"
-            )
-        except ValueError as exc:
-            _skip_or_fail_internal_api_error(
-                exc,
-                context=f"unpublish_sub_portal failed on org {org_uuid}",
             )
 
         after_unpublish = await live_portal_service.get_portal(portal_uuid)

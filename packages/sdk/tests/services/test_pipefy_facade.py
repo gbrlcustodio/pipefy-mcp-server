@@ -3,7 +3,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.client import PipefyClient
+from pipefy_sdk import __version__
+from pipefy_sdk.client import PipefyClient, build_executors
+from pipefy_sdk.graphql_executor import GraphQLResult
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_service import AutomationService
@@ -18,6 +20,7 @@ from pipefy_sdk.services.schema_introspection_service import (
 from pipefy_sdk.services.table_service import TableService
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.telemetry import telemetry_headers
 
 
 @pytest.fixture
@@ -31,8 +34,74 @@ def mock_settings():
 def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
     auth = StaticBearerAuth("unit-token")
     client = PipefyClient(mock_settings, auth=auth)
-    assert client._card_service._auth is auth
-    assert client._pipe_service._auth is auth
+    # Public services share one executor bound to the caller's auth, so GraphQL
+    # auth cannot drift across services.
+    assert client._card_service._executor.auth is auth
+    assert client._pipe_service._executor.auth is auth
+    assert client._internal_executor.auth is auth
+
+
+@pytest.mark.unit
+def test_build_executors_routes_each_endpoint_to_its_url(mock_settings):
+    ex = build_executors(mock_settings, StaticBearerAuth("unit-token"))
+    # Each executor must target its own endpoint; a copy-paste that aimed
+    # interfaces or internal at the public graphql_url would route silently.
+    assert ex.public.endpoint._graphql_url == mock_settings.graphql_url
+    assert ex.interfaces.endpoint._graphql_url == mock_settings.interfaces_graphql_url
+    assert ex.internal.endpoint._graphql_url == mock_settings.internal_api_url
+
+
+@pytest.mark.unit
+def test_build_executors_stamps_each_endpoint_with_telemetry_headers():
+    settings = PipefySettings(base_url="https://api.pipefy.com")
+    ex = build_executors(settings, StaticBearerAuth("unit-token"), surface="mcp")
+    expected = telemetry_headers(surface="mcp", version=__version__)
+    assert ex.public.endpoint._headers == expected
+    assert ex.interfaces.endpoint._headers == expected
+    assert ex.internal.endpoint._headers == expected
+
+
+@pytest.mark.unit
+def test_build_executors_defaults_surface_to_sdk():
+    """Direct SDK use passes no surface, so the endpoints stamp the 'sdk' default."""
+    ex = build_executors(
+        PipefySettings(base_url="https://api.pipefy.com"),
+        StaticBearerAuth("unit-token"),
+    )
+    expected = telemetry_headers(surface="sdk", version=__version__)
+    assert ex.public.endpoint._headers == expected
+    assert ex.interfaces.endpoint._headers == expected
+    assert ex.internal.endpoint._headers == expected
+
+
+@pytest.mark.unit
+def test_pipefy_client_threads_surface_to_endpoints():
+    """The surface passed to the facade reaches the endpoints it builds."""
+    client = PipefyClient(
+        PipefySettings(base_url="https://api.pipefy.com"),
+        auth=StaticBearerAuth("unit-token"),
+        surface="cli",
+    )
+    assert client._internal_executor.endpoint._headers == telemetry_headers(
+        surface="cli", version=__version__
+    )
+
+
+@pytest.mark.unit
+def test_env_var_cannot_forge_surface(monkeypatch: pytest.MonkeyPatch):
+    """``PIPEFY_CLIENT_SURFACE`` cannot forge the surface.
+
+    The surface is a constructor argument, not a setting, so it is never read
+    from the environment: a default client stamps 'sdk' regardless of the env var.
+    """
+    monkeypatch.setenv("PIPEFY_CLIENT_SURFACE", "mcp")
+    client = PipefyClient(
+        PipefySettings(base_url="https://api.pipefy.com"),
+        auth=StaticBearerAuth("unit-token"),
+    )
+    assert client._internal_executor.endpoint._headers == telemetry_headers(
+        surface="sdk", version=__version__
+    )
 
 
 @pytest.mark.unit
@@ -239,8 +308,8 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.update_webhook("w1", name="X") == {"ok": "update_webhook"}
     webhook_service.update_webhook.assert_awaited_once_with("w1", name="X")
 
-    # delete_card_relation delegates to InternalApiClient (not CardService)
-    # — tested separately below.
+    # delete_card_relation routes through the internal GraphQL executor (not CardService),
+    # tested separately below.
 
     assert await client.get_card(4) == {"ok": "card"}
     card_service.get_card.assert_awaited_once_with(4, include_fields=False)
@@ -586,38 +655,11 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert isinstance(client._ai_agent_service, AiAgentService)
     assert isinstance(client._attachment_service, AttachmentService)
     assert isinstance(client._introspection_service, SchemaIntrospectionService)
-    assert client._pipe_service._auth is not None, (
-        "PipeService should have an auth instance"
-    )
-    assert client._card_service._auth is not None, (
-        "CardService should have an auth instance"
-    )
-    assert client._introspection_service._auth is not None, (
-        "SchemaIntrospectionService should have an auth instance"
-    )
-    assert client._pipe_config_service._auth is not None, (
-        "PipeConfigService should have an auth instance"
-    )
-    assert client._table_service._auth is not None, (
-        "TableService should have an auth instance"
-    )
-    assert client._relation_service._auth is not None, (
-        "RelationService should have an auth instance"
-    )
-    assert client._automation_service._auth is not None, (
-        "AutomationService should have an auth instance"
-    )
-    assert client._ai_agent_service._auth is not None, (
-        "AiAgentService should have an auth instance"
-    )
-    assert client._pipe_config_service._auth is client._ai_agent_service._auth
-    assert client._pipe_service._auth is client._card_service._auth
-    assert client._pipe_service._auth is client._pipe_config_service._auth
-    assert client._pipe_service._auth is client._table_service._auth
-    assert client._pipe_service._auth is client._relation_service._auth
-    assert client._pipe_service._auth is client._automation_service._auth
-    assert client._pipe_service._auth is client._introspection_service._auth
-    assert client._pipe_service._auth is client._attachment_service._auth
+    # Converted public services share one GraphQL executor instance (one token cache).
+    shared_executor = client._pipe_service._executor
+    assert client._card_service._executor is shared_executor
+    assert client._table_service._executor is shared_executor
+    assert shared_executor.auth is auth
 
 
 @pytest.mark.unit
@@ -720,7 +762,7 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
     assert isinstance(forwarded, UpdateAiAgentInput)
     assert forwarded.uuid == uin.uuid
     assert (
-        forwarded.behaviors[0].action_params["aiBehaviorParams"]["referencedFieldIds"]
+        forwarded.behaviors[0].action_params.ai_behavior_params.referenced_field_ids
         == []
     )
 
@@ -736,23 +778,25 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_card_relation_delegates_to_internal_api_client(mock_settings):
-    """delete_card_relation uses InternalApiClient (not CardService) because the
-    mutation is only on the internal GraphQL schema."""
+    """delete_card_relation delegates to RelationService, which routes through the
+    internal executor because the mutation is only on the internal GraphQL schema."""
     from graphql import print_ast
 
-    from pipefy_sdk.queries.card_queries import (
+    from pipefy_sdk.queries.relation_queries import (
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
     )
-    from pipefy_sdk.services.internal_api_client import InternalApiClient
 
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
-    internal = MagicMock(spec=InternalApiClient)
-    internal.execute_query = AsyncMock(
-        return_value={"deleteCardRelation": {"success": True}}
+    # The facade and RelationService share the one internal executor, which
+    # delegates to its shared endpoint; swap that endpoint's network seam.
+    internal = client._internal_executor
+    internal.endpoint.execute = AsyncMock(
+        return_value=GraphQLResult(
+            data={"deleteCardRelation": {"success": True}}, errors=[]
+        )
     )
-    client.set_internal_api_client(internal)
 
-    # Pin the snake_case input keys that the internal API expects
+    # Pin the snake_case input keys that the Internal API expects
     rendered = print_ast(INTERNAL_DELETE_CARD_RELATION_MUTATION.document)
     assert "child_id: $childId" in rendered
     assert "parent_id: $parentId" in rendered
@@ -760,29 +804,31 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
     result = await client.delete_card_relation("c1", "p2", "src-3")
 
-    internal.execute_query.assert_awaited_once_with(
+    internal.endpoint.execute.assert_awaited_once_with(
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
         {"childId": "c1", "parentId": "p2", "sourceId": "src-3"},
+        auth=internal.auth,
     )
     assert result == {"deleteCardRelation": {"success": True}}
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_set_internal_api_client_forwards_to_portal_service(mock_settings):
-    """Sub-portal mutations on PortalService use the same internal_api client as the facade."""
-    from pipefy_sdk.services.internal_api_client import InternalApiClient
-
+async def test_sub_portal_mutation_routes_through_internal_api_client(mock_settings):
+    """A sub-portal mutation reaches the Internal API client the facade builds at
+    construction; PortalService and the facade share that one instance."""
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
-    internal = MagicMock(spec=InternalApiClient)
-    internal.execute_query = AsyncMock(
-        return_value={"updateSubPortalElement": {"success": True}}
+    # PortalService and the facade share the one internal executor and its endpoint.
+    internal = client._internal_executor
+    internal.endpoint.execute = AsyncMock(
+        return_value=GraphQLResult(
+            data={"updateSubPortalElement": {"success": True}}, errors=[]
+        )
     )
-    client.set_internal_api_client(internal)
 
     result = await client.publish_sub_portal("portal-1", "element-2", "sub-3")
 
-    internal.execute_query.assert_awaited()
+    internal.endpoint.execute.assert_awaited()
     assert result == {"updateSubPortalElement": {"success": True}}
 
 

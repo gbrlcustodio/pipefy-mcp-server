@@ -239,6 +239,88 @@ GET_AUTOMATIONS_USAGE_QUERY = gql(
     """
 )
 
+AUTOMATION_EXECUTION_METRICS_PERIODS: tuple[str, ...] = (
+    "FIFTEEN_MINUTES",
+    "SIXTY_MINUTES",
+    "TWELVE_HOURS",
+    "TWENTY_FOUR_HOURS",
+)
+
+# AutomationsEvents enum values accepted by the `automations` query's `eventId`
+# filter. Single source so the MCP validation set and CLI help stay in step with
+# the schema instead of drifting across hand-copied prose.
+AUTOMATION_EVENT_IDS: tuple[str, ...] = (
+    "card_moved",
+    "field_updated",
+    "card_created",
+    "scheduler",
+    "sla_based",
+    "card_left_phase",
+    "card_inbox_received_email",
+    "all_children_in_phase",
+    "http_response_received",
+    "manually_triggered",
+)
+
+# AutomationSortCriteria fields: `by` (AutomationSortBy) and `order` (SortDirection).
+AUTOMATION_SORT_BY: tuple[str, ...] = ("created_at", "name")
+AUTOMATION_SORT_ORDER: tuple[str, ...] = ("asc", "desc")
+
+GET_AUTOMATION_EXECUTION_METRICS_QUERY = gql(
+    """
+    query AutomationExecutionMetrics(
+        $organizationId: ID!
+        $repoId: ID
+        $automationIds: [ID!]
+        $actionIds: [ID!]
+        $eventId: AutomationsEvents
+        $active: Boolean
+        $search: String
+        $sort: AutomationSortCriteria
+        $period: AutomationExecutionMetricsPeriod
+        $first: Int
+        $after: String
+    ) {
+        automations(
+            organizationId: $organizationId
+            repoId: $repoId
+            automationIds: $automationIds
+            actionIds: $actionIds
+            eventId: $eventId
+            active: $active
+            search: $search
+            sort: $sort
+            first: $first
+            after: $after
+        ) {
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
+            edges {
+                node {
+                    id
+                    name
+                    event_id
+                    action_id
+                    event_repo {
+                        id
+                        name
+                    }
+                    executionMetrics(period: $period) {
+                        lastRun
+                        failureRate
+                        successRate
+                        averageDuration
+                        totalRuns
+                    }
+                }
+            }
+        }
+    }
+    """
+)
+
 RESOLVE_ORGANIZATION_UUID_QUERY = gql(
     """
     query ResolveOrganizationUuid($id: ID!) {
@@ -306,7 +388,12 @@ GET_AUTOMATION_JOBS_EXPORT_QUERY = gql(
 )
 
 __all__ = [
+    "AUTOMATION_EVENT_IDS",
+    "AUTOMATION_EXECUTION_METRICS_PERIODS",
+    "AUTOMATION_SORT_BY",
+    "AUTOMATION_SORT_ORDER",
     "CREATE_AUTOMATION_JOBS_EXPORT_MUTATION",
+    "GET_AUTOMATION_EXECUTION_METRICS_QUERY",
     "GET_AUTOMATION_JOBS_EXPORT_QUERY",
     "GET_AGENTS_USAGE_QUERY",
     "GET_AI_AGENT_LOG_DETAILS_QUERY",

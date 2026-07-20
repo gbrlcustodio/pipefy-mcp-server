@@ -5,15 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.automation_tools import AutomationTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 
 @pytest.fixture
@@ -36,9 +35,9 @@ def mock_automation_client():
 
 @pytest.fixture
 def automation_mcp_server(mock_automation_client):
-    mcp = FastMCP("Automation Tools Test")
-    AutomationTools.register(mcp, mock_automation_client)
-    return mcp
+    return build_tool_test_server(
+        "Automation Tools Test", AutomationTools.register, mock_automation_client
+    )
 
 
 @pytest.fixture
@@ -65,6 +64,19 @@ async def test_get_automation_success(
         "action_params": {
             "aiParams": {"value": "Run prompt", "fieldIds": ["1"], "skillsIds": []},
         },
+        "condition": {
+            "id": "c1",
+            "expressions": [
+                {
+                    "id": "e1",
+                    "structure_id": "0",
+                    "field_address": "900000101",
+                    "operation": "equals",
+                    "value": "yes",
+                }
+            ],
+            "expressions_structure": [[0]],
+        },
     }
 
     async with automation_session as session:
@@ -77,6 +89,7 @@ async def test_get_automation_success(
     assert payload["data"] == mock_automation_client.get_automation.return_value
     assert payload["data"]["event_params"]["kindOfSla"] == "due_date"
     assert payload["data"]["action_params"]["aiParams"]["value"] == "Run prompt"
+    assert payload["data"]["condition"]["expressions"][0]["operation"] == "equals"
 
 
 @pytest.mark.anyio
@@ -571,6 +584,62 @@ async def test_create_automation_error(
 
     assert extract_payload(result)["success"] is False
     assert "invalid event" in tool_error_message(extract_payload(result))
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_automation_error_only_diagnostic_markers_uses_fallback(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.create_automation.side_effect = TransportQueryError(
+        " [code=X] [correlation_id=Y]",
+        errors=[{"message": " [code=X] [correlation_id=Y]"}],
+    )
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_automation",
+            {
+                "pipe_id": "p1",
+                "name": "N",
+                "trigger_id": "e",
+                "action_id": "a",
+            },
+        )
+
+    payload = extract_payload(result)
+    msg = tool_error_message(payload)
+    assert payload["success"] is False
+    assert msg == "Automation request failed."
+    assert "[code=" not in msg and "[correlation_id=" not in msg
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_automation_error_only_markers_with_debug_keeps_fallback(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.create_automation.side_effect = TransportQueryError(
+        " [code=X] [correlation_id=Y]",
+        errors=[{"message": " [code=X] [correlation_id=Y]"}],
+    )
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_automation",
+            {
+                "pipe_id": "p1",
+                "name": "N",
+                "trigger_id": "e",
+                "action_id": "a",
+                "debug": True,
+            },
+        )
+
+    msg = tool_error_message(extract_payload(result))
+    assert msg.startswith("Automation request failed.")
+    assert "(debug:" in msg and "codes=X" in msg
+    assert "[code=" not in msg and "[correlation_id=" not in msg
 
 
 @pytest.mark.anyio

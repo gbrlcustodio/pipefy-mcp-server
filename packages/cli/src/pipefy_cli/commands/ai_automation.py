@@ -1,4 +1,4 @@
-"""AI Automations (generate_with_ai) via internal API."""
+"""AI Automations (generate_with_ai) via Internal API."""
 
 from __future__ import annotations
 

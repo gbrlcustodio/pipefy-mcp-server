@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 from httpx import Auth
-from pipefy_auth import AuthSettings, missing_auth_message, resolve_pipefy_auth
+from pipefy_auth import (
+    AuthSettings,
+    ResolvedAuth,
+    build_httpx_auth,
+    missing_auth_message,
+    resolve_pipefy_auth,
+)
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -43,7 +49,7 @@ def live_auth_settings() -> AuthSettings:
     return AuthSettings()
 
 
-def _try_resolve_live_auth() -> Auth | None:
+def _try_resolve_live_auth() -> ResolvedAuth | None:
     a = live_auth_settings()
     # ``oidc_client=None``: a stray ``pipefy auth login`` on a dev machine would
     # otherwise satisfy live-creds detection via the developer's personal session.
@@ -59,7 +65,7 @@ def live_resolved_auth() -> Auth:
     resolved = _try_resolve_live_auth()
     if resolved is None:
         pytest.skip(_MISSING_CREDS_MESSAGE)
-    return resolved
+    return build_httpx_auth(resolved)
 
 
 def pipefy_live_configured() -> bool:

@@ -10,17 +10,15 @@ from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     PipefyClient,
     PipefyId,
-    format_service_account_removal_block_message,
-    service_account_removal_blocked_user_ids,
 )
 
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.member_tool_helpers import (
     build_member_error_payload,
     build_member_success_payload,
     handle_member_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 
@@ -28,13 +26,14 @@ class MemberTools:
     """MCP tools for inviting, removing, and setting roles for pipe members."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def invite_members(
             pipe_id: PipefyId,
             members: list[dict[str, Any]],
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Invite one or more users to a pipe.
@@ -46,6 +45,7 @@ class MemberTools:
                 members: List of member dicts with `email` and `role_name`.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -101,16 +101,13 @@ class MemberTools:
             ``confirm=True`` after explicit human approval. Elicitation does not authorize
             deletion (only ``confirm=True`` does).
 
-            Service account guard: when ``PIPEFY_SERVICE_ACCOUNT_IDS`` is set, user IDs in
-            that list cannot be removed via this tool (returns an error); use the Pipefy UI
-            if intentional. When the env var is unset or empty, the guard is not applied.
-
             Args:
                 pipe_id: ID of the pipe.
                 user_ids: List of user IDs to remove.
                 confirm: Set to True to execute the removal (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -121,15 +118,6 @@ class MemberTools:
             if not all(uid.strip() for uid in user_ids):
                 return build_member_error_payload(
                     message="Invalid 'user_ids': each ID must be a non-empty string.",
-                )
-
-            protected_ids = settings.pipefy.service_account_ids
-            blocked = service_account_removal_blocked_user_ids(
-                list(user_ids), list(protected_ids)
-            )
-            if blocked:
-                return build_member_error_payload(
-                    message=format_service_account_removal_block_message(blocked),
                 )
 
             guard = await check_destructive_confirmation(
@@ -179,13 +167,10 @@ class MemberTools:
             pipe_id: PipefyId,
             member_id: PipefyId,
             role_name: str,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Set a member's role on a pipe.
-
-            Service account warning: when ``PIPEFY_SERVICE_ACCOUNT_IDS`` includes ``member_id``,
-            the success payload may include a ``warning`` field reminding you to keep write
-            permissions for that account. When the env var is unset or empty, no warning is added.
 
             Args:
                 pipe_id: ID of the pipe.
@@ -193,6 +178,7 @@ class MemberTools:
                 role_name: New role name (e.g. 'member', 'admin').
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -213,17 +199,9 @@ class MemberTools:
                     resource_kind="pipe",
                     resource_id=str(pipe_id),
                 )
-            warning: str | None = None
-            protected_ids = settings.pipefy.service_account_ids
-            if protected_ids and member_id in protected_ids:
-                warning = (
-                    "Warning: you changed the role of a service account. "
-                    "Ensure the new role retains write permissions."
-                )
             return build_member_success_payload(
                 message="Role updated.",
                 data=raw,
-                warning=warning,
             )
 
 

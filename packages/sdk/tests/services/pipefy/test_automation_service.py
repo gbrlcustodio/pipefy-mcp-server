@@ -3,8 +3,9 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
-from pipefy_auth import StaticBearerAuth
+from graphql import print_ast
 
 from pipefy_sdk.queries.automation_queries import (
     AUTOMATION_SIMULATION_QUERY,
@@ -25,10 +26,6 @@ from pipefy_sdk.services.automation_service import (
     _format_automation_error_details,
     normalize_automation_event_attributes,
 )
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
-
 
 ## ---------------------------------------------------------------------------
 ## _format_automation_error_details edge cases
@@ -107,22 +104,15 @@ class TestFormatAutomationErrorDetails:
 ## ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def mock_settings():
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
-
-
-def _make_service(mock_settings, return_value: dict):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
+def _make_service(return_value: dict):
+    executor = mock_executor(return_value)
+    service = AutomationService(executor=executor)
+    return service, executor
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_success(mock_settings):
+async def test_get_automation_success():
     automation = {
         "id": "a1",
         "name": "Notify assignee",
@@ -147,13 +137,27 @@ async def test_get_automation_success(mock_settings):
             "email_template_id": "tmpl-1",
             "to_phase_id": "ph2",
         },
+        "condition": {
+            "id": "cond-1",
+            "expressions": [
+                {
+                    "id": "expr-1",
+                    "structure_id": "0",
+                    "field_address": "900000101",
+                    "operation": "equals",
+                    "value": "approved",
+                }
+            ],
+            "expressions_structure": [[0]],
+        },
     }
-    service = _make_service(mock_settings, {"automation": automation})
+    service, executor = _make_service({"automation": automation})
     result = await service.get_automation("101")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_QUERY
+    assert "condition" in print_ast(GET_AUTOMATION_QUERY.document)
     assert variables == {"id": "101"}
     assert result["id"] == "a1"
     assert result["name"] == "Notify assignee"
@@ -161,15 +165,18 @@ async def test_get_automation_success(mock_settings):
     assert result["event_params"]["triggerFieldIds"] == ["f1", "f2"]
     assert result["action_params"]["aiParams"]["value"] == "Summarize card"
     assert result["action_params"]["aiParams"]["fieldIds"] == ["10"]
+    assert result["condition"]["id"] == "cond-1"
+    assert result["condition"]["expressions"][0]["operation"] == "equals"
+    assert result["condition"]["expressions_structure"] == [[0]]
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_when_api_returns_null(mock_settings):
-    service = _make_service(mock_settings, {"automation": None})
+async def test_get_automation_when_api_returns_null():
+    service, executor = _make_service({"automation": None})
     result = await service.get_automation("999")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_QUERY
     assert variables == {"id": "999"}
     assert result is None
@@ -177,26 +184,26 @@ async def test_get_automation_when_api_returns_null(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_automation_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_automation("998")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_success(mock_settings):
+async def test_get_automations_success():
     rows = [
         {"id": "a1", "name": "Rule 1", "active": True},
         {"id": "a2", "name": "Rule 2", "active": False},
     ]
-    service = _make_service(mock_settings, {"automations": {"nodes": rows}})
+    service, executor = _make_service({"automations": {"nodes": rows}})
     result = await service.get_automations(organization_id="101", pipe_id="901")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY
     assert variables == {"organizationId": "101", "repoId": "901"}
     assert isinstance(result, list)
@@ -205,20 +212,20 @@ async def test_get_automations_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_success_resolves_org_from_pipe(mock_settings):
+async def test_get_automations_success_resolves_org_from_pipe():
     rows = [{"id": "a1", "name": "Rule 1", "active": True}]
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=[
             {"pipe": {"organizationId": "300"}},
             {"automations": {"nodes": rows}},
         ],
     )
+    service = AutomationService(executor=executor)
     result = await service.get_automations(pipe_id="901")
 
-    assert service.execute_query.await_count == 2
-    q1, v1 = service.execute_query.call_args_list[0][0]
-    q2, v2 = service.execute_query.call_args_list[1][0]
+    assert executor.execute_query.await_count == 2
+    q1, v1 = executor.execute_query.call_args_list[0][0]
+    q2, v2 = executor.execute_query.call_args_list[1][0]
     assert q1 is GET_PIPE_ORGANIZATION_ID_QUERY
     assert v1 == {"id": "901"}
     assert q2 is GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY
@@ -228,12 +235,12 @@ async def test_get_automations_success_resolves_org_from_pipe(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_organization_only_omits_repo_id(mock_settings):
+async def test_get_automations_organization_only_omits_repo_id():
     rows = [{"id": "a1", "name": "R", "active": True}]
-    service = _make_service(mock_settings, {"automations": {"nodes": rows}})
+    service, executor = _make_service({"automations": {"nodes": rows}})
     result = await service.get_automations(organization_id="201")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATIONS_BY_ORG_QUERY
     assert variables == {"organizationId": "201"}
     assert result == rows
@@ -241,80 +248,80 @@ async def test_get_automations_organization_only_omits_repo_id(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_pipe_only_org_not_found_returns_empty(mock_settings):
+async def test_get_automations_pipe_only_org_not_found_returns_empty():
     """When pipe_id is given but org lookup returns no organizationId, return empty."""
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value={"pipe": {"organizationId": None}})
+    executor = mock_executor({"pipe": {"organizationId": None}})
+    service = AutomationService(executor=executor)
     result = await service.get_automations(pipe_id="100")
     assert result == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_pipe_only_pipe_missing_returns_empty(mock_settings):
+async def test_get_automations_pipe_only_pipe_missing_returns_empty():
     """When pipe lookup returns no pipe key at all, return empty."""
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value={"pipe": None})
+    executor = mock_executor({"pipe": None})
+    service = AutomationService(executor=executor)
     result = await service.get_automations(pipe_id="100")
     assert result == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_null_nodes_returns_empty(mock_settings):
-    service = _make_service(mock_settings, {"automations": {"nodes": None}})
+async def test_get_automations_null_nodes_returns_empty():
+    service, _ = _make_service({"automations": {"nodes": None}})
     result = await service.get_automations(organization_id="1")
     assert result == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_null_connection_returns_empty(mock_settings):
-    service = _make_service(mock_settings, {"automations": None})
+async def test_get_automations_null_connection_returns_empty():
+    service, _ = _make_service({"automations": None})
     result = await service.get_automations(organization_id="1")
     assert result == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_actions_null_returns_empty(mock_settings):
-    service = _make_service(mock_settings, {"automationActions": None})
+async def test_get_automation_actions_null_returns_empty():
+    service, _ = _make_service({"automationActions": None})
     result = await service.get_automation_actions("100")
     assert result == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_events_null_returns_empty(mock_settings):
-    service = _make_service(mock_settings, {"automationEvents": None})
+async def test_get_automation_events_null_returns_empty():
+    service, _ = _make_service({"automationEvents": None})
     result = await service.get_automation_events("100")
     assert result == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_both_none_returns_empty(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock()
+async def test_get_automations_both_none_returns_empty():
+    executor = mock_executor()
+    service = AutomationService(executor=executor)
     result = await service.get_automations()
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
     assert result == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_automations_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_automations(organization_id="1")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_actions_success(mock_settings):
+async def test_get_automation_actions_success():
     actions = [
         {
             "id": "act1",
@@ -327,10 +334,10 @@ async def test_get_automation_actions_success(mock_settings):
             "triggerEvents": ["card_created"],
         }
     ]
-    service = _make_service(mock_settings, {"automationActions": actions})
+    service, executor = _make_service({"automationActions": actions})
     result = await service.get_automation_actions("601")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_ACTIONS_QUERY
     assert variables == {"repoId": "601"}
     assert isinstance(result, list)
@@ -340,18 +347,18 @@ async def test_get_automation_actions_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_actions_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_automation_actions_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "bad pipe"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_automation_actions("999")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_events_success(mock_settings):
+async def test_get_automation_events_success():
     events = [
         {
             "id": "evt1",
@@ -360,10 +367,10 @@ async def test_get_automation_events_success(mock_settings):
             "actionsBlacklist": [],
         }
     ]
-    service = _make_service(mock_settings, {"automationEvents": events})
+    service, executor = _make_service({"automationEvents": events})
     result = await service.get_automation_events("pipe-2")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_EVENTS_QUERY
     assert variables == {}
     assert isinstance(result, list)
@@ -372,11 +379,11 @@ async def test_get_automation_events_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_events_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_automation_events_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_automation_events("y")
 
@@ -409,15 +416,15 @@ class TestNormalizeAutomationEventAttributes:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_event_attributes_null_returns_empty(mock_settings):
-    service = _make_service(mock_settings, {"automationEventAttributes": None})
+async def test_get_automation_event_attributes_null_returns_empty():
+    service, _ = _make_service({"automationEventAttributes": None})
     result = await service.get_automation_event_attributes()
     assert result == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_event_attributes_success(mock_settings):
+async def test_get_automation_event_attributes_success():
     graphql_payload = {
         "automationEventAttributes": {
             "automationEventExecutionDatetime": {
@@ -427,10 +434,10 @@ async def test_get_automation_event_attributes_success(mock_settings):
             }
         }
     }
-    service = _make_service(mock_settings, graphql_payload)
+    service, executor = _make_service(graphql_payload)
     result = await service.get_automation_event_attributes()
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY
     assert variables == {}
     assert result == [
@@ -446,24 +453,24 @@ async def test_get_automation_event_attributes_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_event_attributes_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_automation_event_attributes_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_automation_event_attributes()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_automation_success(mock_settings):
+async def test_create_automation_success():
     created = {
         "createAutomation": {
             "automation": {"id": "a-new", "name": "Notify", "active": True},
         },
     }
-    service = _make_service(mock_settings, created)
+    service, executor = _make_service(created)
     result = await service.create_automation(
         "p1",
         "Notify",
@@ -471,8 +478,8 @@ async def test_create_automation_success(mock_settings):
         "act-1",
     )
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_AUTOMATION_MUTATION
     inp = variables["input"]
     assert inp["name"] == "Notify"
@@ -486,13 +493,13 @@ async def test_create_automation_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_automation_with_action_repo_id(mock_settings):
+async def test_create_automation_with_action_repo_id():
     created = {
         "createAutomation": {
             "automation": {"id": "a-xpipe", "name": "Cross", "active": True},
         },
     }
-    service = _make_service(mock_settings, created)
+    service, executor = _make_service(created)
     await service.create_automation(
         "p-parent",
         "Cross",
@@ -500,35 +507,35 @@ async def test_create_automation_with_action_repo_id(mock_settings):
         "act-connected",
         action_repo_id="p-child",
     )
-    inp = service.execute_query.call_args[0][1]["input"]
+    inp = executor.execute_query.call_args[0][1]["input"]
     assert inp["event_repo_id"] == "p-parent"
     assert inp["action_repo_id"] == "p-child"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_automation_active_false_via_attrs(mock_settings):
+async def test_create_automation_active_false_via_attrs():
     created = {
         "createAutomation": {
             "automation": {"id": "a2", "name": "Off", "active": False},
         },
     }
-    service = _make_service(mock_settings, created)
+    service, executor = _make_service(created)
     await service.create_automation("p1", "Off", "e", "a", **{"active": False})
-    inp = service.execute_query.call_args[0][1]["input"]
+    inp = executor.execute_query.call_args[0][1]["input"]
     assert inp["active"] is False
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_send_task_automation_builds_task_params(mock_settings):
+async def test_create_send_task_automation_builds_task_params():
     """Service builds ``action_params.taskParams`` and delegates to ``create_automation``."""
     created = {
         "createAutomation": {
             "automation": {"id": "st-1", "name": "Notify", "active": True},
         },
     }
-    service = _make_service(mock_settings, created)
+    service, executor = _make_service(created)
 
     result = await service.create_send_task_automation(
         "pipe-1",
@@ -538,7 +545,7 @@ async def test_create_send_task_automation_builds_task_params(mock_settings):
         "a@b.com, c@d.com",
     )
 
-    inp = service.execute_query.call_args[0][1]["input"]
+    inp = executor.execute_query.call_args[0][1]["input"]
     assert inp["action_id"] == "send_a_task"
     assert inp["event_id"] == "card_created"
     assert inp["event_repo_id"] == "pipe-1"
@@ -556,12 +563,9 @@ async def test_create_send_task_automation_builds_task_params(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_send_task_automation_includes_event_params_and_condition(
-    mock_settings,
-):
+async def test_create_send_task_automation_includes_event_params_and_condition():
     """Optional ``event_params`` and ``condition`` are merged when provided."""
-    service = _make_service(
-        mock_settings,
+    service, executor = _make_service(
         {"createAutomation": {"automation": {"id": "st-2", "active": True}}},
     )
     event_params = {"to_phase_id": "ph-1"}
@@ -578,7 +582,7 @@ async def test_create_send_task_automation_includes_event_params_and_condition(
         condition=condition,
     )
 
-    inp = service.execute_query.call_args[0][1]["input"]
+    inp = executor.execute_query.call_args[0][1]["input"]
     assert inp["event_params"] == event_params
     assert inp["condition"] == condition
     assert inp["active"] is False
@@ -586,20 +590,18 @@ async def test_create_send_task_automation_includes_event_params_and_condition(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_create_automation_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "reject"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.create_automation("p1", "N", "e", "a")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_automation_raises_when_mutation_returns_error_details(
-    mock_settings,
-):
+async def test_create_automation_raises_when_mutation_returns_error_details():
     payload = {
         "createAutomation": {
             "automation": None,
@@ -611,35 +613,33 @@ async def test_create_automation_raises_when_mutation_returns_error_details(
             ],
         },
     }
-    service = _make_service(mock_settings, payload)
+    service, _ = _make_service(payload)
     with pytest.raises(ValueError, match="Invalid action"):
         await service.create_automation("p1", "N", "e", "a")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_automation_raises_when_mutation_returns_error_details(
-    mock_settings,
-):
+async def test_update_automation_raises_when_mutation_returns_error_details():
     payload = {
         "updateAutomation": {
             "automation": None,
             "error_details": [{"messages": ["Cannot rename inactive automation"]}],
         },
     }
-    service = _make_service(mock_settings, payload)
+    service, _ = _make_service(payload)
     with pytest.raises(ValueError, match="Cannot rename"):
         await service.update_automation("a7", name="x")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_automation_success(mock_settings):
+async def test_update_automation_success():
     updated = {"updateAutomation": {"automation": {"id": "a7", "name": "Renamed"}}}
-    service = _make_service(mock_settings, updated)
+    service, executor = _make_service(updated)
     result = await service.update_automation("a7", name="Renamed")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_AUTOMATION_MUTATION
     assert variables["input"] == {"id": "a7", "name": "Renamed"}
     assert result == updated
@@ -647,23 +647,23 @@ async def test_update_automation_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_update_automation_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.update_automation("x", name="y")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_automation_success(mock_settings):
+async def test_delete_automation_success():
     deleted = {"deleteAutomation": {"success": True}}
-    service = _make_service(mock_settings, deleted)
+    service, executor = _make_service(deleted)
     result = await service.delete_automation("rm-1")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_AUTOMATION_MUTATION
     assert variables["input"] == {"id": "rm-1"}
     assert result == {"success": True}
@@ -671,18 +671,18 @@ async def test_delete_automation_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_delete_automation_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "no access"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.delete_automation("z")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_simulate_automation_success(mock_settings):
+async def test_simulate_automation_success():
     mutation_payload = {
         "createAutomationSimulation": {
             "simulationId": "sim-99",
@@ -696,8 +696,8 @@ async def test_simulate_automation_success(mock_settings):
             "simulationResult": {"preview": True},
         },
     }
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=[mutation_payload, query_payload])
+    executor = mock_executor(side_effect=[mutation_payload, query_payload])
+    service = AutomationService(executor=executor)
     result = await service.simulate_automation(
         pipe_id="pipe-77",
         action_id="generate_with_ai",
@@ -708,9 +708,9 @@ async def test_simulate_automation_success(mock_settings):
         extra_input={"active": True, "schedulerCron": "0 0 * * *"},
     )
 
-    assert service.execute_query.await_count == 2
-    q1, v1 = service.execute_query.call_args_list[0][0]
-    q2, v2 = service.execute_query.call_args_list[1][0]
+    assert executor.execute_query.await_count == 2
+    q1, v1 = executor.execute_query.call_args_list[0][0]
+    q2, v2 = executor.execute_query.call_args_list[1][0]
     assert q1 is CREATE_AUTOMATION_SIMULATION_MUTATION
     assert v1["input"]["action_id"] == "generate_with_ai"
     assert v1["input"]["sampleCardId"] == "card-1"
@@ -730,7 +730,7 @@ async def test_simulate_automation_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_simulate_automation_extra_input_overrides_repo_ids(mock_settings):
+async def test_simulate_automation_extra_input_overrides_repo_ids():
     mutation_payload = {
         "createAutomationSimulation": {
             "simulationId": "sim-override",
@@ -744,26 +744,26 @@ async def test_simulate_automation_extra_input_overrides_repo_ids(mock_settings)
             "simulationResult": None,
         },
     }
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=[mutation_payload, query_payload])
+    executor = mock_executor(side_effect=[mutation_payload, query_payload])
+    service = AutomationService(executor=executor)
     await service.simulate_automation(
         pipe_id="default-pipe",
         action_id="generate_with_ai",
         sample_card_id="c1",
         extra_input={"event_repo_id": "ev-pipe", "action_repo_id": "act-pipe"},
     )
-    _, v1 = service.execute_query.call_args_list[0][0]
+    _, v1 = executor.execute_query.call_args_list[0][0]
     assert v1["input"]["event_repo_id"] == "ev-pipe"
     assert v1["input"]["action_repo_id"] == "act-pipe"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_simulate_automation_raises_when_no_simulation_id(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
-        return_value={"createAutomationSimulation": {"simulationId": None}},
+async def test_simulate_automation_raises_when_no_simulation_id():
+    executor = mock_executor(
+        {"createAutomationSimulation": {"simulationId": None}},
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(ValueError, match="simulationId"):
         await service.simulate_automation(
             pipe_id="p1",
@@ -774,11 +774,11 @@ async def test_simulate_automation_raises_when_no_simulation_id(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_simulate_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_simulate_automation_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = AutomationService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.simulate_automation(
             pipe_id="p1",
@@ -789,9 +789,7 @@ async def test_simulate_automation_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_logs_by_repo_skips_graphql_when_pipe_has_no_automations(
-    mock_settings,
-):
+async def test_get_automation_logs_by_repo_skips_graphql_when_pipe_has_no_automations():
     """Facade short-circuits before automationLogsByRepo when ``get_automations`` is empty."""
     from pipefy_sdk.client import PipefyClient
 

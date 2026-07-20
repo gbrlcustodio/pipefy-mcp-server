@@ -14,81 +14,34 @@ from _shared.fixture_ids import (
     EXAMPLE_OTHER_ORG_UUID,
     EXAMPLE_PIPE_REPO_ID,
 )
+from _shared.mock_clients import mock_executor
+from gql import gql
 from gql.transport.exceptions import TransportQueryError
-from httpx_auth import OAuth2ClientCredentials
 from pydantic import ValidationError
 
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_QUERY
 from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
-from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.portal_service import PortalService
-from pipefy_sdk.settings import PipefySettings
-
-BASE_URL = "https://app.pipefy.com"
-INTERFACES_URL = "https://app.pipefy.com/graphql/interfaces"
-MAIN_GRAPHQL_URL = "https://app.pipefy.com/graphql"
-OAUTH_URL = "https://app.pipefy.com/oauth/token"
-
-
-@pytest.fixture
-def mock_settings() -> PipefySettings:
-    return PipefySettings(base_url=BASE_URL)
-
-
-@pytest.fixture
-def mock_auth() -> OAuth2ClientCredentials:
-    return OAuth2ClientCredentials(
-        token_url=OAUTH_URL,
-        client_id="client_id",
-        client_secret="client_secret",
-    )
-
-
-def _mock_internal_api_client() -> MagicMock:
-    mock = MagicMock(spec=InternalApiClient)
-    mock.execute_query = AsyncMock(return_value={"updateSubPortalElement": {}})
-    return mock
-
-
-@pytest.mark.unit
-def test_portal_service_interfaces_client_uses_interfaces_graphql_url(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
-    """PortalService wires BasePipefyClient to the Interfaces schema URL."""
-    service = PortalService(
-        settings=mock_settings,
-        auth=mock_auth,
-        internal_api_client=_mock_internal_api_client(),
-    )
-    assert service._interfaces_client._graphql_url == INTERFACES_URL
-    assert service._interfaces_client._graphql_url != MAIN_GRAPHQL_URL
-    assert service._graphql_client._graphql_url == MAIN_GRAPHQL_URL
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_interfaces_query_routes_through_interfaces_client(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
-    """Representative Interfaces call delegates to the interfaces BasePipefyClient."""
+async def test_interfaces_query_routes_through_interfaces_client() -> None:
+    """Representative Interfaces call delegates to the Interfaces GraphQL executor."""
+    interfaces = mock_executor({"interfaces": {"edges": []}})
     service = PortalService(
-        settings=mock_settings,
-        auth=mock_auth,
-        internal_api_client=_mock_internal_api_client(),
-    )
-    service._interfaces_client.execute_query = AsyncMock(
-        return_value={"interfaces": {"edges": []}}
+        public_executor=mock_executor(),
+        interfaces_executor=interfaces,
+        internal_executor=mock_executor(),
     )
 
-    query = "query { interfaces(orgUuid: $orgUuid) { edges { node { uuid } } } }"
+    query = gql("query { interfaces(orgUuid: $orgUuid) { edges { node { uuid } } } }")
     variables = {"orgUuid": "org-123"}
     result = await service.execute_interfaces_query(query, variables)
 
-    service._interfaces_client.execute_query.assert_called_once()
-    call_query, call_vars = service._interfaces_client.execute_query.call_args[0]
+    interfaces.execute_query.assert_called_once()
+    call_query, call_vars = interfaces.execute_query.call_args[0]
     assert call_query == query
     assert call_vars == variables
     assert result == {"interfaces": {"edges": []}}
@@ -96,19 +49,16 @@ async def test_interfaces_query_routes_through_interfaces_client(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_sub_portal_element_call_routes_through_internal_api_client(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
-    """Sub-portal wiring mutations delegate to InternalApiClient."""
-    mock_internal = _mock_internal_api_client()
+async def test_sub_portal_element_call_routes_through_internal_api_client() -> None:
+    """Sub-portal wiring mutations delegate to the internal GraphQL executor."""
+    internal = mock_executor({"updateSubPortalElement": {}})
     service = PortalService(
-        settings=mock_settings,
-        auth=mock_auth,
-        internal_api_client=mock_internal,
+        public_executor=mock_executor(),
+        interfaces_executor=mock_executor(),
+        internal_executor=internal,
     )
 
-    query = (
+    query = gql(
         "mutation updateSubPortalElement($input: UpdateSubPortalElementInput!) "
         "{ updateSubPortalElement(input: $input) { success } }"
     )
@@ -121,25 +71,22 @@ async def test_sub_portal_element_call_routes_through_internal_api_client(
     }
     result = await service.execute_internal_api_query(query, variables)
 
-    mock_internal.execute_query.assert_called_once()
-    call_query, call_vars = mock_internal.execute_query.call_args[0]
+    internal.execute_query.assert_called_once()
+    call_query, call_vars = internal.execute_query.call_args[0]
     assert call_query == query
     assert call_vars == variables
     assert result == {"updateSubPortalElement": {}}
 
 
-def _make_interfaces_service(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-    return_value: dict,
-) -> PortalService:
+def _make_interfaces_service(return_value):
+    public = mock_executor()
+    interfaces = mock_executor(return_value)
     service = PortalService(
-        settings=mock_settings,
-        auth=mock_auth,
-        internal_api_client=_mock_internal_api_client(),
+        public_executor=public,
+        interfaces_executor=interfaces,
+        internal_executor=mock_executor(),
     )
-    service._interfaces_client.execute_query = AsyncMock(return_value=return_value)
-    return service
+    return service, public, interfaces
 
 
 _PORTAL_LIST_GRAPHQL_NODE = {
@@ -201,17 +148,14 @@ _PORTAL_DETAIL = {
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_returns_portal_nodes(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_returns_portal_nodes() -> None:
     """list_portals unwraps Relay edges into a flat list of portal dicts."""
     response = {
         "interfaces": {
             "edges": [{"node": _PORTAL_LIST_GRAPHQL_NODE}],
         }
     }
-    service = _make_interfaces_service(mock_settings, mock_auth, response)
+    service, _public, _interfaces_executor = _make_interfaces_service(response)
 
     result = await service.list_portals(EXAMPLE_ORG_UUID)
 
@@ -220,21 +164,16 @@ async def test_list_portals_returns_portal_nodes(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_passes_org_uuid_and_portal_filter(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_passes_org_uuid_and_portal_filter() -> None:
     """list_portals queries interfaces with org_uuid and filterBySubType portal."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
 
     await service.list_portals(EXAMPLE_OTHER_ORG_UUID)
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
     assert variables == {
         "org_uuid": EXAMPLE_OTHER_ORG_UUID,
@@ -244,20 +183,15 @@ async def test_list_portals_passes_org_uuid_and_portal_filter(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_passes_search_term_when_provided(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_passes_search_term_when_provided() -> None:
     """Optional search_term is forwarded as searchTerm to the GraphQL query."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
 
     await service.list_portals(EXAMPLE_ORG_UUID, search_term="intake")
 
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
     assert variables == {
         "org_uuid": EXAMPLE_ORG_UUID,
@@ -268,14 +202,9 @@ async def test_list_portals_passes_search_term_when_provided(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_empty_returns_empty_list(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_empty_returns_empty_list() -> None:
     """When no portals exist, list_portals returns an empty list."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, _interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
 
@@ -286,87 +215,67 @@ async def test_list_portals_empty_returns_empty_list(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_uuid_org_identifier_passes_through_unchanged(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_uuid_org_identifier_passes_through_unchanged() -> None:
     """UUID-shaped org identifiers skip resolve and go straight to Interfaces."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, public_executor, interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
-    service._graphql_client.execute_query = AsyncMock()
+    public_executor.execute_query = AsyncMock()
 
     await service.list_portals(EXAMPLE_ORG_UUID)
 
-    service._graphql_client.execute_query.assert_not_called()
-    _, variables = service._interfaces_client.execute_query.call_args[0]
+    public_executor.execute_query.assert_not_called()
+    _, variables = interfaces_executor.execute_query.call_args[0]
     assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_numeric_org_id_resolves_via_main_graphql_client(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_numeric_org_id_resolves_via_main_graphql_client() -> None:
     """Numeric org ids resolve on the public GraphQL client before Interfaces list."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, public_executor, interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
-    service._graphql_client.execute_query = AsyncMock(
+    public_executor.execute_query = AsyncMock(
         return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
     await service.list_portals(EXAMPLE_NUMERIC_ORG_ID)
 
-    service._graphql_client.execute_query.assert_called_once_with(
+    public_executor.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
         {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
-    _, variables = service._interfaces_client.execute_query.call_args[0]
+    _, variables = interfaces_executor.execute_query.call_args[0]
     assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_accepts_int_org_id(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_accepts_int_org_id() -> None:
     """Integer org ids coerce to string before resolve and Interfaces list."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, public_executor, interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
-    service._graphql_client.execute_query = AsyncMock(
+    public_executor.execute_query = AsyncMock(
         return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
     await service.list_portals(int(EXAMPLE_NUMERIC_ORG_ID))
 
-    service._graphql_client.execute_query.assert_called_once_with(
+    public_executor.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
         {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
-    _, variables = service._interfaces_client.execute_query.call_args[0]
+    _, variables = interfaces_executor.execute_query.call_args[0]
     assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_rejects_empty_org_identifier(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_rejects_empty_org_identifier() -> None:
     """Empty org identifiers raise ValueError before any GraphQL call."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, _interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
 
@@ -376,14 +285,9 @@ async def test_list_portals_rejects_empty_org_identifier(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_rejects_invalid_org_identifier(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_rejects_invalid_org_identifier() -> None:
     """Non-UUID, non-numeric org identifiers raise ValueError."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, _interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
 
@@ -393,19 +297,12 @@ async def test_list_portals_rejects_invalid_org_identifier(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_portals_org_not_found_on_resolve_raises_value_error(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_list_portals_org_not_found_on_resolve_raises_value_error() -> None:
     """When resolve yields no uuid, list_portals raises ValueError."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, public_executor, _interfaces_executor = _make_interfaces_service(
         {"interfaces": {"edges": []}},
     )
-    service._graphql_client.execute_query = AsyncMock(
-        return_value={"organization": None}
-    )
+    public_executor.execute_query = AsyncMock(return_value={"organization": None})
 
     with pytest.raises(ValueError, match="Organization not found"):
         await service.list_portals(EXAMPLE_NUMERIC_ORG_ID)
@@ -413,14 +310,9 @@ async def test_list_portals_org_not_found_on_resolve_raises_value_error(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_portal_returns_full_portal_shape(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_get_portal_returns_full_portal_shape() -> None:
     """get_portal returns portal metadata, pages, elements, and sub-portals."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, _interfaces_executor = _make_interfaces_service(
         {"portalInterface": _PORTAL_DETAIL_GRAPHQL},
     )
 
@@ -434,14 +326,9 @@ async def test_get_portal_returns_full_portal_shape(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_portal_not_found_raises_value_error(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_get_portal_not_found_raises_value_error() -> None:
     """When portalInterface is null, get_portal raises ValueError with the UUID."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, _interfaces_executor = _make_interfaces_service(
         {"portalInterface": None},
     )
 
@@ -451,20 +338,15 @@ async def test_get_portal_not_found_raises_value_error(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_portal_uses_correct_variables(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_get_portal_uses_correct_variables() -> None:
     """get_portal passes the portal UUID as the uuid GraphQL variable."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"portalInterface": _PORTAL_DETAIL},
     )
 
     await service.get_portal("uuid-abc")
 
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     assert query_used is GET_PORTAL_QUERY
     assert variables == {"uuid": "uuid-abc"}
 
@@ -510,14 +392,14 @@ except ModuleNotFoundError:
 
 
 def _portal_internal_mutation_constant(name: str):
-    """Return the internal_api mutation constant when exported; else None (TDD)."""
+    """Return the Internal API mutation constant when exported; else None (TDD)."""
     if _portal_internal_queries_module is None:
         return None
     return getattr(_portal_internal_queries_module, name, None)
 
 
 def _assert_internal_mutation_query(query_used: object, constant_name: str) -> None:
-    """Assert internal_api mutation document matches the expected constant."""
+    """Assert Internal API mutation document matches the expected constant."""
     expected = _portal_internal_mutation_constant(constant_name)
     if expected is not None:
         assert query_used is expected
@@ -531,26 +413,19 @@ def _assert_internal_mutation_query(query_used: object, constant_name: str) -> N
 
 
 def _make_portal_service_with_clients(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
     *,
     interfaces_return: dict | None = None,
     internal_return: dict | None = None,
 ) -> tuple[PortalService, MagicMock, MagicMock]:
-    """PortalService with mocked Interfaces and internal_api clients."""
-    mock_internal = _mock_internal_api_client()
-    if internal_return is not None:
-        mock_internal.execute_query = AsyncMock(return_value=internal_return)
+    """PortalService with mocked Interfaces and Internal API clients."""
+    interfaces = mock_executor(interfaces_return)
+    internal = mock_executor(internal_return)
     service = PortalService(
-        settings=mock_settings,
-        auth=mock_auth,
-        internal_api_client=mock_internal,
+        public_executor=mock_executor(),
+        interfaces_executor=interfaces,
+        internal_executor=internal,
     )
-    interfaces_execute = AsyncMock()
-    if interfaces_return is not None:
-        interfaces_execute.return_value = interfaces_return
-    service._interfaces_client.execute_query = interfaces_execute
-    return service, service._interfaces_client, mock_internal
+    return service, interfaces, internal
 
 
 _CREATE_PORTAL_GRAPHQL_INTERFACE = {
@@ -579,28 +454,25 @@ _PERMISSION_DENIED_ERROR = TransportQueryError(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_resolves_numeric_org_and_calls_find_or_create_template(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_resolves_numeric_org_and_calls_find_or_create_template() -> (
+    None
+):
     """create_portal resolves numeric org id then findOrCreateInterfaceByTemplate."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, public_executor, interfaces_executor = _make_interfaces_service(
         _CREATE_PORTAL_RESPONSE,
     )
-    service._graphql_client.execute_query = AsyncMock(
+    public_executor.execute_query = AsyncMock(
         return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
     result = await service.create_portal(EXAMPLE_NUMERIC_ORG_ID)
 
-    service._graphql_client.execute_query.assert_called_once_with(
+    public_executor.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
         {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "FIND_OR_CREATE_PORTAL_MUTATION")
     assert variables == {"input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}}
     assert result["uuid"] == "portal-created-uuid"
@@ -608,35 +480,25 @@ async def test_create_portal_resolves_numeric_org_and_calls_find_or_create_templ
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_uuid_org_skips_resolve(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_uuid_org_skips_resolve() -> None:
     """UUID-shaped org identifiers skip resolve before findOrCreate mutation."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, public_executor, interfaces_executor = _make_interfaces_service(
         _CREATE_PORTAL_RESPONSE,
     )
-    service._graphql_client.execute_query = AsyncMock()
+    public_executor.execute_query = AsyncMock()
 
     await service.create_portal(EXAMPLE_ORG_UUID)
 
-    service._graphql_client.execute_query.assert_not_called()
-    _, variables = service._interfaces_client.execute_query.call_args[0]
+    public_executor.execute_query.assert_not_called()
+    _, variables = interfaces_executor.execute_query.call_args[0]
     assert variables == {"input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}}
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_idempotent_returns_same_interface_uuid(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_idempotent_returns_same_interface_uuid() -> None:
     """Second create_portal call returns the same interface uuid (idempotent)."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_PORTAL_RESPONSE,
     )
 
@@ -644,8 +506,8 @@ async def test_create_portal_idempotent_returns_same_interface_uuid(
     second = await service.create_portal(EXAMPLE_ORG_UUID)
 
     assert first["uuid"] == second["uuid"] == "portal-created-uuid"
-    assert service._interfaces_client.execute_query.call_count == 2
-    for call in service._interfaces_client.execute_query.call_args_list:
+    assert interfaces_executor.execute_query.call_count == 2
+    for call in interfaces_executor.execute_query.call_args_list:
         _, variables = call[0]
         assert variables == {
             "input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}
@@ -654,22 +516,19 @@ async def test_create_portal_idempotent_returns_same_interface_uuid(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_passes_only_set_fields_under_input(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_passes_only_set_fields_under_input() -> None:
     """update_portal sends snake_case interface_uuid and only provided fields."""
     update_response = {
         "updateInterface": {
             "interface": {**_CREATE_PORTAL_GRAPHQL_INTERFACE, "name": "Renamed"},
         }
     }
-    service = _make_interfaces_service(mock_settings, mock_auth, update_response)
+    service, _public, interfaces_executor = _make_interfaces_service(update_response)
 
     await service.update_portal("portal-created-uuid", name="Renamed")
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "UPDATE_INTERFACE_MUTATION")
     assert variables == {
         "input": {"interface_uuid": "portal-created-uuid", "name": "Renamed"}
@@ -678,14 +537,9 @@ async def test_update_portal_passes_only_set_fields_under_input(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_omits_unset_optional_fields(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_omits_unset_optional_fields() -> None:
     """Unset optional fields are not included in updateInterface input."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {
             "updateInterface": {
                 "interface": {
@@ -701,7 +555,7 @@ async def test_update_portal_omits_unset_optional_fields(
         visibility="public",
     )
 
-    _, variables = service._interfaces_client.execute_query.call_args[0]
+    _, variables = interfaces_executor.execute_query.call_args[0]
     assert variables == {
         "input": {
             "interface_uuid": "portal-created-uuid",
@@ -713,14 +567,9 @@ async def test_update_portal_omits_unset_optional_fields(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_rejects_invalid_visibility_before_graphql(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_rejects_invalid_visibility_before_graphql() -> None:
     """Invalid visibility values raise ValidationError before any GraphQL call."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"updateInterface": {"interface": _CREATE_PORTAL_GRAPHQL_INTERFACE}},
     )
 
@@ -730,19 +579,14 @@ async def test_update_portal_rejects_invalid_visibility_before_graphql(
             visibility="public_visibility",
         )
 
-    service._interfaces_client.execute_query.assert_not_called()
+    interfaces_executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_serializes_all_fields_with_camel_case_aliases(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_serializes_all_fields_with_camel_case_aliases() -> None:
     """update_portal sends displayPipefyHeader and omits unset fields."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {
             "updateInterface": {
                 "interface": {
@@ -763,7 +607,7 @@ async def test_update_portal_serializes_all_fields_with_camel_case_aliases(
         display_pipefy_header=True,
     )
 
-    _, variables = service._interfaces_client.execute_query.call_args[0]
+    _, variables = interfaces_executor.execute_query.call_args[0]
     assert variables == {
         "input": {
             "interface_uuid": "portal-created-uuid",
@@ -778,21 +622,16 @@ async def test_update_portal_serializes_all_fields_with_camel_case_aliases(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_portal_calls_delete_interface_with_interface_uuid(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_delete_portal_calls_delete_interface_with_interface_uuid() -> None:
     """delete_portal uses deleteInterface with snake_case input.interface_uuid."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"deleteInterface": {"success": True}},
     )
 
     result = await service.delete_portal("portal-to-delete")
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "DELETE_INTERFACE_MUTATION")
     assert variables == {"input": {"interface_uuid": "portal-to-delete"}}
     assert result == {"deleteInterface": {"success": True}}
@@ -800,19 +639,12 @@ async def test_delete_portal_calls_delete_interface_with_interface_uuid(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_permission_denied_surfaces_actionable_message(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_permission_denied_surfaces_actionable_message() -> None:
     """PERMISSION_DENIED from Interfaces maps to portal permission guidance."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_PORTAL_RESPONSE,
     )
-    service._interfaces_client.execute_query = AsyncMock(
-        side_effect=_PERMISSION_DENIED_ERROR
-    )
+    interfaces_executor.execute_query = AsyncMock(side_effect=_PERMISSION_DENIED_ERROR)
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.create_portal(EXAMPLE_ORG_UUID)
@@ -820,19 +652,12 @@ async def test_create_portal_permission_denied_surfaces_actionable_message(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_permission_denied_surfaces_actionable_message(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_permission_denied_surfaces_actionable_message() -> None:
     """PERMISSION_DENIED on update maps to portal permission guidance."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"updateInterface": {"interface": _CREATE_PORTAL_GRAPHQL_INTERFACE}},
     )
-    service._interfaces_client.execute_query = AsyncMock(
-        side_effect=_PERMISSION_DENIED_ERROR
-    )
+    interfaces_executor.execute_query = AsyncMock(side_effect=_PERMISSION_DENIED_ERROR)
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.update_portal("portal-created-uuid", name="Renamed")
@@ -840,19 +665,12 @@ async def test_update_portal_permission_denied_surfaces_actionable_message(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_portal_permission_denied_surfaces_actionable_message(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_delete_portal_permission_denied_surfaces_actionable_message() -> None:
     """PERMISSION_DENIED on delete maps to portal permission guidance."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"deleteInterface": {"success": True}},
     )
-    service._interfaces_client.execute_query = AsyncMock(
-        side_effect=_PERMISSION_DENIED_ERROR
-    )
+    interfaces_executor.execute_query = AsyncMock(side_effect=_PERMISSION_DENIED_ERROR)
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.delete_portal("portal-to-delete")
@@ -876,21 +694,18 @@ _CREATE_PAGE_RESPONSE = {
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_page_calls_create_page_with_interface_uuid_and_title(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_page_calls_create_page_with_interface_uuid_and_title() -> (
+    None
+):
     """create_portal_page uses createPage with interface_uuid and title."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_PAGE_RESPONSE,
     )
 
     result = await service.create_portal_page(_INTERFACE_UUID, _PAGE_TITLE)
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "CREATE_PAGE_MUTATION")
     assert variables == {
         "input": {"interface_uuid": _INTERFACE_UUID, "title": _PAGE_TITLE}
@@ -901,14 +716,9 @@ async def test_create_portal_page_calls_create_page_with_interface_uuid_and_titl
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_page_forwards_optional_fields(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_page_forwards_optional_fields() -> None:
     """Optional createPage fields are included when provided."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_PAGE_RESPONSE,
     )
 
@@ -919,7 +729,7 @@ async def test_create_portal_page_forwards_optional_fields(
         index=1,
     )
 
-    _, variables = service._interfaces_client.execute_query.call_args[0]
+    _, variables = interfaces_executor.execute_query.call_args[0]
     assert variables == {
         "input": {
             "interface_uuid": _INTERFACE_UUID,
@@ -932,17 +742,14 @@ async def test_create_portal_page_forwards_optional_fields(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_page_calls_update_page_with_required_ids(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_page_calls_update_page_with_required_ids() -> None:
     """update_portal_page uses updatePage with interface_uuid and page_id."""
     update_response = {
         "updatePage": {
             "page": {**_CREATE_PAGE_GRAPHQL, "title": "Renamed Page"},
         }
     }
-    service = _make_interfaces_service(mock_settings, mock_auth, update_response)
+    service, _public, interfaces_executor = _make_interfaces_service(update_response)
 
     result = await service.update_portal_page(
         _INTERFACE_UUID,
@@ -950,8 +757,8 @@ async def test_update_portal_page_calls_update_page_with_required_ids(
         title="Renamed Page",
     )
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "UPDATE_PAGE_MUTATION")
     assert variables == {
         "input": {
@@ -965,14 +772,9 @@ async def test_update_portal_page_calls_update_page_with_required_ids(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_page_omits_unset_optional_fields(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_page_omits_unset_optional_fields() -> None:
     """Unset optional updatePage fields are not sent to GraphQL."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"updatePage": {"page": _CREATE_PAGE_GRAPHQL}},
     )
 
@@ -982,7 +784,7 @@ async def test_update_portal_page_omits_unset_optional_fields(
         description="Only description changed",
     )
 
-    _, variables = service._interfaces_client.execute_query.call_args[0]
+    _, variables = interfaces_executor.execute_query.call_args[0]
     assert variables == {
         "input": {
             "interface_uuid": _INTERFACE_UUID,
@@ -995,21 +797,18 @@ async def test_update_portal_page_omits_unset_optional_fields(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_portal_page_calls_delete_page_with_interface_and_page_ids(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_delete_portal_page_calls_delete_page_with_interface_and_page_ids() -> (
+    None
+):
     """delete_portal_page uses deletePage with interface_uuid and page_id."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"deletePage": {"success": True}},
     )
 
     result = await service.delete_portal_page(_INTERFACE_UUID, _PAGE_ID)
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "DELETE_PAGE_MUTATION")
     assert variables == {
         "input": {"interface_uuid": _INTERFACE_UUID, "page_id": _PAGE_ID}
@@ -1019,22 +818,17 @@ async def test_delete_portal_page_calls_delete_page_with_interface_and_page_ids(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_sort_portal_pages_calls_sort_pages_with_page_ids_list(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_sort_portal_pages_calls_sort_pages_with_page_ids_list() -> None:
     """sort_portal_pages uses sortPages with interface_uuid and page_ids."""
     page_ids = [_PAGE_ID_2, _PAGE_ID]
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"sortPages": {"success": True}},
     )
 
     result = await service.sort_portal_pages(_INTERFACE_UUID, page_ids)
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "SORT_PAGES_MUTATION")
     assert variables == {
         "input": {"interface_uuid": _INTERFACE_UUID, "page_ids": page_ids}
@@ -1044,22 +838,17 @@ async def test_sort_portal_pages_calls_sort_pages_with_page_ids_list(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_page_layout_does_not_send_interface_uuid(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_page_layout_does_not_send_interface_uuid() -> None:
     """update_portal_page_layout uses updatePageLayout with page_id and layout only."""
     layout = {"rows": [{"columns": [{"width": 12}]}]}
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"updatePageLayout": {"success": True}},
     )
 
     result = await service.update_portal_page_layout(_PAGE_ID, layout)
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "UPDATE_PAGE_LAYOUT_MUTATION")
     assert variables == {
         "input": {
@@ -1073,19 +862,14 @@ async def test_update_portal_page_layout_does_not_send_interface_uuid(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_page_permission_denied_surfaces_actionable_message(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_page_permission_denied_surfaces_actionable_message() -> (
+    None
+):
     """PERMISSION_DENIED on createPage maps to portal permission guidance."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_PAGE_RESPONSE,
     )
-    service._interfaces_client.execute_query = AsyncMock(
-        side_effect=_PERMISSION_DENIED_ERROR
-    )
+    interfaces_executor.execute_query = AsyncMock(side_effect=_PERMISSION_DENIED_ERROR)
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.create_portal_page(_INTERFACE_UUID, _PAGE_TITLE)
@@ -1108,14 +892,11 @@ _CREATE_ELEMENT_RESPONSE = {
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_element_calls_create_element_with_validated_input(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_element_calls_create_element_with_validated_input() -> (
+    None
+):
     """create_portal_element validates via CreatePortalElementInput then createElement."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_ELEMENT_RESPONSE,
     )
 
@@ -1126,8 +907,8 @@ async def test_create_portal_element_calls_create_element_with_validated_input(
         data_sources=_FORMS_DATA_SOURCES,
     )
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "CREATE_ELEMENT_MUTATION")
     assert variables == {
         "input": {
@@ -1143,36 +924,27 @@ async def test_create_portal_element_calls_create_element_with_validated_input(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_element_always_sends_empty_data_sources_for_link(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_element_always_sends_empty_data_sources_for_link() -> None:
     """Link creates must send data_sources: [] so Pipefy does not receive null."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_ELEMENT_RESPONSE,
     )
     link_metadata = {"linkName": "Test", "linkUrl": "https://example.com"}
 
     await service.create_portal_element(_PAGE_ID, type="link", metadata=link_metadata)
 
-    _query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _query_used, variables = interfaces_executor.execute_query.call_args[0]
     assert variables["input"]["data_sources"] == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_portal_element_logs_warning_for_unrecognized_data_source_keys(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Invalid data_sources entries are skipped with a warning (e.g. LLM-guessed pipe_id)."""
     caplog.set_level(logging.WARNING, logger="pipefy_sdk.services.portal_service")
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_ELEMENT_RESPONSE,
     )
 
@@ -1184,23 +956,20 @@ async def test_create_portal_element_logs_warning_for_unrecognized_data_source_k
     )
 
     assert any("Skipping portal data_sources" in r.message for r in caplog.records)
-    _query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _query_used, variables = interfaces_executor.execute_query.call_args[0]
     assert variables["input"]["data_sources"] == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_element_graphql_error_is_not_portal_permission_error(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_element_graphql_error_is_not_portal_permission_error() -> (
+    None
+):
     """Non-permission Interfaces failures must not be wrapped as PortalPermissionError."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_ELEMENT_RESPONSE,
     )
-    service._interfaces_client.execute_query = AsyncMock(
+    interfaces_executor.execute_query = AsyncMock(
         side_effect=TransportQueryError(
             "invalid",
             errors=[{"message": "Variable $input was provided invalid value"}],
@@ -1217,14 +986,9 @@ async def test_create_portal_element_graphql_error_is_not_portal_permission_erro
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_portal_element_rejects_invalid_metadata_before_graphql(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_portal_element_rejects_invalid_metadata_before_graphql() -> None:
     """CreatePortalElementInput validation must run before execute_query."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         _CREATE_ELEMENT_RESPONSE,
     )
 
@@ -1235,22 +999,19 @@ async def test_create_portal_element_rejects_invalid_metadata_before_graphql(
             metadata={},
         )
 
-    service._interfaces_client.execute_query.assert_not_called()
+    interfaces_executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_portal_element_calls_update_element_with_full_metadata(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_update_portal_element_calls_update_element_with_full_metadata() -> None:
     """update_portal_element sends element_id, page_id, and full metadata replace."""
     link_metadata = {
         "linkUrl": "https://example.com/pipefy",
         "linkName": "Open",
     }
     update_response = {"updateElement": {"success": True}}
-    service = _make_interfaces_service(mock_settings, mock_auth, update_response)
+    service, _public, interfaces_executor = _make_interfaces_service(update_response)
 
     result = await service.update_portal_element(
         _ELEMENT_ID,
@@ -1259,8 +1020,8 @@ async def test_update_portal_element_calls_update_element_with_full_metadata(
         metadata=link_metadata,
     )
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "UPDATE_ELEMENT_MUTATION")
     assert variables == {
         "input": {
@@ -1277,21 +1038,16 @@ async def test_update_portal_element_calls_update_element_with_full_metadata(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_portal_element_calls_delete_element_with_ids(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_delete_portal_element_calls_delete_element_with_ids() -> None:
     """delete_portal_element uses deleteElement with element_id and page_id."""
-    service = _make_interfaces_service(
-        mock_settings,
-        mock_auth,
+    service, _public, interfaces_executor = _make_interfaces_service(
         {"deleteElement": {"success": True}},
     )
 
     result = await service.delete_portal_element(_ELEMENT_ID, _PAGE_ID)
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "DELETE_ELEMENT_MUTATION")
     assert variables == {
         "input": {"element_id": _ELEMENT_ID, "page_id": _PAGE_ID},
@@ -1301,17 +1057,14 @@ async def test_delete_portal_element_calls_delete_element_with_ids(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_duplicate_portal_element_sends_camel_case_duplicate_input(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_duplicate_portal_element_sends_camel_case_duplicate_input() -> None:
     """duplicateElement input uses elementUuid, interfaceUuid, pageUuid (camelCase)."""
     dup_response = {
         "duplicateElement": {
             "element": {"id": "el-copy", "type": "text", "metadata": {}},
         }
     }
-    service = _make_interfaces_service(mock_settings, mock_auth, dup_response)
+    service, _public, interfaces_executor = _make_interfaces_service(dup_response)
 
     result = await service.duplicate_portal_element(
         element_id=_ELEMENT_ID,
@@ -1319,8 +1072,8 @@ async def test_duplicate_portal_element_sends_camel_case_duplicate_input(
         page_id=_PAGE_ID,
     )
 
-    service._interfaces_client.execute_query.assert_called_once()
-    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    interfaces_executor.execute_query.assert_called_once()
+    query_used, variables = interfaces_executor.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "DUPLICATE_ELEMENT_MUTATION")
     assert variables == {
         "input": {
@@ -1349,14 +1102,9 @@ _CREATE_SUB_PORTAL_RESPONSE = {
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_sub_portal_calls_create_sub_portal_on_interfaces(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_sub_portal_calls_create_sub_portal_on_interfaces() -> None:
     """create_sub_portal uses Interfaces createSubPortal with mainPortalUuid."""
     service, interfaces_client, internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
         interfaces_return=_CREATE_SUB_PORTAL_RESPONSE,
     )
 
@@ -1378,14 +1126,9 @@ async def test_create_sub_portal_calls_create_sub_portal_on_interfaces(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_sub_portal_omits_name_when_not_provided(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_create_sub_portal_omits_name_when_not_provided() -> None:
     """Optional name is omitted from createSubPortal input when None."""
     service, interfaces_client, _internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
         interfaces_return=_CREATE_SUB_PORTAL_RESPONSE,
     )
 
@@ -1398,15 +1141,10 @@ async def test_create_sub_portal_omits_name_when_not_provided(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_sub_portal_element_routes_through_internal_api(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
-    """update_sub_portal_element uses internal_api updateSubPortalElement."""
+async def test_update_sub_portal_element_routes_through_internal_api() -> None:
+    """update_sub_portal_element uses Internal API updateSubPortalElement."""
     internal_response = {"updateSubPortalElement": {"success": True}}
     service, interfaces_client, internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
         internal_return=internal_response,
     )
 
@@ -1432,15 +1170,10 @@ async def test_update_sub_portal_element_routes_through_internal_api(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_publish_sub_portal_delegates_to_update_sub_portal_element(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_publish_sub_portal_delegates_to_update_sub_portal_element() -> None:
     """publish_sub_portal wires subPortalUuid via updateSubPortalElement (not createElement)."""
     internal_response = {"updateSubPortalElement": {"success": True}}
     service, interfaces_client, internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
         internal_return=internal_response,
     )
 
@@ -1459,14 +1192,9 @@ async def test_publish_sub_portal_delegates_to_update_sub_portal_element(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_unpublish_sub_portal_sends_null_sub_portal_uuid(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_unpublish_sub_portal_sends_null_sub_portal_uuid() -> None:
     """unpublish_sub_portal clears subPortalUuid (null); 6.7 integration confirms detach."""
     service, interfaces_client, internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
         internal_return={"updateSubPortalElement": {"success": True}},
     )
 
@@ -1486,15 +1214,10 @@ async def test_unpublish_sub_portal_sends_null_sub_portal_uuid(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_sub_portal_element_routes_through_internal_api(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
-    """delete_sub_portal_element uses internal_api deleteSubPortalElement."""
+async def test_delete_sub_portal_element_routes_through_internal_api() -> None:
+    """delete_sub_portal_element uses Internal API deleteSubPortalElement."""
     internal_response = {"deleteSubPortalElement": {"success": True}}
     service, interfaces_client, internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
         internal_return=internal_response,
     )
 
@@ -1518,15 +1241,10 @@ async def test_delete_sub_portal_element_routes_through_internal_api(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_sub_portal_calls_delete_sub_portal_interface(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
+async def test_delete_sub_portal_calls_delete_sub_portal_interface() -> None:
     """delete_sub_portal removes the sub-portal entity via deleteSubPortalInterface."""
     internal_response = {"deleteSubPortalInterface": {"success": True}}
     service, interfaces_client, internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
         internal_return=internal_response,
     )
 
@@ -1571,16 +1289,11 @@ _INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR = ValueError(
     ],
 )
 async def test_sub_portal_internal_api_permission_denied_surfaces_actionable_message(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
     method_name: str,
     call_args: tuple[str, ...],
 ) -> None:
-    """PERMISSION_DENIED from internal_api maps to portal permission guidance."""
-    service, _interfaces_client, internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
-    )
+    """PERMISSION_DENIED from the Internal API maps to portal permission guidance."""
+    service, _interfaces_client, internal_client = _make_portal_service_with_clients()
     internal_client.execute_query = AsyncMock(
         side_effect=_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR
     )
@@ -1591,15 +1304,9 @@ async def test_sub_portal_internal_api_permission_denied_surfaces_actionable_mes
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_sub_portal_internal_api_non_permission_value_error_propagates(
-    mock_settings: PipefySettings,
-    mock_auth: OAuth2ClientCredentials,
-) -> None:
-    """Non-permission internal_api ValueError must not become PortalPermissionError."""
-    service, _interfaces_client, internal_client = _make_portal_service_with_clients(
-        mock_settings,
-        mock_auth,
-    )
+async def test_sub_portal_internal_api_non_permission_value_error_propagates() -> None:
+    """Non-permission Internal API ValueError must not become PortalPermissionError."""
+    service, _interfaces_client, internal_client = _make_portal_service_with_clients()
     bad_request = ValueError("Bad request [code=BAD_REQUEST] [correlation_id=abc-123]")
     internal_client.execute_query = AsyncMock(side_effect=bad_request)
 

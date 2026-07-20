@@ -6,8 +6,8 @@ Tests validate the pipe-related operations without requiring real API credential
 from unittest.mock import AsyncMock
 
 import pytest
+from _shared.mock_clients import mock_executor
 from graphql import print_ast
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
@@ -18,47 +18,36 @@ from pipefy_sdk.queries.pipe_queries import (
     SEARCH_PIPES_QUERY,
 )
 from pipefy_sdk.services.pipe_service import PipeService
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
-@pytest.fixture
-def mock_settings() -> PipefySettings:
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
-
-
-def _make_service(mock_settings, return_value):
-    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
+def _make_service(return_value):
+    executor = mock_executor(return_value)
+    return PipeService(executor=executor), executor
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_passes_pipe_id_variable(mock_settings):
+async def test_get_pipe_passes_pipe_id_variable():
     """Test get_pipe sends pipe_id in GraphQL variables."""
     pipe_id = 303181849
 
-    service = _make_service(mock_settings, {"pipe": {"id": str(pipe_id)}})
+    service, executor = _make_service({"pipe": {"id": str(pipe_id)}})
     result = await service.get_pipe(pipe_id)
 
-    service.execute_query.assert_called_once()
-    variables = service.execute_query.call_args[0][1]
+    executor.execute_query.assert_called_once()
+    variables = executor.execute_query.call_args[0][1]
     assert variables == {"pipe_id": str(pipe_id)}, "Expected pipe_id in variables"
     assert result == {"pipe": {"id": str(pipe_id)}}, "Expected pipe response"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_accepts_alphanumeric_id(mock_settings):
+async def test_get_pipe_accepts_alphanumeric_id():
     """Test get_pipe passes an alphanumeric ID through to GraphQL variables unchanged."""
-    service = _make_service(mock_settings, {"pipe": {"id": "Yr5RUVCi"}})
+    service, executor = _make_service({"pipe": {"id": "Yr5RUVCi"}})
     await service.get_pipe("Yr5RUVCi")
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables == {"pipe_id": "Yr5RUVCi"}
 
 
@@ -71,7 +60,7 @@ def test_get_pipe_query_selects_cards_count_on_phases():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_returns_phases_with_cards_count(mock_settings):
+async def test_get_pipe_returns_phases_with_cards_count():
     pipe_id = 10
     api_response = {
         "pipe": {
@@ -83,18 +72,18 @@ async def test_get_pipe_returns_phases_with_cards_count(mock_settings):
             "start_form_fields": [],
         }
     }
-    service = _make_service(mock_settings, api_response)
+    service, executor = _make_service(api_response)
 
     result = await service.get_pipe(pipe_id)
 
-    service.execute_query.assert_called_once()
-    assert service.execute_query.call_args[0][0] is GET_PIPE_QUERY
+    executor.execute_query.assert_called_once()
+    assert executor.execute_query.call_args[0][0] is GET_PIPE_QUERY
     assert result == api_response
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_members_returns_members(mock_settings):
+async def test_get_pipe_members_returns_members():
     """Test get_pipe_members returns the list of members for a pipe."""
     pipe_id = 123
     mock_members = [
@@ -112,11 +101,11 @@ async def test_get_pipe_members_returns_members(mock_settings):
         },
     ]
 
-    service = _make_service(mock_settings, {"pipe": {"members": mock_members}})
+    service, executor = _make_service({"pipe": {"members": mock_members}})
     result = await service.get_pipe_members(pipe_id)
 
-    service.execute_query.assert_called_once()
-    variables = service.execute_query.call_args[0][1]
+    executor.execute_query.assert_called_once()
+    variables = executor.execute_query.call_args[0][1]
     assert variables == {"pipeId": str(pipe_id)}, "Expected pipeId in variables"
     assert result == {"pipe": {"members": mock_members}}, (
         "Expected pipe members response"
@@ -125,11 +114,11 @@ async def test_get_pipe_members_returns_members(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_empty_returns_message(mock_settings):
+async def test_get_start_form_fields_empty_returns_message():
     """Test get_start_form_fields returns user-friendly message when no fields configured."""
     pipe_id = 303181849
 
-    service = _make_service(mock_settings, {"pipe": {"start_form_fields": []}})
+    service, _ = _make_service({"pipe": {"start_form_fields": []}})
     result = await service.get_start_form_fields(pipe_id)
 
     assert result == {
@@ -140,9 +129,7 @@ async def test_get_start_form_fields_empty_returns_message(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_required_only_filters_and_returns_message_when_none(
-    mock_settings,
-):
+async def test_get_start_form_fields_required_only_filters_and_returns_message_when_none():
     """Test get_start_form_fields with required_only=True returns message when all optional."""
     pipe_id = 303181849
     mock_fields = [
@@ -150,7 +137,7 @@ async def test_get_start_form_fields_required_only_filters_and_returns_message_w
         {"id": "notes", "type": "long_text", "required": False},
     ]
 
-    service = _make_service(mock_settings, {"pipe": {"start_form_fields": mock_fields}})
+    service, _ = _make_service({"pipe": {"start_form_fields": mock_fields}})
     result = await service.get_start_form_fields(pipe_id, required_only=True)
 
     assert result == {
@@ -161,14 +148,14 @@ async def test_get_start_form_fields_required_only_filters_and_returns_message_w
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_raises_on_malformed_graphql_fields(mock_settings):
+async def test_get_start_form_fields_raises_on_malformed_graphql_fields():
     """Null or missing id/type from GraphQL are rejected at the SDK boundary."""
     from pipefy_sdk.models.field_definition import MalformedFieldDefinitionError
 
     pipe_id = 303181849
     mock_fields = [{"id": None, "type": "select", "label": "Status"}]
 
-    service = _make_service(mock_settings, {"pipe": {"start_form_fields": mock_fields}})
+    service, _ = _make_service({"pipe": {"start_form_fields": mock_fields}})
 
     with pytest.raises(MalformedFieldDefinitionError, match="return start form fields"):
         await service.get_start_form_fields(pipe_id)
@@ -176,7 +163,7 @@ async def test_get_start_form_fields_raises_on_malformed_graphql_fields(mock_set
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_required_only_returns_only_required(mock_settings):
+async def test_get_start_form_fields_required_only_returns_only_required():
     """Test get_start_form_fields with required_only=True filters correctly."""
     pipe_id = 303181849
     mock_fields = [
@@ -185,7 +172,7 @@ async def test_get_start_form_fields_required_only_returns_only_required(mock_se
         {"id": "due_date", "type": "date", "required": True},
     ]
 
-    service = _make_service(mock_settings, {"pipe": {"start_form_fields": mock_fields}})
+    service, _ = _make_service({"pipe": {"start_form_fields": mock_fields}})
     result = await service.get_start_form_fields(pipe_id, required_only=True)
 
     assert len(result["start_form_fields"]) == 2
@@ -231,18 +218,16 @@ def mock_organizations() -> list[dict]:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_without_name_returns_all(
-    mock_settings, mock_organizations: list[dict]
-):
+async def test_search_pipes_without_name_returns_all(mock_organizations: list[dict]):
     """Test search_pipes returns all organizations and pipes when no name filter provided."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, executor = _make_service({"organizations": mock_organizations})
     result = await service.search_pipes()
 
     assert result["organizations"] == mock_organizations
     assert result["search_limits"]["max_pipes_per_org"] == 500
     assert result["search_limits"]["graphql_name_search"] is False
     assert result["search_limits"]["pipes_truncated"] is False
-    service.execute_query.assert_awaited_once_with(
+    executor.execute_query.assert_awaited_once_with(
         SEARCH_PIPES_QUERY,
         {"nameSearch": None},
     )
@@ -347,7 +332,6 @@ async def test_search_pipes_without_name_returns_all(
     ],
 )
 async def test_search_pipes_fuzzy_matching(
-    mock_settings,
     mock_organizations: list[dict],
     search_term: str,
     expected_org_ids: list[str],
@@ -355,10 +339,10 @@ async def test_search_pipes_fuzzy_matching(
     expected_pipe_scores: list[list[float]],
 ):
     """Test search_pipes fuzzy matching filters and sorts correctly."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, executor = _make_service({"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name=search_term)
 
-    service.execute_query.assert_awaited_once_with(
+    executor.execute_query.assert_awaited_once_with(
         SEARCH_PIPES_QUERY,
         {"nameSearch": search_term},
     )
@@ -375,11 +359,9 @@ async def test_search_pipes_fuzzy_matching(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_no_matches_returns_empty(
-    mock_settings, mock_organizations: list[dict]
-):
+async def test_search_pipes_no_matches_returns_empty(mock_organizations: list[dict]):
     """Test search_pipes returns empty list when no pipes match the search term."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, _ = _make_service({"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name="XyzNonExistent123")
 
     assert result["organizations"] == []
@@ -388,7 +370,7 @@ async def test_search_pipes_no_matches_returns_empty(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_empty_organizations(mock_settings):
+async def test_search_pipes_empty_organizations():
     """Test search_pipes handles organizations with no pipes."""
     mock_orgs = [
         {
@@ -403,8 +385,7 @@ async def test_search_pipes_empty_organizations(mock_settings):
         },
     ]
 
-    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value={"organizations": mock_orgs})
+    service, _ = _make_service({"organizations": mock_orgs})
 
     result = await service.search_pipes()
     assert len(result["organizations"]) == 2
@@ -416,10 +397,9 @@ async def test_search_pipes_empty_organizations(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_all_organizations_empty(mock_settings):
+async def test_search_pipes_all_organizations_empty():
     """Test search_pipes handles API response with no organizations."""
-    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value={"organizations": []})
+    service, _ = _make_service({"organizations": []})
 
     result = await service.search_pipes()
     assert result["organizations"] == []
@@ -430,12 +410,9 @@ async def test_search_pipes_all_organizations_empty(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_short_keyword_matches_substring(
-    mock_settings,
-    mock_organizations,
-):
+async def test_search_pipes_short_keyword_matches_substring(mock_organizations):
     """Substring match finds pipes even when fuzzy score is below threshold."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, _ = _make_service({"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name="pipe")
     pipe_names = [p["name"] for org in result["organizations"] for p in org["pipes"]]
     assert "Custaudio pipe" in pipe_names
@@ -444,12 +421,9 @@ async def test_search_pipes_short_keyword_matches_substring(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_case_insensitive_substring(
-    mock_settings,
-    mock_organizations,
-):
+async def test_search_pipes_case_insensitive_substring(mock_organizations):
     """Case-insensitive substring matches correctly."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, _ = _make_service({"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name="bug")
     pipe_names = [p["name"] for org in result["organizations"] for p in org["pipes"]]
     assert "Bug Tracker [v2.0]" in pipe_names
@@ -457,11 +431,11 @@ async def test_search_pipes_case_insensitive_substring(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_truncates_per_org_when_over_cap(mock_settings):
+async def test_search_pipes_truncates_per_org_when_over_cap():
     """When an org has more pipes than max_pipes_per_org, list is sliced."""
     pipes = [{"id": str(i), "name": f"Pipe {i}"} for i in range(5)]
     mock_orgs = [{"id": "1", "name": "Org", "pipes": pipes}]
-    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    service, _ = _make_service({"organizations": mock_orgs})
     result = await service.search_pipes(max_pipes_per_org=2)
 
     assert len(result["organizations"][0]["pipes"]) == 2
@@ -471,13 +445,11 @@ async def test_search_pipes_truncates_per_org_when_over_cap(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_truncates_when_at_cap_and_pipes_count_missing(
-    mock_settings,
-):
+async def test_search_pipes_truncates_when_at_cap_and_pipes_count_missing():
     """When pipesCount is absent and the API fills the cap, flag as truncated (conservative)."""
     pipes = [{"id": str(i), "name": f"P{i}"} for i in range(500)]
     mock_orgs = [{"id": "1", "name": "Org", "pipes": pipes}]
-    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    service, _ = _make_service({"organizations": mock_orgs})
     result = await service.search_pipes(max_pipes_per_org=500)
 
     assert len(result["organizations"][0]["pipes"]) == 500
@@ -487,13 +459,11 @@ async def test_search_pipes_truncates_when_at_cap_and_pipes_count_missing(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_not_truncated_short_list_without_pipes_count(
-    mock_settings,
-):
+async def test_search_pipes_not_truncated_short_list_without_pipes_count():
     """Short list below the cap without pipesCount is treated as complete."""
     pipes = [{"id": str(i), "name": f"P{i}"} for i in range(10)]
     mock_orgs = [{"id": "1", "name": "Org", "pipes": pipes}]
-    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    service, _ = _make_service({"organizations": mock_orgs})
     result = await service.search_pipes(max_pipes_per_org=500)
 
     assert len(result["organizations"][0]["pipes"]) == 10
@@ -503,13 +473,11 @@ async def test_search_pipes_not_truncated_short_list_without_pipes_count(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_pipes_truncates_per_org_when_api_returns_fewer_than_pipes_count(
-    mock_settings,
-):
+async def test_search_pipes_truncates_per_org_when_api_returns_fewer_than_pipes_count():
     """When API returns fewer pipes than Organization.pipesCount, flag as truncated."""
     pipes = [{"id": str(i), "name": f"P{i}"} for i in range(10)]
     mock_orgs = [{"id": "1", "name": "Org", "pipesCount": 271, "pipes": pipes}]
-    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    service, _ = _make_service({"organizations": mock_orgs})
     result = await service.search_pipes(max_pipes_per_org=500)
 
     assert len(result["organizations"][0]["pipes"]) == 10
@@ -539,7 +507,7 @@ def test_get_phase_allowed_moves_query_requests_transition_field():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_allowed_move_targets_sends_phase_id(mock_settings):
+async def test_get_phase_allowed_move_targets_sends_phase_id():
     phase_id = 342182335
     api_response = {
         "phase": {
@@ -548,34 +516,34 @@ async def test_get_phase_allowed_move_targets_sends_phase_id(mock_settings):
             "cards_can_be_moved_to_phases": [{"id": "200", "name": "Done"}],
         }
     }
-    service = _make_service(mock_settings, api_response)
+    service, executor = _make_service(api_response)
     result = await service.get_phase_allowed_move_targets(phase_id)
 
-    service.execute_query.assert_called_once()
-    assert service.execute_query.call_args[0][0] is GET_PHASE_ALLOWED_MOVES_QUERY
-    assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
+    executor.execute_query.assert_called_once()
+    assert executor.execute_query.call_args[0][0] is GET_PHASE_ALLOWED_MOVES_QUERY
+    assert executor.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
     assert result == api_response
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_cards_count_returns_native_scalar(mock_settings):
+async def test_get_phase_cards_count_returns_native_scalar():
     phase_id = 342182334
     api_response = {"phase": {"id": str(phase_id), "cards_count": 42}}
-    service = _make_service(mock_settings, api_response)
+    service, executor = _make_service(api_response)
 
     result = await service.get_phase_cards_count(phase_id)
 
-    service.execute_query.assert_called_once()
-    assert service.execute_query.call_args[0][0] is GET_PHASE_QUERY
-    assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
+    executor.execute_query.assert_called_once()
+    assert executor.execute_query.call_args[0][0] is GET_PHASE_QUERY
+    assert executor.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
     assert result == 42
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_cards_count_raises_when_missing(mock_settings):
-    service = _make_service(mock_settings, {"phase": None})
+async def test_get_phase_cards_count_raises_when_missing():
+    service, _ = _make_service({"phase": None})
 
     with pytest.raises(ValueError, match="cards_count"):
         await service.get_phase_cards_count(1)
@@ -592,10 +560,10 @@ def test_get_phase_query_selects_phase_row():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_returns_normalized_shape(mock_settings):
+async def test_get_phase_returns_normalized_shape():
     phase_id = 342182334
     api_response = {"phase": {"id": str(phase_id), "name": "Doing", "cards_count": 42}}
-    service = _make_service(mock_settings, api_response)
+    service, _ = _make_service(api_response)
 
     result = await service.get_phase(phase_id)
 
@@ -608,9 +576,9 @@ async def test_get_phase_returns_normalized_shape(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_cards_count_delegates_to_get_phase(mock_settings):
+async def test_get_phase_cards_count_delegates_to_get_phase():
     phase_id = 342182334
-    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
+    service = PipeService(executor=mock_executor())
     service.get_phase = AsyncMock(
         return_value={
             "phase_id": str(phase_id),
@@ -636,7 +604,7 @@ def test_get_phase_cards_query_requests_pagination_and_fields():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_cards_sends_phase_id_first_after(mock_settings):
+async def test_get_phase_cards_sends_phase_id_first_after():
     phase_id = 99
     api_response = {
         "phase": {
@@ -648,7 +616,7 @@ async def test_get_phase_cards_sends_phase_id_first_after(mock_settings):
             },
         }
     }
-    service = _make_service(mock_settings, api_response)
+    service, executor = _make_service(api_response)
 
     result = await service.get_phase_cards(
         phase_id,
@@ -657,9 +625,9 @@ async def test_get_phase_cards_sends_phase_id_first_after(mock_settings):
         include_fields=True,
     )
 
-    service.execute_query.assert_called_once()
-    assert service.execute_query.call_args[0][0] is GET_PHASE_CARDS_QUERY
-    assert service.execute_query.call_args[0][1] == {
+    executor.execute_query.assert_called_once()
+    assert executor.execute_query.call_args[0][0] is GET_PHASE_CARDS_QUERY
+    assert executor.execute_query.call_args[0][1] == {
         "phase_id": str(phase_id),
         "first": 50,
         "after": "cursor-1",
@@ -670,13 +638,13 @@ async def test_get_phase_cards_sends_phase_id_first_after(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_cards_omits_optional_variables_when_unset(mock_settings):
+async def test_get_phase_cards_omits_optional_variables_when_unset():
     phase_id = 10
-    service = _make_service(mock_settings, {"phase": {"id": "10", "cards": {}}})
+    service, executor = _make_service({"phase": {"id": "10", "cards": {}}})
 
     await service.get_phase_cards(phase_id, include_fields=False)
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables == {"phase_id": "10", "includeFields": False}
     assert "first" not in variables
     assert "after" not in variables
@@ -690,13 +658,12 @@ class TestGetPhaseFields:
     PHASE_ID = 12345
 
     @pytest.fixture
-    def mock_phase_service(self, mock_settings):
+    def mock_phase_service(self):
         """Factory fixture to create a PipeService with mocked phase response."""
 
         def _create(phase_response: dict):
-            service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
-            service.execute_query = AsyncMock(return_value={"phase": phase_response})
-            return service, service.execute_query
+            executor = mock_executor({"phase": phase_response})
+            return PipeService(executor=executor), executor.execute_query
 
         return _create
 

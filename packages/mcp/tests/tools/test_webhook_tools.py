@@ -6,15 +6,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _shared.pagination_test_defaults import DEFAULT_FIRST
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.webhook_tools import WebhookTools
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 
 @pytest.fixture
@@ -33,9 +32,9 @@ def mock_webhook_client():
 
 @pytest.fixture
 def webhook_mcp_server(mock_webhook_client):
-    mcp = FastMCP("Webhook Tools Test")
-    WebhookTools.register(mcp, mock_webhook_client)
-    return mcp
+    return build_tool_test_server(
+        "Webhook Tools Test", WebhookTools.register, mock_webhook_client
+    )
 
 
 @pytest.fixture

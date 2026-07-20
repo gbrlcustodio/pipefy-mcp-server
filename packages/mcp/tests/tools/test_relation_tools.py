@@ -5,15 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.relation_tools import RelationTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 
 @pytest.fixture
@@ -30,9 +29,9 @@ def mock_relation_client():
 
 @pytest.fixture
 def relation_mcp_server(mock_relation_client):
-    mcp = FastMCP("Relation Tools Test")
-    RelationTools.register(mcp, mock_relation_client)
-    return mcp
+    return build_tool_test_server(
+        "Relation Tools Test", RelationTools.register, mock_relation_client
+    )
 
 
 @pytest.fixture

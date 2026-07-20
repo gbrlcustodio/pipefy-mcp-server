@@ -6,12 +6,12 @@ Existing users of `pipefy-mcp-server`: this guide covers what changed and what t
 
 ## Package name — unchanged
 
-`pipefy-mcp-server` is the same PyPI package name as before. Your `pip install pipefy-mcp-server` or `uvx pipefy-mcp-server` still works. The existing PyPI version is frozen at the pre-monorepo release; new versions ship at v1.0 via the same name.
+`pipefy-mcp-server` is the same PyPI package name as before, so your `pip install pipefy-mcp-server` or `uvx pipefy-mcp-server` keeps working. Pre-release 0.x builds now publish to PyPI on every tag under this name; while only pre-releases exist a plain install resolves the latest one, and a stable release becomes the default at v1.0.
 
-**Pre-launch (v0.1 → v0.5):** install from git to get the latest:
+**Pre-launch (0.x):** install the latest pre-release from PyPI:
 
 ```sh
-uvx --from git+https://github.com/pipefy/ai-toolkit@latest --refresh pipefy-mcp-server
+uvx pipefy-mcp-server
 ```
 
 ---
@@ -49,10 +49,10 @@ The toolkit lives in the **Pipefy org** at **[github.com/pipefy/ai-toolkit](http
 git remote set-url origin https://github.com/pipefy/ai-toolkit.git
 ```
 
-Pre-1.0 installs from git:
+Pre-1.0 installs the latest pre-release from PyPI:
 
 ```sh
-uvx --from git+https://github.com/pipefy/ai-toolkit@latest --refresh pipefy-mcp-server
+uvx pipefy-mcp-server
 ```
 
 ---
@@ -64,8 +64,7 @@ These are new additions — all optional to adopt:
 **`pipefy-cli`** — a terminal CLI with the same capabilities as the MCP server.
 
 ```sh
-uvx --from git+https://github.com/pipefy/ai-toolkit@latest --refresh pipefy-cli
-pipefy card get 12345
+uvx --from pipefy-cli pipefy card get 12345
 ```
 
 **`skills/` catalog** — Anthropic Skills-format playbooks for common Pipefy workflows, consumable by any LLM agent. Install via [`skills.sh`](https://github.com/vercel-labs/skills):
@@ -112,7 +111,7 @@ The legacy names will be removed in a later `0.2.0-beta.x` release; the change w
 
 ## Settings model split (library / script users only)
 
-End users of `pipefy-cli` and `pipefy-mcp-server` are unaffected — every `PIPEFY_*` env var and `.env` entry keeps loading exactly as before. The split matters only if you construct settings types directly in Python code that depends on `pipefy-sdk`.
+End users of `pipefy-cli` and `pipefy-mcp-server` are unaffected — every `PIPEFY_*` env var and `.env` entry keeps loading exactly as before. The split matters only if you construct settings types directly in Python code that depends on `pipefy`.
 
 Auth-related fields have moved from `PipefySettings` (which now owns endpoint config only) to `pipefy_auth.AuthSettings`. URL endpoints (graphql, internal_api, interfaces, service_account) are now `@computed_field` properties derived from `base_url`:
 

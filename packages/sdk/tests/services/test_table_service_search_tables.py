@@ -1,16 +1,11 @@
 """Unit tests for TableService.search_tables."""
 
-from unittest.mock import AsyncMock
-
 import pytest
+from _shared.mock_clients import mock_executor
 from _shared.pagination_test_defaults import DEFAULT_FIRST
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.table_queries import SEARCH_TABLES_QUERY
 from pipefy_sdk.services.table_service import TableService
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
 def _table_connection(
@@ -28,17 +23,9 @@ def _table_connection(
     }
 
 
-@pytest.fixture
-def mock_settings() -> PipefySettings:
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
-
-
-def _make_service(mock_settings: PipefySettings, return_value: dict) -> TableService:
-    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
+def _make_service(return_value: dict):
+    executor = mock_executor(return_value)
+    return TableService(executor=executor), executor
 
 
 @pytest.fixture
@@ -73,12 +60,12 @@ def mock_organizations() -> list[dict]:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_without_name_returns_all_tables(mock_settings, mock_organizations):
+async def test_without_name_returns_all_tables(mock_organizations):
     """search_tables with no name returns every table across all organizations."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, executor = _make_service({"organizations": mock_organizations})
     result = await service.search_tables()
 
-    service.execute_query.assert_awaited_once_with(SEARCH_TABLES_QUERY, {"first": 100})
+    executor.execute_query.assert_awaited_once_with(SEARCH_TABLES_QUERY, {"first": 100})
     assert result["search_limits"]["tables_first"] == 100
     assert result["search_limits"]["tables_has_next_page"] is False
     assert len(result["organizations"]) == 2
@@ -90,9 +77,9 @@ async def test_without_name_returns_all_tables(mock_settings, mock_organizations
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_fuzzy_match_filters_tables(mock_settings, mock_organizations):
+async def test_fuzzy_match_filters_tables(mock_organizations):
     """search_tables with a name returns only tables that meet the threshold."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, _ = _make_service({"organizations": mock_organizations})
     result = await service.search_tables(table_name="Clients")
 
     # "Clients" must match "Clients" (exact) and likely "Clientes VIP" (partial)
@@ -105,9 +92,9 @@ async def test_fuzzy_match_filters_tables(mock_settings, mock_organizations):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_no_match_returns_empty_organizations(mock_settings, mock_organizations):
+async def test_no_match_returns_empty_organizations(mock_organizations):
     """search_tables returns empty list when nothing matches the query."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, _ = _make_service({"organizations": mock_organizations})
     result = await service.search_tables(table_name="XyzNonExistent999")
 
     assert result["organizations"] == []
@@ -116,9 +103,9 @@ async def test_no_match_returns_empty_organizations(mock_settings, mock_organiza
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_matched_tables_include_match_score(mock_settings, mock_organizations):
+async def test_matched_tables_include_match_score(mock_organizations):
     """Matched tables include a match_score field."""
-    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    service, _ = _make_service({"organizations": mock_organizations})
     result = await service.search_tables(table_name="Products")
 
     assert len(result["organizations"]) >= 1
@@ -129,7 +116,7 @@ async def test_matched_tables_include_match_score(mock_settings, mock_organizati
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_tables_sorted_by_score_descending(mock_settings):
+async def test_tables_sorted_by_score_descending():
     """Tables within an organization are sorted by match_score descending."""
     orgs = [
         {
@@ -144,7 +131,7 @@ async def test_tables_sorted_by_score_descending(mock_settings):
             ),
         }
     ]
-    service = _make_service(mock_settings, {"organizations": orgs})
+    service, _ = _make_service({"organizations": orgs})
     result = await service.search_tables(table_name="Clients")
 
     tables = result["organizations"][0]["tables"]
@@ -154,9 +141,9 @@ async def test_tables_sorted_by_score_descending(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_empty_organizations(mock_settings):
+async def test_empty_organizations():
     """search_tables handles an empty organizations list gracefully."""
-    service = _make_service(mock_settings, {"organizations": []})
+    service, _ = _make_service({"organizations": []})
 
     result = await service.search_tables()
     assert result["organizations"] == []
@@ -167,7 +154,7 @@ async def test_empty_organizations(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_tables_propagates_has_next_page(mock_settings):
+async def test_search_tables_propagates_has_next_page():
     orgs = [
         {
             "id": "org1",
@@ -179,12 +166,12 @@ async def test_search_tables_propagates_has_next_page(mock_settings):
             ),
         }
     ]
-    service = _make_service(mock_settings, {"organizations": orgs})
+    service, executor = _make_service({"organizations": orgs})
     result = await service.search_tables(first=DEFAULT_FIRST)
 
     assert result["search_limits"]["tables_has_next_page"] is True
     assert result["organizations"][0]["tables_has_next_page"] is True
     assert result["organizations"][0]["tables_page_end_cursor"] == "c1"
-    service.execute_query.assert_awaited_once_with(
+    executor.execute_query.assert_awaited_once_with(
         SEARCH_TABLES_QUERY, {"first": DEFAULT_FIRST}
     )

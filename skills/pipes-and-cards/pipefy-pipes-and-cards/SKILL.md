@@ -42,7 +42,7 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, att
 
    CLI: `pipefy pipe create --name "Customer Onboarding" --org 123`
 
-2. **Add phases** — call `create_phase` for each phase (see Phase section below).
+2. **Add phases** — call `create_phase` for each phase (see Phase section below). Omit `index` to append after existing workflow phases, or pass a **1-based** `index` to insert among phases returned by `get_pipe`. Prefer `1` or higher; `index: 0` creates a phase that does not appear in `get_pipe`'s `phases` list. `index` only controls order — it does **not** wire Phase Connections / `allowed_phases` (configure those in the Pipefy UI; use `get_phase_allowed_move_targets` before moves).
 
 3. **Add start form fields** — call `create_phase_field` on the start form phase.
 

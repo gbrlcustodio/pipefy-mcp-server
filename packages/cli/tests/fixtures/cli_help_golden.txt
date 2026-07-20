@@ -2272,7 +2272,9 @@ Usage: pipefy phase create [OPTIONS]
 │                                  [required]                                  │
 │ *  --name         -n      TEXT   Phase display name. [required]              │
 │    --done                        Mark as a final/done phase.                 │
-│    --index                FLOAT  Optional position index within the pipe.    │
+│    --index                FLOAT  1-based insert among workflow phases; omit  │
+│                                  to append. Does not set Connections         │
+│                                  (UI-only).                                  │
 │    --description  -d      TEXT                                               │
 │    --json         -j                                                         │
 │    --help                        Show this message and exit.                 │

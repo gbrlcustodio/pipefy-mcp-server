@@ -326,6 +326,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_card_relations(
             ctx: Context[ServerSession, None],
@@ -774,6 +775,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_labels(
             ctx: Context[ServerSession, None],
@@ -827,6 +829,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_pipe_members(
             ctx: Context[ServerSession, None],

@@ -17,6 +17,7 @@ from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
     validate_page_size,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
@@ -132,7 +133,7 @@ class LlmProviderTools:
                 page_size=nfirst,
             )
 
-        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)
         async def get_available_ai_models(
             ctx: Context,
             provider_name: str,

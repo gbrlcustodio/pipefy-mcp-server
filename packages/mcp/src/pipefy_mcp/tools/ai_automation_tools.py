@@ -29,6 +29,7 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     handle_automation_tool_graphql_error,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
@@ -45,6 +46,7 @@ class AiAutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def validate_ai_automation_prompt(
             ctx: Context,
@@ -125,6 +127,7 @@ class AiAutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_ai_automation(
             ctx: Context,
@@ -173,6 +176,7 @@ class AiAutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_ai_automations(
             ctx: Context,

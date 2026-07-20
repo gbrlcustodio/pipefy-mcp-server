@@ -39,6 +39,20 @@ REMOTE_SEED = frozenset(
         "introspect_query",
         "introspect_mutation",
         "introspect_type",
+        # AI agent & automation reads (#437): read/validate tools that reach the
+        # API with the request-scoped bearer and are governed by API permissions;
+        # no filesystem or per-user process-global settings reads.
+        "get_ai_agent",
+        "get_ai_agents",
+        "get_ai_agent_logs",
+        "get_ai_agent_log_details",
+        "get_agents_usage",
+        "validate_ai_agent_behaviors",
+        "get_ai_automation",
+        "get_ai_automations",
+        "validate_ai_automation_prompt",
+        "get_ai_credit_usage",
+        "get_available_ai_models",
     }
 )
 

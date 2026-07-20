@@ -9,7 +9,7 @@ dependencies = [
     "httpx-auth>=0.23.1",
     "keyring>=24",
     "keyrings.alt>=5",
-    "pipefy-infra==0.4.0",
+    "pipefy-infra==0.3.0-beta.1",
     # RS256 validation of inbound bearers (resource-server role); [crypto] pulls cryptography.
     "pyjwt[crypto]>=2.8",
     "pydantic>=2.13.4,<3",

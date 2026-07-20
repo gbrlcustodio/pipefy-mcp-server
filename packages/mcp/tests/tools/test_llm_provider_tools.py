@@ -63,6 +63,15 @@ def not_found_error() -> TransportQueryError:
     )
 
 
+WRITTEN_PROVIDER = {
+    "id": "42",
+    "name": "My OpenAI",
+    "type": "byom",
+    "active": True,
+    "organizationDefault": False,
+}
+
+
 @pytest.fixture
 def mock_provider_client():
     client = MagicMock(PipefyClient)
@@ -71,6 +80,12 @@ def mock_provider_client():
     client.get_default_llm_provider = AsyncMock()
     client.get_llm_provider_dependencies = AsyncMock()
     client.validate_llm_provider_access = AsyncMock()
+    client.create_llm_provider = AsyncMock()
+    client.update_llm_provider = AsyncMock()
+    client.delete_llm_provider = AsyncMock()
+    client.set_llm_provider_active_status = AsyncMock()
+    client.set_default_llm_provider = AsyncMock()
+    client.reset_default_llm_provider = AsyncMock()
     return client
 
 
@@ -359,3 +374,226 @@ async def test_transport_failure_without_graphql_errors_falls_back_to_str(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "socket closed" in tool_error_message(payload)
+
+
+# --- Write tools ---------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_create_and_update_take_file_path_not_inline_configuration(
+    provider_session,
+):
+    """Secrets can only arrive via a file path: no inline `configuration` input."""
+    async with provider_session as session:
+        tools = {t.name: t for t in (await session.list_tools()).tools}
+    for name in ("create_llm_provider", "update_llm_provider"):
+        props = tools[name].inputSchema.get("properties", {})
+        assert "configuration_file_path" in props
+        assert "configuration" not in props
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_create_llm_provider_success_returns_no_configuration(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.create_llm_provider = AsyncMock(return_value=WRITTEN_PROVIDER)
+    async with provider_session as session:
+        result = await session.call_tool(
+            "create_llm_provider",
+            {
+                "organization_uuid": "org-uuid-1",
+                "name": "My OpenAI",
+                "configuration_file_path": "/tmp/config.json",
+            },
+        )
+    assert result.isError is False
+    mock_provider_client.create_llm_provider.assert_awaited_once_with(
+        "org-uuid-1", name="My OpenAI", configuration_file_path="/tmp/config.json"
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    # The response must never carry configuration.
+    assert "configuration" not in str(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_create_llm_provider_value_error_becomes_tool_error(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.create_llm_provider = AsyncMock(
+        side_effect=ValueError(
+            "Provider configuration must be a non-empty JSON object."
+        )
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "create_llm_provider",
+            {
+                "organization_uuid": "org-uuid-1",
+                "name": "X",
+                "configuration_file_path": "/tmp/bad.json",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "non-empty JSON object" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_update_llm_provider_success(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.update_llm_provider = AsyncMock(return_value=WRITTEN_PROVIDER)
+    async with provider_session as session:
+        result = await session.call_tool(
+            "update_llm_provider",
+            {
+                "provider_id": "42",
+                "organization_uuid": "org-uuid-1",
+                "configuration_file_path": "/tmp/config.json",
+                "name": "Renamed",
+            },
+        )
+    assert result.isError is False
+    mock_provider_client.update_llm_provider.assert_awaited_once_with(
+        "42",
+        "org-uuid-1",
+        configuration_file_path="/tmp/config.json",
+        name="Renamed",
+    )
+    assert "configuration" not in str(extract_payload(result))
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_delete_preview_without_confirm_does_not_delete(
+    provider_session, mock_provider_client, extract_payload
+):
+    async with provider_session as session:
+        result = await session.call_tool(
+            "delete_llm_provider",
+            {"provider_id": "42", "organization_uuid": "org-uuid-1"},
+        )
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    mock_provider_client.delete_llm_provider.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_delete_with_confirm_executes(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.delete_llm_provider = AsyncMock(return_value={"success": True})
+    async with provider_session as session:
+        result = await session.call_tool(
+            "delete_llm_provider",
+            {"provider_id": "42", "organization_uuid": "org-uuid-1", "confirm": True},
+        )
+    assert result.isError is False
+    mock_provider_client.delete_llm_provider.assert_awaited_once_with(
+        "42", "org-uuid-1"
+    )
+    assert extract_payload(result)["data"]["deleted_id"] == "42"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_delete_unconfirmed_by_api_is_tool_error(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.delete_llm_provider = AsyncMock(
+        return_value={"success": False}
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "delete_llm_provider",
+            {"provider_id": "42", "organization_uuid": "org-uuid-1", "confirm": True},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "did not confirm" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_set_active_status_success(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.set_llm_provider_active_status = AsyncMock(
+        return_value={"success": True}
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "set_llm_provider_active_status", {"provider_id": "42", "active": False}
+        )
+    assert result.isError is False
+    mock_provider_client.set_llm_provider_active_status.assert_awaited_once_with(
+        "42", active=False
+    )
+    data = extract_payload(result)["data"]
+    assert data == {"provider_id": "42", "active": False}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_set_default_success(
+    provider_session, mock_provider_client, extract_payload
+):
+    active = {"id": "a1", "llmProviderId": "42"}
+    mock_provider_client.set_default_llm_provider = AsyncMock(return_value=active)
+    async with provider_session as session:
+        result = await session.call_tool(
+            "set_default_llm_provider",
+            {"organization_id": "123456", "provider_id": "42"},
+        )
+    assert result.isError is False
+    mock_provider_client.set_default_llm_provider.assert_awaited_once_with(
+        "123456", provider_id="42", system_provider_id=None
+    )
+    assert extract_payload(result)["data"]["active_provider"] == active
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_set_default_xor_violation_is_tool_error(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.set_default_llm_provider = AsyncMock(
+        side_effect=ValueError(
+            "Provide exactly one of provider_id or system_provider_id."
+        )
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "set_default_llm_provider",
+            {
+                "organization_id": "123456",
+                "provider_id": "42",
+                "system_provider_id": "7",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "exactly one" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_reset_default_success(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.reset_default_llm_provider = AsyncMock(
+        return_value={"success": True}
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "reset_default_llm_provider", {"organization_id": "123456"}
+        )
+    assert result.isError is False
+    mock_provider_client.reset_default_llm_provider.assert_awaited_once_with("123456")
+    assert extract_payload(result)["data"]["organization_id"] == "123456"

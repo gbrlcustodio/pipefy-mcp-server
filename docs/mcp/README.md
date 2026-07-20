@@ -12,7 +12,7 @@ Material in this tree describes **`pipefy-mcp-server`**: the MCP process, tool b
 | [`tools/relations.md`](tools/relations.md) | Pipe and card relations |
 | [`tools/reports.md`](tools/reports.md) | Pipe and organization reports, async exports |
 | [`tools/automations-and-ai.md`](tools/automations-and-ai.md) | Traditional automations, AI automations, AI agents, validators |
-| [`tools/llm-providers.md`](tools/llm-providers.md) | LLM provider discovery: custom + system providers, vendor models, defaults, dependencies, access probe |
+| [`tools/llm-providers.md`](tools/llm-providers.md) | LLM providers: discovery (custom + system, vendor models, defaults, dependencies, access probe) and custom-provider management (create/update/delete, active-status, default set/reset) |
 | [`tools/knowledge-bases.md`](tools/knowledge-bases.md) | Pipe-scoped AI knowledge bases: list, plain text, document (PDF), and data lookup CRUD, read-access probe |
 | [`tools/observability.md`](tools/observability.md) | Logs, usage, credits, execution metrics, job exports |
 | [`tools/members-email-webhooks.md`](tools/members-email-webhooks.md) | Membership, inbox email, webhooks |

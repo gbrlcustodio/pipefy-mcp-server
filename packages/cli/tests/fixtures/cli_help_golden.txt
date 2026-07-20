@@ -36,7 +36,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ agent             AI Agents (repo-scoped).                                   │
 │ ai-automation     AI Automations (generate_with_ai).                         │
-│ ai-provider       LLM providers (discovery reads; organization-scoped).      │
+│ ai-provider       LLM providers (organization-scoped: discovery reads and    │
+│                   provider writes).                                          │
 │ attachment        Attachment uploads (presigned URL + field update).         │
 │ audit             Pipe audit log exports.                                    │
 │ auth              Authenticate the CLI as your Pipefy user (browser-based    │
@@ -406,34 +407,74 @@ Usage: pipefy ai-automation validate-prompt [OPTIONS]
 ### HELP ai-provider
 Usage: pipefy ai-provider [OPTIONS] COMMAND [ARGS]...
 
- LLM providers (discovery reads; organization-scoped).
+ LLM providers (organization-scoped: discovery reads and provider writes).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list              List custom (BYOM) and Pipefy-managed system LLM providers │
-│                   (``get_llm_providers``).                                   │
-│ models            List the model names a provider vendor exposes             │
-│                   (``get_available_ai_models``).                             │
-│ dependencies      List owners that depend on a provider                      │
-│                   (``get_llm_provider_dependencies``).                       │
-│ validate-access   Probe LLM provider read access                             │
-│                   (``validate_llm_provider_access``).                        │
-│ default           Default LLM provider.                                      │
+│ list                List custom (BYOM) and Pipefy-managed system LLM         │
+│                     providers (``get_llm_providers``).                       │
+│ models              List the model names a provider vendor exposes           │
+│                     (``get_available_ai_models``).                           │
+│ dependencies        List owners that depend on a provider                    │
+│                     (``get_llm_provider_dependencies``).                     │
+│ validate-access     Probe LLM provider read access                           │
+│                     (``validate_llm_provider_access``).                      │
+│ create              Create a custom (BYOM) LLM provider                      │
+│                     (``create_llm_provider``).                               │
+│ update              Update a custom (BYOM) LLM provider                      │
+│                     (``update_llm_provider``).                               │
+│ delete              Delete a custom (BYOM) LLM provider permanently          │
+│                     (``delete_llm_provider``).                               │
+│ set-active-status   Activate or deactivate a custom (BYOM) LLM provider      │
+│                     (``set_llm_provider_active_status``).                    │
+│ default             Organization default LLM provider (get / set / reset).   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/create
+Usage: pipefy ai-provider create [OPTIONS]
+
+ Create a custom (BYOM) LLM provider (``create_llm_provider``).
+
+ Configuration is read from the local JSON file, never inline; the created
+ provider is returned without its configuration. The ``provider`` key in the
+ file selects the vendor. Gated on the read-access probe. Requires the
+ ``manage_ai_providers`` organization permission and an eligible plan.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-uuid             TEXT  Organization UUID (not the numeric ID;       │
+│                                 `pipefy org get` shows both).                │
+│                                 [required]                                   │
+│ *  --name                 TEXT  Display name (required). [required]          │
+│ *  --config-file  -f      PATH  Local JSON file with the provider            │
+│                                 configuration object (secrets stay in the    │
+│                                 file; never passed inline). Supports ~       │
+│                                 expansion. Its `provider` key uses           │
+│                                 hyphenated vendor strings (amazon-bedrock,   │
+│                                 oracle-oci) — not the snake_case form        │
+│                                 `ai-provider models --provider-name` takes;  │
+│                                 the two are not interchangeable.             │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-provider/default
 Usage: pipefy ai-provider default [OPTIONS] COMMAND [ARGS]...
 
- Default LLM provider.
+ Organization default LLM provider (get / set / reset).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get   Resolve the default LLM provider for an owner                          │
-│       (``get_default_llm_provider``).                                        │
+│ get     Resolve the default LLM provider for an owner                        │
+│         (``get_default_llm_provider``).                                      │
+│ set     Set the organization's default LLM provider                          │
+│         (``set_default_llm_provider``).                                      │
+│ reset   Reset (clear) the organization's default LLM provider                │
+│         (``reset_default_llm_provider``).                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-provider/default/get
@@ -451,6 +492,66 @@ Usage: pipefy ai-provider default get [OPTIONS]
 │                                [default: organization]                       │
 │    --json        -j            Print machine-readable JSON to stdout.        │
 │    --help                      Show this message and exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/default/reset
+Usage: pipefy ai-provider default reset [OPTIONS]
+
+ Reset (clear) the organization's default LLM provider
+ (``reset_default_llm_provider``).
+
+ Reversible via `pipefy ai-provider default set`. Like that command, it
+ authorizes against the credential's own organization, so it needs a
+ service-account credential bound to that organization (a bare personal token
+ is denied).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-id          TEXT  Numeric organization ID (not the UUID; `pipefy    │
+│                            org get` shows both).                             │
+│                            [required]                                        │
+│    --json    -j            Print machine-readable JSON to stdout.            │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/default/set
+Usage: pipefy ai-provider default set [OPTIONS]
+
+ Set the organization's default LLM provider (``set_default_llm_provider``).
+
+ Provide exactly one of --provider-id or --system-provider-id. Authorizes
+ against the credential's own organization, so it needs a service-account
+ credential bound to that organization (a bare personal token is denied); pass
+ that same organization's numeric id as --org-id.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-id                      TEXT  Numeric organization ID (not the      │
+│                                        UUID; `pipefy org get` shows both).   │
+│                                        [required]                            │
+│    --provider-id                 TEXT  Custom (BYOM) provider ID to make the │
+│                                        default.                              │
+│    --system-provider-id          TEXT  System provider ID to make the        │
+│                                        default.                              │
+│    --json                -j            Print machine-readable JSON to        │
+│                                        stdout.                               │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/delete
+Usage: pipefy ai-provider delete [OPTIONS]
+
+ Delete a custom (BYOM) LLM provider permanently (``delete_llm_provider``).
+
+ Check `pipefy ai-provider dependencies` first — owners that still reference
+ the provider are blockers.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                TEXT  Provider ID to delete. [required]               │
+│ *  --org-uuid          TEXT  Organization UUID (not the numeric ID; `pipefy  │
+│                              org get` shows both).                           │
+│                              [required]                                      │
+│    --yes       -y            Skip the confirmation prompt.                   │
+│    --json      -j            Print machine-readable JSON to stdout.          │
+│    --help                    Show this message and exit.                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-provider/dependencies
@@ -503,10 +604,68 @@ Usage: pipefy ai-provider models [OPTIONS]
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --provider-name          TEXT  Provider vendor: openai, azure_openai,     │
 │                                   amazon_bedrock, custom, google_vertex_ai,  │
-│                                   oracle_oci, or anthropic.                  │
+│                                   oracle_oci, or anthropic. Snake_case here; │
+│                                   the `provider` key in the create/update    │
+│                                   --config-file uses the hyphenated form     │
+│                                   (amazon-bedrock) — not interchangeable.    │
 │                                   [required]                                 │
 │    --json           -j            Print machine-readable JSON to stdout.     │
 │    --help                         Show this message and exit.                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/set-active-status
+Usage: pipefy ai-provider set-active-status [OPTIONS]
+
+ Activate or deactivate a custom (BYOM) LLM provider
+ (``set_llm_provider_active_status``).
+
+ The provider's organization is resolved from the credential's own organization
+ context, so no organization argument is needed — which means this needs a
+ service-account credential bound to that organization (a bare personal token
+ is denied). Deactivating a provider owners depend on can break them — check
+ `pipefy ai-provider dependencies` first.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                        TEXT  Provider ID whose active status to set. │
+│                                      [required]                              │
+│ *  --active      --inactive          Activate (--active) or deactivate       │
+│                                      (--inactive) the provider.              │
+│                                      [required]                              │
+│    --json    -j                      Print machine-readable JSON to stdout.  │
+│    --help                            Show this message and exit.             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/update
+Usage: pipefy ai-provider update [OPTIONS]
+
+ Update a custom (BYOM) LLM provider (``update_llm_provider``).
+
+ Full configuration replacement: the file must hold the complete configuration
+ object. To keep an existing secret without re-supplying it, leave the
+ redaction placeholder that ``pipefy ai-provider list`` returned in place — the
+ backend preserves the stored secret for any value left as the placeholder. To
+ rotate a secret, put its new real value in the file. Gated on the read-access
+ probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                   TEXT  Provider ID to update (from `pipefy          │
+│                                 ai-provider list`).                          │
+│                                 [required]                                   │
+│ *  --org-uuid             TEXT  Organization UUID (not the numeric ID;       │
+│                                 `pipefy org get` shows both).                │
+│                                 [required]                                   │
+│ *  --config-file  -f      PATH  Local JSON file with the provider            │
+│                                 configuration object (secrets stay in the    │
+│                                 file; never passed inline). Supports ~       │
+│                                 expansion. Its `provider` key uses           │
+│                                 hyphenated vendor strings (amazon-bedrock,   │
+│                                 oracle-oci) — not the snake_case form        │
+│                                 `ai-provider models --provider-name` takes;  │
+│                                 the two are not interchangeable.             │
+│                                 [required]                                   │
+│    --name                 TEXT  New name (non-blank).                        │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-provider/validate-access

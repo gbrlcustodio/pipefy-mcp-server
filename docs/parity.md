@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **176** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **182** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -39,6 +39,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_field_condition` | `pipefy field-condition create` | shipped | (`--phase`, `--name`, `--condition`, `--actions` JSON). |
 | `create_ipaas_connection` | — | deferred | iPaaS (Advanced Automations) connection creation; MCP-first surface, CLI twin considered with the other iPaaS tools. |
 | `create_label` | `pipefy label create` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
+| `create_llm_provider` | `pipefy ai-provider create` | shipped | Custom (BYOM) provider; configuration via local JSON file only (`--config-file`), never returned; probe-gated. |
 | `create_organization_report` | `pipefy report-org create` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `create_phase` | `pipefy phase create` | shipped | — |
 | `create_phase_field` | `pipefy field create` | shipped | (phase fields). |
@@ -65,6 +66,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `delete_comment` | `pipefy card comment delete` | shipped | destructive: `--yes` or confirm. |
 | `delete_field_condition` | `pipefy field-condition delete` | shipped | destructive: `--yes` or confirm. |
 | `delete_label` | `pipefy label delete` | shipped | destructive: `--yes`. |
+| `delete_llm_provider` | `pipefy ai-provider delete` | shipped | Custom (BYOM) provider; destructive (`confirm` / `--yes`). |
 | `delete_organization_report` | `pipefy report-org delete` | shipped | Organization reports. |
 | `delete_phase` | `pipefy phase delete` | shipped | destructive: `--yes`. |
 | `delete_phase_field` | `pipefy field delete` | shipped | destructive: `--yes`. |
@@ -158,11 +160,14 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `move_card_to_phase` | `pipefy card move` | shipped | (`--phase`). |
 | `publish_sub_portal` | `pipefy portal sub-portal publish` | shipped | internal_api `updateSubPortalElement` on a templated `forms` element; check `subPortals[].published` via `get_portal`. |
 | `remove_member_from_pipe` | `pipefy member remove` | shipped | — |
+| `reset_default_llm_provider` | `pipefy ai-provider default reset` | shipped | Organization-scoped; clears the org default (`--org-id`). |
 | `search_pipes` | `pipefy pipe list` | shipped | (`--name`, `--max-per-org`). |
 | `search_schema` | `pipefy introspect schema search` | shipped | (optional `--kind`). |
 | `search_tables` | `pipefy table list` | shipped | (without ``--ids``). |
 | `send_email_with_template` | `pipefy email template send` | shipped | (`--card`, `--template`). |
 | `send_inbox_email` | `pipefy email inbox send` | shipped | (`--from-email`, `--to`, `--subject`, `--body`). |
+| `set_default_llm_provider` | `pipefy ai-provider default set` | shipped | Organization-scoped; exactly one of `--provider-id` / `--system-provider-id`. |
+| `set_llm_provider_active_status` | `pipefy ai-provider set-active-status` | shipped | Custom (BYOM) provider; `--active/--inactive`; org from session. |
 | `set_role` | `pipefy member set-role` | shipped | — |
 | `set_table_record_field_value` | `pipefy record update` | shipped | (``--field-id`` + ``--value``). |
 | `simulate_automation` | `pipefy automation simulate` | shipped | (`--pipe`, `--action-id`, `--sample-card`, optional JSON fragments). |
@@ -180,6 +185,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_comment` | `pipefy card comment update` | shipped | — |
 | `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). |
 | `update_label` | `pipefy label update` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
+| `update_llm_provider` | `pipefy ai-provider update` | shipped | Custom (BYOM) provider; full configuration replacement via local JSON file; redacted placeholders preserve stored secrets; probe-gated. |
 | `update_organization_report` | `pipefy report-org update` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `update_phase` | `pipefy phase update` | shipped | — |
 | `update_phase_field` | `pipefy field update` | shipped | (``--extra`` JSON). Optional ``phase_id`` / ``pipe_id`` in ``--extra`` resolve slug ``field_id`` to ``internal_id`` when ``uuid`` is omitted. |
@@ -213,6 +219,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **176** tool names in `PIPEFY_TOOL_NAMES` and **176** data rows in the parity table (excluding the header rows).
+Expect **182** tool names in `PIPEFY_TOOL_NAMES` and **182** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

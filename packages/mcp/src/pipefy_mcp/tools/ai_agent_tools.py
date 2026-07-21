@@ -211,10 +211,12 @@ class AiAgentTools:
                 They are not required for every ``fill_with_ai`` (e.g. instruction-only fills,
                 OCR/attachment, or knowledge-base context). When card inputs are needed and
                 omitted, ``card.fields`` arrives empty at trigger time and the model may
-                hallucinate. A wrong input id/slug is accepted silently (validate and
-                create/update) and becomes a dead ``referencedFieldId``, so ``card.fields``
-                stays empty (same hallucination); confirm the id with
-                ``get_start_form_fields`` / ``get_phase_fields``. Dotted connected-pipe refs
+                hallucinate. A wrong **numeric** input id is accepted silently (validate and
+                create/update) and becomes a dead ``referencedFieldId``; a wrong **slug**
+                never resolves and is dropped by the digits-only extractor (unresolved
+                token). Either way ``card.fields`` stays empty (same hallucination);
+                confirm the id with ``get_start_form_fields`` / ``get_phase_fields``.
+                Dotted connected-pipe refs
                 (``%{field:<parent>.<child>}``) are not forwarded at runtime; to read a
                 connected card field, use a field on the current pipe.
 
@@ -399,9 +401,11 @@ class AiAgentTools:
 
             ``fill_with_ai`` marks output fields; declare input ``%{field:<internal_id>}`` tokens
             in the behavior ``instruction`` only when the model must read card fields (see
-            ``create_ai_agent`` for the full input vs output note). A wrong input id/slug is
-            accepted silently and becomes a dead ``referencedFieldId`` (same empty
-            ``card.fields`` hallucination); confirm ids with ``get_start_form_fields`` /
+            ``create_ai_agent`` for the full input vs output note). A wrong **numeric** input
+            id is accepted silently and becomes a dead ``referencedFieldId``; a wrong
+            **slug** never resolves and is dropped by the digits-only extractor
+            (unresolved token). Either way ``card.fields`` stays empty (same
+            hallucination); confirm ids with ``get_start_form_fields`` /
             ``get_phase_fields``. Dotted connected-pipe refs (``%{field:<parent>.<child>}``)
             are not forwarded at runtime; use a field on the current pipe instead.
 

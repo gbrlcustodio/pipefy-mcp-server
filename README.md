@@ -47,7 +47,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 ## Installation
 
-> Pre-1.0 ships pre-release builds to PyPI on every tag; `uvx` and `uv tool install` resolve them. A stable PyPI release becomes the default at **v1.0**. The current pre-release line is **`v0.3.0-alpha.*`** (first tag: [`v0.3.0-alpha.1`](https://github.com/pipefy/ai-toolkit/releases/tag/v0.3.0-alpha.1)). Two install paths: the **Quick install** script below (resolves the latest GitHub Release at runtime and runs `uv tool install` for you), or **Claude Code** via the plugin marketplace.
+> Pre-1.0 ships pre-release builds to PyPI on every tag; `uvx` and `uv tool install` resolve them. A stable PyPI release becomes the default at **v1.0**. The current pre-release line is **`v0.3.0-alpha.*`** (first tag: [`v0.3.0-alpha.1`](https://github.com/pipefy/ai-toolkit/releases/tag/v0.3.0-alpha.1)). Two install paths: the **Quick install** script below (resolves the latest GitHub Release at runtime and runs `uv tool install` for you), or **Claude Code** via the plugin marketplace (or hosted MCP).
 >
 > The CLI snippets below install `pipefy-cli` from PyPI, which resolves `pipefy` and `pipefy-auth` transitively (no explicit `--with` needed). While the toolkit ships only pre-release versions (the 0.x line), `uv` resolves the latest pre-release automatically; to pin a specific one, use `pipefy-cli==X.Y.Z` (PEP 440 form, e.g. `pipefy-cli==0.3.0a1`). Do not pass a global `--prerelease allow`: it also lets transitive dependencies jump to their own pre-releases, which can pull a broken build.
 
@@ -57,6 +57,20 @@ Two auth paths:
 - **Service account (unattended / CI)**: provision a Service Account in [Pipefy Admin](https://app.pipefy.com/) (Admin → Service Accounts) and add that account to every pipe the tools should touch. Wire `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` into the client config below.
 
 Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
+
+**First-time / ask your agent:** paste a setup request into Claude or Cursor and point them at this section — the checklist is [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](skills/onboarding/pipefy-toolkit-setup/SKILL.md). Pick **one** MCP registration named `pipefy` (do not mix hosted HTTP and local stdio/plugin under the same name).
+
+### Hosted MCP (Claude Code)
+
+Zero local Python: Claude Code connects over HTTPS. Auth is the client OAuth flow (`--client-id pipefy-mcp`). Hosted exposes the **remote-safe** tool surface only.
+
+```bash
+claude mcp add --transport http --scope user \
+  --client-id pipefy-mcp \
+  pipefy https://mcp.pipefy.com/mcp
+```
+
+Complete the browser login when prompted. For CLI/slash commands without a second MCP server, use [Claude Code](#claude-code) **instead**, or install the CLI only ([CLI](#cli)). Hand-wired local stdio: [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ### Quick install (recommended)
 
@@ -86,7 +100,7 @@ After install, run `pipefy auth login` to authenticate (`--device` on headless s
 /pipefy:pipefy-login
 ```
 
-`/plugin install pipefy` registers the MCP server and the `/pipefy:install` + `/pipefy:pipefy-login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:pipefy-login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecParam` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).
+Type the slash commands **in order** (the model cannot invoke `/plugin …` for you). `/plugin install pipefy` registers the local MCP server and the `/pipefy:install` + `/pipefy:pipefy-login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:pipefy-login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecParam` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ### CLI
 

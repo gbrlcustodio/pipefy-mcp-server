@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Documentation map
-- **`README.md`** — Project pitch, one-page install (MCP client JSON for Claude Code / Cursor / Claude Desktop / Codex, CLI, skills), repo layout, MCP tools table, contributing.
+- **`README.md`** — Project pitch, one-page install front door (`README.md#installation`: hosted MCP, Quick install, Claude Code plugin, CLI, skills), repo layout, MCP tools table, contributing.
 - **`CONTRIBUTING.md`** — Skills contribution guide (frontmatter, CI, style); entry point for GitHub contributors.
 - **`docs/README.md`** — Index of docs by surface (MCP, CLI, SDK) and shared guides.
 - **`docs/config.md`** — `PIPEFY_*` environment variables, `config.toml` schema, precedence chain.
@@ -13,6 +13,7 @@
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
 - **`docs/sdk/README.md`** — Using `pipefy` as a library.
 - **`skills/AGENTS.md`** — Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.
+- **`skills/onboarding/pipefy-toolkit-setup/`** — First-time setup checklist for agents (links to README snippets; does not own commands).
 
 ## Project structure
 

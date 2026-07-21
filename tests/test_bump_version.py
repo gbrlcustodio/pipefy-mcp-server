@@ -173,6 +173,20 @@ def test_json_manifest_version_matches_real_manifest(manifest: Path) -> None:
     assert m.group("value") == _bump.read_sdk_version()
 
 
+def test_json_manifests_cover_every_versioned_plugin_manifest() -> None:
+    # A .claude-plugin JSON that carries a "version" but is absent from
+    # JSON_MANIFESTS is exactly the drift this fix targets: it exists yet is
+    # bumped and verified by nothing. Deriving the expected set from the tree
+    # (not a hand-list) means neither dropping a manifest nor adding a future one
+    # can silently unwire it.
+    versioned = {
+        path
+        for path in (_bump.REPO_ROOT / ".claude-plugin").glob("*.json")
+        if _bump.JSON_VERSION_RE.search(path.read_text(encoding="utf-8"))
+    }
+    assert versioned == set(_bump.JSON_MANIFESTS)
+
+
 def test_write_json_manifest_version_rewrites_marketplace_entry(tmp_path: Path) -> None:
     # The marketplace manifest holds the version on a nested plugin entry; the
     # writer must rewrite it and leave the surrounding keys untouched.

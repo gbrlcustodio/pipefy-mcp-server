@@ -94,7 +94,7 @@ For `card_moved` and `field_updated`, you MUST include `event_params`. Omitting 
 - Each behavior MUST have at least one action in `actionsAttributes`.
 - **Maximum 5 behaviors per agent.**
 - The MCP tool auto-injects `referenceId` and `%{action:<uuid>}` placeholders — do NOT generate these yourself.
-- `inputMode: "fill_with_ai"` lets the AI decide the value. Omit `inputMode` and set `value` for fixed values.
+- `inputMode: "fill_with_ai"` marks **output** fields the AI writes. **Input** field references (`%{field:<internal_id>}` in the behavior `instruction`, auto-populated into `referencedFieldIds` on create/update) are needed **only when** the AI must read card field values — not for every `fill_with_ai` (e.g. instruction-only, OCR/attachment, or knowledge-base context). When card inputs are needed and omitted, `card.fields` arrives empty at trigger time and the model may hallucinate. Omit `inputMode` and set `value` for fixed values.
 - For `update_card`: set `destinationPhaseId: ""` when not moving the card.
 
 #### Example identifiers (fictional)
@@ -111,8 +111,10 @@ Use real values from `get_pipe` / `get_start_form_fields` for your org. Placehol
 #### Metadata examples
 
 ```json
-// update_card
+// update_card — output field fill_with_ai; input fields referenced in instruction
 { "pipeId": "987654321", "destinationPhaseId": "", "fieldsAttributes": [{ "fieldId": "900000101", "inputMode": "fill_with_ai", "value": "" }] }
+// companion instruction (aiBehaviorParams.instruction), not metadata:
+// "Read %{field:900000102} (title) and %{field:900000103} (description), then fill the category."
 
 // move_card
 { "destinationPhaseId": "900000201", "pipeId": "", "fieldsAttributes": [] }

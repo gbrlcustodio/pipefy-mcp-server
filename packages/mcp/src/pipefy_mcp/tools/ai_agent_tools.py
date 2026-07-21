@@ -182,21 +182,36 @@ class AiAgentTools:
             Behavior dict example::
 
               {
-                "name": "When card is created: move to Doing",
+                "name": "When card is created: classify request",
                 "event_id": "card_created",
                 "actionParams": {
                   "aiBehaviorParams": {
-                    "instruction": "Analyze the card and summarize key points.",
+                    "instruction": "Read %{field:<input_internal_id>} and fill the category.",
                     "actionsAttributes": [
                       {
-                        "name": "Move to Doing",
-                        "actionType": "move_card",
-                        "metadata": {"destinationPhaseId": "<phase_id from get_pipe>"}
+                        "name": "Update category",
+                        "actionType": "update_card",
+                        "metadata": {
+                          "pipeId": "<pipe_id>",
+                          "fieldsAttributes": [
+                            {"fieldId": "<output_field_id>", "inputMode": "fill_with_ai", "value": ""}
+                          ]
+                        }
                       }
                     ]
                   }
                 }
               }
+
+            Input vs output fields:
+              - ``inputMode: "fill_with_ai"`` marks **output** fields the model writes.
+              - **Input** field references (``%{field:<internal_id>}`` in
+                ``aiBehaviorParams.instruction``, auto-populated into ``referencedFieldIds`` on
+                create/update) are needed **only when** the model must read card field values.
+                They are not required for every ``fill_with_ai`` (e.g. instruction-only fills,
+                OCR/attachment, or knowledge-base context). When card inputs are needed and
+                omitted, ``card.fields`` arrives empty at trigger time and the model may
+                hallucinate.
 
             Known ``actionType`` values and their required ``metadata``:
               - ``move_card`` → ``{"destinationPhaseId": "<phase_id>"}``
@@ -376,6 +391,10 @@ class AiAgentTools:
                 (``pipeId`` not required; field IDs belong to the table.)
               - ``send_email_template`` → ``{"emailTemplateId": "<template_id>"}``;
                 optional ``allowTemplateModifications`` (boolean).
+
+            ``fill_with_ai`` marks output fields; declare input ``%{field:<internal_id>}`` tokens
+            in the behavior ``instruction`` only when the model must read card fields (see
+            ``create_ai_agent``).
 
             Optional ``capabilitiesAttributes`` / ``providerId`` / ``systemProviderId`` inside
             ``actionParams.aiBehaviorParams`` — same rules as ``create_ai_agent``; see its

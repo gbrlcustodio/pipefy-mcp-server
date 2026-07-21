@@ -30,7 +30,14 @@ Edge cases: [`packages/mcp/README.md`](../../../packages/mcp/README.md). Auth: [
 - User has a Pipefy account (Admin access if they need a service account).
 - Hosted MCP: Claude Code CLI (`claude`).
 - Local toolkit: a shell that can run `curl` (`install.sh` can install `uv`).
-- Claude Code **slash commands** (`/plugin …`, `/pipefy:…`) must be typed by the user. Print them; never claim you invoked them.
+
+**Who does what**
+
+| Actor | Does |
+|-------|------|
+| **Agent** | Asks path; prints README commands verbatim; runs shell `claude mcp add` / `install.sh` when the user agrees; checks `claude mcp get` / list |
+| **User types** | Claude slash commands (`/plugin …`, `/pipefy:…`) — the model cannot invoke them |
+| **User in browser** | OAuth for hosted (`claude mcp login …`) or `/pipefy:pipefy-login` / `pipefy auth login` |
 
 ## Tools needed
 
@@ -44,6 +51,10 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 
 1. **Choose one path** — ask the user; do not pick silently.
 
+   If they only say “Claude Code” (no path), ask a **closed** question:
+
+   > Hosted MCP (zero local Python, `mcp.pipefy.com`) or the Claude Code plugin (slash commands + local CLI)? If you’re unsure, Hosted is the usual first try.
+
    | Path | README section | Outcome |
    |------|----------------|---------|
    | Hosted MCP | [Hosted MCP](../../../README.md#hosted-mcp-claude-code) | HTTPS `mcp.pipefy.com` (remote-safe tools) |
@@ -55,13 +66,13 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 
 2. **Execute the chosen README block** — run it in the shell, or print it for the user to paste (required for Claude slash commands). Do not reorder the plugin sequence: marketplace → `/plugin install pipefy` → `/pipefy:install` → `/pipefy:pipefy-login`.
 
-3. **Auth** — hosted: finish the client browser OAuth prompt. Local/plugin/CLI: `pipefy auth login` or `/pipefy:pipefy-login` (see README). Service accounts: [`docs/config.md`](../../../docs/config.md).
+3. **Auth** — hosted: finish the client browser OAuth prompt (`claude mcp login <name>` if status is Needs authentication). Local/plugin/CLI: `pipefy auth login` or `/pipefy:pipefy-login` (see README). Service accounts: [`docs/config.md`](../../../docs/config.md).
 
 4. **Verify**
 
    - Shell (local / plugin / CLI): `pipefy --version`
    - MCP: call `get_organization` (or another read-only tool the user allows)
-   - Confirm exactly one `pipefy` MCP registration
+   - Confirm exactly one `pipefy` MCP registration for the path you chose (hosted vs plugin)
 
 ## Success criteria
 
@@ -74,7 +85,8 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
 | Slash commands missing | Plugin not installed | README [Claude Code](../../../README.md#claude-code) — marketplace + install first |
-| Two `pipefy` MCP entries | Hosted + plugin both registered | Remove one (`claude mcp remove` / client settings) |
+| Two `pipefy` MCP entries | Hosted + plugin both registered | `claude mcp remove <name> -s user` (or client settings) |
+| `Needs authentication` after hosted add | OAuth not finished | `claude mcp login <name>` + browser |
 | `pipefy: command not found` | CLI not on PATH | `/pipefy:install` or README [CLI](../../../README.md#cli); check `$HOME/.local/bin` |
 | MCP tools empty / auth errors | Login not done | Re-run login; service accounts → `docs/config.md` |
 | macOS `errSecParam` | Keychain write | [`packages/mcp/README.md`](../../../packages/mcp/README.md) |

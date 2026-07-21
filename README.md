@@ -64,13 +64,15 @@ Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/con
 
 Zero local Python: Claude Code connects over HTTPS. Auth is the client OAuth flow (`--client-id pipefy-mcp`). Hosted exposes the **remote-safe** tool surface only.
 
+Do **not** run this if you already have a local/plugin MCP named `pipefy` (or another Pipefy stdio entry you intend to keep). Remove the conflicting registration first: `claude mcp remove pipefy -s user` (adjust name/scope), or use the [Claude Code plugin](#claude-code) path instead of hosted.
+
 ```bash
 claude mcp add --transport http --scope user \
   --client-id pipefy-mcp \
   pipefy https://mcp.pipefy.com/mcp
 ```
 
-Complete the browser login when prompted. For CLI/slash commands without a second MCP server, use [Claude Code](#claude-code) **instead**, or install the CLI only ([CLI](#cli)). Hand-wired local stdio: [`packages/mcp/README.md`](packages/mcp/README.md).
+Complete the browser login when prompted (`claude mcp login pipefy` if the client reports Needs authentication). For CLI/slash commands without a second MCP server, use [Claude Code](#claude-code) **instead**, or install the CLI only ([CLI](#cli)). Hand-wired local stdio: [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ### Quick install (recommended)
 

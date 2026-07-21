@@ -29,6 +29,8 @@ For traditional automations and AI automations (prompt-driven), see [skills/auto
 | `toggle_ai_agent_status` | `pipefy agent toggle` | No | Enable/disable the agent (e.g. `--inactive`). |
 | `validate_ai_agent_behaviors` | `pipefy agent validate-behaviors` | Yes | **Pre-flight check before create/update.** |
 
+The three read tools (`get_ai_agents`, `get_ai_agent`, `validate_ai_agent_behaviors`) are remote-safe: available under the hosted (`profile=remote`) surface. The write tools (`create`/`update`/`delete`/`toggle`) are local-only.
+
 Execution logs live in [skills/observability/](../../observability/pipefy-observability/SKILL.md) (`get_ai_agent_logs`, `get_ai_agent_log_details`).
 
 ---
@@ -64,14 +66,18 @@ For `card_moved` and `field_updated`, you MUST include `event_params`. Omitting 
 
 ### 4 — Discover valid action types
 
-`get_automation_actions(pipe_id)`. Inside `actionsAttributes`:
+`get_automation_actions(pipe_id)`. The 6 known `actionType` values and their required `metadata`:
 
 | Action (`actionType` value) | `metadata` required |
 |--------------|---------------------|
-| update_card | `pipeId` + `fieldsAttributes` with `inputMode` |
+| update_card | `pipeId` + `fieldsAttributes` (each entry needs `fieldId` + `inputMode`) |
 | move_card | `destinationPhaseId` |
 | create_card | `pipeId` + `fieldsAttributes` |
 | create_connected_card | `pipeId` + `fieldsAttributes` (requires pipe relation) |
+| create_table_record | `tableId` + `fieldsAttributes` (table field IDs; **no** `pipeId`) |
+| send_email_template | `emailTemplateId`; optional `allowTemplateModifications` (bool) |
+
+`fieldId` values for card actions accept slug or numeric `internal_id`; for `create_table_record` they are **table** field IDs (validate with `get_table` / `get_table_record`, not the pipe).
 
 ### 5 — Build the behavior dict
 
@@ -94,7 +100,8 @@ For `card_moved` and `field_updated`, you MUST include `event_params`. Omitting 
 - Each behavior MUST have at least one action in `actionsAttributes`.
 - **Maximum 5 behaviors per agent.**
 - The MCP tool auto-injects `referenceId` and `%{action:<uuid>}` placeholders — do NOT generate these yourself.
-- `inputMode: "fill_with_ai"` marks **output** fields the AI writes. **Input** field references (`%{field:<internal_id>}` in the behavior `instruction`, auto-populated into `referencedFieldIds` on create/update) are needed **only when** the AI must read card field values, not for every `fill_with_ai` (e.g. instruction-only, OCR/attachment, or knowledge-base context). When card inputs are needed and omitted, `card.fields` arrives empty at trigger time and the model may hallucinate. A wrong **numeric** input id is accepted silently (validate and create/update) and becomes a dead `referencedFieldId`; a wrong **slug** never resolves and is dropped by the digits-only extractor (unresolved token). Either way `card.fields` stays empty (same hallucination); confirm the id with `get_start_form_fields` / `get_phase_fields`. Dotted connected-pipe refs (`%{field:<parent>.<child>}`) are not forwarded at runtime; to read a connected card field, use a field on the current pipe. Omit `inputMode` and set `value` for fixed values.
+- **`inputMode` is required on every `fieldsAttributes` entry** (omitting it fails model validation). Values: `fill_with_ai` (AI writes the value into an **output** field), `fixed_value` (use the literal `value`), `copy_from` (`value` is a `%{…}` template copying another field).
+- **Input** field references (`%{field:<internal_id>}` in the behavior `instruction`, auto-populated into `referencedFieldIds` on create/update) are needed **only when** the AI must read card field values, not for every `fill_with_ai` (e.g. instruction-only, OCR/attachment, or knowledge-base context). When card inputs are needed and omitted, `card.fields` arrives empty at trigger time and the model may hallucinate. A wrong **numeric** input id is accepted silently (validate and create/update) and becomes a dead `referencedFieldId`; a wrong **slug** never resolves and is dropped by the digits-only extractor (unresolved token). Either way `card.fields` stays empty (same hallucination); confirm the id with `get_start_form_fields` / `get_phase_fields`. Dotted connected-pipe refs (`%{field:<parent>.<child>}`) are not forwarded at runtime; to read a connected card field, use a field on the current pipe.
 - For `update_card`: set `destinationPhaseId: ""` when not moving the card.
 
 #### Example identifiers (fictional)
@@ -121,6 +128,12 @@ Use real values from `get_pipe` / `get_start_form_fields` for your org. Placehol
 
 // create_card
 { "pipeId": "900000301", "fieldsAttributes": [{ "fieldId": "title", "inputMode": "fill_with_ai", "value": "" }] }
+
+// create_table_record (fieldsAttributes are TABLE field IDs; no pipeId)
+{ "tableId": "<table_id>", "fieldsAttributes": [{ "fieldId": "<table_field_id>", "inputMode": "fill_with_ai", "value": "" }] }
+
+// send_email_template
+{ "emailTemplateId": "<template_id>", "allowTemplateModifications": false }
 ```
 
 ### 5b — Optional: capabilities and LLM provider
@@ -157,21 +170,25 @@ Inside `actionParams.aiBehaviorParams` a behavior may also carry:
 - Output field IDs (`fieldsAttributes[].fieldId`) exist in the pipe
 - Phase IDs exist
 - Pipe relations exist for `create_connected_card`
-- Action types are valid
+- Action types are valid (the 6 in `KNOWN_AI_ACTION_TYPES`; `create_table_record` `fieldsAttributes` are **table** field IDs, so they are not checked against the pipe and surface a warning to verify with `get_table`; `send_email_template` metadata runs no pipe field-ID checks)
 - Behavior structure passes Pydantic validation (including canonical `capabilitiesAttributes` shape and at most one of `providerId` / `systemProviderId`)
 - `fieldsAttributes[].fieldId` values (outputs) are checked against start-form and phase fields, accepting both slug `id` and numeric `internal_id`. Instruction `%{field:...}` tokens (inputs) are **not** existence-checked: a missing id/slug still yields `valid: true`. Slug → numeric rewrite happens only on create/update, not here.
 - Pass `data_source_ids` (agent-level) to also check knowledge base membership: it is unioned with each behavior's `dataSourceIds` and checked against the pipe's knowledge bases. Unknown IDs are **warnings only** (`valid` stays true); if the knowledge base list cannot be read, a single warning is added and the check is skipped.
 
+**`strict_unknown_action_types`** (default `true`): an `actionType` outside the known 6 is reported in `problems` (blocking). Set `false` to demote unknown action types to `warnings` only, so `valid` stays true. CLI: `--strict` (default) / `--no-strict` on `agent validate-behaviors`, `agent create`, and `agent update`.
+
 ### 7 — Create the agent
 
 `create_ai_agent` with `name`, `repo_uuid`, `instruction`, and `behaviors`. One-call creation is preferred — avoids partial agent shells. Agents are **active by default**.
+
+The **CLI** `agent create` / `agent update` require `--pipe` (numeric pipe id) and run `validate_ai_agent_behaviors` automatically as a pre-flight, blocking the write when `problems` are found and surfacing `warnings` under a `preflight` key. The MCP tools do **not** auto-preflight, so call `validate_ai_agent_behaviors` yourself (step 6) before `create_ai_agent` / `update_ai_agent`. CLI flags: `--repo-uuid`, `--name`, `--instruction`, `--behaviors` (JSON array), `--data-sources` (JSON array); `agent validate-behaviors` instead takes `--data-source-id` (repeatable).
 
 On create/update, slug `fieldId` values are resolved to numeric `internal_id`, `%{field:<slug>}` is rewritten to `%{field:<internal_id>}`, and `referencedFieldIds` is auto-populated when applicable.
 
 ### 8 — Handle responses
 
 - **Success with `agent_uuid`** → done.
-- **Partial failure (UUID returned, behaviors rejected)** → call `update_ai_agent` with that UUID. Do NOT create a second agent.
+- **Partial failure (UUID returned, behaviors rejected)** → call `update_ai_agent` with the **full required payload**: `uuid`, `repo_uuid` (same pipe UUID used on create), `name`, `instruction`, and complete `behaviors` (full-replace, not patch). Do NOT create a second agent.
 - **Failure without UUID** → validation or API error. Trust the hint text in the enriched error.
 
 ### 9 — Verify
@@ -291,7 +308,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
 
 - **`update_ai_agent` is full-replace, not patch.** Fetch existing behaviors with `get_ai_agent` first, merge, then update — otherwise existing behaviors are silently dropped.
 - **Behavior save is all-or-nothing (`RECORD_NOT_SAVED`).** One invalid behavior rejects the entire list. The MCP tool auto-validates the payload on failure; if structurally correct, the error indicates a pipe-level restriction (not your payload). Inform the user this pipe does not support AI agent behaviors and suggest alternatives.
-- **Partial-failure recovery.** If `create_ai_agent` returns a UUID but reports failure, call `update_ai_agent` with that UUID. Do NOT create a second agent.
+- **Partial-failure recovery.** If `create_ai_agent` returns a UUID but reports failure, call `update_ai_agent(uuid, repo_uuid, name, instruction, behaviors)` — all five are required. Reuse the create `repo_uuid`; send the full behaviors list. Do NOT create a second agent.
 - **Cross-pipe `PERMISSION_DENIED`.** Behaviors with `create_connected_card` or cross-pipe `create_card` require the service account to be a member of **both** source and destination pipes. When it is not, the API returns a bare `PERMISSION_DENIED`. Recovery: `get_pipe_members` + `invite_members` on the destination pipe.
 - **Phase transition rule on `move_card`.** Destination must be reachable from the source phase (`cards_can_be_moved_to_phases`). Both `validate_ai_agent_behaviors` and `create_ai_agent` / `update_ai_agent` enrich this error with `valid_destinations` and a hint that transition rules are editable in the Pipefy UI only.
 - **Maximum 5 behaviors per agent.** Adding a 6th rejects the whole save.

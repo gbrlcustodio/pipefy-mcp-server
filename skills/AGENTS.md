@@ -22,7 +22,7 @@ skills/
 ```
 
 **Domain folders** match the MCP tool surface:
-`pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ai-agents`, `observability`, `members-email-webhooks`, `portal-setup`, `attachments`, `introspection`, `process-design`, `process-intelligence`, `api-troubleshoot`
+`pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ipaas`, `ai-agents`, `observability`, `members-email-webhooks`, `portal-setup`, `attachments`, `introspection`, `process-design`, `process-intelligence`, `api-troubleshoot`
 
 ---
 

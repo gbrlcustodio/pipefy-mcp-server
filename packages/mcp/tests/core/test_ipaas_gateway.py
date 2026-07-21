@@ -21,12 +21,12 @@ REDIRECT_URI = "https://localhost/pipefy-mcp-callback"
 
 TOOLS = [
     {
-        "name": "ap_create_flow",
+        "name": "demo_create_flow",
         "description": "Create a new flow\n\nLonger guidance here.",
         "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}},
     },
     {
-        "name": "ap_list_flows",
+        "name": "demo_list_flows",
         "description": "List flows in the current project",
         "inputSchema": {"type": "object"},
     },
@@ -224,13 +224,15 @@ CALL_RESULT = {
 async def test_call_tool_posts_tools_call_with_arguments(respx_mock, gateway):
     mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
 
-    result = await gateway.call_tool("embed-jwt", "ap_create_flow", {"name": "My flow"})
+    result = await gateway.call_tool(
+        "embed-jwt", "demo_create_flow", {"name": "My flow"}
+    )
 
     assert result == CALL_RESULT
     body = json.loads(mcp_route.calls.last.request.content)
     assert body["method"] == "tools/call"
     assert body["params"] == {
-        "name": "ap_create_flow",
+        "name": "demo_create_flow",
         "arguments": {"name": "My flow"},
     }
     assert (
@@ -243,10 +245,10 @@ async def test_call_tool_posts_tools_call_with_arguments(respx_mock, gateway):
 async def test_call_tool_defaults_arguments_to_empty_object(respx_mock, gateway):
     mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
 
-    await gateway.call_tool("embed-jwt", "ap_list_flows")
+    await gateway.call_tool("embed-jwt", "demo_list_flows")
 
     body = json.loads(mcp_route.calls.last.request.content)
-    assert body["params"] == {"name": "ap_list_flows", "arguments": {}}
+    assert body["params"] == {"name": "demo_list_flows", "arguments": {}}
 
 
 @pytest.mark.anyio
@@ -257,7 +259,7 @@ async def test_call_tool_gives_only_the_invocation_hop_the_long_timeout(
     """A called tool may run a real flow; the handshake hops keep 30s."""
     mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
 
-    await gateway.call_tool("embed-jwt", "ap_test_flow", {"flowId": "flow-1"})
+    await gateway.call_tool("embed-jwt", "demo_test_flow", {"flowId": "flow-1"})
 
     initialize, invocation = mcp_route.calls[-2].request, mcp_route.calls[-1].request
     assert initialize.extensions["timeout"]["read"] == REQUEST_TIMEOUT_SECONDS
@@ -274,7 +276,7 @@ async def test_call_tool_relays_host_error_results_without_raising(respx_mock, g
     }
     _mock_happy_chain(respx_mock, rpc_result=error_result)
 
-    result = await gateway.call_tool("embed-jwt", "ap_delete_flow", {"id": "nope"})
+    result = await gateway.call_tool("embed-jwt", "demo_delete_flow", {"id": "nope"})
 
     assert result == error_result
 
@@ -284,7 +286,7 @@ async def test_call_tool_relays_host_error_results_without_raising(respx_mock, g
 async def test_call_tool_parses_sse_encoded_response(respx_mock, gateway):
     _mock_happy_chain(respx_mock, sse_tools_list=True, rpc_result=CALL_RESULT)
 
-    result = await gateway.call_tool("embed-jwt", "ap_create_flow", {"name": "x"})
+    result = await gateway.call_tool("embed-jwt", "demo_create_flow", {"name": "x"})
 
     assert result == CALL_RESULT
 
@@ -299,7 +301,7 @@ async def test_jsonrpc_error_from_tools_call_names_the_method(respx_mock, gatewa
     )
 
     with pytest.raises(IpaasGatewayError, match="tools/call returned an error"):
-        await gateway.call_tool("embed-jwt", "ap_create_flow", {})
+        await gateway.call_tool("embed-jwt", "demo_create_flow", {})
 
 
 @pytest.mark.anyio
@@ -320,7 +322,7 @@ async def test_call_tool_timeout_names_the_method_and_points_at_runs(
     with pytest.raises(
         IpaasGatewayError, match="tools/call timed out after 120s.*run-listing"
     ):
-        await gateway.call_tool("embed-jwt", "ap_test_flow", {"flowId": "flow-1"})
+        await gateway.call_tool("embed-jwt", "demo_test_flow", {"flowId": "flow-1"})
 
 
 @pytest.mark.anyio
@@ -335,7 +337,7 @@ async def test_handshake_timeout_reports_retry_safe(respx_mock, gateway):
     respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=responder)
 
     with pytest.raises(IpaasGatewayError, match="handshake timed out.*safe to retry"):
-        await gateway.call_tool("embed-jwt", "ap_test_flow", {"flowId": "flow-1"})
+        await gateway.call_tool("embed-jwt", "demo_test_flow", {"flowId": "flow-1"})
 
 
 @pytest.mark.anyio
@@ -345,7 +347,7 @@ async def test_response_without_result_names_the_method(respx_mock, gateway):
     respx_mock.post(f"{IPAAS_URL}/mcp").respond(200, json={"jsonrpc": "2.0", "id": 2})
 
     with pytest.raises(IpaasGatewayError, match="tools/call.*no result"):
-        await gateway.call_tool("embed-jwt", "ap_list_flows")
+        await gateway.call_tool("embed-jwt", "demo_list_flows")
 
 
 PIECE_NAME = "@example/piece-demo"
@@ -562,7 +564,7 @@ async def test_sse_notification_frames_before_the_response_are_skipped(
 
     respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=responder)
 
-    result = await gateway.call_tool("embed-jwt", "ap_create_flow", {"name": "x"})
+    result = await gateway.call_tool("embed-jwt", "demo_create_flow", {"name": "x"})
 
     assert result == CALL_RESULT
 
@@ -577,7 +579,7 @@ async def test_null_result_is_a_protocol_error(respx_mock, gateway):
     )
 
     with pytest.raises(IpaasGatewayError, match="tools/call.*non-object result"):
-        await gateway.call_tool("embed-jwt", "ap_list_flows")
+        await gateway.call_tool("embed-jwt", "demo_list_flows")
 
 
 @pytest.mark.anyio

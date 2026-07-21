@@ -94,7 +94,7 @@ For `card_moved` and `field_updated`, you MUST include `event_params`. Omitting 
 - Each behavior MUST have at least one action in `actionsAttributes`.
 - **Maximum 5 behaviors per agent.**
 - The MCP tool auto-injects `referenceId` and `%{action:<uuid>}` placeholders — do NOT generate these yourself.
-- `inputMode: "fill_with_ai"` lets the AI decide the value. Omit `inputMode` and set `value` for fixed values.
+- `inputMode: "fill_with_ai"` marks **output** fields the AI writes. **Input** field references (`%{field:<internal_id>}` in the behavior `instruction`, auto-populated into `referencedFieldIds` on create/update) are needed **only when** the AI must read card field values, not for every `fill_with_ai` (e.g. instruction-only, OCR/attachment, or knowledge-base context). When card inputs are needed and omitted, `card.fields` arrives empty at trigger time and the model may hallucinate. A wrong **numeric** input id is accepted silently (validate and create/update) and becomes a dead `referencedFieldId`; a wrong **slug** never resolves and is dropped by the digits-only extractor (unresolved token). Either way `card.fields` stays empty (same hallucination); confirm the id with `get_start_form_fields` / `get_phase_fields`. Dotted connected-pipe refs (`%{field:<parent>.<child>}`) are not forwarded at runtime; to read a connected card field, use a field on the current pipe. Omit `inputMode` and set `value` for fixed values.
 - For `update_card`: set `destinationPhaseId: ""` when not moving the card.
 
 #### Example identifiers (fictional)
@@ -111,8 +111,10 @@ Use real values from `get_pipe` / `get_start_form_fields` for your org. Placehol
 #### Metadata examples
 
 ```json
-// update_card
+// update_card — output field fill_with_ai; input fields referenced in instruction
 { "pipeId": "987654321", "destinationPhaseId": "", "fieldsAttributes": [{ "fieldId": "900000101", "inputMode": "fill_with_ai", "value": "" }] }
+// companion instruction (aiBehaviorParams.instruction), not metadata:
+// "Read %{field:900000102} (title) and %{field:900000103} (description), then fill the category."
 
 // move_card
 { "destinationPhaseId": "900000201", "pipeId": "", "fieldsAttributes": [] }
@@ -152,12 +154,12 @@ Inside `actionParams.aiBehaviorParams` a behavior may also carry:
 ### 6 — Validate (recommended for complex behaviors)
 
 `validate_ai_agent_behaviors(pipe_id, behaviors)` checks:
-- Field IDs exist in the pipe
+- Output field IDs (`fieldsAttributes[].fieldId`) exist in the pipe
 - Phase IDs exist
 - Pipe relations exist for `create_connected_card`
 - Action types are valid
 - Behavior structure passes Pydantic validation (including canonical `capabilitiesAttributes` shape and at most one of `providerId` / `systemProviderId`)
-- Field IDs are checked against start-form and phase fields, accepting both slug `id` and numeric `internal_id`. Placeholders like `%{field:<slug>}` or `%{field:<internal_id>}` are validated but **not rewritten** at this step.
+- `fieldsAttributes[].fieldId` values (outputs) are checked against start-form and phase fields, accepting both slug `id` and numeric `internal_id`. Instruction `%{field:...}` tokens (inputs) are **not** existence-checked: a missing id/slug still yields `valid: true`. Slug → numeric rewrite happens only on create/update, not here.
 - Pass `data_source_ids` (agent-level) to also check knowledge base membership: it is unioned with each behavior's `dataSourceIds` and checked against the pipe's knowledge bases. Unknown IDs are **warnings only** (`valid` stays true); if the knowledge base list cannot be read, a single warning is added and the check is skipped.
 
 ### 7 — Create the agent

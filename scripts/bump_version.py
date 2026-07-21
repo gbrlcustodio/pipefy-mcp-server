@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, the Claude plugin manifest, and root workspace meta.
+"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, the Claude plugin and marketplace manifests, and root workspace meta.
 
 After rewriting the version strings, runs ``uv lock`` so the workspace
 lockfile's ``pipefy-workspace`` entry tracks the new version.
@@ -21,6 +21,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
+MARKETPLACE_MANIFEST = REPO_ROOT / ".claude-plugin/marketplace.json"
+
+# Both Claude manifests carry the release version, so both move with every bump.
+JSON_MANIFESTS: tuple[Path, ...] = (PLUGIN_MANIFEST, MARKETPLACE_MANIFEST)
 
 # The SDK distribution; its __version__ is the lockstep source of truth every
 # other version-bearing file is compared against.
@@ -87,10 +91,13 @@ VERSION_ASSIGN_RE = re.compile(
     re.MULTILINE,
 )
 
-# The Claude plugin manifest carries the release version too (it is what the
-# marketplace shows), so it moves with every bump. plugin.json has a single
-# top-level "version" key.
-PLUGIN_MANIFEST_VERSION_RE = re.compile(
+# Matches a JSON "version" string in a Claude manifest. plugin.json holds it at
+# the top level; marketplace.json holds it on the plugin's catalog entry, which
+# is the version the plugin marketplace UI displays. Each manifest has exactly
+# one "version" key, so _sole_match / _sub_exactly_one target the right one and
+# a second key (e.g. a further catalog entry) fails loudly instead of being
+# silently rewritten.
+JSON_VERSION_RE = re.compile(
     r'(?P<prefix>"version"\s*:\s*")(?P<value>[^"]+)(?P<suffix>")',
 )
 
@@ -184,15 +191,21 @@ def write_version_to_all_files(new_version: str) -> None:
     )
     ROOT_PYPROJECT.write_text(new_root, encoding="utf-8")
 
-    manifest_text = PLUGIN_MANIFEST.read_text(encoding="utf-8")
-    new_manifest = _sub_exactly_one(
-        PLUGIN_MANIFEST_VERSION_RE,
+    for manifest in JSON_MANIFESTS:
+        _write_json_manifest_version(manifest, new_version)
+
+
+def _write_json_manifest_version(path: Path, new_version: str) -> None:
+    """Rewrite the lone JSON ``"version"`` string in a Claude manifest."""
+    text = path.read_text(encoding="utf-8")
+    new_text = _sub_exactly_one(
+        JSON_VERSION_RE,
         rf"\g<prefix>{new_version}\g<suffix>",
-        manifest_text,
+        text,
         what='"version" key',
-        where=PLUGIN_MANIFEST,
+        where=path,
     )
-    PLUGIN_MANIFEST.write_text(new_manifest, encoding="utf-8")
+    path.write_text(new_text, encoding="utf-8")
 
 
 def workspace_dep_pin_re(dep_name: str) -> re.Pattern[str]:
@@ -444,16 +457,17 @@ def verify_lockstep() -> int:
         )
         return 1
 
-    try:
-        manifest_text = PLUGIN_MANIFEST.read_text(encoding="utf-8")
-    except OSError as exc:
-        print(f"could not read {PLUGIN_MANIFEST}: {exc}", file=sys.stderr)
-        return 1
-    m = _sole_match(PLUGIN_MANIFEST_VERSION_RE, manifest_text)
-    if not m:
-        print(f'expected exactly one "version" in {PLUGIN_MANIFEST}', file=sys.stderr)
-        return 1
-    raw[str(PLUGIN_MANIFEST.relative_to(REPO_ROOT))] = m.group("value")
+    for manifest in JSON_MANIFESTS:
+        try:
+            manifest_text = manifest.read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"could not read {manifest}: {exc}", file=sys.stderr)
+            return 1
+        m = _sole_match(JSON_VERSION_RE, manifest_text)
+        if not m:
+            print(f'expected exactly one "version" in {manifest}', file=sys.stderr)
+            return 1
+        raw[str(manifest.relative_to(REPO_ROOT))] = m.group("value")
 
     canonical = {label: str(Version(v)) for label, v in raw.items()}
     if len(set(canonical.values())) != 1:

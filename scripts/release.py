@@ -245,16 +245,24 @@ def _show_at(ref: str, path: str) -> str:
     return capture(["git", "show", f"{ref}:{path}"])
 
 
-def _dev_current_version() -> str:
-    """The lockstep version on ``origin/dev`` (read from its root pyproject).
+def _version_at(ref: str) -> str:
+    """The lockstep version at ``ref`` (read from its root pyproject).
 
-    ``release_pr`` computes the target from dev's version, not the working
-    tree's — the branch it is invoked from may carry a different version.
+    ``release_pr`` derives the target from ``origin/dev``'s version, not the
+    working tree's — the branch it is invoked from may carry a different one —
+    and compares against ``origin/main`` to refuse a downgrade.
     """
     import tomllib
 
-    data = tomllib.loads(_show_at(f"origin/{DEV_BRANCH}", "pyproject.toml"))
+    data = tomllib.loads(_show_at(ref, "pyproject.toml"))
     return data["project"]["version"]
+
+
+def _target_ahead_of_main(target: str, main_version: str) -> bool:
+    """Whether ``target`` is a strictly newer version than ``main_version``."""
+    from packaging.version import Version
+
+    return Version(target) > Version(main_version)
 
 
 def _dev_unreleased_body() -> str:
@@ -316,15 +324,29 @@ def release_pr(bump_arg: str, *, assume_yes: bool = False) -> None:
             "add release notes first"
         )
 
-    current = _dev_current_version()
+    current = _version_at(f"origin/{DEV_BRANCH}")
     target = target_for(bump_arg, current)
+
+    # Guard against a downgrade-shaped release: if origin/dev is behind
+    # origin/main (a release bump on main not back-merged into dev), the bump
+    # computed from dev can land below main's already-released version.
+    main_version = _version_at(f"origin/{MAIN_BRANCH}")
+    if not _target_ahead_of_main(target, main_version):
+        raise ReleaseError(
+            f"Computed target v{target} is not ahead of origin/{MAIN_BRANCH} "
+            f"(v{main_version}); origin/{DEV_BRANCH} (v{current}) is behind "
+            f"{MAIN_BRANCH}. Back-merge {MAIN_BRANCH} into {DEV_BRANCH} before "
+            "cutting a release."
+        )
+
     branch = f"rc-{MAIN_BRANCH}/release/v{target}"
     if branch_exists(branch):
         raise ReleaseError(f"Branch {branch} already exists")
 
     confirm(
-        f"Will branch off origin/{DEV_BRANCH}, bump {current} -> {target}, and "
-        f"open a release PR into {MAIN_BRANCH}. Proceed?",
+        f"Will branch off origin/{DEV_BRANCH}, bump {current} -> {target} "
+        f"(origin/{MAIN_BRANCH} is at {main_version}), and open a release PR "
+        f"into {MAIN_BRANCH}. Proceed?",
         assume_yes=assume_yes,
     )
 

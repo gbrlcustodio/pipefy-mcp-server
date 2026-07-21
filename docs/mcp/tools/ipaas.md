@@ -8,7 +8,7 @@ Discover and invoke the iPaaS tools available to a pipe's workspace, and connect
 |------|-----------|------|
 | `get_ipaas_tools` | Yes | Lists the iPaaS (Advanced Automations) tools available for a pipe; with `tool_name`, expands one tool's full description and input schema. |
 | `call_ipaas_tool` | No | Invokes one iPaaS tool by name with `arguments` matching its input schema, relaying the result in full. The catalog includes destructive operations (deleting flows, tables, records) — reserve those for explicit user intent. |
-| `get_ipaas_connection_auth_url` | Yes | Step 1 for OAuth-based apps: returns the consent URL the user opens in a browser, plus a `completion` bundle for step 2. |
+| `get_ipaas_connection_auth_url` | No | Step 1 for OAuth-based apps: returns the consent URL the user opens in a browser, plus a `completion` bundle for step 2. |
 | `create_ipaas_connection` | No | Creates (or, on an existing `external_id`, rotates) an app connection in the pipe's workspace — token/API-key credentials directly, or OAuth via the two-step flow. |
 
 **`pipe_id`** matches GraphQL: use a **string** (unquoted JSON integers are coerced). See [Pipefy IDs in pipes & cards](pipes-and-cards.md#pipefy-ids-type-safety).

@@ -12,7 +12,21 @@ The next **GitHub pre-release** after the standalone repo’s [`v0.1.0-beta.1`](
 
 The Release workflow requires the git tag (without leading `v`) to **exactly match** `__version__` in `packages/sdk/src/pipefy_sdk/__init__.py` (and the MCP/CLI/Auth/Infra copies). For example tag **`v0.2.0-beta.1`** implies **`__version__ = "0.2.0-beta.1"`** in all five packages before you push the tag (set via step 2 below using `version=0.2.0-beta.1`, or edit the five `__init__.py` files together).
 
-`scripts/release.py` drives the whole flow as two subcommands split at the irreversible boundary — everything before the tag push is local and reversible, so you review the commit before anything leaves your machine.
+`scripts/release.py` drives the flow, split at the irreversible boundary — everything before the tag push is local and reversible, so you review before anything leaves your machine. The subcommands are `release-pr` (open a dev→main release PR), `prepare` (bump/stamp/commit on `main`), `publish` (tag, push, watch, verify), and `verify` (re-run the post-publish checks).
+
+### Recommended: `dev → main` release PR
+
+Most releases start from `dev`. `release.py release-pr <bump>` branches off the latest `origin/dev`, runs the same bump-and-stamp as `prepare`, pushes, and opens a PR into `main`:
+
+```bash
+uv run python scripts/release.py release-pr patch
+```
+
+It reads the current version and `## [Unreleased]` from `origin/dev` (not your checked-out branch), confirms the computed target, then opens the PR. After the PR is approved and merged into `main`, cut the release from `main` with `publish` (step 4 below) — deliberately a human step, so the tag push triggers the Release workflow. `release-pr` never tags or publishes.
+
+### From `main` directly
+
+If `main` already carries the merged work, run the steps below (this is also exactly what `release-pr` automates for steps 1–2, off `dev`).
 
 1. Merge work to `main` and ensure `CHANGELOG.md` has everything under `## [Unreleased]`.
 2. Prepare the release. This bumps the shared version across every version-bearing file (via `scripts/bump_version.py`), stamps the `## [Unreleased]` CHANGELOG heading with the new version and today's date, re-seeds an empty `## [Unreleased]`, and commits — all locally:
@@ -68,7 +82,7 @@ Same steps as above. PyPI publishing already runs on every tag; a **`v1.`** tag 
 
 | Piece | Role |
 | --- | --- |
-| `scripts/release.py` | Guided release CLI. `prepare <bump>` runs `bump_version.py`, stamps the `CHANGELOG.md` `## [Unreleased]` heading, and commits (all local, reversible). `publish` tags, pushes, watches the Release workflow, then verifies. `verify <tag>` re-runs the post-publish checks (all five wheels on the GitHub Release, PyPI install resolves, `install.sh` dry-run resolves the tag). It shells out to `bump_version.py` for the transform rather than reimplementing it. |
+| `scripts/release.py` | Guided release CLI. `release-pr <bump>` branches off `origin/dev`, prepares, and opens a release PR into `main`. `prepare <bump>` runs `bump_version.py`, stamps the `CHANGELOG.md` `## [Unreleased]` heading, and commits on `main` (all local, reversible). `publish` tags, pushes, watches the Release workflow, then verifies. `verify <tag>` re-runs the post-publish checks (all five wheels on the GitHub Release, PyPI install resolves, `install.sh` dry-run resolves the tag). It shells out to `bump_version.py` for the transform rather than reimplementing it. |
 | `scripts/bump_version.py` | Reads the SDK `__version__`, applies the bump, writes the same value to SDK, MCP, CLI, Auth, and Infra `__init__.py`, the root `pyproject.toml`'s `[project].version`, the `.claude-plugin/plugin.json` `version`, and each published package's sibling `==` pins, then runs `uv lock` to refresh `uv.lock`. Also exposes a `verify` mode that asserts every version-bearing file agrees. |
 | `.github/workflows/ci.yml` | Invokes `scripts/bump_version.py verify` to assert that all version-bearing files match: the five `__version__` strings, the root `pyproject.toml` `[project].version`, `uv.lock`, the `.claude-plugin/plugin.json` `version`, and the sibling `==` pins in each published package's `pyproject.toml`. |
 | `.github/workflows/release.yml` | On `v*` tags: asserts the tag matches SDK `__version__`, extracts the matching `CHANGELOG.md` section as the GitHub Release body, builds wheels and sdists with `uv build --all-packages -o dist --wheel --sdist`, guards that `dist/` holds exactly five wheels (one per workspace member) so a sixth member cannot ship unnoticed, attaches wheels to the GitHub Release, and uploads all five wheels to PyPI via Trusted Publishing on every `v*` tag. |

@@ -258,6 +258,15 @@ REMOTE_SEED = frozenset(
         "create_ai_automation",
         "update_ai_automation",
         "delete_ai_automation",
+        # AI agent writes (#480): create/update/delete and the enable/disable toggle
+        # reach the public API with the request-scoped bearer and are governed by API
+        # permissions (manage_ai_agents); no filesystem or per-user process-global
+        # settings reads, every input a per-request value. delete carries the
+        # two-step confirm UX guard.
+        "create_ai_agent",
+        "update_ai_agent",
+        "delete_ai_agent",
+        "toggle_ai_agent_status",
     }
 )
 

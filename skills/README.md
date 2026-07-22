@@ -43,6 +43,7 @@ git clone https://github.com/pipefy/ai-toolkit.git
 | **Process Design** | [pipefy-process-design](process-design/pipefy-process-design/SKILL.md) | Process architecture (consulting; not execution). |
 | **Process Intelligence** | [pipefy-process-intelligence](process-intelligence/pipefy-process-intelligence/SKILL.md) | Analyze pipes for improvement opportunities. |
 | **API Fallback** | [pipefy-api-fallback](api-troubleshoot/pipefy-api-fallback/SKILL.md) | Raw GraphQL fallback when higher-level tools are insufficient. |
+| **Onboarding** | [pipefy-toolkit-setup](onboarding/pipefy-toolkit-setup/SKILL.md) | First-time install: hosted MCP, `install.sh`, or Claude Code plugin. |
 
 ---
 

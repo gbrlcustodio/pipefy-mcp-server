@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Docs / skills**: hosted MCP (`mcp.pipefy.com`) install snippet on the root README front door; first-time agent checklist [`pipefy-toolkit-setup`](skills/onboarding/pipefy-toolkit-setup/SKILL.md) (path choice / ask-your-agent / verify — commands stay in `README.md#installation`, per #246).
+
+### Fixed
+
+- **Installer**: Claude Code next-steps print `/pipefy:pipefy-login` (and the full plugin slash sequence) instead of the stale `/pipefy-login` label.
+
+## [0.3.0-beta.1] - 2026-07-20
+
+### Added
+
 - **MCP**: hosted structured logging on the HTTP transport (#373). Each HTTP request and each tool call emits one JSON line on **stderr** (`event`: `http_request` / `tool_call`) for hosted debugging, with a privacy allowlist (method, path, status, duration, caller identity, per-tool `arg_keys` (key names only, never argument values)). Request logging uses pure-ASGI middleware; tool logging uses the `#378` tool-call middleware chain via the same structured emitter. The dedicated structured logger is pinned at `INFO` independently of `PIPEFY_MCP_LOG_LEVEL` (which governs FastMCP/root text only). Stdio is unchanged: stdout remains the JSON-RPC wire. HTTP is served via uvicorn with `access_log=False` so structured request lines replace uvicorn's text access log.
 - **CLI**: `pipefy relation table list --ids <id,...>` mirrors MCP `get_table_relations` (table-relation IDs, not database table IDs).
 - **CLI**: `pipefy pipe start-form <pipe_id>` mirrors MCP `get_start_form_fields` (optional `--required-only`).

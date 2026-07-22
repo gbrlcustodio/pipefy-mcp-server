@@ -25,4 +25,4 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributing skills (Markdown playbooks) |
 | [`../RELEASE.md`](../RELEASE.md) | Versioning and GitHub Releases |
 
-First-time install and per-client MCP wiring live in the root [`README.md#installation`](../README.md#installation). Package READMEs under `packages/*/README.md` cover surface-specific edge cases.
+First-time install and per-client MCP wiring live in the root [`README.md#installation`](../README.md#installation). First-time agent checklist (path choice, ask-your-agent, verify): [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](../skills/onboarding/pipefy-toolkit-setup/SKILL.md). Package READMEs under `packages/*/README.md` cover surface-specific edge cases.

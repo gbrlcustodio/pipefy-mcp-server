@@ -15,7 +15,7 @@ Create and delete organization **service accounts** — OAuth2 machine identitie
 
 - `create_service_account` returns the **client secret** and **token endpoint** in its response, and there is **no query to read them back** — capture and store them at creation time.
 - The secret is returned to the caller because it is needed to authenticate the account (mint access tokens via the OAuth2 client-credentials grant against the token endpoint). It is never logged.
-- Both tools are **excluded from the remote profile**: provisioning org-level identities is not a hosted, per-request operation.
+- Both tools are **remote-safe**: each reaches the API with the request-scoped caller's bearer and is fully governed by API permissions (org-admin to create/delete). The returned client secret goes to the authenticated caller only and is never logged (the hosted logging layer excludes response bodies).
 
 ## Lifecycle
 

@@ -3,8 +3,10 @@
 Secrets contract: ``create_service_account`` returns the OAuth2 client secret and
 token endpoint ONCE — there is no query to read them back. The tool therefore
 returns them to the caller (they are needed to authenticate as the account) but
-never logs them, and the toolset is excluded from the remote profile (org-level
-provisioning is not a hosted, per-request operation).
+never logs them. These tools are remote-safe: each reaches the API with the
+request-scoped bearer and is fully governed by API permissions (org-admin to
+create/delete), and the hosted logging layer excludes response bodies, so the
+returned secret is not logged.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from pipefy_mcp.core.tool_error_envelope import tool_error, tool_success
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import handle_tool_graphql_error
 from pipefy_mcp.tools.member_tool_helpers import service_account_is_member
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 _SA_NAME_MAX = 20
@@ -32,6 +35,7 @@ class ServiceAccountTools:
     def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_service_account(
             organization_uuid: str,
@@ -163,6 +167,7 @@ class ServiceAccountTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_service_account(
             ctx: Context[ServerSession, None],

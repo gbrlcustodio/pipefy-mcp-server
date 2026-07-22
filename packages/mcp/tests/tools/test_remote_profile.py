@@ -112,6 +112,17 @@ REMOTE_SEED = frozenset(
         "get_email_templates",
         "get_portal",
         "list_portals",
+        # service-account tools: the first write mutations on the seed. Each
+        # reaches the API with the request-scoped bearer and is fully governed by
+        # API permissions (org-admin to create/delete, pipe-admin to add-to-pipe);
+        # no filesystem or per-user process-global settings reads (org/pipe are
+        # per-request arguments). create_service_account returns the new account's
+        # own client secret to the authenticated caller — the hosted logging layer
+        # excludes response bodies, so it is not logged. delete_service_account is
+        # guarded by two-step confirmation.
+        "create_service_account",
+        "delete_service_account",
+        "add_service_account_to_pipe",
     }
 )
 

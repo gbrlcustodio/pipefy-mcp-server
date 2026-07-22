@@ -52,7 +52,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_portal_element` | `pipefy portal element create` | shipped | `--page-id`, `--type`, `--metadata` JSON; optional `--data-sources` JSON array. SDK validates metadata before GraphQL. |
 | `create_sub_portal` | `pipefy portal sub-portal create` | shipped | `--main-portal-uuid`; optional `--name`. Interfaces `createSubPortal`. |
 | `create_send_task_automation` | `pipefy automation send-task create` | shipped | (task title + recipients; optional `--event-params` / `--condition` JSON). |
-| `create_service_account` | `pipefy service-account create` | shipped | Org service account (`--org` uuid, `--name` <=20, `--role`, optional `--description` / `--expiration-unit` + `--expiration-value`; optional `--pipe-ids` + `--pipe-role` default admin to add it to pipes immediately). Returns the OAuth2 client secret + token endpoint once; not remote-safe. |
+| `create_service_account` | `pipefy service-account create` | shipped | Org service account (`--org` uuid, `--name` <=20, `--role`, optional `--description` / `--expiration-unit` + `--expiration-value`; optional `--pipe-ids` + `--pipe-role` default admin to add it to pipes immediately). Returns the OAuth2 client secret + token endpoint once (never logged); remote-safe. |
 | `create_table` | `pipefy table create` | shipped | — |
 | `create_table_field` | `pipefy table field create` | shipped | — |
 | `create_table_record` | `pipefy record create` | shipped | — |

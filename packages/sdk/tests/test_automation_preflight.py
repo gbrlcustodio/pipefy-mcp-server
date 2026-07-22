@@ -299,23 +299,43 @@ async def test_validate_ai_automation_prompt_overlap_prompt_and_output(mock_clie
 
 
 @pytest.mark.anyio
-async def test_validate_resolves_dest_from_nested_phase_id(mock_client):
-    """Agents often pass ``action_params.phase.id`` instead of ``to_phase_id`` — both must work."""
-    mock_client.get_phase_allowed_move_targets.return_value = {
-        "phase": {"name": "Src", "cards_can_be_moved_to_phases": []},
-    }
-    with pytest.raises(AutomationPreflightError) as excinfo:
-        await validate_traditional_automation_move_transition(
-            mock_client,
-            trigger_id="card_moved",
-            action_id="move_single_card",
-            extra_input={
-                "event_params": {"to_phase_id": "src"},
-                "action_params": {"phase": {"id": "dest"}},
-            },
-        )
-    assert "id src" in str(excinfo.value)
-    assert "id dest" in str(excinfo.value)
+async def test_validate_ignores_output_only_phase_key(mock_client):
+    """``action_params.phase`` is output-only and rejected on write, so it is not a destination.
+
+    Core exposes ``phase`` only on the read type (derived from ``to_phase_id``); the
+    write input declares only ``to_phase_id``. A payload carrying ``phase`` but no
+    ``to_phase_id`` resolves no destination, so preflight is a no-op — the API returns
+    its own unknown-argument error at create time.
+    """
+    await validate_traditional_automation_move_transition(
+        mock_client,
+        trigger_id="card_moved",
+        action_id="move_single_card",
+        extra_input={
+            "event_params": {"to_phase_id": "src"},
+            "action_params": {"phase": {"id": "dest"}},
+        },
+    )
+    mock_client.get_phase_allowed_move_targets.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_validate_ignores_camel_to_phase_id_in_action_params(mock_client):
+    """``action_params.toPhaseId`` (camel) is not the declared destination spelling.
+
+    The event src is a valid snake ``to_phase_id`` control, so the check is skipped
+    because the camel *dest* resolves to nothing, not because the src is missing.
+    """
+    await validate_traditional_automation_move_transition(
+        mock_client,
+        trigger_id="card_moved",
+        action_id="move_single_card",
+        extra_input={
+            "event_params": {"to_phase_id": "src"},
+            "action_params": {"toPhaseId": "dest"},
+        },
+    )
+    mock_client.get_phase_allowed_move_targets.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -323,18 +343,25 @@ async def test_validate_resolves_dest_from_nested_phase_id(mock_client):
 # ---------------------------------------------------------------------------
 
 
-def test_extract_field_map_ids_snake_case():
+def test_extract_field_map_ids_declared_shape():
+    """The declared write shape: snake ``field_map`` wrapper, camel ``fieldId`` entries."""
     ids = extract_field_map_destination_ids(
         {
             "action_params": {
-                "field_map": [{"field_id": "429659044", "inputMode": "copy_from"}],
+                "field_map": [{"fieldId": "429659044", "inputMode": "copy_from"}],
             },
         },
     )
     assert ids == ["429659044"]
 
 
-def test_extract_field_map_ids_camel_case():
+def test_extract_field_map_ids_ignores_camel_wrapper_keys():
+    """``actionParams``/``fieldMap`` (camel wrappers) are not declared names.
+
+    Top-level keys are normalized to ``action_params`` upstream, and ``fieldMap`` is not
+    the declared list key (``field_map``), so neither is read: the helper honors only the
+    declared wrapper spellings.
+    """
     ids = extract_field_map_destination_ids(
         {
             "actionParams": {
@@ -342,7 +369,7 @@ def test_extract_field_map_ids_camel_case():
             },
         },
     )
-    assert ids == ["111"]
+    assert ids == []
 
 
 def test_extract_field_map_ids_empty_when_missing():
@@ -466,7 +493,8 @@ async def test_validate_field_map_raises_for_slug_field_id(mock_client):
 
 
 @pytest.mark.anyio
-async def test_validate_field_map_accepts_camel_case_keys(mock_client):
+async def test_validate_field_map_ignores_camel_wrapper_keys(mock_client):
+    """Camel wrappers (``actionParams``/``fieldMap``) are not declared; nothing is validated."""
     mock_client.get_pipe.return_value = _pipe_with_internal_field("42")
     await validate_automation_field_map_field_ids(
         mock_client,
@@ -479,6 +507,7 @@ async def test_validate_field_map_accepts_camel_case_keys(mock_client):
             },
         },
     )
+    mock_client.get_pipe.assert_not_called()
 
 
 @pytest.mark.anyio

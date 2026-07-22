@@ -14,6 +14,7 @@ from pipefy_sdk.models.ai_agent import (
     UpdateAiAgentInput,
 )
 from pipefy_sdk.models.ai_automation import (
+    AutomationActionParamsInput,
     AutomationConditionInput,
     AutomationEventParamsInput,
     CreateAiAutomationInput,
@@ -57,6 +58,7 @@ __all__ = [
     "AttachmentUploadError",
     "AttachmentUploadResult",
     "AttachmentUploadStep",
+    "AutomationActionParamsInput",
     "AutomationConditionInput",
     "AutomationEventParamsInput",
     "BehaviorInput",

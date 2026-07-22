@@ -6,12 +6,38 @@ from pydantic import ValidationError
 
 from pipefy_sdk.models.ai_automation import (
     DEFAULT_CONDITION,
+    AutomationActionParamsInput,
     AutomationConditionInput,
     AutomationEventParamsInput,
     CreateAiAutomationInput,
     FieldMapInput,
     UpdateAiAutomationInput,
 )
+
+
+@pytest.mark.unit
+def test_action_params_input_types_field_map_and_to_phase_id():
+    """field_map parses into FieldMapInput entries; to_phase_id is the snake wire name."""
+    act = AutomationActionParamsInput.model_validate(
+        {
+            "field_map": [{"fieldId": "900", "inputMode": "copy_from"}],
+            "to_phase_id": "phase-7",
+        }
+    )
+    assert act.to_phase_id == "phase-7"
+    assert isinstance(act.field_map[0], FieldMapInput)
+    assert act.field_map[0].field_id == "900"
+
+
+@pytest.mark.unit
+def test_action_params_input_passes_siblings_and_output_only_phase_through_extra():
+    """Undeclared/sibling keys (card_id, and the output-only phase) ride extra verbatim."""
+    act = AutomationActionParamsInput.model_validate(
+        {"to_phase_id": "1", "card_id": "c-1", "phase": {"id": "9"}}
+    )
+    dumped = act.model_dump(by_alias=True, exclude_none=True)
+    assert dumped["card_id"] == "c-1"
+    assert dumped["phase"] == {"id": "9"}
 
 
 @pytest.mark.unit

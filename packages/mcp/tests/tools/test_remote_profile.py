@@ -225,6 +225,23 @@ REMOTE_SEED = frozenset(
         "unpublish_sub_portal",
         "update_sub_portal_element",
         "delete_sub_portal_element",
+        # webhook / member / email writes (#478): create/update/delete, membership
+        # ops, and inbox/template email sends that reach the public API with the
+        # request-scoped bearer and are governed by API permissions (pipe-admin to
+        # add/remove members); no filesystem reads, every input a per-request value.
+        # create_webhook/update_webhook read default_webhook_name and
+        # allow_insecure_urls in the SDK, but both are per-deployment settings (a
+        # cosmetic fallback name and the deployment's HTTPS-enforcement posture), not
+        # per-user decisions — safe under the single-backend assumption (see
+        # AGENTS.md #306 audit). delete_webhook carries the two-step confirm UX guard.
+        "create_webhook",
+        "update_webhook",
+        "delete_webhook",
+        "invite_members",
+        "remove_member_from_pipe",
+        "set_role",
+        "send_inbox_email",
+        "send_email_with_template",
     }
 )
 

@@ -54,11 +54,14 @@ def _extract_existing_prompt_and_field_ids(
 
     Returns ``(None, None)`` for non-AI rows or rows missing the ``aiParams`` block;
     callers must surface that as a clear user error.
+
+    The row comes from ``get_automation``, whose query selects ``action_params`` (snake)
+    with a nested ``aiParams`` / ``fieldIds`` (camel) block — one canonical key style.
     """
-    action_params = row.get("action_params") or row.get("actionParams") or {}
-    ai_params = action_params.get("aiParams") or action_params.get("ai_params") or {}
+    action_params = row.get("action_params") or {}
+    ai_params = action_params.get("aiParams") or {}
     prompt = ai_params.get("value")
-    field_ids = ai_params.get("fieldIds") or ai_params.get("field_ids")
+    field_ids = ai_params.get("fieldIds")
     if not isinstance(prompt, str):
         prompt = None
     if isinstance(field_ids, list) and all(isinstance(x, str) for x in field_ids):
@@ -266,7 +269,7 @@ def ai_automation_update(
                 "Could not infer current prompt / field_ids from the existing automation. "
                 "Pass --prompt and --field-ids explicitly."
             )
-        ev = str(row.get("event_id") or row.get("eventId") or "")
+        ev = str(row.get("event_id") or "")
         pre = await validate_ai_automation_prompt_sdk(
             client,
             pipe.strip(),

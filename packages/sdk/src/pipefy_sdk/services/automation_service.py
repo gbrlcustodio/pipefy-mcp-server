@@ -61,9 +61,10 @@ def _automation_condition_for_api(
 def _automation_event_params_for_api(
     params: AutomationEventParamsInput,
 ) -> dict[str, Any]:
-    """Serialize event_params without unset fields or explicit ``None`` values."""
+    """Serialize event_params to declared wire names, without unset/``None`` values."""
     return params.model_dump(
         mode="python",
+        by_alias=True,
         exclude_unset=True,
         exclude_none=True,
     )

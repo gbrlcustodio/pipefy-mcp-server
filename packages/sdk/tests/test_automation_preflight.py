@@ -108,6 +108,38 @@ async def test_validate_skips_without_src_phase(mock_client):
 
 
 @pytest.mark.anyio
+async def test_validate_ignores_camel_to_phase_id_in_event_params(mock_client):
+    """``toPhaseId`` (camel) is not the declared spelling, so it yields no src phase.
+
+    A valid snake ``action_params.to_phase_id`` dest is present as a control: the
+    check is skipped because the *event* src is camel-ignored, not because the dest
+    is missing.
+    """
+    await validate_traditional_automation_move_transition(
+        mock_client,
+        trigger_id="card_moved",
+        action_id="move_single_card",
+        extra_input={
+            "event_params": {"toPhaseId": "src"},
+            "action_params": {"to_phase_id": "dest"},
+        },
+    )
+    mock_client.get_phase_allowed_move_targets.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_validate_treats_malformed_event_params_as_absent(mock_client):
+    """Preflight is advisory: an uncoercible event_params payload is a no-op, never a raise."""
+    await validate_traditional_automation_move_transition(
+        mock_client,
+        trigger_id="card_moved",
+        action_id="move_single_card",
+        extra_input={"event_params": {"to_phase_id": ["not", "a", "scalar"]}},
+    )
+    mock_client.get_phase_allowed_move_targets.assert_not_called()
+
+
+@pytest.mark.anyio
 async def test_validate_skips_when_dest_missing(mock_client):
     await validate_traditional_automation_move_transition(
         mock_client,

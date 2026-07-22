@@ -308,7 +308,8 @@ def test_behavior_input_accepts_event_params_with_trigger_field_ids():
     payload = minimal_behavior_dict(event_id="field_updated")
     payload["eventParams"] = {"triggerFieldIds": [EXAMPLE_FIELD_INTERNAL_ID]}
     inp = BehaviorInput.model_validate(payload)
-    assert inp.event_params == {"triggerFieldIds": [EXAMPLE_FIELD_INTERNAL_ID]}
+    assert inp.event_params is not None
+    assert inp.event_params.trigger_field_ids == [EXAMPLE_FIELD_INTERNAL_ID]
 
 
 @pytest.mark.unit
@@ -316,7 +317,8 @@ def test_behavior_input_accepts_event_params_with_to_phase_id():
     payload = minimal_behavior_dict(event_id="card_moved")
     payload["eventParams"] = {"to_phase_id": "12345678"}
     inp = BehaviorInput.model_validate(payload)
-    assert inp.event_params == {"to_phase_id": "12345678"}
+    assert inp.event_params is not None
+    assert inp.event_params.to_phase_id == "12345678"
 
 
 @pytest.mark.unit

@@ -627,7 +627,7 @@ class AiAgentTools:
             Known ``actionType`` values for pipe-context checks are:
             ``move_card``, ``update_card``, ``create_card``, ``create_connected_card``,
             ``create_table_record``, and ``send_email_template``.
-            For ``move_card`` with trigger ``card_moved`` and ``eventParams.to_phase_id``/``toPhaseId``,
+            For ``move_card`` with trigger ``card_moved`` and ``eventParams.to_phase_id``,
             the tool also checks that ``destinationPhaseId`` is allowed from that phase
             (``cards_can_be_moved_to_phases``).
             For ``create_table_record``, ``fieldsAttributes`` hold **table** field IDs — they are not

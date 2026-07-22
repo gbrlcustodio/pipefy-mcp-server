@@ -186,6 +186,22 @@ REMOTE_SEED = frozenset(
         "update_table_record",
         "delete_table_record",
         "set_table_record_field_value",
+        # report writes (#476): pipe/organization report create/update/delete plus
+        # the export triggers, which reach the public API with the request-scoped
+        # bearer and are governed by API permissions; no filesystem or per-user
+        # process-global settings reads, every input a per-request value. The export
+        # triggers start an async server-side export and return a status/URL through
+        # the API — no local-disk write (the matching get_*_export reads that poll the
+        # fileURL are already seeded). Deletes carry the two-step confirm UX guard.
+        "create_pipe_report",
+        "update_pipe_report",
+        "delete_pipe_report",
+        "export_pipe_report",
+        "create_organization_report",
+        "update_organization_report",
+        "delete_organization_report",
+        "export_organization_report",
+        "export_pipe_audit_logs",
     }
 )
 

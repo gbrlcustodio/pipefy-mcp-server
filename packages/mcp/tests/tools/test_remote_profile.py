@@ -170,6 +170,22 @@ REMOTE_SEED = frozenset(
         "create_pipe_relation",
         "update_pipe_relation",
         "delete_pipe_relation",
+        # table / table-field / record writes (#475): create/update/delete and
+        # set_table_record_field_value that reach the public API with the
+        # request-scoped bearer and are governed by API permissions; no filesystem or
+        # per-user process-global settings reads, every input a per-request value.
+        # Deletes carry the two-step confirm UX guard. upload_attachment_to_table_record
+        # stays withheld (local-file input, tracked by #305).
+        "create_table",
+        "update_table",
+        "delete_table",
+        "create_table_field",
+        "update_table_field",
+        "delete_table_field",
+        "create_table_record",
+        "update_table_record",
+        "delete_table_record",
+        "set_table_record_field_value",
     }
 )
 

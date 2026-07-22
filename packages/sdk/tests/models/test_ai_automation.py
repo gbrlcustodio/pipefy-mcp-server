@@ -9,8 +9,36 @@ from pipefy_sdk.models.ai_automation import (
     AutomationConditionInput,
     AutomationEventParamsInput,
     CreateAiAutomationInput,
+    FieldMapInput,
     UpdateAiAutomationInput,
 )
+
+
+@pytest.mark.unit
+def test_field_map_input_parses_and_dumps_declared_wire_names():
+    """fieldId/inputMode are camel aliases; dump emits the declared wire names."""
+    entry = FieldMapInput.model_validate(
+        {"fieldId": "900", "inputMode": "fill_with_ai", "value": ""}
+    )
+    assert entry.field_id == "900"
+    assert entry.input_mode == "fill_with_ai"
+    assert entry.value == ""
+    assert entry.model_dump(by_alias=True, exclude_none=True) == {
+        "fieldId": "900",
+        "inputMode": "fill_with_ai",
+        "value": "",
+    }
+
+
+@pytest.mark.unit
+def test_field_map_input_is_a_lenient_shell():
+    """Required-ness is enforced by consumers, not the shell: partial entries parse."""
+    entry = FieldMapInput.model_validate({"inputMode": "copy_from"})
+    assert entry.field_id is None
+    assert entry.input_mode == "copy_from"
+    # Unknown keys round-trip verbatim via extra="allow".
+    entry2 = FieldMapInput.model_validate({"fieldId": "1", "futureKey": "x"})
+    assert entry2.model_dump(by_alias=True, exclude_none=True)["futureKey"] == "x"
 
 
 @pytest.mark.unit

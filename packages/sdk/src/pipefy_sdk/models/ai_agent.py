@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
-from pipefy_sdk.models.ai_automation import AutomationEventParamsInput
+from pipefy_sdk.models.ai_automation import (
+    AutomationEventParamsInput,
+    FieldMapInput,
+)
 from pipefy_sdk.models.validators import NonBlankStr
 
 ACTION_ID_AI_BEHAVIOR = "ai_behavior"
@@ -18,82 +21,82 @@ _CARD_FIELD_ACTION_TYPES = frozenset(
 )
 
 
-def _validate_fields_attributes_entries(action_type: str, metadata: dict) -> None:
+def _validate_fields_attributes_entries(
+    action_type: str, fields: list[FieldMapInput] | None
+) -> None:
     """Require non-empty ``fieldsAttributes`` with ``fieldId`` and ``inputMode`` per entry."""
-    fields = metadata.get("fieldsAttributes")
-    if not isinstance(fields, list) or not fields:
+    if not fields:
         raise ValueError(
             f"actionType '{action_type}' requires metadata.fieldsAttributes "
             f"as a non-empty list of field entries."
         )
     for i, entry in enumerate(fields):
-        if not isinstance(entry, dict):
-            raise ValueError(
-                f"actionType '{action_type}': fieldsAttributes[{i}] must be a dict."
-            )
-        if not entry.get("fieldId"):
+        if not entry.field_id:
             raise ValueError(
                 f"actionType '{action_type}': fieldsAttributes[{i}] requires 'fieldId'."
             )
-        if not entry.get("inputMode"):
+        if not entry.input_mode:
             raise ValueError(
                 f"actionType '{action_type}': fieldsAttributes[{i}] "
                 f"requires 'inputMode'."
             )
 
 
-def _validate_card_field_metadata(action_type: str, metadata: dict) -> None:
+def _validate_card_field_metadata(
+    action_type: str, metadata: AiBehaviorMetadataInput
+) -> None:
     """Validate metadata for actions that operate on card fields.
 
     Args:
         action_type: The actionType string (used in error messages).
-        metadata: The metadata dict from the action.
+        metadata: The typed metadata from the action.
 
     Raises:
         ValueError: When required keys are missing or malformed.
     """
-    if not metadata.get("pipeId"):
+    if not metadata.pipe_id:
         raise ValueError(
             f"actionType '{action_type}' requires metadata.pipeId "
             f"(the pipe where the action executes)."
         )
-    _validate_fields_attributes_entries(action_type, metadata)
+    _validate_fields_attributes_entries(action_type, metadata.fields_attributes)
 
 
-def _validate_create_table_record_metadata(metadata: dict) -> None:
+def _validate_create_table_record_metadata(metadata: AiBehaviorMetadataInput) -> None:
     """Validate metadata for create_table_record (table row, not pipe fields)."""
-    if not metadata.get("tableId"):
+    if not metadata.table_id:
         raise ValueError(
             "actionType 'create_table_record' requires metadata.tableId "
             "(target database table ID)."
         )
-    _validate_fields_attributes_entries("create_table_record", metadata)
+    _validate_fields_attributes_entries(
+        "create_table_record", metadata.fields_attributes
+    )
 
 
-def _validate_send_email_template_metadata(metadata: dict) -> None:
+def _validate_send_email_template_metadata(metadata: AiBehaviorMetadataInput) -> None:
     """Validate metadata for send_email_template actions."""
-    template_id = metadata.get("emailTemplateId")
+    template_id = metadata.email_template_id
     if not isinstance(template_id, str) or not template_id.strip():
         raise ValueError(
             "actionType 'send_email_template' requires metadata.emailTemplateId "
             "(non-empty email template ID)."
         )
-    if "allowTemplateModifications" in metadata:
-        mod = metadata["allowTemplateModifications"]
-        if not isinstance(mod, bool):
-            raise ValueError(
-                "actionType 'send_email_template': metadata.allowTemplateModifications "
-                "must be a boolean when set."
-            )
+    mod = metadata.allow_template_modifications
+    if mod is not None and not isinstance(mod, bool):
+        raise ValueError(
+            "actionType 'send_email_template': metadata.allowTemplateModifications "
+            "must be a boolean when set."
+        )
 
 
-def _validate_move_card_metadata(metadata: dict) -> None:
+def _validate_move_card_metadata(metadata: AiBehaviorMetadataInput) -> None:
     """Validate metadata for move_card actions.
 
     Raises:
         ValueError: When destinationPhaseId is missing or blank.
     """
-    dest = metadata.get("destinationPhaseId")
+    dest = metadata.destination_phase_id
     if not isinstance(dest, str) or not dest.strip():
         raise ValueError(
             "actionType 'move_card' requires metadata.destinationPhaseId "
@@ -173,7 +176,7 @@ def _validate_action_metadata(action: AiBehaviorActionAttributes) -> None:
     Unknown actionTypes are passed through without validation.
     """
     action_type = action.action_type or ""
-    metadata = action.metadata if isinstance(action.metadata, dict) else {}
+    metadata = action.metadata or AiBehaviorMetadataInput()
 
     if action_type in _CARD_FIELD_ACTION_TYPES:
         _validate_card_field_metadata(action_type, metadata)
@@ -202,12 +205,38 @@ class AiBehaviorCapabilityAttributes(BaseModel):
     enabled: bool | None = None
 
 
+class AiBehaviorMetadataInput(BaseModel):
+    """Behavior action ``metadata`` (``AiBehaviorMetadataInput``).
+
+    Types the fields the per-actionType validators read; ``extra="allow"`` carries
+    the growing tail (``mcpServerId``, ``toolName``, ``toolInputs``, ``emails``,
+    ``title``, …) verbatim so GET→update round-trips stay byte-identical. All declared
+    names are camelCase. ``allowTemplateModifications`` is typed ``Any`` on purpose:
+    Pydantic's lax bool coercion would silently turn ``"yes"`` into ``True``, so the
+    boolean contract is enforced by :func:`_validate_send_email_template_metadata`
+    with an actionable message instead.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    pipe_id: str | None = Field(default=None, alias="pipeId")
+    table_id: str | None = Field(default=None, alias="tableId")
+    destination_phase_id: str | None = Field(default=None, alias="destinationPhaseId")
+    email_template_id: str | None = Field(default=None, alias="emailTemplateId")
+    allow_template_modifications: Any = Field(
+        default=None, alias="allowTemplateModifications"
+    )
+    fields_attributes: list[FieldMapInput] | None = Field(
+        default=None, alias="fieldsAttributes"
+    )
+
+
 class AiBehaviorActionAttributes(BaseModel):
     """One entry in ``aiBehaviorParams.actionsAttributes``.
 
-    ``metadata`` stays an opaque dict: it is a typed input server-side but grows
-    frequently, so keeping it a pass-through keeps GET→update round-trips faithful.
-    Unknown keys (e.g. injected ``referenceId``) pass through via ``extra="allow"``.
+    ``metadata`` is a typed :class:`AiBehaviorMetadataInput` shell: the validators read
+    typed fields, while ``extra="allow"`` on that model keeps the growing tail (and
+    injected keys like ``referenceId``) so GET→update round-trips serialize identically.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -216,7 +245,7 @@ class AiBehaviorActionAttributes(BaseModel):
     name: str | None = None
     action_type: str | None = Field(default=None, alias="actionType")
     reference_id: str | None = Field(default=None, alias="referenceId")
-    metadata: dict | None = None
+    metadata: AiBehaviorMetadataInput | None = None
 
 
 class AiBehaviorParams(BaseModel):

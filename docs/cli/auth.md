@@ -139,7 +139,7 @@ The command answers four diagnostic questions: am I signed in, as whom, via whic
   "issuer": "https://signin.pipefy.com/realms/pipefy",
   "state": "active",                              // or "refresh-expired" | "needs-login" | "n/a"
   "access_expires_at": "2026-05-20T22:14:03Z",    // ISO 8601, null for static-bearer
-  "refresh_expires_at": "2026-06-19T18:02:00Z",   // ISO 8601, null when not stored-session
+  "refresh_expires_at": "2026-06-19T18:02:00Z",   // ISO 8601; null when not a stored session, or when the IdP advertises no refresh-token expiry (refresh_expires_in: 0)
   "token_rejected": false,                        // true only when the identity `me` query returned 401
   "keychain_backend": "Keyring",                  // null for non-stored-session sources
   "masking_env_vars": []                          // env vars masking a stored session, if any

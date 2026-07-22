@@ -358,8 +358,10 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
             report.access_expires_at = _iso_expiry(
                 stale.obtained_at, stale.token.expires_in
             )
+            # refresh_expires_in: 0 is Keycloak's "no advertised expiry" sentinel,
+            # not a 0-second TTL — treat as no expiry (else it renders "expired").
             report.refresh_expires_at = _iso_expiry(
-                stale.obtained_at, stale.token.refresh_expires_in
+                stale.obtained_at, stale.token.refresh_expires_in or None
             )
         raise _StatusExit(
             report=report,
@@ -382,7 +384,7 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
         fresh_session.obtained_at, fresh_session.token.expires_in
     )
     report.refresh_expires_at = _iso_expiry(
-        fresh_session.obtained_at, fresh_session.token.refresh_expires_in
+        fresh_session.obtained_at, fresh_session.token.refresh_expires_in or None
     )
 
 

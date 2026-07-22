@@ -142,6 +142,24 @@ REMOTE_SEED = frozenset(
         "delete_comment",
         "create_card_relation",
         "delete_card_relation",
+        # pipe / phase / phase-field / label writes (#473): create/update/delete
+        # (plus clone_pipe) that reach the public API with the request-scoped bearer
+        # and are governed by API permissions (pipe-admin to alter structure); no
+        # filesystem or per-user process-global settings reads, every input a
+        # per-request value. Deletes carry the two-step confirm UX guard.
+        "create_pipe",
+        "update_pipe",
+        "delete_pipe",
+        "clone_pipe",
+        "create_phase",
+        "update_phase",
+        "delete_phase",
+        "create_phase_field",
+        "update_phase_field",
+        "delete_phase_field",
+        "create_label",
+        "update_label",
+        "delete_label",
     }
 )
 

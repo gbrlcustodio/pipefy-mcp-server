@@ -659,7 +659,7 @@ def test_portal_page_layout_update_json(runner, clean_pipefy_env, saved_cwd, oau
 
 _ELEMENT_UUID = "el-uuid-1"
 _FORMS_METADATA = {"name": "Request form"}
-_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
+_FORMS_DATA_SOURCES = [{"repoId": EXAMPLE_PIPE_REPO_ID}]
 
 _CREATED_ELEMENT = {
     "id": _ELEMENT_UUID,

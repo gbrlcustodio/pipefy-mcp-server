@@ -145,7 +145,7 @@ async def poll_export_until_done(
         if state in ("failed", "error"):
             raise ValueError(f"Export failed (state={state!r}).")
         if state == "done":
-            url = node.get("fileURL") or node.get("fileUrl")
+            url = node.get("fileURL")
             if isinstance(url, str) and url.strip():
                 return url.strip()
             raise ValueError("Export is done but fileURL is missing.")

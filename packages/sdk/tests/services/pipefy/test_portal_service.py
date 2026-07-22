@@ -877,7 +877,7 @@ async def test_create_portal_page_permission_denied_surfaces_actionable_message(
 
 _ELEMENT_ID = "el-uuid-1"
 _FORMS_METADATA = {"name": "Request form"}
-_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
+_FORMS_DATA_SOURCES = [{"repoId": EXAMPLE_PIPE_REPO_ID}]
 
 _CREATE_ELEMENT_GRAPHQL = {
     "id": _ELEMENT_ID,
@@ -953,6 +953,29 @@ async def test_create_portal_element_logs_warning_for_unrecognized_data_source_k
         type="forms",
         metadata=_FORMS_METADATA,
         data_sources=[{"pipe_id": "123"}],
+    )
+
+    assert any("Skipping portal data_sources" in r.message for r in caplog.records)
+    _query_used, variables = interfaces_executor.execute_query.call_args[0]
+    assert variables["input"]["data_sources"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_element_reads_only_declared_repo_id_key(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Only the declared ``repoId`` key is honored; ``repo_uuid``/``repoUuid`` are skipped."""
+    caplog.set_level(logging.WARNING, logger="pipefy_sdk.services.portal_service")
+    service, _public, interfaces_executor = _make_interfaces_service(
+        _CREATE_ELEMENT_RESPONSE,
+    )
+
+    await service.create_portal_element(
+        _PAGE_ID,
+        type="forms",
+        metadata=_FORMS_METADATA,
+        data_sources=[{"repo_uuid": "p-1"}, {"repoUuid": "p-2"}],
     )
 
     assert any("Skipping portal data_sources" in r.message for r in caplog.records)

@@ -202,6 +202,29 @@ REMOTE_SEED = frozenset(
         "delete_organization_report",
         "export_organization_report",
         "export_pipe_audit_logs",
+        # portal / sub-portal / page / element writes (#477): create/update/delete
+        # and the action-style mutations (sort/layout/duplicate/publish/unpublish)
+        # reach the Interfaces API with the request-scoped bearer and are governed by
+        # API permissions; no filesystem or per-user process-global settings reads,
+        # every input a per-request value. Deletes carry the two-step confirm UX guard.
+        "create_portal",
+        "update_portal",
+        "delete_portal",
+        "create_portal_page",
+        "update_portal_page",
+        "delete_portal_page",
+        "update_portal_page_layout",
+        "sort_portal_pages",
+        "create_portal_element",
+        "update_portal_element",
+        "delete_portal_element",
+        "duplicate_portal_element",
+        "create_sub_portal",
+        "delete_sub_portal",
+        "publish_sub_portal",
+        "unpublish_sub_portal",
+        "update_sub_portal_element",
+        "delete_sub_portal_element",
     }
 )
 

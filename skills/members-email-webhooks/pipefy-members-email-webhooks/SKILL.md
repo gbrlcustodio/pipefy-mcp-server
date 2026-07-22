@@ -2,13 +2,13 @@
 name: pipefy-members-email-webhooks
 description: >
   Use this skill when the user wants to manage pipe membership, send or read
-  card inbox emails, use email templates, or manage webhooks. Covers 11 MCP tools.
+  card inbox emails, use email templates, or manage webhooks. Covers 12 MCP tools.
 tags: [pipefy, members, email, webhooks, inbox]
 ---
 
 # Members, Email & Webhooks
 
-Manage pipe membership, send emails from card inboxes, read inbox replies, and manage webhooks. **11 MCP tools.**
+Manage pipe membership, send emails from card inboxes, read inbox replies, and manage webhooks. **12 MCP tools.**
 
 ---
 
@@ -17,6 +17,7 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
 | `invite_members` | `pipefy member invite` | No | Invite one or more users by email + role. |
+| `add_service_account_to_pipe` | `pipefy member add-service-account` | No | Attach an existing org **service account** to a pipe by email + role (iPaaS setup). Verifies membership afterwards. |
 | `remove_member_from_pipe` | `pipefy member remove` | No | **Two-step destructive.** Warns on external emails. |
 | `set_role` | `pipefy member set-role` | No | Change a member's pipe role. |
 
@@ -39,6 +40,22 @@ List existing members with `get_pipe_members` from [skills/pipes-and-cards/pipef
    > Before inviting **external emails** (domain different from the org's known domains), warn the user that this is an external invitation and confirm before proceeding.
 
    > Before granting **admin role**, confirm with the user — admin is the highest pipe-level role.
+
+### Steps — add a service account to a pipe (iPaaS setup)
+
+When setting up an iPaaS (Advanced Automations) flow that runs under a **service account**, the account must be a member of the target pipe, or pipe-scoped calls under its identity fail with a permission error even though the flow looks configured.
+
+1. **Get the service account's email.** Either create one with `create_service_account(organization_uuid, name, role)` — which returns the account's email plus its OAuth2 client secret and token endpoint **once** (store them immediately) — or take the email from your organization's service-account settings. A freshly created account has no pipe access until this step. The pipe role defaults to `admin` (a service account running automations usually needs full pipe access); pass a narrower role only when you deliberately want to limit it.
+
+   > One-step alternative: `create_service_account(organization_uuid, name, role, pipe_ids=[...])` provisions the account **and** adds it to the given pipes in one call, returning a `pipe_memberships` summary. Use it when you already know the target pipes.
+
+2. **Attach it** (when not using the `pipe_ids` shortcut above):
+
+   MCP: `add_service_account_to_pipe pipe_id=67890 email=svc-automations@your-org.pipefy-service.com` (role defaults to `admin`)
+
+   CLI: `pipefy member add-service-account --pipe 67890 --email svc-automations@your-org.pipefy-service.com`
+
+   The tool verifies membership afterwards: it returns an error if the account is not a member of the pipe once the invite is processed, so an incomplete setup is not reported as success. This attaches an existing service account — create one first with `create_service_account` if you don't have one, and delete a throwaway with `delete_service_account(organization_uuid, service_account_uuid)` when done. See [docs/mcp/tools/service-accounts.md](../../../docs/mcp/tools/service-accounts.md).
 
 ---
 
@@ -107,3 +124,4 @@ List existing members with `get_pipe_members` from [skills/pipes-and-cards/pipef
 
 - `skills/pipes-and-cards/` — create the pipe and cards before managing membership.
 - `skills/observability/` — monitor email and webhook delivery logs.
+- [skills/ipaas/pipefy-ipaas/SKILL.md](../../ipaas/pipefy-ipaas/SKILL.md) — when a flow's service account needs pipe membership.

@@ -25,6 +25,7 @@ from pipefy_mcp.tools.portal_tools import PortalTools
 from pipefy_mcp.tools.relation_tools import RelationTools
 from pipefy_mcp.tools.remote_profile import is_remote_tool
 from pipefy_mcp.tools.report_tools import ReportTools
+from pipefy_mcp.tools.service_account_tools import ServiceAccountTools
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 
@@ -37,6 +38,7 @@ logger = logging.getLogger(__name__)
 PIPEFY_TOOL_NAMES = frozenset(
     {
         "add_card_comment",
+        "add_service_account_to_pipe",
         "call_ipaas_tool",
         "clone_pipe",
         "create_ai_agent",
@@ -62,6 +64,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "create_portal_page",
         "create_sub_portal",
         "create_send_task_automation",
+        "create_service_account",
         "create_table",
         "create_table_field",
         "create_table_record",
@@ -87,6 +90,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "delete_portal",
         "delete_portal_element",
         "delete_portal_page",
+        "delete_service_account",
         "delete_sub_portal",
         "delete_sub_portal_element",
         "delete_table",
@@ -233,6 +237,7 @@ _TOOLSETS = (
     ReportTools,
     AttachmentTools,
     MemberTools,
+    ServiceAccountTools,
     WebhookTools,
     AutomationTools,
     IntrospectionTools,

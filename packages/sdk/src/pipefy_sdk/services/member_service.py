@@ -69,6 +69,29 @@ class MemberService:
             {"input": {"pipe_id": str(pipe_id), "emails": validated}},
         )
 
+    async def add_service_account_to_pipe(
+        self,
+        pipe_id: str,
+        email: str,
+        role_name: str,
+    ) -> dict[str, Any]:
+        """Grant a service account membership on a pipe, by email.
+
+        A single-row wrapper over :meth:`invite_members` for the iPaaS
+        (Advanced Automations) setup path: a service account must be a pipe
+        member before pipe-scoped calls under its identity succeed. Email and
+        role are validated by ``invite_members`` (raises ``ValueError`` on a
+        malformed row).
+
+        Args:
+            pipe_id: ID of the pipe.
+            email: The service account's email address.
+            role_name: Pipe role to grant (e.g. 'admin', 'member').
+        """
+        return await self.invite_members(
+            pipe_id, [{"email": email, "role_name": role_name}]
+        )
+
     async def remove_members_from_pipe(
         self,
         pipe_id: str,

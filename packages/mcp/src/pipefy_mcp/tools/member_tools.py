@@ -17,6 +17,7 @@ from pipefy_mcp.tools.member_tool_helpers import (
     build_member_error_payload,
     build_member_success_payload,
     handle_member_tool_graphql_error,
+    service_account_is_member,
 )
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
@@ -79,6 +80,91 @@ class MemberTools:
                 )
             return build_member_success_payload(
                 message="Members invited.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def add_service_account_to_pipe(
+            pipe_id: PipefyId,
+            email: str,
+            ctx: Context,
+            role_name: str = "admin",
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Grant a service account membership on a pipe, by email.
+
+            Use this in the iPaaS (Advanced Automations) setup flow: a service
+            account must be a member of the target pipe before pipe-scoped
+            calls under its identity succeed, otherwise setup looks complete
+            but later fails with a permission error. Pass the service account's
+            email (from your organization's service-account settings); the pipe
+            role defaults to 'admin' (service accounts running automations
+            usually need full pipe access). This attaches an existing org
+            service account; it does not create one.
+
+            After the invite, membership is verified against the pipe's member
+            list when the pipe is given by its numeric ID: the tool then returns
+            an error if the account is not a member afterwards, so an incomplete
+            setup is not reported as success.
+
+            Args:
+                pipe_id: ID of the pipe.
+                email: The service account's email address.
+                role_name: Pipe role to grant (default 'admin'). Valid: 'admin',
+                    'member', 'creator', 'my_cards_only', 'read_and_comment'.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            client = get_pipefy_client(ctx)
+            pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            if not isinstance(email, str) or not email.strip():
+                return build_member_error_payload(
+                    message="Invalid 'email': provide the service account's email address.",
+                )
+            if not isinstance(role_name, str) or not role_name.strip():
+                return build_member_error_payload(
+                    message="Invalid 'role_name': provide a non-empty pipe role.",
+                )
+            email = email.strip()
+            try:
+                raw = await client.add_service_account_to_pipe(
+                    pipe_id, email, role_name.strip()
+                )
+            except ValueError as exc:
+                return build_member_error_payload(
+                    message=str(exc),
+                    code="INVALID_ARGUMENTS",
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_member_tool_graphql_error(
+                    exc,
+                    "Add service account to pipe failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
+                )
+
+            is_member = await service_account_is_member(client, pipe_id, email)
+            if is_member is False:
+                invite_payload = (raw or {}).get("inviteMembers") or {}
+                msgs = [
+                    str(e["message"])
+                    for e in (invite_payload.get("errors") or [])
+                    if isinstance(e, dict) and e.get("message")
+                ]
+                reason = "; ".join(msgs) if msgs else "the invite did not take effect"
+                return build_member_error_payload(
+                    message=(
+                        f"Service account '{email}' was not added to pipe {pipe_id}: {reason}. "
+                        "Confirm the email is a valid organization service account."
+                    ),
+                    code="INVALID_ARGUMENTS" if msgs else None,
+                )
+            return build_member_success_payload(
+                message="Service account added to pipe.",
                 data=raw,
             )
 

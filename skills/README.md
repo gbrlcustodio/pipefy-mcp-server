@@ -36,7 +36,7 @@ git clone https://github.com/pipefy/ai-toolkit.git
 | **iPaaS (Advanced Automations)** | [pipefy-ipaas](ipaas/pipefy-ipaas/SKILL.md) | Build, test, publish, and manage integration flows. 4 MCP meta-tools over a per-pipe catalog; MCP-only. |
 | **AI Agents** | [pipefy-ai-agents](ai-agents/pipefy-ai-agents/SKILL.md) | Conversational AI agents and behaviors. 7 MCP tools. |
 | **Observability** | [pipefy-observability](observability/pipefy-observability/SKILL.md) | Logs, usage, credits, execution metrics, job exports. 11 MCP tools. |
-| **Members, Email & Webhooks** | [pipefy-members-email-webhooks](members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) | Membership, email, webhooks. 11 MCP tools. |
+| **Members, Email & Webhooks** | [pipefy-members-email-webhooks](members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) | Membership, email, webhooks. 12 MCP tools. |
 | **Portal setup** | [pipefy-portal-setup](portal-setup/pipefy-portal-setup/SKILL.md) | Main portal, pages, elements, sub-portals (publish/unpublish). 20 MCP tools. |
 | **Introspection** | [pipefy-introspection](introspection/pipefy-introspection/SKILL.md) | Schema discovery and GraphQL fallback. 6 MCP tools. |
 | **Attachments** | [pipefy-attachments](attachments/pipefy-attachments/SKILL.md) | Upload files to card or table-record attachment fields. 2 MCP tools. |

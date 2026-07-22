@@ -1,6 +1,6 @@
 # pipefy-mcp-server
 
-MCP server for Pipefy — **182 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy`](../sdk/README.md) for all GraphQL and API logic.
+MCP server for Pipefy — **185 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy`](../sdk/README.md) for all GraphQL and API logic.
 
 ## Install
 
@@ -104,7 +104,7 @@ This form also works as a per-project `.mcp.json` if your team shares a clone. C
 
 ## Tools
 
-**182 tools** across thirteen domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
+**185 tools** across fourteen domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
 
 ## Development
 

@@ -16,6 +16,7 @@ Material in this tree describes **`pipefy-mcp-server`**: the MCP process, tool b
 | [`tools/knowledge-bases.md`](tools/knowledge-bases.md) | Pipe-scoped AI knowledge bases: list, plain text, document (PDF), and data lookup CRUD, read-access probe |
 | [`tools/observability.md`](tools/observability.md) | Logs, usage, credits, execution metrics, job exports |
 | [`tools/members-email-webhooks.md`](tools/members-email-webhooks.md) | Membership, inbox email, webhooks |
+| [`tools/service-accounts.md`](tools/service-accounts.md) | Create and delete organization service accounts (OAuth2 machine identities) |
 | [`tools/organization.md`](tools/organization.md) | Organization metadata |
 | [`tools/portal.md`](tools/portal.md) | Portals, pages, elements, sub-portals |
 | [`tools/ipaas.md`](tools/ipaas.md) | iPaaS (Advanced Automations) tool discovery, invocation, and app connections |

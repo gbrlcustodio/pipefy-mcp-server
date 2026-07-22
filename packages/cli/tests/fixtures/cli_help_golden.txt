@@ -56,6 +56,7 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ webhook           Pipe webhook operations.                                   │
 │ relation          Pipe and card relations.                                   │
 │ member            Pipe member operations.                                    │
+│ service-account   Organization service account operations.                   │
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
@@ -2281,10 +2282,26 @@ Usage: pipefy member [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list       List members of a pipe.                                           │
-│ invite     Invite users to a pipe.                                           │
-│ remove     Remove users from a pipe.                                         │
-│ set-role   Set a member's role on a pipe.                                    │
+│ list                  List members of a pipe.                                │
+│ invite                Invite users to a pipe.                                │
+│ add-service-account   Grant a service account membership on a pipe (iPaaS    │
+│                       setup).                                                │
+│ remove                Remove users from a pipe.                              │
+│ set-role              Set a member's role on a pipe.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP member/add-service-account
+Usage: pipefy member add-service-account [OPTIONS]
+
+ Grant a service account membership on a pipe (iPaaS setup).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe           TEXT  Pipe id. [required]                                │
+│ *  --email          TEXT  Service account email. [required]                  │
+│    --role           TEXT  Pipe role to grant (default admin).                │
+│                           [default: admin]                                   │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP member/invite
@@ -3551,6 +3568,59 @@ Usage: pipefy report-pipe update [OPTIONS] REPORT_ID
 │ --featured-field          TEXT                                               │
 │ --json            -j            Print machine-readable JSON to stdout.       │
 │ --help                          Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account
+Usage: pipefy service-account [OPTIONS] COMMAND [ARGS]...
+
+ Organization service account operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create   Create an org service account. Prints the client secret once —      │
+│          store it now.                                                       │
+│ delete   Permanently delete an org service account (revokes its              │
+│          credentials).                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account/create
+Usage: pipefy service-account create [OPTIONS]
+
+ Create an org service account. Prints the client secret once — store it now.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org                       TEXT     Organization UUID. [required]        │
+│ *  --name                      TEXT     Service account name (<=20 chars).   │
+│                                         [required]                           │
+│    --role                      TEXT     Org role (admin, normal,             │
+│                                         company_guest, external_guest).      │
+│                                         [default: normal]                    │
+│    --description               TEXT     Optional description.                │
+│    --expiration-unit           TEXT     Token lifetime unit                  │
+│                                         (seconds/minutes/hours/days).        │
+│    --expiration-value          INTEGER  Token lifetime value (positive int). │
+│    --pipe-ids                  TEXT     Comma-separated pipe IDs to add the  │
+│                                         new account to immediately.          │
+│    --pipe-role                 TEXT     Pipe role for --pipe-ids (default    │
+│                                         admin).                              │
+│                                         [default: admin]                     │
+│    --json              -j                                                    │
+│    --help                               Show this message and exit.          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account/delete
+Usage: pipefy service-account delete [OPTIONS]
+
+ Permanently delete an org service account (revokes its credentials).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org           TEXT  Organization UUID. [required]                       │
+│ *  --id            TEXT  Service account UUID. [required]                    │
+│    --yes   -y            Skip confirmation prompt.                           │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table

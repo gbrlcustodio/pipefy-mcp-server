@@ -160,6 +160,16 @@ REMOTE_SEED = frozenset(
         "create_label",
         "update_label",
         "delete_label",
+        # field-condition / pipe-relation writes (#474): create/update/delete that
+        # reach the public API with the request-scoped bearer and are governed by API
+        # permissions; no filesystem or per-user process-global settings reads, every
+        # input a per-request value. Deletes carry the two-step confirm UX guard.
+        "create_field_condition",
+        "update_field_condition",
+        "delete_field_condition",
+        "create_pipe_relation",
+        "update_pipe_relation",
+        "delete_pipe_relation",
     }
 )
 

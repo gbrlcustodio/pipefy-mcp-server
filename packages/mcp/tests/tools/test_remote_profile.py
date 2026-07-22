@@ -267,6 +267,21 @@ REMOTE_SEED = frozenset(
         "update_ai_agent",
         "delete_ai_agent",
         "toggle_ai_agent_status",
+        # knowledge-base writes (#481): plain-text and data-lookup CRUD plus document
+        # metadata update/delete reach the public API with the request-scoped bearer
+        # and are governed by API permissions (manage_ai_agents); no filesystem or
+        # per-user process-global settings reads, every input a per-request value.
+        # update_ai_knowledge_base_document edits metadata only (no file input).
+        # create_ai_knowledge_base_document stays withheld (local-file upload, #305).
+        # Deletes carry the two-step confirm UX guard.
+        "create_ai_knowledge_base_plain_text",
+        "update_ai_knowledge_base_plain_text",
+        "delete_ai_knowledge_base_plain_text",
+        "update_ai_knowledge_base_document",
+        "delete_ai_knowledge_base_document",
+        "create_ai_knowledge_base_data_lookup",
+        "update_ai_knowledge_base_data_lookup",
+        "delete_ai_knowledge_base_data_lookup",
     }
 )
 

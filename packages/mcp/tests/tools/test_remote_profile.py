@@ -125,6 +125,23 @@ REMOTE_SEED = frozenset(
         "create_service_account",
         "delete_service_account",
         "add_service_account_to_pipe",
+        # card / comment / card-relation writes (#472): create/update/delete and
+        # action-style mutations that reach the public (or, for delete_card_relation,
+        # Internal) API with the request-scoped bearer and are governed by API
+        # permissions; no filesystem or per-user process-global settings reads, and
+        # every input is a per-request value (ids, titles, field values). The deletes
+        # carry the two-step confirm UX guard; authorization stays the API's.
+        "add_card_comment",
+        "create_card",
+        "update_card",
+        "update_card_field",
+        "delete_card",
+        "move_card_to_phase",
+        "fill_card_phase_fields",
+        "update_comment",
+        "delete_comment",
+        "create_card_relation",
+        "delete_card_relation",
     }
 )
 

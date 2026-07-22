@@ -271,6 +271,7 @@ class RelationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_card_relation(
             parent_id: PipefyId,

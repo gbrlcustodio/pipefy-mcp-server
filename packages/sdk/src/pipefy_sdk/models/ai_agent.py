@@ -6,6 +6,7 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
+from pipefy_sdk.models.ai_automation import AutomationEventParamsInput
 from pipefy_sdk.models.validators import NonBlankStr
 
 ACTION_ID_AI_BEHAVIOR = "ai_behavior"
@@ -281,7 +282,9 @@ class BehaviorPayload(BaseModel):
     action_id: str | None = Field(default=None, alias="actionId")
     active: bool | None = None
     condition: dict | None = None
-    event_params: dict | None = Field(default=None, alias="eventParams")
+    event_params: AutomationEventParamsInput | None = Field(
+        default=None, alias="eventParams"
+    )
     action_params: AiBehaviorActionParams | None = Field(
         default=None, alias="actionParams"
     )
@@ -321,7 +324,9 @@ class BehaviorInput(BaseModel):
     action_id: str = Field(default=ACTION_ID_AI_BEHAVIOR, alias="actionId")
     active: bool = True
     condition: dict | None = None
-    event_params: dict | None = Field(default=None, alias="eventParams")
+    event_params: AutomationEventParamsInput | None = Field(
+        default=None, alias="eventParams"
+    )
     action_params: AiBehaviorActionParams | None = Field(
         default=None, alias="actionParams"
     )

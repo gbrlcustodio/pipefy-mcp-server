@@ -42,9 +42,23 @@ class AutomationConditionInput(BaseModel):
 
 
 class AutomationEventParamsInput(BaseModel):
-    """Pipefy automation trigger params (e.g. ``to_phase_id``, ``triggerFieldIds``)."""
+    """Pipefy ``AutomationEventParamsInput`` trigger params.
 
-    model_config = ConfigDict(extra="allow")
+    The declared inputFields mix casing in one type: ``to_phase_id`` is snake while
+    its siblings are camel. Aliases are per declared field (never a blanket
+    snake→camel pass); ``to_phase_id`` keeps its wire name (no alias) so it round-trips
+    for both reads (GET selects ``to_phase_id``) and writes. ``extra="allow"`` lets
+    sibling/unknown keys pass through verbatim. Dump with ``by_alias=True``.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    kind_of_sla: str | None = Field(default=None, alias="kindOfSla")
+    from_phase_id: str | None = Field(default=None, alias="fromPhaseId")
+    in_phase_id: str | None = Field(default=None, alias="inPhaseId")
+    to_phase_id: str | None = None
+    trigger_automation_id: str | None = Field(default=None, alias="triggerAutomationId")
+    trigger_field_ids: list[str] | None = Field(default=None, alias="triggerFieldIds")
 
 
 def _default_automation_condition() -> AutomationConditionInput:

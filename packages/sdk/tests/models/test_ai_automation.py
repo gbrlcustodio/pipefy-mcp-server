@@ -7,9 +7,53 @@ from pydantic import ValidationError
 from pipefy_sdk.models.ai_automation import (
     DEFAULT_CONDITION,
     AutomationConditionInput,
+    AutomationEventParamsInput,
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
+
+
+@pytest.mark.unit
+def test_event_params_input_parses_all_declared_fields_from_wire():
+    """Every declared inputField parses from its wire spelling (mixed casing)."""
+    wire = {
+        "kindOfSla": "Late",
+        "fromPhaseId": "1",
+        "inPhaseId": "2",
+        "to_phase_id": "3",
+        "triggerAutomationId": "4",
+        "triggerFieldIds": ["5", "6"],
+    }
+    params = AutomationEventParamsInput.model_validate(wire)
+    assert params.kind_of_sla == "Late"
+    assert params.from_phase_id == "1"
+    assert params.in_phase_id == "2"
+    assert params.to_phase_id == "3"
+    assert params.trigger_automation_id == "4"
+    assert params.trigger_field_ids == ["5", "6"]
+    # Dumps back to the exact declared wire names.
+    assert params.model_dump(by_alias=True, exclude_none=True) == wire
+
+
+@pytest.mark.unit
+def test_event_params_input_accepts_python_names_via_populate_by_name():
+    """populate_by_name lets snake_case python names in; dump normalizes to wire."""
+    params = AutomationEventParamsInput(from_phase_id="10", trigger_field_ids=["11"])
+    assert params.model_dump(by_alias=True, exclude_none=True) == {
+        "fromPhaseId": "10",
+        "triggerFieldIds": ["11"],
+    }
+
+
+@pytest.mark.unit
+def test_event_params_input_passes_unknown_keys_through_verbatim():
+    """extra='allow' round-trips sibling/unknown keys (GET responses carry extras)."""
+    params = AutomationEventParamsInput.model_validate(
+        {"to_phase_id": "3", "someNewField": "x"}
+    )
+    dumped = params.model_dump(by_alias=True, exclude_none=True)
+    assert dumped["to_phase_id"] == "3"
+    assert dumped["someNewField"] == "x"
 
 
 @pytest.mark.unit
@@ -226,7 +270,8 @@ def test_create_ai_automation_input_event_params_pass_through():
         event_params=params,
     )
     assert inp.event_params is not None
-    assert inp.event_params.model_dump(mode="python") == params
+    assert inp.event_params.to_phase_id == "phase-42"
+    assert inp.event_params.model_dump(by_alias=True, exclude_none=True) == params
 
 
 @pytest.mark.unit
@@ -278,7 +323,8 @@ def test_update_ai_automation_input_event_params_pass_through():
     params = {"to_phase_id": "phase-99"}
     inp = UpdateAiAutomationInput(automation_id="456", event_params=params)
     assert inp.event_params is not None
-    assert inp.event_params.model_dump(mode="python") == params
+    assert inp.event_params.to_phase_id == "phase-99"
+    assert inp.event_params.model_dump(by_alias=True, exclude_none=True) == params
 
 
 @pytest.mark.unit

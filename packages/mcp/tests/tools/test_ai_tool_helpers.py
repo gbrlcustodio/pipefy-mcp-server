@@ -447,13 +447,16 @@ def test_validate_invalid_event_params_to_phase_id():
         related_pipe_ids=RELATED_PIPES,
     )
     assert warnings == []
-    assert any(
-        "ph-ghost" in p and "eventParams" in p and "toPhaseId" in p for p in problems
-    )
+    assert any("ph-ghost" in p and "eventParams.to_phase_id" in p for p in problems)
 
 
 @pytest.mark.unit
-def test_validate_invalid_event_params_to_phase_id_camel_case():
+def test_validate_event_params_camel_to_phase_id_is_not_honored():
+    """``toPhaseId`` (camel) is not the declared wire spelling (``to_phase_id``).
+
+    GraphQL rejects it at coercion, so the toolkit no longer reads it as the
+    destination phase: it rides ``extra`` untouched and raises no phase problem.
+    """
     behavior = _move_card_behavior()
     del behavior["eventParams"]["to_phase_id"]
     behavior["eventParams"]["toPhaseId"] = "ph-ghost"
@@ -465,7 +468,7 @@ def test_validate_invalid_event_params_to_phase_id_camel_case():
         related_pipe_ids=RELATED_PIPES,
     )
     assert warnings == []
-    assert any("ph-ghost" in p for p in problems)
+    assert not any("ph-ghost" in p for p in problems)
 
 
 @pytest.mark.unit

@@ -65,8 +65,8 @@ async def collect_ai_behavior_move_transition_problems(
         event_id = str(payload.event_id or "")
         if event_id != "card_moved":
             continue
-        ep = payload.event_params or {}
-        src = ep.get("to_phase_id") or ep.get("toPhaseId")
+        ep = payload.event_params
+        src = ep.to_phase_id if ep else None
         if not src:
             continue
         src_s = str(src)

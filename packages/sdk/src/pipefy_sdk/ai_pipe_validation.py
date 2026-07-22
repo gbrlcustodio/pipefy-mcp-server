@@ -103,11 +103,11 @@ def validate_behaviors_against_pipe(
         abp = _ai_behavior_params(b)
         attrs = (abp.actions_attributes if abp else None) or []
 
-        ep = (payload.event_params if payload else None) or {}
-        to_phase = ep.get("to_phase_id") or ep.get("toPhaseId")
+        ep = payload.event_params if payload else None
+        to_phase = ep.to_phase_id if ep else None
         if to_phase and str(to_phase) not in pipe_phase_ids:
             problems.append(
-                f'{prefix}: eventParams.to_phase_id / toPhaseId "{to_phase}" '
+                f'{prefix}: eventParams.to_phase_id "{to_phase}" '
                 f"not found in pipe phases."
             )
 

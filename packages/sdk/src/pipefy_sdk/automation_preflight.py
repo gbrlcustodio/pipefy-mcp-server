@@ -12,6 +12,9 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
+from pipefy_sdk.models import AutomationEventParamsInput
 from pipefy_sdk.transition_hints import (
     TRANSITION_RULES_HINT,
     format_allowed_destinations_phrase,
@@ -26,6 +29,21 @@ logger = logging.getLogger(__name__)
 _AUTOMATION_MOVE_CARD_ACTION_IDS = frozenset({"move_single_card"})
 
 _DIGITS_ONLY_RE = re.compile(r"^\d+$")
+
+
+def _parse_event_params(raw: Any) -> AutomationEventParamsInput | None:
+    """Parse a trigger ``event_params`` sub-dict, or ``None`` for missing/malformed input.
+
+    Preflight is advisory and must never turn odd input into a spurious create failure,
+    so a payload that fails ``AutomationEventParamsInput`` coercion is treated as absent
+    (no-op preflight) rather than raised.
+    """
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return AutomationEventParamsInput.model_validate(raw)
+    except ValidationError:
+        return None
 
 
 class AutomationPreflightError(ValueError):
@@ -93,8 +111,8 @@ async def validate_traditional_automation_move_transition(
     if aid not in _AUTOMATION_MOVE_CARD_ACTION_IDS:
         return
     extra = extra_input if isinstance(extra_input, dict) else {}
-    ev = extra.get("event_params") or extra.get("eventParams") or {}
-    src = ev.get("to_phase_id") or ev.get("toPhaseId")
+    ev = _parse_event_params(extra.get("event_params"))
+    src = ev.to_phase_id if ev else None
     if not src:
         return
     src_s = str(src)

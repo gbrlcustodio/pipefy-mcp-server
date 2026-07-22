@@ -35,7 +35,7 @@ def _validate_forms_metadata(metadata: dict[str, Any]) -> None:
     if not isinstance(name, str) or not name.strip():
         raise ValueError(
             "type 'forms' requires metadata.name (non-empty display name string). "
-            "Pipe linkage uses data_sources (e.g. repo_uuid) on create."
+            "Pipe linkage uses data_sources (e.g. repoId) on create."
         )
 
 

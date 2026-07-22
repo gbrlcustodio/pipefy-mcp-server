@@ -529,8 +529,7 @@ class PortalTools:
 
             Validates ``type`` and ``metadata`` before calling the Interfaces API.
             For ``forms`` elements, include ``metadata.name`` and optional
-            ``data_sources`` (``repoId`` + ``fieldKeys`` per Interfaces schema;
-            ``repo_uuid`` is accepted and normalized).
+            ``data_sources`` (``repoId`` + ``fieldKeys`` per Interfaces schema).
 
             Args:
                 page_id: Parent page UUID.

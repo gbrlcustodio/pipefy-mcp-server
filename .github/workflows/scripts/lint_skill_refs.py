@@ -18,6 +18,7 @@ PIPEFY_CLI_ROOT_COMMANDS = frozenset(
         "ai-provider",
         "attachment",
         "audit",
+        "auth",
         "automation",
         "card",
         "email",

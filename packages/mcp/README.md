@@ -36,14 +36,18 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 ### Claude Code: `claude mcp add` (per-project terminal flow)
 
-Useful when you want to wire the server without editing `~/.claude.json` by hand:
+Useful when you want to wire the server without editing `~/.claude.json` by hand.
+
+**Hosted MCP (HTTP)** — zero local Python; OAuth in Claude Code. Prefer this when you do not need the full local tool surface. Do not also install the Claude Code plugin’s local `pipefy` server under the same name. Canonical snippet: [root README — Hosted MCP](../../README.md#hosted-mcp-claude-code).
+
+**Local stdio** — runs `uvx pipefy-mcp-server` on the machine:
 
 ```bash
 claude mcp add --scope project pipefy \
   -- uvx pipefy-mcp-server
 ```
 
-Then (repeat for each key you need):
+Then (repeat for each key you need; service-account path):
 
 ```bash
 claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_ID <YOUR_CLIENT_ID>

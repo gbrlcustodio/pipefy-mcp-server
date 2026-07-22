@@ -34,18 +34,15 @@ MAX_CROSS_PIPE_FIELD_FETCH = 100
 
 
 def _is_ai_automation_summary_row(row: Any) -> bool:
-    """True when the listing row is an AI (prompt) automation."""
+    """True when the listing row is an AI (prompt) automation.
+
+    Listing rows come from ``get_automations``, whose query selects ``action_id``
+    (snake) on every node and does not select ``action_params``. So ``action_id`` is
+    the sole, canonical signal — ``generate_with_ai`` marks an AI automation.
+    """
     if not isinstance(row, dict):
         return False
-    action_id = row.get("action_id") or row.get("actionId")
-    if action_id == GENERATE_WITH_AI_ACTION_ID:
-        return True
-    ap = row.get("action_params") or row.get("actionParams")
-    if isinstance(ap, dict) and (
-        ap.get("aiParams") is not None or ap.get("ai_params") is not None
-    ):
-        return True
-    return False
+    return row.get("action_id") == GENERATE_WITH_AI_ACTION_ID
 
 
 def filter_ai_automation_summaries(rows: list[Any]) -> list[Any]:

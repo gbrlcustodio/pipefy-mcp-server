@@ -242,6 +242,22 @@ REMOTE_SEED = frozenset(
         "set_role",
         "send_inbox_email",
         "send_email_with_template",
+        # traditional & AI automation writes (#479): create/update/delete, the
+        # send-task automation, simulate_automation, and the automation-jobs export
+        # trigger reach the public API with the request-scoped bearer and are
+        # governed by API permissions; no filesystem or per-user process-global
+        # settings reads, every input a per-request value. The export trigger starts
+        # a server-side async export (its get_automation_jobs_export reads are already
+        # seeded), no local write. Deletes carry the two-step confirm UX guard.
+        "create_automation",
+        "update_automation",
+        "delete_automation",
+        "create_send_task_automation",
+        "simulate_automation",
+        "export_automation_jobs",
+        "create_ai_automation",
+        "update_ai_automation",
+        "delete_ai_automation",
     }
 )
 

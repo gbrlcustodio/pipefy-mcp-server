@@ -527,6 +527,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def export_automation_jobs(
             organization_id: PipefyId,

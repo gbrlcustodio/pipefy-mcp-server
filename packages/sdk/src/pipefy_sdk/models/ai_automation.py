@@ -41,6 +41,24 @@ class AutomationConditionInput(BaseModel):
     )
 
 
+class FieldMapInput(BaseModel):
+    """Shared ``FieldMapInput`` shell: a single field-mapping entry.
+
+    Used by both behavior action ``metadata.fieldsAttributes`` and classic-automation
+    ``action_params.field_map``. The GraphQL type marks ``fieldId`` and ``inputMode``
+    NON_NULL, but this is a lenient parse shell — required-ness is enforced by the
+    consumer (behavior metadata validators with pinned messages; the API for classic
+    automations) so a malformed entry yields an actionable error, not an opaque
+    Pydantic one. ``extra="allow"`` round-trips unknown keys.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    field_id: str | None = Field(default=None, alias="fieldId")
+    input_mode: str | None = Field(default=None, alias="inputMode")
+    value: str | None = None
+
+
 class AutomationEventParamsInput(BaseModel):
     """Pipefy ``AutomationEventParamsInput`` trigger params.
 

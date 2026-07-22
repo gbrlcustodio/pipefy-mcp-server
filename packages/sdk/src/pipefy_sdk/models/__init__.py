@@ -6,6 +6,7 @@ from pipefy_sdk.models.ai_agent import (
     AiBehaviorActionAttributes,
     AiBehaviorActionParams,
     AiBehaviorCapabilityAttributes,
+    AiBehaviorMetadataInput,
     AiBehaviorParams,
     BehaviorInput,
     BehaviorPayload,
@@ -16,6 +17,7 @@ from pipefy_sdk.models.ai_automation import (
     AutomationConditionInput,
     AutomationEventParamsInput,
     CreateAiAutomationInput,
+    FieldMapInput,
     UpdateAiAutomationInput,
 )
 from pipefy_sdk.models.attachment import (
@@ -48,6 +50,7 @@ __all__ = [
     "AiBehaviorActionAttributes",
     "AiBehaviorActionParams",
     "AiBehaviorCapabilityAttributes",
+    "AiBehaviorMetadataInput",
     "AiBehaviorParams",
     "Attachment",
     "AttachmentTarget",
@@ -66,6 +69,7 @@ __all__ = [
     "CreateSendTaskAutomationInput",
     "DataLookupCondition",
     "DeleteCommentInput",
+    "FieldMapInput",
     "MemberInvite",
     "NonBlankStr",
     "PipefyId",

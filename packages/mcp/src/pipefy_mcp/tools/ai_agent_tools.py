@@ -78,8 +78,8 @@ def _extract_pipe_id_from_behaviors(behaviors: list[dict]) -> str | None:
         if abp is None:
             continue
         for a in abp.actions_attributes or []:
-            metadata = a.metadata if isinstance(a.metadata, dict) else {}
-            pid = metadata.get("pipeId")
+            metadata = a.metadata
+            pid = metadata.pipe_id if metadata else None
             if pid:
                 return str(pid)
     return None

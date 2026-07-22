@@ -80,8 +80,8 @@ async def collect_ai_behavior_move_transition_problems(
         for j, action in enumerate(attrs):
             if action.action_type != "move_card":
                 continue
-            meta = action.metadata if isinstance(action.metadata, dict) else {}
-            dest = meta.get("destinationPhaseId")
+            meta = action.metadata
+            dest = meta.destination_phase_id if meta else None
             if not dest:
                 continue
             dest_s = str(dest)

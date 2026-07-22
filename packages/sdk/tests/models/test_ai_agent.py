@@ -8,10 +8,38 @@ from pydantic import ValidationError
 from pipefy_sdk.models.ai_agent import (
     ACTION_ID_AI_BEHAVIOR,
     MAX_BEHAVIORS,
+    AiBehaviorMetadataInput,
     BehaviorInput,
     CreateAiAgentInput,
     UpdateAiAgentInput,
 )
+
+
+@pytest.mark.unit
+def test_behavior_metadata_input_round_trips_known_and_grown_tail_fields():
+    """Typed fields carry camel aliases; undeclared tail keys ride extra verbatim."""
+    wire = {
+        "pipeId": "1",
+        "fieldsAttributes": [
+            {"fieldId": "900", "inputMode": "fill_with_ai", "value": ""}
+        ],
+        # Fields added to the schema after this model was written must survive.
+        "mcpServerId": "srv-1",
+        "toolName": "search",
+        "emails": ["a@b.com"],
+        "title": "Review task",
+    }
+    meta = AiBehaviorMetadataInput.model_validate(wire)
+    assert meta.pipe_id == "1"
+    assert meta.fields_attributes[0].field_id == "900"
+    assert meta.model_dump(by_alias=True, exclude_none=True) == wire
+
+
+@pytest.mark.unit
+def test_behavior_metadata_input_does_not_coerce_allow_template_modifications():
+    """allowTemplateModifications is stored verbatim (no lax bool coercion of 'yes')."""
+    meta = AiBehaviorMetadataInput.model_validate({"allowTemplateModifications": "yes"})
+    assert meta.allow_template_modifications == "yes"
 
 
 def _make_behavior(name="Test Behavior", event_id="card_created"):
@@ -361,7 +389,7 @@ def test_metadata_valid_for_card_field_actions(action_type):
     payload = behavior_with_action(action_type, metadata)
     inp = BehaviorInput.model_validate(payload)
     action = inp.action_params.ai_behavior_params.actions_attributes[0]
-    assert action.metadata["pipeId"] == EXAMPLE_PIPE_ID
+    assert action.metadata.pipe_id == EXAMPLE_PIPE_ID
 
 
 @pytest.mark.unit
@@ -445,7 +473,7 @@ def test_metadata_valid_for_move_card():
     payload = behavior_with_action("move_card", {"destinationPhaseId": "999"})
     inp = BehaviorInput.model_validate(payload)
     action = inp.action_params.ai_behavior_params.actions_attributes[0]
-    assert action.metadata["destinationPhaseId"] == "999"
+    assert action.metadata.destination_phase_id == "999"
 
 
 @pytest.mark.unit
@@ -467,7 +495,8 @@ def test_metadata_passes_through_unknown_action_type():
     payload = behavior_with_action("send_email", {"to": "user@example.com"})
     inp = BehaviorInput.model_validate(payload)
     action = inp.action_params.ai_behavior_params.actions_attributes[0]
-    assert action.metadata["to"] == "user@example.com"
+    # Unknown metadata keys ride extra="allow" and round-trip verbatim.
+    assert action.metadata.model_extra["to"] == "user@example.com"
 
 
 @pytest.mark.unit
@@ -485,7 +514,7 @@ def test_metadata_valid_for_create_table_record():
     payload = behavior_with_action("create_table_record", metadata)
     inp = BehaviorInput.model_validate(payload)
     action = inp.action_params.ai_behavior_params.actions_attributes[0]
-    assert action.metadata["tableId"] == "tbl-999"
+    assert action.metadata.table_id == "tbl-999"
 
 
 @pytest.mark.unit
@@ -534,7 +563,7 @@ def test_metadata_valid_for_send_email_template():
     )
     inp = BehaviorInput.model_validate(payload)
     meta = inp.action_params.ai_behavior_params.actions_attributes[0].metadata
-    assert meta["emailTemplateId"] == "tmpl-1"
+    assert meta.email_template_id == "tmpl-1"
 
 
 @pytest.mark.unit
@@ -545,7 +574,7 @@ def test_metadata_send_email_template_accepts_allow_template_modifications():
     )
     inp = BehaviorInput.model_validate(payload)
     meta = inp.action_params.ai_behavior_params.actions_attributes[0].metadata
-    assert meta["allowTemplateModifications"] is False
+    assert meta.allow_template_modifications is False
 
 
 @pytest.mark.unit

@@ -282,6 +282,17 @@ REMOTE_SEED = frozenset(
         "create_ai_knowledge_base_data_lookup",
         "update_ai_knowledge_base_data_lookup",
         "delete_ai_knowledge_base_data_lookup",
+        # LLM provider owner ops (#482): delete, active-status toggle, and the
+        # organization default set/reset reach the public API with the request-scoped
+        # bearer and are governed by API permissions; no filesystem or per-user
+        # process-global settings reads, every input a per-request value, and none
+        # returns a provider secret. create_llm_provider / update_llm_provider stay
+        # withheld (local configuration_file_path holding provider secrets).
+        # delete carries the two-step confirm UX guard.
+        "delete_llm_provider",
+        "set_default_llm_provider",
+        "reset_default_llm_provider",
+        "set_llm_provider_active_status",
     }
 )
 

@@ -1,6 +1,6 @@
 # Members, Email & Webhooks
 
-Manage pipe membership, send emails from card inboxes, read inbox replies, and manage webhooks (list, create, update, delete). **11 tools.**
+Manage pipe membership, send emails from card inboxes, read inbox replies, and manage webhooks (list, create, update, delete). **12 tools.**
 
 ---
 
@@ -9,6 +9,7 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 | Tool | Read-only | Role |
 |------|-----------|------|
 | `invite_members` | No | Invite one or more users to a pipe by email; `members` is a list of dicts with `email` and `role_name`. |
+| `add_service_account_to_pipe` | No | Attach an existing organization service account to a pipe by `email` (iPaaS setup); `role_name` defaults to `admin`. Wraps `inviteMembers` and verifies membership afterwards, so an incomplete setup is not reported as success. |
 | `remove_member_from_pipe` | No | Permanently remove one or more users from a pipe (`destructiveHint=True` — confirm with the user first). |
 | `set_role` | No | Set a member's role on a pipe (`member_id`, `role_name`). |
 

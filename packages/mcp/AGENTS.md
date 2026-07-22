@@ -229,6 +229,20 @@ rather than a local `file_path`) would follow the same shape. A tool whose
 exclusion deserves a reason gets a plain code comment stating why; the exclusion
 itself needs no annotation.
 
+### Write tools on the remote profile
+
+A write — create, update, delete, or an action-style mutation — must pass the same inclusion criteria as a read (above) plus three write-specific ones before it earns `meta=REMOTE`:
+
+- **Authorization is the API's, and only the API's.** A remote-safe write carries no client-side permission check; it relies entirely on the backend rejecting a caller who lacks the permission (org-admin to create or delete a service account, pipe-admin to add a member). Mark a write remote-safe only once its permission is enforced downstream for the request-scoped bearer — never infer authorization from the tool merely being reachable.
+- **A returned secret must never reach a log.** A write that returns a credential (`create_service_account` returns an OAuth2 client secret shown only once) is safe to expose because the hosted logging layers record neither argument values nor response bodies: `tool_log_middleware` logs bounded argument key names only, and `RequestLogMiddleware` logs request metadata without buffering the response body. The secret goes to the authenticated caller and nowhere else. A write that would need its secret logged, echoed in an error, or persisted server-side is not remote-safe.
+- **`confirm` is a UX guard, not an authorization boundary.** The two-step `check_destructive_confirmation` flow (preview on `confirm=False`, execute on `confirm=True`) makes a destructive call deliberate, and deliberately avoids elicitation because some clients auto-accept it. A programmatic caller can still pass `confirm=True` on the first call, so `confirm` protects against accident, not intent — the guard against an *unauthorized* delete is the API permission above. A destructive write is remote-safe when its authorization is downstream and its effect is stated plainly to the caller, not because `confirm` gates it.
+
+Input restriction (via `is_remote_profile(ctx)`, per "Exposure vs input restriction" above) is required for a write only when an input resolves from the deployment's own environment or disk — the `create_ipaas_connection` `$env` case — not merely because the tool mutates. A write whose every input is a per-request value (an id, a name, a role) needs none.
+
+The organization service-account tools (`create_service_account`, `delete_service_account`, `add_service_account_to_pipe`) are the first **public-GraphQL** writes on the remote seed (the iPaaS meta-tools `call_ipaas_tool` / `create_ipaas_connection` are also writes, but reach the iPaaS host rather than the public API) and the worked example of the test above: public-GraphQL mutations, API-permission-governed, per-request inputs only, a returned-once secret kept out of logs, and a `confirm`-gated delete.
+
+**Governance is deferred, on purpose.** Per-user quotas, rate limiting, and cost weighting for remote writes are not a precondition of exposure: the tool-call middleware seam (`core/tool_middleware.py`) is where they attach, but the only middleware shipped is structured logging, and remote writes rely on API-side rate limits plus per-user identity. Per-user write governance is tracked under the "Scaling and abuse protection" milestone; until it lands, expose new write categories conservatively and prefer ones whose blast radius is bounded by API permissions.
+
 ### Process-global configuration and the single-backend assumption
 
 When the server runs in hosted (`remote`) mode, one process serves many users at the same time. Settings loaded from the environment are **shared by everyone** — there is one copy for the whole process, not one per user.

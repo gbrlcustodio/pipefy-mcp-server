@@ -74,6 +74,7 @@ from pipefy_sdk.services.report_service import ReportService
 from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
 )
+from pipefy_sdk.services.service_account_service import ServiceAccountService
 from pipefy_sdk.services.table_service import (
     SEARCH_TABLES_FIRST_DEFAULT,
     TableService,
@@ -281,6 +282,7 @@ class PipefyClient:
             executor=ex.public,
             pipe_service=self._pipe_service,
         )
+        self._service_account_service = ServiceAccountService(executor=ex.public)
         self._webhook_service = WebhookService(
             executor=ex.public,
             settings=settings,
@@ -610,6 +612,113 @@ class PipefyClient:
             members: List of dicts with at least `email` and `role_name`.
         """
         return await self._member_service.invite_members(pipe_id, members)
+
+    async def add_service_account_to_pipe(
+        self, pipe_id: str, email: str, role_name: str
+    ) -> dict[str, Any]:
+        """Grant a service account membership on a pipe, by email.
+
+        For the iPaaS (Advanced Automations) setup path: a service account must
+        be a pipe member before pipe-scoped calls under its identity succeed.
+
+        Args:
+            pipe_id: ID of the pipe.
+            email: The service account's email address.
+            role_name: Pipe role to grant (e.g. 'admin', 'member').
+        """
+        return await self._member_service.add_service_account_to_pipe(
+            pipe_id, email, role_name
+        )
+
+    async def create_service_account(
+        self,
+        *,
+        organization_uuid: str,
+        name: str,
+        role: str,
+        description: str | None = None,
+        expiration: dict[str, Any] | None = None,
+        pipe_ids: list[str] | None = None,
+        pipe_role: str = "admin",
+    ) -> dict[str, Any]:
+        """Create an organization service account, optionally adding it to pipes.
+
+        Returns the service account including its OAuth2 client credentials and
+        token endpoint — available only once, at creation. Never log the result.
+
+        When ``pipe_ids`` is given, the new account is added to each pipe (by
+        email) with ``pipe_role`` right after creation, and the returned payload
+        gains a ``pipe_memberships`` list — one entry per pipe with its invite
+        outcome. A per-pipe failure is recorded there, not raised: the account is
+        already created, so partial results must surface.
+
+        Args:
+            organization_uuid: The organization UUID.
+            name: Service account name (backend caps at 20 characters).
+            role: Organization role (e.g. 'normal', 'admin').
+            description: Optional description.
+            expiration: Optional token expiration ``{"unit": ..., "value": ...}``.
+            pipe_ids: Optional pipes to add the new account to immediately.
+            pipe_role: Pipe role to grant on those pipes (default 'admin').
+        """
+        result = await self._service_account_service.create_service_account(
+            organization_uuid=organization_uuid,
+            name=name,
+            role=role,
+            description=description,
+            expiration=expiration,
+        )
+        if not pipe_ids:
+            return result
+
+        account = (result.get("createServiceAccount") or {}).get("serviceAccount") or {}
+        email = account.get("email")
+        memberships: list[dict[str, Any]] = []
+        for pipe_id in pipe_ids:
+            entry: dict[str, Any] = {"pipe_id": str(pipe_id)}
+            if not email:
+                entry["invited"] = False
+                entry["error"] = "Service account email missing from create payload."
+                memberships.append(entry)
+                continue
+            try:
+                invite = await self.add_service_account_to_pipe(
+                    str(pipe_id), email, pipe_role
+                )
+            except Exception as exc:  # noqa: BLE001
+                entry["invited"] = False
+                entry["error"] = str(exc)
+                memberships.append(entry)
+                continue
+            payload = (invite or {}).get("inviteMembers") or {}
+            errors = [
+                str(e["message"])
+                for e in (payload.get("errors") or [])
+                if isinstance(e, dict) and e.get("message")
+            ]
+            entry["invited"] = bool(payload.get("users")) and not errors
+            if errors:
+                entry["errors"] = errors
+            memberships.append(entry)
+        result["pipe_memberships"] = memberships
+        return result
+
+    async def delete_service_account(
+        self,
+        *,
+        organization_uuid: str,
+        service_account_uuid: str,
+    ) -> dict[str, Any]:
+        """Delete an organization service account.
+
+        Args:
+            organization_uuid: The organization UUID.
+            service_account_uuid: The service account UUID.
+        """
+        return await self._service_account_service.delete_service_account(
+            organization_uuid=organization_uuid,
+            service_account_uuid=service_account_uuid,
+        )
 
     async def remove_members_from_pipe(
         self, pipe_id: str, user_ids: list[str]

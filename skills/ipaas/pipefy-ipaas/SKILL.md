@@ -28,7 +28,8 @@ Pipefy's embedded workflow-automation platform. A **flow** is a trigger plus a s
 - **iPaaS enabled on the organization.** If not, the backend typically returns a permission error (often coded `PERMISSION_DENIED` with text like "iPaaS is disabled for your organization" — exact code/string is backend-dependent).
 - **iPaaS OAuth client configured on this MCP server.** If `PIPEFY_IPAAS_OAUTH_CLIENT_ID` is blank, every tool returns a "disabled on this server" message (server-config disable, distinct from the org-level one).
 - **Permission to create automations on the pipe** (pipe-admin ability).
-- **MCP-only.** There is no CLI twin (deferred in [docs/parity.md](../../../docs/parity.md)).
+- **Service account must be a pipe member.** When a flow runs under a service account, that account must be a member of the target pipe, or pipe-scoped calls under its identity fail with a permission error even after the flow is built. Adding the account elsewhere (org-level) is not enough. Provision one with `create_service_account` if needed, then attach it with `add_service_account_to_pipe(pipe_id, email, role_name)` immediately — see [skills/members-email-webhooks/pipefy-members-email-webhooks/SKILL.md](../../members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) and [docs/mcp/tools/service-accounts.md](../../../docs/mcp/tools/service-accounts.md). The 4 meta-tools themselves act as the calling session's identity, so this applies to the service account your flow runs under, not to these tools.
+- **MCP-only.** The 4 meta-tools have no CLI twin (deferred in [docs/parity.md](../../../docs/parity.md)); `add_service_account_to_pipe` is available on both MCP and CLI.
 - The iPaaS workspace is **per-pipe**: the catalog and any existing flows, connections, and tables belong to one `pipe_id`, so the same call against two pipes can differ.
 - Under `profile=remote`, `$env` secret references in arguments are rejected.
 
@@ -112,6 +113,7 @@ For a single task ("send one Slack message", "check my inbox"), the catalog has 
 - **Wrong argument name.** Entry schemas are not uniform (a run-detail entry may key the run id differently from how a test entry returns it). Always expand the entry with `get_ipaas_tools(pipe_id, tool_name=…)` and build arguments from that schema.
 - **Test-run has real side effects.** For external-app pieces the test performs the real action even from a draft. Keep test data disposable; self-contained pieces are safe.
 - **External step fails with an auth error.** The piece needs a connection. Create one and pass its `externalId` as the step `auth`; for Slack the bot must be a member of the target channel.
+- **`PERMISSION_DENIED` on pipe operations under a service account.** The service account the flow runs under is not a member of the pipe. Attach it with `add_service_account_to_pipe(pipe_id, email, role_name)` and confirm with `get_pipe_members`.
 - **Dropdown resolution times out.** Large external workspaces can time out. Ask the user for the ID and pass it literally.
 - **`$env` rejected under remote profile.** Secret references are local-only. Pass credentials through `create_ipaas_connection`, not inline `$env`.
 - **Accidental destruction.** Delete entries (flow, table, records) are permanent and have no preview. Confirm intent first; prefer updating a step over deleting it (delete destroys sample data).
@@ -119,5 +121,5 @@ For a single task ("send one Slack message", "check my inbox"), the catalog has 
 ## See also
 
 - [skills/automations/pipefy-automations/SKILL.md](../../automations/pipefy-automations/SKILL.md) — native if/then rules and AI automations (not iPaaS).
-- [skills/members-email-webhooks/pipefy-members-email-webhooks/SKILL.md](../../members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) — `create_webhook` for HTTP callbacks on card events.
+- [skills/members-email-webhooks/pipefy-members-email-webhooks/SKILL.md](../../members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) — `create_webhook` for HTTP callbacks on card events; `add_service_account_to_pipe` to grant a flow's service account pipe membership.
 - [docs/mcp/tools/ipaas.md](../../../docs/mcp/tools/ipaas.md) and [docs/ipaas.md](../../../docs/ipaas.md) — meta-tool semantics and flow vocabulary.

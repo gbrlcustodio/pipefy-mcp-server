@@ -387,8 +387,8 @@ class AutomationTools:
             ``active: false`` to disable a rule after creation.
 
             For ``card_moved`` rules with action ``move_single_card``, when ``extra_input`` includes
-            ``event_params.to_phase_id`` and ``action_params.to_phase_id`` (or
-            ``phase.id``), the tool rejects impossible transitions before calling the API, using the
+            ``event_params.to_phase_id`` and ``action_params.to_phase_id``, the tool rejects
+            impossible transitions before calling the API, using the
             same read-only transition data as ``move_card_to_phase``.
 
             **Cross-pipe actions** (e.g. ``create_connected_card``, ``move_card_to_pipe``):

@@ -79,6 +79,22 @@ class AutomationEventParamsInput(BaseModel):
     trigger_field_ids: list[str] | None = Field(default=None, alias="triggerFieldIds")
 
 
+class AutomationActionParamsInput(BaseModel):
+    """Classic-automation ``AutomationActionParamsInput`` subtree read by preflight.
+
+    Only the fields preflight touches are typed (``field_map``, ``to_phase_id`` — both
+    snake wire names, so no alias); ``extra="allow"`` passes every other declared or
+    unknown key (``card_id``, ``aiBehaviorParams``, ``httpMethod``, …) through verbatim.
+    There is deliberately no ``phase`` field: it is not a declared write input (Core
+    rejects it), only an output-type convenience derived from ``to_phase_id``.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    field_map: list[FieldMapInput] | None = None
+    to_phase_id: str | None = None
+
+
 def _default_automation_condition() -> AutomationConditionInput:
     """Fresh placeholder condition (deep copy) for each new create input."""
     return AutomationConditionInput.model_validate(copy.deepcopy(DEFAULT_CONDITION))

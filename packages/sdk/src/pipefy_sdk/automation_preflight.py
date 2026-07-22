@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from pipefy_sdk.models import AutomationEventParamsInput
+from pipefy_sdk.models import AutomationActionParamsInput, AutomationEventParamsInput
 from pipefy_sdk.transition_hints import (
     TRANSITION_RULES_HINT,
     format_allowed_destinations_phrase,
@@ -42,6 +42,20 @@ def _parse_event_params(raw: Any) -> AutomationEventParamsInput | None:
         return None
     try:
         return AutomationEventParamsInput.model_validate(raw)
+    except ValidationError:
+        return None
+
+
+def _parse_action_params(raw: Any) -> AutomationActionParamsInput | None:
+    """Parse an ``action_params`` sub-dict, or ``None`` for missing/malformed input.
+
+    Lenient for the same reason as :func:`_parse_event_params`: preflight is advisory
+    and must never turn odd input into a spurious create failure.
+    """
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return AutomationActionParamsInput.model_validate(raw)
     except ValidationError:
         return None
 
@@ -101,9 +115,10 @@ async def validate_traditional_automation_move_transition(
         client: Pipefy facade.
         trigger_id: Rule trigger (e.g. ``card_moved``).
         action_id: Rule action id from the catalog (e.g. ``move_single_card``).
-        extra_input: Optional ``CreateAutomationInput``-style dict (``event_params`` /
-            ``action_params`` keys in snake_case or camelCase). Non-dict values are
-            treated as empty (no-op preflight).
+        extra_input: Optional ``CreateAutomationInput``-style dict. The destination is
+            read from ``action_params.to_phase_id`` (the sole declared write field;
+            ``phase`` is output-only and rejected on write). Non-dict values are treated
+            as empty (no-op preflight).
     """
     if str(trigger_id) != "card_moved":
         return
@@ -116,11 +131,8 @@ async def validate_traditional_automation_move_transition(
     if not src:
         return
     src_s = str(src)
-    act = extra.get("action_params") or extra.get("actionParams") or {}
-    dest = act.get("to_phase_id") or act.get("toPhaseId")
-    phase_nested = act.get("phase")
-    if dest is None and isinstance(phase_nested, dict):
-        dest = phase_nested.get("id")
+    act = _parse_action_params(extra.get("action_params"))
+    dest = act.to_phase_id if act else None
     if not dest:
         return
     dest_s = str(dest)
@@ -157,20 +169,14 @@ def extract_field_map_destination_ids(
     """Return ``field_map`` destination ``fieldId`` values from ``CreateAutomationInput``-style dicts."""
     if not isinstance(extra_input, dict):
         return []
-    act = extra_input.get("action_params") or extra_input.get("actionParams") or {}
-    if not isinstance(act, dict):
-        return []
-    field_map = act.get("field_map") or act.get("fieldMap")
-    if not field_map:
+    act = _parse_action_params(extra_input.get("action_params"))
+    if act is None or not act.field_map:
         return []
     ids: list[str] = []
-    for entry in field_map:
-        if not isinstance(entry, dict):
+    for entry in act.field_map:
+        if entry.field_id is None:
             continue
-        raw = entry.get("fieldId") or entry.get("field_id")
-        if raw is None:
-            continue
-        text = str(raw).strip()
+        text = str(entry.field_id).strip()
         if text:
             ids.append(text)
     return ids
@@ -267,8 +273,8 @@ async def validate_automation_field_map_field_ids(
 ) -> None:
     """Raise :class:`AutomationPreflightError` when ``field_map`` references unknown destination fields.
 
-    Only runs when ``extra_input`` includes ``action_params.field_map`` (or camelCase
-    equivalents). Compares each ``fieldId`` to numeric ``internal_id`` values on
+    Only runs when ``extra_input`` includes ``action_params.field_map``. Compares each
+    ``fieldId`` to numeric ``internal_id`` values on
     ``action_pipe_id`` (the action repo pipe). Upstream field-load failures are logged
     and skipped so preflight does not block creates on transient API errors.
 

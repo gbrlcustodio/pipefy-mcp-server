@@ -34,7 +34,7 @@ async def service_account_is_member(
     except Exception:  # noqa: BLE001
         return None
 
-    members = (members_data.get("pipe") or {}).get("members", [])
+    members = (members_data.get("pipe") or {}).get("members") or []
     target = email.strip().lower()
     for m in members:
         user = m.get("user") if isinstance(m.get("user"), dict) else {}

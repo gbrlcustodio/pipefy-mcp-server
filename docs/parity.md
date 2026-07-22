@@ -26,7 +26,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | MCP tool name | CLI command (or target) | Status | Notes |
 | --- | --- | --- | --- |
 | `add_card_comment` | `pipefy card comment add` | shipped | — |
-| `add_service_account_to_pipe` | `pipefy member add-service-account` | shipped | Attaches an existing org service account to a pipe by email (iPaaS setup); role defaults to `admin`; wraps `inviteMembers` and verifies membership. |
+| `add_service_account_to_pipe` | `pipefy member add-service-account` | shipped | Attaches an existing org service account to a pipe by email (iPaaS setup); role defaults to `admin`; wraps `inviteMembers`. The MCP tool verifies membership afterwards (errors if absent); the CLI returns the raw invite result (inspect `inviteMembers.errors`). |
 | `call_ipaas_tool` | — | deferred | iPaaS (Advanced Automations) tool invocation; MCP-first surface, CLI twin considered once agent usage settles. |
 | `clone_pipe` | `pipefy pipe clone` | shipped | optional `--org`. |
 | `create_ai_agent` | `pipefy agent create` | shipped | AI Agents domain; post-v0.1 CLI unless explicitly rescoped. |

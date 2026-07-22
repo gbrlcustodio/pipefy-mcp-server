@@ -55,7 +55,7 @@ When setting up an iPaaS (Advanced Automations) flow that runs under a **service
 
    CLI: `pipefy member add-service-account --pipe 67890 --email svc-automations@your-org.pipefy-service.com`
 
-   The tool verifies membership afterwards: it returns an error if the account is not a member of the pipe once the invite is processed, so an incomplete setup is not reported as success. This attaches an existing service account — create one first with `create_service_account` if you don't have one, and delete a throwaway with `delete_service_account(organization_uuid, service_account_uuid)` when done. See [docs/mcp/tools/service-accounts.md](../../../docs/mcp/tools/service-accounts.md).
+   The **MCP tool** verifies membership afterwards: it returns an error if the account is not a member of the pipe once the invite is processed, so an incomplete setup is not reported as success. The **CLI** does not verify — it prints the raw invite result, so check `inviteMembers.errors` (or run `pipefy member list --pipe <id>`) to confirm the account was actually added. This attaches an existing service account — create one first with `create_service_account` if you don't have one, and delete a throwaway with `delete_service_account(organization_uuid, service_account_uuid)` when done. See [docs/mcp/tools/service-accounts.md](../../../docs/mcp/tools/service-accounts.md).
 
 ---
 

@@ -155,6 +155,43 @@ async def test_create_service_account_with_pipe_ids_chains_and_verifies(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("sa_session", [None], indirect=True)
+async def test_create_service_account_pipe_ids_null_members_still_returns_secret(
+    sa_session, mock_sa_client, extract_payload
+):
+    """A GraphQL `members: null` during post-create verification must not crash
+    the tool and strand the one-time client secret."""
+    mock_sa_client.create_service_account.return_value = {
+        "createServiceAccount": {
+            "serviceAccount": {
+                "email": "sa@x.com",
+                "client": {"id": "cid", "secret": "csecret"},
+            }
+        },
+        "pipe_memberships": [{"pipe_id": "100", "invited": True}],
+    }
+    mock_sa_client.get_pipe_members.return_value = {"pipe": {"members": None}}
+
+    async with sa_session as session:
+        result = await session.call_tool(
+            "create_service_account",
+            {
+                "organization_uuid": ORG,
+                "name": "sa",
+                "role": "normal",
+                "pipe_ids": ["100"],
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["serviceAccount"]["client"]["secret"] == "csecret"
+    # Verification could not confirm membership, but the secret is still returned.
+    assert payload["data"]["pipe_memberships"][0]["member"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_bad_pipe_ids(
     sa_session, mock_sa_client, extract_payload
 ):

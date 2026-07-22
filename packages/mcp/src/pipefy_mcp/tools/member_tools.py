@@ -314,7 +314,7 @@ async def _verify_removal(
     except Exception:  # noqa: BLE001
         return None
 
-    members = (members_data.get("pipe") or {}).get("members", [])
+    members = (members_data.get("pipe") or {}).get("members") or []
     remaining_ids: set[str] = set()
     for m in members:
         user = m.get("user") if isinstance(m.get("user"), dict) else {}

@@ -201,6 +201,30 @@ async def test_add_service_account_ignores_invite_errors_when_member_present(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_handles_null_pipe_members(
+    member_session, mock_member_client, extract_payload
+):
+    """A GraphQL `members: null` verification response must not raise TypeError."""
+    mock_member_client.add_service_account_to_pipe.return_value = {
+        "inviteMembers": {"users": [], "errors": []}
+    }
+    mock_member_client.get_pipe_members.return_value = {"pipe": {"members": None}}
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
+        )
+
+    # No crash; verification treats null as absent -> tool reports not-added.
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "svc@x.com" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_skips_verification_for_non_numeric_pipe_id(
     member_session, mock_member_client, extract_payload
 ):

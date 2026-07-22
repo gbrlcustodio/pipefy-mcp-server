@@ -19,6 +19,7 @@ from pipefy_mcp.tools.member_tool_helpers import (
     handle_member_tool_graphql_error,
     service_account_is_member,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
@@ -85,6 +86,7 @@ class MemberTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def add_service_account_to_pipe(
             pipe_id: PipefyId,

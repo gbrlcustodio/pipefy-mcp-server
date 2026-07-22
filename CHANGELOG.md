@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.1-beta.1] - 2026-07-22
+
 ### Added
 
 - **Docs / skills**: hosted MCP (`mcp.pipefy.com`) install snippet on the root README front door; first-time agent checklist [`pipefy-toolkit-setup`](skills/onboarding/pipefy-toolkit-setup/SKILL.md) (path choice / ask-your-agent / verify — commands stay in `README.md#installation`, per #246).

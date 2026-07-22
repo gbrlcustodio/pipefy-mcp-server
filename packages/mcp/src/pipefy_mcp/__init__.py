@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-__version__ = "0.3.0-beta.1"
+__version__ = "0.3.1-beta.1"
 version = __version__
 
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)", __version__)

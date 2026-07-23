@@ -191,6 +191,25 @@ credential resolved at startup (stdio/local), while `RequestScopedIdentity`
 snapshots each caller's validated bearer from the request context, so every session
 acts as its own caller.
 
+## Subject-domain taxonomy
+
+The tool surface is classified along two orthogonal axes. A **domain** is the single subject a tool is *about* — domains form a disjoint partition where every registered tool has exactly one, answering "what subject is this tool fundamentally about?". A **profile** is an overlapping, journey-sized selection where the same tool may appear in many, answering "who reaches for this tool, and when?". Domains back the tool-catalog map and the drift-guard; profiles carry the small-working-set job for named `--toolsets` selection. The two are complementary: a tool like `set_default_llm_provider` is *about* AI (domain `intelligence`) yet an IT/governance persona also reaches for it — so the subject fixes the one domain and the cross-persona pull is expressed as a profile overlap, never by splitting the domain or duplicating the tool.
+
+The eight domains and the subject each owns:
+
+- **workflow** — running a process: pipes, phases, fields, labels, field conditions, cards, comments, card attachments, inbox email, and pipe/card relations.
+- **database** — Pipefy database tables: tables, table fields, table relations, records, and record attachments.
+- **interfaces** — no-code page building: portals, pages, elements, and sub-portals.
+- **automation** — Pipefy-native rule (if/then) and AI automations, plus their execution logs, metrics, usage, and job exports.
+- **intelligence** — AI capability: agents, LLM providers, knowledge bases, available models, and AI usage and credits.
+- **analytics** — reporting: pipe and organization reports and their exports.
+- **governance** — org administration: organization, members, roles, service accounts, and audit-log export.
+- **integration** — connecting to the outside: webhooks, iPaaS, and the raw GraphQL API (introspection and arbitrary execution). iPaaS lives here (external-app connectivity), not in `automation`.
+
+Subject domains are deliberately chosen over the `docs/mcp/tools/*.md` doc-areas: doc-areas group by API object (cards, pipes, tables), which is redundant with tool names — if a caller says "cards", the names (`create_card`) already lead the model there. The value a taxonomy adds is at the job/business-subject layer, which subject domains capture and doc-areas do not.
+
+The partition lives as central data in `tools/toolsets.py` (`DOMAINS`), not co-located in each tool's `meta` dict — a partition's correctness is a whole-set property (complete, disjoint) best reviewed and asserted in one place, unlike a per-tool security marker like remote-safety, which is reviewed tool-by-tool and so stays on the decorator. The drift-guard (`tests/tools/test_toolsets.py`) keys completeness to `PIPEFY_TOOL_NAMES` with no hardcoded count: a newly registered tool with no domain fails the build. Re-homing or renaming a domain later churns the guard, the docs, and the `--toolsets` vocabulary callers type, so the boundary choices above are deliberate.
+
 ## Remote-profile tool marker
 
 Under the `remote` profile (`--profile remote` / `PIPEFY_MCP_PROFILE=remote`), the
@@ -246,6 +265,8 @@ A write — create, update, delete, or an action-style mutation — must pass th
 Input restriction (via `is_remote_profile(ctx)`, per "Exposure vs input restriction" above) is required for a write only when an input resolves from the deployment's own environment or disk — the `create_ipaas_connection` `$env` case — not merely because the tool mutates. A write whose every input is a per-request value (an id, a name, a role) needs none.
 
 The organization service-account tools (`create_service_account`, `delete_service_account`, `add_service_account_to_pipe`) are the first **public-GraphQL** writes on the remote seed (the iPaaS meta-tools `call_ipaas_tool` / `create_ipaas_connection` are also writes, but reach the iPaaS host rather than the public API) and the worked example of the test above: public-GraphQL mutations, API-permission-governed, per-request inputs only, a returned-once secret kept out of logs, and a `confirm`-gated delete.
+
+**Raw GraphQL on the remote profile.** `execute_graphql` is remote-safe (#308), unlike the dedicated destructive tools it can stand in for. It runs an arbitrary query or mutation as the request-scoped bearer, so its write reach is whatever that caller's API permissions already allow — the same trust boundary as its remote-safe introspection siblings (`search_schema`, `introspect_*`), just write-capable. It qualifies on the same three write criteria: authorization is the API's alone (no client-side permission check), no returned value is logged (hosted logging records neither argument values nor response bodies), and it takes only per-request inputs (a query string and variables — no `file_path`, no `$env` reference, no iPaaS host). Two properties are worth stating plainly: it deliberately has **no `confirm` gate** and bypasses the client-side input restrictions of dedicated tools — acceptable because, per the criteria above, `confirm` and input scrubs are UX guards, not authorization boundaries, and the authorization boundary (the API permission on the bearer) still holds. Its reach is the public GraphQL API only (the SDK runs it on the public executor); it cannot read local disk, reach the iPaaS host, or use the Internal API, so the tools withheld for *those* reasons stay unreachable through it — though public-GraphQL equivalents of tools withheld for other reasons remain callable.
 
 **Governance is deferred, on purpose.** Per-user quotas, rate limiting, and cost weighting for remote writes are not a precondition of exposure: the tool-call middleware seam (`core/tool_middleware.py`) is where they attach, but the only middleware shipped is structured logging, and remote writes rely on API-side rate limits plus per-user identity. Per-user write governance is tracked under the "Scaling and abuse protection" milestone; until it lands, expose new write categories conservatively and prefer ones whose blast radius is bounded by API permissions.
 

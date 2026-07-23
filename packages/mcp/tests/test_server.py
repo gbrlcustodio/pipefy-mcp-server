@@ -161,7 +161,10 @@ def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_runti
     assert "get_organization" in exposed
     # The attachment tools are remote-safe via file_url (file_path rejected per call).
     assert "upload_attachment_to_card" in exposed
-    assert "execute_graphql" not in exposed
+    # raw-GraphQL escape hatch is remote-safe (#308)
+    assert "execute_graphql" in exposed
+    # A secret-handling write stays withheld, so default-deny still holds.
+    assert "create_llm_provider" not in exposed
 
 
 @pytest.mark.unit

@@ -15,7 +15,7 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 
 ## Identifiers reference
 
-Full cross-tool map: `docs/mcp/tools/identifiers.md`.
+Full cross-tool map: `docs/mcp/tools/identifiers.md#observability`.
 
 | Concept | What tools expect | How to obtain |
 |---------|-------------------|---------------|

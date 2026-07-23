@@ -8,7 +8,7 @@ Read-only observability tools use `readOnlyHint=True`. The async export mutation
 
 ## Identifiers (avoid mixing pipe vs automation vs org)
 
-> Full cross-tool map: [identifiers.md](identifiers.md).
+> Full cross-tool map: [identifiers.md](identifiers.md#observability).
 
 | Concept | What observability tools expect | How to obtain it |
 |--------|--------------------------------|------------------|

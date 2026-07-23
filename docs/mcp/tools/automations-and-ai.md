@@ -86,7 +86,7 @@ Official **event-scoped** catalog only: `get_automation_event_attributes` (MCP) 
 
 #### Slug vs `internal_id`
 
-Full cross-tool identifier map: [identifiers.md](identifiers.md).
+Full cross-tool identifier map: [identifiers.md](identifiers.md#field-references-slug-vs-internal_id).
 
 | Surface | Field identifier |
 | --- | --- |

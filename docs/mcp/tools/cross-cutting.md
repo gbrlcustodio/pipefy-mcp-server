@@ -10,7 +10,7 @@ List-style tools accept `first` and `after`. Continue with `pageInfo.endCursor` 
 
 Pipefy GraphQL uses string IDs. Pass IDs as strings (e.g. `"301234"`). Some parameters also accept JSON integers; the server normalizes to string before calling the API. Success payloads return string IDs. Empty, zero, or otherwise invalid IDs fail validation before any network call.
 
-Which **form** each tool expects (slug vs `internal_id` vs uuid vs numeric id) is the canonical [Identifiers map](identifiers.md). Type-safety and coercion detail: [Pipefy IDs and type safety](pipes-and-cards.md#pipefy-ids-type-safety).
+Which **form** each tool expects (slug vs `internal_id` vs uuid vs numeric id) is the canonical [Identifiers map](identifiers.md#the-four-forms). Type-safety and coercion detail: [Pipefy IDs and type safety](pipes-and-cards.md#pipefy-ids-type-safety).
 
 ## `debug=true`
 

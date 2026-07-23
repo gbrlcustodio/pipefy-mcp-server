@@ -58,11 +58,11 @@ A field is addressed by **slug** for one-off card edits, and by **internal_id** 
 
 ## Per-area quick reference
 
-### Pipes & cards
+### Pipes and cards
 - `get_pipe` / `get_card` / `create_card` / `move_card_to_phase`: numeric ids (`pipe_id`, `card_id`, `destination_phase_id`).
 - Field references: see [Field references](#field-references-slug-vs-internal_id) above.
 
-### AI agents & knowledge bases
+### AI agents and knowledge bases
 - AI agent tools scope by `repo_uuid` (pipe **UUID**); the agent itself is addressed by its own `uuid`.
 - Knowledge-base tools scope by `pipe_uuid` (pipe **UUID**); items (plain text, document, data source) by their data-source **UUID**; data lookups read `source_repo_id` (numeric pipe id).
 - `dataSourceIds` / `data_source_ids`: knowledge-base item **UUIDs**.
@@ -71,7 +71,7 @@ A field is addressed by **slug** for one-off card edits, and by **internal_id** 
 - `create_automation` / `create_ai_automation`: `pipe_id` numeric; `automation_id` (get/update/delete) is the automation's own id, not the pipe's.
 - Field references inside `field_map` and `condition`: **internal_id** (see above).
 
-### Tables & records
+### Tables and records
 - `table_id` and record ids are strings — numeric or an opaque token (e.g. `"fIVcd19N"`). Record field references use the field **slug**.
 
 ### LLM providers

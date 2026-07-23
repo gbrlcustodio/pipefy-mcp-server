@@ -35,7 +35,7 @@ Integration tests (`pytest -m integration -k portal`) need **`PIPEFY_PORTAL_ORG_
 
 ## Identifiers
 
-> Full cross-tool map: [identifiers.md](identifiers.md).
+> Full cross-tool map: [identifiers.md](identifiers.md#organization-portal-relations-reports).
 
 | Concept | Tool parameter | Notes |
 |--------|----------------|-------|

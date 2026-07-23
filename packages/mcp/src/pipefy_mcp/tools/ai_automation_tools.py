@@ -240,6 +240,7 @@ class AiAutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_ai_automation(
             ctx: Context[ServerSession, None],
@@ -297,6 +298,7 @@ class AiAutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_ai_automation(
             ctx: Context,
@@ -378,6 +380,7 @@ class AiAutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_ai_automation(
             ctx: Context,

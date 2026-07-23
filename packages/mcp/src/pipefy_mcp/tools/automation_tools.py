@@ -261,6 +261,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def simulate_automation(
             ctx: Context,
@@ -365,6 +366,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_automation(
             ctx: Context,
@@ -506,6 +508,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def create_send_task_automation(
             ctx: Context,
@@ -586,6 +589,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_automation(
             ctx: Context,
@@ -640,6 +644,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_automation(
             ctx: Context[ServerSession, None],

@@ -91,6 +91,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_card(
             ctx: Context[ServerSession, None],
@@ -390,6 +391,7 @@ class PipeTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
             structured_output=False,
+            meta=REMOTE,
         )
         async def add_card_comment(
             card_id: PipefyId, text: str, ctx: Context[ServerSession, None]
@@ -427,6 +429,7 @@ class PipeTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
             structured_output=False,
+            meta=REMOTE,
         )
         async def update_comment(
             comment_id: PipefyId, text: str, ctx: Context[ServerSession, None]
@@ -465,6 +468,7 @@ class PipeTools:
                 destructiveHint=True,
             ),
             structured_output=False,
+            meta=REMOTE,
         )
         async def delete_comment(
             ctx: Context[ServerSession, None],
@@ -514,6 +518,7 @@ class PipeTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_card_relation(
             ctx: Context[ServerSession, None],
@@ -868,6 +873,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
+            meta=REMOTE,
         )
         async def move_card_to_phase(
             card_id: PipefyId,
@@ -907,6 +913,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_card_field(
             card_id: PipefyId,
@@ -951,6 +958,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_card(
             card_id: PipefyId,
@@ -1085,6 +1093,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def fill_card_phase_fields(
             ctx: Context[ServerSession, None],
@@ -1226,6 +1235,7 @@ class PipeTools:
                 destructiveHint=True,
             ),
             structured_output=False,
+            meta=REMOTE,
         )
         async def delete_card(
             ctx: Context[ServerSession, None],

@@ -31,6 +31,7 @@ class MemberTools:
     def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def invite_members(
             pipe_id: PipefyId,
@@ -175,6 +176,7 @@ class MemberTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def remove_member_from_pipe(
             ctx: Context[ServerSession, None],
@@ -250,6 +252,7 @@ class MemberTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def set_role(
             pipe_id: PipefyId,

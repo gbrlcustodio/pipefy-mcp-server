@@ -33,8 +33,8 @@ def is_remote_profile(ctx: Context) -> bool:
     off the runtime, not the module-global settings singleton, so embedders
     and tests that build a runtime from explicit settings get the same
     answer the serving profile was resolved from. The runtime exposes this as
-    a resolved boolean, not the settings tree, so tool code cannot reach any
-    other process-global value through the request context (see #405).
+    a resolved boolean, not the settings tree, so this read does not put the
+    Settings tree back on the request context (see #405).
     """
     runtime: McpRuntime = ctx.request_context.lifespan_context
     return runtime.is_remote

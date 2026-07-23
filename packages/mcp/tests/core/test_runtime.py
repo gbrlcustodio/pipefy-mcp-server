@@ -82,7 +82,10 @@ class TestMcpRuntime:
 
         assert runtime.is_remote is False
         assert runtime.unified_envelope is True
+        # Neither the public property nor the private store may come back:
+        # `lifespan_context._settings` would be just as reachable from a tool.
         assert not hasattr(runtime, "settings")
+        assert not hasattr(runtime, "_settings")
 
     @pytest.mark.unit
     def test_unified_envelope_flag_follows_the_setting(self):

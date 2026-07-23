@@ -4,7 +4,12 @@ import pytest
 from pipefy_sdk import PipefySettings
 from pydantic import ValidationError
 
-from pipefy_mcp.settings import IpaasSettings, McpSettings, Settings
+from pipefy_mcp.settings import (
+    IpaasSettings,
+    McpSettings,
+    Settings,
+    resolve_mcp_settings,
+)
 
 
 @pytest.mark.unit
@@ -164,6 +169,7 @@ def test_mcp_settings_defaults():
     assert mcp.host == "127.0.0.1"
     assert mcp.port == 8000
     assert mcp.log_level == "INFO"
+    assert mcp.toolsets is None
 
 
 @pytest.mark.unit
@@ -186,6 +192,7 @@ def test_mcp_settings_loads_from_pipefy_mcp_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_MCP_HOST", "0.0.0.0")
     monkeypatch.setenv("PIPEFY_MCP_PORT", "9100")
     monkeypatch.setenv("PIPEFY_MCP_UNIFIED_ENVELOPE", "false")
+    monkeypatch.setenv("PIPEFY_MCP_TOOLSETS", "workflow,database")
 
     mcp = Settings().mcp
     assert mcp.profile == "remote"
@@ -193,6 +200,27 @@ def test_mcp_settings_loads_from_pipefy_mcp_env(monkeypatch):
     assert mcp.host == "0.0.0.0"
     assert mcp.port == 9100
     assert mcp.unified_envelope is False
+    assert mcp.toolsets == "workflow,database"
+
+
+@pytest.mark.unit
+def test_resolve_mcp_settings_folds_toolsets_flag_over_env(monkeypatch):
+    """The ``--toolsets`` flag reaches ``mcp.toolsets`` and outranks the env var."""
+    monkeypatch.setenv("PIPEFY_MCP_TOOLSETS", "governance")
+
+    resolved = resolve_mcp_settings(
+        profile=None, transport=None, host=None, port=None, toolsets="workflow"
+    )
+    assert resolved.mcp.toolsets == "workflow"
+
+
+@pytest.mark.unit
+def test_resolve_mcp_settings_toolsets_falls_back_to_env(monkeypatch):
+    """With no flag, ``mcp.toolsets`` falls back to ``PIPEFY_MCP_TOOLSETS``."""
+    monkeypatch.setenv("PIPEFY_MCP_TOOLSETS", "governance")
+
+    resolved = resolve_mcp_settings(profile=None, transport=None, host=None, port=None)
+    assert resolved.mcp.toolsets == "governance"
 
 
 @pytest.mark.unit

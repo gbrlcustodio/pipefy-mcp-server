@@ -239,3 +239,39 @@ DOMAINS: dict[str, frozenset[str]] = {
         }
     ),
 }
+
+# Reserved keywords that mean "no curation" — the full (post-floor) surface.
+_NO_CURATION = frozenset({"all", "default"})
+
+
+def resolve_selection(spec: str | None) -> frozenset[str] | None:
+    """Resolve a ``--toolsets`` / ``PIPEFY_MCP_TOOLSETS`` spec to a set of tool names.
+
+    ``spec`` is a comma-separated list of subject-domain names (case-insensitive).
+    Returns the union of the named domains' tools, or ``None`` for no curation —
+    an empty spec or the ``all`` / ``default`` keywords. ``None`` means the caller
+    applies no selection at all (backward-compatible default).
+
+    Selection only ever narrows: the returned names are matched against the
+    already-registered (and, on the remote profile, already-floored) surface, so a
+    name here can never widen the surface past the floor.
+
+    Raises:
+        ValueError: if any name is neither a known domain nor a reserved keyword.
+            The message names the unknown values and lists the known toolsets, so
+            the CLI can render it as a usage error.
+    """
+    if spec is None:
+        return None
+    names = [part.strip().lower() for part in spec.split(",") if part.strip()]
+    if not names:
+        return None
+    unknown = [n for n in names if n not in DOMAINS and n not in _NO_CURATION]
+    if unknown:
+        known = ", ".join(sorted(set(DOMAINS) | _NO_CURATION))
+        raise ValueError(
+            f"unknown toolset(s): {', '.join(unknown)}. Known toolsets: {known}."
+        )
+    if any(n in _NO_CURATION for n in names):
+        return None
+    return frozenset().union(*(DOMAINS[n] for n in names))

@@ -59,7 +59,9 @@ def _make_lifespan(
     return lifespan
 
 
-def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
+def _register_pipefy_tools(
+    app: FastMCP, *, remote_mode: bool, toolsets: str | None
+) -> None:
     """Register every Pipefy tool on ``app`` exactly once, at construction.
 
     Shared by both transports. Tools take no client at registration: each opens a
@@ -67,12 +69,16 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so registration is
     decoupled from how or when the runtime builds its engine. Registration never
     repeats, so there is no repeat-visit bookkeeping to maintain.
+
+    The remote floor then the toolset selection are applied in that order, so a
+    ``toolsets`` selection narrows within the surviving surface and never widens it.
     """
     install_pipefy_validation_envelope()
     registry = ToolRegistry(mcp=app)
     registry.check_for_name_collisions()
     registry.register_tools()
     registry.apply_remote_profile(remote_mode=remote_mode)
+    registry.apply_toolset_selection(toolsets)
 
 
 def default_tool_middlewares(settings: Settings) -> list[ToolCallMiddleware]:
@@ -135,7 +141,11 @@ def build_pipefy_mcp_server(
         auth=auth,
         transport_security=runtime.transport_security,
     )
-    _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
+    _register_pipefy_tools(
+        app,
+        remote_mode=settings.mcp.profile == "remote",
+        toolsets=settings.mcp.toolsets,
+    )
     # Wrap the tool-call handler with the built-in chain plus any consumer middleware.
     # Both transports serve this app, so tool calls over stdio and HTTP alike run
     # through the chain; the install is a no-op when the combined list is empty.

@@ -55,11 +55,18 @@ def _parse_condition_arg(
     if condition is None:
         return None, None
     try:
-        return AutomationConditionInput.model_validate(condition), None
+        parsed = AutomationConditionInput.model_validate(condition)
     except ValidationError as exc:
+        return None, build_automation_error_payload(f"Invalid 'condition': {exc}")
+    if not parsed.expressions:
+        # An expressionless condition serializes to an empty payload that would
+        # still win over extra_input.condition — almost always a mistake. Omit
+        # condition to leave the rule unconditional.
         return None, build_automation_error_payload(
-            f"Invalid 'condition': {exc}",
+            "Invalid 'condition': provide at least one expression, or omit "
+            "condition to leave the rule unconditional."
         )
+    return parsed, None
 
 
 class AutomationTools:
@@ -660,6 +667,9 @@ class AutomationTools:
             ``field_map`` and move-transition preflight run on ``create_automation`` only, not on
             this tool. Invalid ``fieldId`` or impossible phase transitions may still fail at the API.
 
+            Provide ``condition`` and/or ``extra_input`` — an update with neither
+            changes nothing and is rejected.
+
             Args:
                 automation_id: Automation rule ID.
                 condition: Optional typed trigger condition to replace (see ``create_automation``).
@@ -678,6 +688,10 @@ class AutomationTools:
             parsed_condition, cond_err = _parse_condition_arg(condition)
             if cond_err is not None:
                 return cond_err
+            if parsed_condition is None and not extra_input:
+                return build_automation_error_payload(
+                    "Nothing to update: provide 'condition' and/or 'extra_input'."
+                )
             try:
                 raw = await client.update_automation(
                     rid,

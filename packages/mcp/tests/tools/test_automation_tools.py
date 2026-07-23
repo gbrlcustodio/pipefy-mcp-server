@@ -512,6 +512,45 @@ async def test_update_automation_passes_typed_condition(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("automation_session", [None], indirect=True)
+@pytest.mark.parametrize("empty", [{}, {"expressions": []}])
+async def test_create_automation_rejects_expressionless_condition(
+    automation_session, mock_automation_client, extract_payload, empty
+):
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_automation",
+            {
+                "pipe_id": "p1",
+                "name": "Rule",
+                "trigger_id": "evt-1",
+                "action_id": "act-1",
+                "condition": empty,
+            },
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "expression" in tool_error_message(payload).lower()
+    mock_automation_client.create_automation.assert_not_called()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_update_automation_rejects_no_op(
+    automation_session, mock_automation_client, extract_payload
+):
+    """An update with neither condition nor extra_input changes nothing — rejected."""
+    async with automation_session as session:
+        result = await session.call_tool("update_automation", {"automation_id": "a7"})
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "nothing to update" in tool_error_message(payload).lower()
+    mock_automation_client.update_automation.assert_not_called()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_surfaces_preflight_error_as_envelope(
     automation_session, mock_automation_client, extract_payload
 ):

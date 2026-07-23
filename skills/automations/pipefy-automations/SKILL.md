@@ -21,8 +21,8 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 |------------|-----|---------|
 | `get_automations` | `pipefy automation list` | List all automations for a pipe. |
 | `get_automation` | `pipefy automation get` | Single automation with full rule config — returns `event_params` and `action_params` (including `aiParams` for AI rules). |
-| `create_automation` | `pipefy automation create` | Create an if/then rule. `active` defaults to true. |
-| `update_automation` | `pipefy automation update` | Patch a rule via `extra_input` (`UpdateAutomationInput` fields). |
+| `create_automation` | `pipefy automation create` | Create an if/then rule. `active` defaults to true. First-class typed `condition` (see [Conditions](#conditions--gate-a-rule-on-field-tests)); other fields via `extra_input`. |
+| `update_automation` | `pipefy automation update` | Patch a rule: first-class typed `condition` (see [Conditions](#conditions--gate-a-rule-on-field-tests)) and/or `extra_input`. |
 | `delete_automation` | `pipefy automation delete` | **(Two-step destructive)** |
 | `simulate_automation` | `pipefy automation simulate` | **AI-only** dry-run (`generate_with_ai` action). |
 | `get_automation_events` | `pipefy automation events list` | Available trigger events. |

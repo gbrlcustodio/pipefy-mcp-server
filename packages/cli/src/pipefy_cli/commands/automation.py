@@ -87,9 +87,15 @@ def _parse_condition_option(raw: str | None) -> AutomationConditionInput | None:
     if obj is None:
         return None
     try:
-        return AutomationConditionInput.model_validate(obj)
+        parsed = AutomationConditionInput.model_validate(obj)
     except ValidationError as exc:
         raise typer.BadParameter(f"--condition: {exc}") from exc
+    if not parsed.expressions:
+        raise typer.BadParameter(
+            "--condition: provide at least one expression, or omit it to leave "
+            "the rule unconditional."
+        )
+    return parsed
 
 
 _CONDITION_HELP = (

@@ -18,6 +18,7 @@ from pipefy_sdk.graphql_problem import (
     classify_graphql_error_dicts,
 )
 from pipefy_sdk.models import (
+    CONDITION_OPERATIONS,
     Attachment,
     AttachmentTarget,
     AttachmentUploadError,
@@ -117,6 +118,7 @@ __all__ = [
     "CardSearch",
     "CardTarget",
     "CommentInput",
+    "CONDITION_OPERATIONS",
     "ConditionExpressionInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",

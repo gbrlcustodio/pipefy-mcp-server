@@ -851,6 +851,42 @@ def test_automation_update_accepts_condition_only(
     }
 
 
+def test_automation_create_rejects_expressionless_condition(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """`--condition '{}'` (no expressions) is rejected before any client call."""
+    oauth_env("aut-cond-empty")
+    mock_client = MagicMock()
+    mock_client.create_automation = AsyncMock()
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation",
+                "create",
+                "--pipe",
+                "1",
+                "--name",
+                "Rule",
+                "--event-id",
+                "card_created",
+                "--action-id",
+                "move_single_card",
+                "--condition",
+                "{}",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code != 0
+    assert "expression" in (r.stderr or "").lower()
+    mock_client.create_automation.assert_not_called()
+
+
 def test_automation_update_requires_extra_or_condition(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):

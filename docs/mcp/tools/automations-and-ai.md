@@ -18,9 +18,9 @@ Ten tools manage Pipefy traditional automations: if/then rules bound to a pipe v
 | `get_automation_events` | Yes | Catalog of trigger event definitions (global list; tool still takes `pipe_id` for context). |
 | `get_automation_event_attributes` | Yes | **Event-scoped only** (today: one token). Full `field_map.value` list: see [Common value tokens](#common-value-tokens-copy_from) below. |
 | `simulate_automation` | Yes | Runs a dry-run simulation for an automation with a payload (see tool docstring). |
-| `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. |
+| `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. Optional first-class typed `condition` (see [Condition contract](#condition-contract-condition)); other fields via `extra_input`. |
 | `create_send_task_automation` | No | Creates a send-a-task automation (`pipe_id`, trigger, task title, recipients). Created active; disable via `update_automation`. |
-| `update_automation` | No | Patches a rule via `extra_input` (`UpdateAutomationInput` fields). |
+| `update_automation` | No | Patches a rule: first-class typed `condition` (see [Condition contract](#condition-contract-condition)) and/or `extra_input` (`UpdateAutomationInput` fields). Requires at least one. |
 | `delete_automation` | No | Permanently deletes a rule (`destructiveHint=True` — confirm with the user first). |
 
 ### Traditional automation: `field_map` and dynamic values

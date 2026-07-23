@@ -18,6 +18,16 @@ from pipefy_sdk.models.ai_automation import (
 
 
 @pytest.mark.unit
+def test_condition_operations_reexported_from_package_roots():
+    """CONDITION_OPERATIONS is importable from the public package roots, not just the submodule."""
+    from pipefy_sdk import CONDITION_OPERATIONS as top_level
+    from pipefy_sdk.models import CONDITION_OPERATIONS as models_level
+
+    assert top_level is CONDITION_OPERATIONS
+    assert models_level is CONDITION_OPERATIONS
+
+
+@pytest.mark.unit
 def test_condition_expression_input_types_the_interior():
     """Expressions parse into ConditionExpressionInput with the documented fields."""
     cond = AutomationConditionInput.model_validate(

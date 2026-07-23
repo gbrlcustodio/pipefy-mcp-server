@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Docs / skills**: hosted MCP (`mcp.pipefy.com`) install snippet on the root README front door; first-time agent checklist [`pipefy-toolkit-setup`](skills/onboarding/pipefy-toolkit-setup/SKILL.md) (path choice / ask-your-agent / verify — commands stay in `README.md#installation`, per #246).
 
+### Changed
+
+- **MCP (internal)**: `McpRuntime` no longer exposes the resolved `Settings` tree; it surfaces only the per-deployment booleans it needs (`is_remote`, `unified_envelope`). This removes the last import-free path from tool-reachable code (the lifespan context) to process-global settings, so the `#306` import-linter contract guards it by construction. The removed `McpRuntime.settings` was an internal composition-root attribute — embedders using `build_pipefy_mcp_server` are unaffected. Closes #405.
+
 ### Fixed
 
 - **Installer**: Claude Code next-steps print `/pipefy:pipefy-login` (and the full plugin slash sequence) instead of the stale `/pipefy-login` label.

@@ -23,16 +23,16 @@ The single biggest source of wrong-id errors: the same pipe is addressed by five
 | `repo_id` | numeric id (string) | observability automation-by-repo logs (`get_automation_logs_by_repo`) |
 | `source_repo_id` | numeric id | knowledge-base data lookups (a UUID is accepted on create but breaks at index time — use the numeric id) |
 | `repo_uuid` | **uuid** | AI agents (`get_ai_agents`, `create_ai_agent`, …), AI agent logs |
-| `pipe_uuid` | **uuid** | knowledge-base tools |
+| `pipe_uuid` | **uuid** | knowledge-base tools; pipe report **reads** (`get_pipe_report*`) — report create/update use numeric `pipe_id` |
 
 ## UUID-named arguments that also accept a numeric id
 
-A few arguments are named `*_uuid` but the API resolves a numeric id too. Prefer the UUID; a numeric id is a documented fallback:
+A few arguments are named `*_uuid` but a numeric id is resolved automatically too. Prefer the UUID; a numeric id is a documented fallback:
 
-- `get_ai_credit_usage(organization_uuid)`
+- The three observability usage tools: `get_agents_usage(organization_uuid)`, `get_automations_usage(organization_uuid)`, `get_ai_credit_usage(organization_uuid)`
 - `list_portals(organization_uuid)`, `create_portal(organization_uuid)`
 
-Everywhere else, an argument named `*_uuid` wants a UUID and an argument named `*_id` wants a numeric id.
+Elsewhere, an argument named `*_uuid` wants a UUID and an argument named `*_id` wants a numeric id.
 
 ## Field references: slug vs internal_id
 
@@ -82,7 +82,7 @@ A field is addressed by **slug** for one-off card edits, and by **internal_id** 
 ### Observability
 - `get_ai_agent_logs(repo_uuid)` (pipe UUID); `get_ai_agent_log_details(log_uuid)`.
 - `get_automation_logs_by_repo(repo_id)` (numeric pipe id, string); `get_automation_logs(automation_id)`.
-- Usage tools take `organization_uuid` (UUID); metrics/export take numeric `organization_id`; `get_ai_credit_usage(organization_uuid)` accepts UUID or numeric.
+- Usage tools (`get_agents_usage`, `get_automations_usage`, `get_ai_credit_usage`) take `organization_uuid` — UUID **or** numeric org id (resolved server-side). Metrics (`get_automation_execution_metrics`) and export (`export_automation_jobs`) take numeric `organization_id` only.
 
 ### Organization, portal, relations, reports
 - `list_organizations`: no id. `get_organization(organization_id)`: numeric id.

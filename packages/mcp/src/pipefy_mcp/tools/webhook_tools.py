@@ -125,6 +125,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def send_inbox_email(
             card_id: PipefyId,
@@ -202,6 +203,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def send_email_with_template(
             card_id: PipefyId,
@@ -309,6 +311,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_webhook(
             pipe_id: PipefyId,
@@ -376,6 +379,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_webhook(
             webhook_id: PipefyId,
@@ -466,6 +470,7 @@ class WebhookTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_webhook(
             ctx: Context[ServerSession, None],

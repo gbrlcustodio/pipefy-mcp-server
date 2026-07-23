@@ -397,6 +397,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_table(
             name: str,
@@ -449,6 +450,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_table(
             table_id: PipefyId,
@@ -514,6 +516,7 @@ class TableTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_table(
             ctx: Context[ServerSession, None],
@@ -597,6 +600,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_table_record(
             table_id: PipefyId,
@@ -681,6 +685,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_table_record(
             record_id: PipefyId,
@@ -736,6 +741,7 @@ class TableTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_table_record(
             ctx: Context[ServerSession, None],
@@ -786,6 +792,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def set_table_record_field_value(
             record_id: PipefyId,
@@ -840,6 +847,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_table_field(
             table_id: PipefyId,
@@ -911,6 +919,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_table_field(
             field_id: PipefyId,
@@ -1004,6 +1013,7 @@ class TableTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_table_field(
             ctx: Context[ServerSession, None],

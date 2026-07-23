@@ -123,6 +123,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_portal(
             ctx: Context[ServerSession, None],
@@ -152,6 +153,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_portal(
             ctx: Context[ServerSession, None],
@@ -217,6 +219,7 @@ class PortalTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_portal(
             ctx: Context[ServerSession, None],
@@ -261,6 +264,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_portal_page(
             ctx: Context[ServerSession, None],
@@ -315,6 +319,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_portal_page(
             ctx: Context[ServerSession, None],
@@ -383,6 +388,7 @@ class PortalTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_portal_page(
             ctx: Context[ServerSession, None],
@@ -435,6 +441,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def sort_portal_pages(
             ctx: Context[ServerSession, None],
@@ -481,6 +488,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_portal_page_layout(
             ctx: Context[ServerSession, None],
@@ -514,6 +522,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_portal_element(
             ctx: Context[ServerSession, None],
@@ -586,6 +595,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_portal_element(
             ctx: Context[ServerSession, None],
@@ -660,6 +670,7 @@ class PortalTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_portal_element(
             ctx: Context[ServerSession, None],
@@ -712,6 +723,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def duplicate_portal_element(
             ctx: Context[ServerSession, None],
@@ -756,6 +768,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_sub_portal(
             ctx: Context[ServerSession, None],
@@ -794,6 +807,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_sub_portal_element(
             ctx: Context[ServerSession, None],
@@ -840,6 +854,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def publish_sub_portal(
             ctx: Context[ServerSession, None],
@@ -884,6 +899,7 @@ class PortalTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def unpublish_sub_portal(
             ctx: Context[ServerSession, None],
@@ -927,6 +943,7 @@ class PortalTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_sub_portal_element(
             ctx: Context[ServerSession, None],
@@ -988,6 +1005,7 @@ class PortalTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_sub_portal(
             ctx: Context[ServerSession, None],

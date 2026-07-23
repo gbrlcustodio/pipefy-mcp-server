@@ -105,6 +105,7 @@ class RelationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_pipe_relation(
             parent_id: PipefyId,
@@ -166,6 +167,7 @@ class RelationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_pipe_relation(
             relation_id: PipefyId,
@@ -222,6 +224,7 @@ class RelationTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_pipe_relation(
             ctx: Context[ServerSession, None],
@@ -271,6 +274,7 @@ class RelationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_card_relation(
             parent_id: PipefyId,

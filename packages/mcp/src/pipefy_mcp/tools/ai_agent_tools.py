@@ -155,6 +155,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_ai_agent(
             ctx: Context,
@@ -362,6 +363,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_ai_agent(
             ctx: Context,
@@ -482,6 +484,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def toggle_ai_agent_status(
             ctx: Context,
@@ -568,6 +571,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_ai_agent(
             ctx: Context, uuid: str, confirm: bool = False

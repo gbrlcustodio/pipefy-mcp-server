@@ -156,6 +156,7 @@ class FieldConditionTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_field_condition(
             ctx: Context,
@@ -318,6 +319,7 @@ class FieldConditionTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_field_condition(
             ctx: Context,
@@ -436,6 +438,7 @@ class FieldConditionTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_field_condition(
             ctx: Context[ServerSession, None],

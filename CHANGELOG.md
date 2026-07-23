@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **MCP (internal)**: `McpRuntime` no longer exposes the resolved `Settings` tree; it surfaces only the per-deployment booleans it needs (`is_remote`, `unified_envelope`). This removes the last import-free path from tool-reachable code (the lifespan context) to process-global settings, so the `#306` import-linter contract guards it by construction. The removed `McpRuntime.settings` was an internal composition-root attribute — embedders using `build_pipefy_mcp_server` are unaffected. Closes #405.
 - **MCP / CLI / SDK**: automation `condition` is now a first-class, typed input on `create_automation` and `update_automation` (CLI `--condition`), instead of only riding opaquely inside `extra_input`. A new `ConditionExpressionInput` types the expression interior (`field_address` = field `internal_id`, `operation`, `value`, `structure_id`), the documented operations are exported as `CONDITION_OPERATIONS` (soft enum — any value passes, the API validates), and the `expressions_structure` AND-of-ORs grouping is documented. An explicit `condition` wins over any `condition` in `extra_input`; `pipefy automation update` no longer requires `--extra` (pass `--condition` and/or `--extra`). Closes #387.
 
 ### Fixed

@@ -172,6 +172,7 @@ class KnowledgeBaseTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def create_ai_knowledge_base_plain_text(
             ctx: Context,
@@ -215,6 +216,7 @@ class KnowledgeBaseTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def update_ai_knowledge_base_plain_text(
             ctx: Context,
@@ -263,6 +265,7 @@ class KnowledgeBaseTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_ai_knowledge_base_plain_text(
             ctx: Context,
@@ -403,6 +406,7 @@ class KnowledgeBaseTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def update_ai_knowledge_base_document(
             ctx: Context,
@@ -447,6 +451,7 @@ class KnowledgeBaseTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_ai_knowledge_base_document(
             ctx: Context,
@@ -537,6 +542,7 @@ class KnowledgeBaseTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def create_ai_knowledge_base_data_lookup(
             ctx: Context,
@@ -598,6 +604,7 @@ class KnowledgeBaseTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def update_ai_knowledge_base_data_lookup(
             ctx: Context,
@@ -659,6 +666,7 @@ class KnowledgeBaseTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_ai_knowledge_base_data_lookup(
             ctx: Context,

@@ -392,6 +392,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_pipe_report(
             pipe_id: PipefyId,
@@ -444,6 +445,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_pipe_report(
             report_id: PipefyId,
@@ -505,6 +507,7 @@ class ReportTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_pipe_report(
             ctx: Context[ServerSession, None],
@@ -553,6 +556,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_organization_report(
             organization_id: PipefyId,
@@ -609,6 +613,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_organization_report(
             report_id: PipefyId,
@@ -668,6 +673,7 @@ class ReportTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_organization_report(
             ctx: Context[ServerSession, None],
@@ -716,6 +722,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def export_pipe_report(
             pipe_id: PipefyId,
@@ -772,6 +779,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def export_organization_report(
             organization_id: PipefyId,
@@ -829,6 +837,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def export_pipe_audit_logs(
             pipe_uuid: str,

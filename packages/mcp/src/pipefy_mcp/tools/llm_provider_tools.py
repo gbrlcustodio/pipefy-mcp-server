@@ -407,6 +407,7 @@ class LlmProviderTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_llm_provider(
             ctx: Context,
@@ -459,6 +460,7 @@ class LlmProviderTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def set_llm_provider_active_status(
             ctx: Context,
@@ -500,6 +502,7 @@ class LlmProviderTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def set_default_llm_provider(
             ctx: Context,
@@ -542,6 +545,7 @@ class LlmProviderTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def reset_default_llm_provider(
             ctx: Context,

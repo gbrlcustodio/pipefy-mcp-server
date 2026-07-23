@@ -45,6 +45,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 
 | Tool (MCP) | CLI equivalent | Read-only |
 |------------|----------------|-----------|
+| `list_organizations` | `pipefy org list` | Yes |
 | `get_organization` | `pipefy org get` | Yes |
 
 ## Steps
@@ -71,7 +72,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 4. **Verify**
 
    - Shell (local / plugin / CLI): `pipefy --version`
-   - MCP: call `get_organization` (or another read-only tool the user allows)
+   - MCP: call `list_organizations` (needs no id — the natural first read; confirms the credential works and surfaces the org ids other tools need) or another read-only tool the user allows
    - Confirm exactly one `pipefy` MCP registration for the path you chose (hosted vs plugin)
 
 ## Success criteria

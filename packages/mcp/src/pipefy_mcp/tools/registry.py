@@ -171,6 +171,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "introspect_query",
         "introspect_type",
         "invite_members",
+        "list_organizations",
         "list_portals",
         "move_card_to_phase",
         "publish_sub_portal",

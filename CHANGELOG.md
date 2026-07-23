@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **MCP / CLI**: `list_organizations` (`pipefy org list`) — list the organizations the caller can access with no id required, the zero-knowledge entry point for discovery. Returns `id`, `uuid`, `name`, `planName`, `role`, `membersCount`, `pipesCount`, `createdAt` per org; an empty result is valid (not an error). Read-only and remote-safe. Closes #383.
 - **Docs / skills**: hosted MCP (`mcp.pipefy.com`) install snippet on the root README front door; first-time agent checklist [`pipefy-toolkit-setup`](skills/onboarding/pipefy-toolkit-setup/SKILL.md) (path choice / ask-your-agent / verify — commands stay in `README.md#installation`, per #246).
 - **Docs / skills**: canonical [Identifiers map](docs/mcp/tools/identifiers.md) — which tool/argument expects slug vs `internal_id` vs uuid vs numeric id (the five argument names for a pipe, the UUID-named-accepts-numeric exceptions, and a per-area quick reference). The per-area doc Identifiers sections and identifier-heavy skills link into its relevant section. Closes #390.
 

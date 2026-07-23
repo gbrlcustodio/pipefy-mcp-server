@@ -49,16 +49,16 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 **Five ways to use the toolkit** — pick one based on your client and whether you need the full tool set:
 
-- **In Claude Code, just exploring / read & analysis work?** → **Hosted MCP** (no local setup).
-- **In Claude Code and need writes, the CLI, and `/pipefy:*` slash commands?** → **Claude Code plugin**.
+- **In Claude Code and want the fastest start with no local setup?** → **Hosted MCP**.
+- **In Claude Code and want the CLI, `/pipefy:*` slash commands, or the few local-only tools?** → **Claude Code plugin**.
 - **On Cursor, Claude Desktop, or Codex — or want one command for everything?** → **Quick-install script**.
 - **Terminal, scripting, or CI, with no agent?** → **CLI only**.
 - **Just want the workflow playbooks in any agent?** → **Skills only**.
 
 | Install path | MCP server runs on | Tools available | Auth | Also installs | Best for |
 |---|---|---|---|---|---|
-| **[Hosted MCP](#1-hosted-mcp-claude-code)** | Pipefy cloud (HTTPS) | Remote-safe subset (~76 of 185; reads & discovery) | In-client OAuth | nothing else | Fastest start in Claude Code; zero local Python |
-| **[Claude Code plugin](#2-claude-code-plugin)** | Your machine (`uvx` stdio) | All **185** | `pipefy` CLI OAuth | slash commands + skills + CLI | Claude Code users who need writes, CLI & slash commands |
+| **[Hosted MCP](#1-hosted-mcp-claude-code)** | Pipefy cloud (HTTPS) | Remote-safe surface: **179 of 185** (all but 6 local-bound tools) | In-client OAuth | nothing else | Fastest start in Claude Code; zero local Python |
+| **[Claude Code plugin](#2-claude-code-plugin)** | Your machine (`uvx` stdio) | All **185** | `pipefy` CLI OAuth | slash commands + skills + CLI | Claude Code users who want the CLI, slash commands & the local-only tools |
 | **[Quick-install script](#3-quick-install-script)** | Your machine (stdio) | All **185** | `pipefy auth login` | CLI + skills, wired into your client config | Cursor / Claude Desktop / Codex, or one-command full setup |
 | **[CLI only](#4-cli-only)** | — (no MCP) | CLI commands ([parity](docs/parity.md)) | login or service account | — | Terminal use, scripting, CI |
 | **[Skills only](#5-skills-only)** | — | — | — | markdown playbooks | Adding playbooks to any agent |
@@ -78,7 +78,7 @@ Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/con
 
 ### 1. Hosted MCP (Claude Code)
 
-**Pick this when:** you're in Claude Code and want the fastest start with zero local Python. The server runs on Pipefy's infrastructure and exposes the **remote-safe subset** of tools (reads & discovery).
+**Pick this when:** you're in Claude Code and want the fastest start with zero local Python. The server runs on Pipefy's infrastructure and exposes the **remote-safe surface** — 179 of the 185 tools, including create / update / delete. The only 6 withheld need local file or credential access: card & table-record attachment uploads, knowledge-base document upload, custom LLM-provider secrets, and the raw `execute_graphql` escape hatch.
 
 ```bash
 claude mcp add --transport http --scope user --client-id pipefy-mcp pipefy https://mcp.pipefy.com/mcp
@@ -88,7 +88,7 @@ Complete the browser login when prompted (`claude mcp login pipefy` if the clien
 
 ### 2. Claude Code plugin
 
-**Pick this when:** you're in Claude Code and want *everything* — all 185 tools (including writes), the `/pipefy:*` slash commands, and the skill catalog. The MCP server runs locally via `uvx`.
+**Pick this when:** you're in Claude Code and want the full local surface — all 185 tools (including the 6 hosted withholds), the `/pipefy:*` slash commands, and the skill catalog. The MCP server runs locally via `uvx`.
 
 ```text
 /plugin marketplace add pipefy/ai-toolkit

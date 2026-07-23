@@ -38,7 +38,7 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 Useful when you want to wire the server without editing `~/.claude.json` by hand.
 
-**Hosted MCP (HTTP)** — zero local Python; OAuth in Claude Code. Prefer this when you do not need the full local tool surface. Do not also install the Claude Code plugin’s local `pipefy` server under the same name. Canonical snippet: [root README — Hosted MCP](../../README.md#hosted-mcp-claude-code).
+**Hosted MCP (HTTP)** — zero local Python; OAuth in Claude Code. Prefer this when you do not need the full local tool surface. Do not also install the Claude Code plugin’s local `pipefy` server under the same name. Canonical snippet: [root README — Hosted MCP](../../README.md#1-hosted-mcp-claude-code).
 
 **Local stdio** — runs `uvx pipefy-mcp-server` on the machine:
 

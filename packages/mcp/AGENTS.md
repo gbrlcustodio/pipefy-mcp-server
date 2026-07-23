@@ -12,10 +12,14 @@ access the user already has.
 Implications for tool design:
 
 - Local filesystem inputs (`file_path`) are first-class. There is no
-  path-traversal threat surface beyond what the user can already access.
-- SSRF guards, redirect loops, and download size caps that defend a hosted
-  server are not appropriate here. They add maintenance cost without buying
-  a security boundary.
+  path-traversal threat surface beyond what the user can already access, and a
+  local `file_path` needs no SSRF guard, redirect cap, or download size limit —
+  the user already has that filesystem and network reach.
+- A **server-side URL fetch is different**: when the server (not the user) makes
+  the request, those defenses apply. The `file_url` attachment source carries
+  them in the SDK (`HttpxUrlDownloader`: HTTPS + public-IP gate, 80/443 ports,
+  connect-time re-validation, redirect cap, size cap), and any future URL
+  ingestion should do the same.
 
 A hosted/remote distribution profile is in progress. It runs the server as a
 multi-user HTTP service. Tool exposure there is **default-deny**: only tools
@@ -86,9 +90,10 @@ validates a per-request bearer, so its bind host is irrelevant and is not checke
 `pipefy_infra.security.is_loopback_host`, which covers all of `127.0.0.0/8` and
 `::1`. This replaced an earlier bind-interface guard (`_assert_safe_http_bind`) that
 false-positived on the entire hosted profile and lived in the run path where the
-ASGI-app path bypassed it. The attachment tools' local `file_path` inputs also
-still assume a loopback peer that shares the client's disk (remote-safe file inputs
-are separate follow-up work).
+ASGI-app path bypassed it. The attachment tools' local `file_path` input assumes a
+loopback peer that shares the client's disk, so it is rejected under the remote
+profile; the hosted-safe path is their `file_url` input, which the SDK downloads
+under an SSRF guard (see "Exposure vs input restriction").
 
 **Transport allowlist.** DNS-rebinding protection is a separate axis from the
 bind-safety interlock: it checks the inbound request's `Host` / `Origin`, not the
@@ -222,10 +227,11 @@ inputs, enforce that in the tool body at call time via
 `is_remote_profile(ctx)` (`tools/tool_context.py`), not via the marker — and not
 via the module-global settings singleton, which can disagree with the profile the
 runtime was actually built from (embedders and tests construct runtimes from
-explicit settings). The shipped instance is `create_ipaas_connection`, which
-rejects `{"$env": ...}` credential references on the remote profile because they
-resolve from the deployment's own environment; the attachment tools (a `file_url`
-rather than a local `file_path`) would follow the same shape. A tool whose
+explicit settings). Two shipped instances: `create_ipaas_connection` rejects
+`{"$env": ...}` credential references on the remote profile because they resolve
+from the deployment's own environment; and the attachment tools reject their local
+`file_path` input on the remote profile, exposing only the `file_url` source (which
+the SDK downloads under an SSRF guard, so it reads no local disk). A tool whose
 exclusion deserves a reason gets a plain code comment stating why; the exclusion
 itself needs no annotation.
 

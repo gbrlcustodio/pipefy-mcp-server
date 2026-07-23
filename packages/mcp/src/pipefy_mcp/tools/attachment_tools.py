@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
@@ -26,7 +27,53 @@ from pipefy_mcp.tools.attachment_tool_helpers import (
     format_s3_upload_failure,
     map_upload_error_to_message,
 )
-from pipefy_mcp.tools.tool_context import get_pipefy_client
+from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client, is_remote_profile
+
+# Appended to a file_read error so an agent whose files live elsewhere (a hosted
+# server, or a co-located client whose sandbox differs from the server's host)
+# knows the path is read on the server's machine and where to turn instead.
+_FILE_READ_TOPOLOGY_HINT = (
+    " The path is read on the machine running the MCP server, which may not be "
+    "the agent's own environment; if the file is elsewhere, pass file_url instead."
+)
+
+# file_path reads the server's own disk, which has no meaning on a multi-user
+# hosted server; the input restriction is enforced per call (exposure vs input
+# restriction, package CLAUDE.md), mirroring create_ipaas_connection's $env case.
+_REMOTE_FILE_PATH_REJECTION = (
+    "file_path is not available on the hosted server (it reads the server's "
+    "local disk); pass file_url instead."
+)
+
+
+def _redact_url_query(url: str | None) -> str | None:
+    """Drop the query string from a URL so a signed source URL's tokens never hit logs."""
+    if not url:
+        return url
+    return urlparse(url)._replace(query="", fragment="").geturl()
+
+
+def _build_attachment(
+    *,
+    file_path: str | None,
+    file_url: str | None,
+    file_name: str | None,
+    content_type: str | None,
+) -> Attachment:
+    """Build an :class:`Attachment` from validated tool input.
+
+    The input DTO already guarantees exactly one of ``file_path`` / ``file_url``.
+    :class:`Attachment` raises ``ValueError`` when the name cannot be resolved
+    (a URL with no basename and no explicit ``file_name``); callers map that to
+    a ``step=validation`` envelope.
+    """
+    return Attachment(
+        path=Path(file_path) if file_path else None,
+        url=file_url,
+        name=file_name,
+        content_type=content_type,
+    )
 
 
 class AttachmentTools:
@@ -38,7 +85,9 @@ class AttachmentTools:
             if exc.step == "file_read":
                 # Preserve the original LocalFileError message (no type prefix or
                 # GraphQL mapper rewrite); the cause chain carries it verbatim.
-                message = str(exc.__cause__) if exc.__cause__ else str(exc)
+                # Append the topology hint so the reader knows whose disk is read.
+                base = str(exc.__cause__) if exc.__cause__ else str(exc)
+                message = base + _FILE_READ_TOPOLOGY_HINT
             elif exc.step == "s3_upload" and exc.body_snippet:
                 message = format_s3_upload_failure(
                     {
@@ -66,19 +115,17 @@ class AttachmentTools:
                 **extra,
             )
 
-        # Left unmarked for the remote profile: this tool reads a local
-        # file_path, which has no meaning on a hosted server. The hosted-safe
-        # input path (client-supplied file_url with SSRF and size guards) is
-        # tracked in #305; the tool gets meta=REMOTE only once that ships.
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def upload_attachment_to_card(
             ctx: Context[ServerSession, None],
             organization_id: PipefyId,
             card_id: PipefyId,
             field_id: PipefyId,
-            file_path: str,
+            file_path: str | None = None,
+            file_url: str | None = None,
             file_name: str | None = None,
             content_type: str | None = None,
         ) -> dict[str, Any]:
@@ -86,17 +133,21 @@ class AttachmentTools:
 
             Handles one file per call. To attach multiple files, call this tool once per file.
 
-            ``file_path`` is the local path the MCP server (running as the user)
-            reads. ``~`` is expanded. When ``file_name`` is omitted, the path's
-            basename fills it in. If ``content_type`` is omitted, it is inferred
-            from the file name.
+            Provide exactly one source: ``file_path`` (a local path the MCP
+            server reads; local profile only) or ``file_url`` (a URL the server
+            downloads under an SSRF guard and 100 MiB cap; works on any profile).
+            On the hosted server ``file_path`` is rejected — pass ``file_url``.
+            ``~`` is expanded in ``file_path``. When ``file_name`` is omitted it
+            defaults to the source basename; if ``content_type`` is omitted it is
+            inferred from the file name.
 
             Args:
                 organization_id: Pipefy organization id. Use ``get_organization`` or ``get_pipe`` to find it.
                 card_id: Target card id.
                 field_id: Attachment field slug (e.g. "document_upload"), not the uuid.
-                file_path: Local filesystem path. Supports ``~`` expansion.
-                file_name: File name including extension. Optional; defaults to the path's basename.
+                file_path: Local filesystem path. Supports ``~`` expansion. Local profile only.
+                file_url: HTTPS URL to download from (http only if the deployment enables insecure URLs); max 100 MiB. Required on the hosted server.
+                file_name: File name including extension. Optional; defaults to the source basename.
                 content_type: Optional MIME type; sent with the S3 upload and presigned request.
             """
             client = get_pipefy_client(ctx)
@@ -107,6 +158,7 @@ class AttachmentTools:
                     field_id=field_id,
                     file_name=file_name,
                     file_path=file_path,
+                    file_url=file_url,
                     content_type=content_type,
                 )
             except ValidationError as exc:
@@ -115,15 +167,26 @@ class AttachmentTools:
                     step="validation",
                 )
 
+            if data.file_path and is_remote_profile(ctx):
+                return build_upload_error_payload(
+                    message=_REMOTE_FILE_PATH_REJECTION,
+                    step="validation",
+                )
+
             await ctx.debug(
-                f"upload_attachment_to_card: field_id={data.field_id!r} file_path={data.file_path!r}"
+                f"upload_attachment_to_card: field_id={data.field_id!r} "
+                f"file_path={data.file_path!r} file_url={_redact_url_query(data.file_url)!r}"
             )
 
-            attachment = Attachment(
-                path=Path(data.file_path),
-                name=data.file_name,
-                content_type=data.content_type,
-            )
+            try:
+                attachment = _build_attachment(
+                    file_path=data.file_path,
+                    file_url=data.file_url,
+                    file_name=data.file_name,
+                    content_type=data.content_type,
+                )
+            except ValueError as exc:
+                return build_upload_error_payload(message=str(exc), step="validation")
             target = CardTarget(card_id=data.card_id, field_id=data.field_id)
 
             try:
@@ -140,17 +203,17 @@ class AttachmentTools:
 
             return _success_envelope(result, data.field_id, {"card_id": data.card_id})
 
-        # Left unmarked for the remote profile, same as upload_attachment_to_card
-        # above (reads a local file_path); hosted-safe input path tracked in #305.
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def upload_attachment_to_table_record(
             ctx: Context[ServerSession, None],
             organization_id: PipefyId,
             table_record_id: PipefyId,
             field_id: PipefyId,
-            file_path: str,
+            file_path: str | None = None,
+            file_url: str | None = None,
             file_name: str | None = None,
             content_type: str | None = None,
         ) -> dict[str, Any]:
@@ -158,17 +221,21 @@ class AttachmentTools:
 
             Handles one file per call. To attach multiple files, call this tool once per file.
 
-            ``file_path`` is the local path the MCP server (running as the user)
-            reads. ``~`` is expanded. When ``file_name`` is omitted, the path's
-            basename fills it in. If ``content_type`` is omitted, it is inferred
-            from the file name.
+            Provide exactly one source: ``file_path`` (a local path the MCP
+            server reads; local profile only) or ``file_url`` (a URL the server
+            downloads under an SSRF guard and 100 MiB cap; works on any profile).
+            On the hosted server ``file_path`` is rejected — pass ``file_url``.
+            ``~`` is expanded in ``file_path``. When ``file_name`` is omitted it
+            defaults to the source basename; if ``content_type`` is omitted it is
+            inferred from the file name.
 
             Args:
                 organization_id: Pipefy organization id. Use ``get_organization`` or ``get_pipe`` to find it.
                 table_record_id: Database table record id.
                 field_id: Attachment field slug on the table record (e.g. "document_upload"), not the uuid.
-                file_path: Local filesystem path. Supports ``~`` expansion.
-                file_name: File name including extension. Optional; defaults to the path's basename.
+                file_path: Local filesystem path. Supports ``~`` expansion. Local profile only.
+                file_url: HTTPS URL to download from (http only if the deployment enables insecure URLs); max 100 MiB. Required on the hosted server.
+                file_name: File name including extension. Optional; defaults to the source basename.
                 content_type: Optional MIME type for storage.
             """
             client = get_pipefy_client(ctx)
@@ -179,6 +246,7 @@ class AttachmentTools:
                     field_id=field_id,
                     file_name=file_name,
                     file_path=file_path,
+                    file_url=file_url,
                     content_type=content_type,
                 )
             except ValidationError as exc:
@@ -187,15 +255,26 @@ class AttachmentTools:
                     step="validation",
                 )
 
+            if data.file_path and is_remote_profile(ctx):
+                return build_upload_error_payload(
+                    message=_REMOTE_FILE_PATH_REJECTION,
+                    step="validation",
+                )
+
             await ctx.debug(
-                f"upload_attachment_to_table_record: field_id={data.field_id!r} file_path={data.file_path!r}"
+                f"upload_attachment_to_table_record: field_id={data.field_id!r} "
+                f"file_path={data.file_path!r} file_url={_redact_url_query(data.file_url)!r}"
             )
 
-            attachment = Attachment(
-                path=Path(data.file_path),
-                name=data.file_name,
-                content_type=data.content_type,
-            )
+            try:
+                attachment = _build_attachment(
+                    file_path=data.file_path,
+                    file_url=data.file_url,
+                    file_name=data.file_name,
+                    content_type=data.content_type,
+                )
+            except ValueError as exc:
+                return build_upload_error_payload(message=str(exc), step="validation")
             target = TableRecordTarget(
                 table_record_id=data.table_record_id, field_id=data.field_id
             )

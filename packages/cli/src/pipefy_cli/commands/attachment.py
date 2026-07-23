@@ -78,7 +78,10 @@ def attachment_upload(
     card_id = str(card).strip() if card is not None else None
     record_id = str(record).strip() if record is not None else None
 
-    attachment = Attachment(path=file, content_type=content_type)
+    try:
+        attachment = Attachment(path=file, content_type=content_type)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     if card_id is not None:
         target = CardTarget(card_id=card_id, field_id=field_str)
     else:

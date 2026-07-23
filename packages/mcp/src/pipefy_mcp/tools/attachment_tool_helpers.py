@@ -12,6 +12,7 @@ from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 UploadFlowStep = Literal[
     "validation",
     "file_read",
+    "download",
     "presigned_url",
     "s3_upload",
     "field_update",
@@ -63,7 +64,7 @@ def build_upload_error_payload(
 
     Args:
         message: Actionable reason for the caller.
-        step: Failed stage (``validation``, ``file_read``, ``presigned_url``, ``s3_upload``, ``field_update``).
+        step: Failed stage (``validation``, ``file_read``, ``download``, ``presigned_url``, ``s3_upload``, ``field_update``).
     """
     out: dict[str, Any] = tool_error(message)
     out["step"] = step

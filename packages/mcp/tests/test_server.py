@@ -159,7 +159,8 @@ def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_runti
     exposed = {t.name for t in app._tool_manager.list_tools()} & PIPEFY_TOOL_NAMES
     assert 0 < len(exposed) < len(PIPEFY_TOOL_NAMES)
     assert "get_organization" in exposed
-    assert "upload_attachment_to_card" not in exposed
+    # The attachment tools are remote-safe via file_url (file_path rejected per call).
+    assert "upload_attachment_to_card" in exposed
     assert "execute_graphql" not in exposed
 
 

@@ -29,7 +29,7 @@ For traditional automations and AI automations (prompt-driven), see [skills/auto
 | `toggle_ai_agent_status` | `pipefy agent toggle` | No | Enable/disable the agent (e.g. `--inactive`). |
 | `validate_ai_agent_behaviors` | `pipefy agent validate-behaviors` | Yes | **Pre-flight check before create/update.** |
 
-The three read tools (`get_ai_agents`, `get_ai_agent`, `validate_ai_agent_behaviors`) are remote-safe: available under the hosted (`profile=remote`) surface. The write tools (`create`/`update`/`delete`/`toggle`) are local-only.
+The read tools (`get_ai_agents`, `get_ai_agent`, `validate_ai_agent_behaviors`) and the write tools (`create`/`update`/`delete`/`toggle`) are all remote-safe: available under the hosted (`profile=remote`) surface.
 
 Execution logs live in [skills/observability/](../../observability/pipefy-observability/SKILL.md) (`get_ai_agent_logs`, `get_ai_agent_log_details`).
 

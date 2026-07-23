@@ -97,7 +97,7 @@ REMOTE_SEED = frozenset(
         # permissions; no filesystem or per-user process-global settings reads. The
         # relation reads use the public GraphQL API only and the portal reads use
         # the Interfaces schema; Pipefy's Internal API is reached only by mutations
-        # such as delete_card_relation, which stay withheld.
+        # such as delete_card_relation, which is seeded under #472 below.
         "get_card_relations",
         "get_card_inbox_emails",
         "get_field_condition",

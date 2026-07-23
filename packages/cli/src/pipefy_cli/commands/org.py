@@ -27,6 +27,19 @@ def _optional_org_id(value: str | None) -> str | None:
     return validate_positional_id(value)
 
 
+@org_app.command("list")
+def org_list(
+    ctx: typer.Context,
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """List the organizations you can access (``list_organizations``)."""
+
+    async def factory(client: PipefyClient):
+        return await client.list_organizations()
+
+    run_cli_command(ctx, json_out, factory)
+
+
 @org_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def org_get(
     ctx: typer.Context,

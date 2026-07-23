@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **185** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **186** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -159,6 +159,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `introspect_query` | `pipefy introspect query` | shipped | — |
 | `introspect_type` | `pipefy introspect type` | shipped | — |
 | `invite_members` | `pipefy member invite` | shipped | — |
+| `list_organizations` | `pipefy org list` | shipped | Lists organizations the caller can access; no id required. |
 | `list_portals` | `pipefy portal list` | shipped | `--organization-uuid`; at most one main portal per org. |
 | `move_card_to_phase` | `pipefy card move` | shipped | (`--phase`). |
 | `publish_sub_portal` | `pipefy portal sub-portal publish` | shipped | internal_api `updateSubPortalElement` on a templated `forms` element; check `subPortals[].published` via `get_portal`. |
@@ -222,6 +223,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **185** tool names in `PIPEFY_TOOL_NAMES` and **185** data rows in the parity table (excluding the header rows).
+Expect **186** tool names in `PIPEFY_TOOL_NAMES` and **186** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

@@ -2366,7 +2366,8 @@ Usage: pipefy org [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get   Fetch organization details (``get_organization``).                     │
+│ list   List the organizations you can access (``list_organizations``).       │
+│ get    Fetch organization details (``get_organization``).                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP org/get
@@ -2379,6 +2380,16 @@ Usage: pipefy org get [OPTIONS] [ORGANIZATION_ID]
 │                                           PIPEFY_ORG_ID is set (see          │
 │                                           docs/config.md).                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP org/list
+Usage: pipefy org list [OPTIONS]
+
+ List the organizations you can access (``list_organizations``).
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json  -j                                                                   │
 │ --help            Show this message and exit.                                │

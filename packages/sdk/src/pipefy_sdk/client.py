@@ -1768,6 +1768,10 @@ class PipefyClient:
         """
         return await self._organization_service.get_organization(organization_id)
 
+    async def list_organizations(self) -> list[dict[str, Any]]:
+        """List the organizations the caller can access (no id required)."""
+        return await self._organization_service.list_organizations()
+
     async def get_advanced_automations_token(self, pipe_id: str | int) -> str:
         """Mint a short-lived advanced-automations (iPaaS) access token for a pipe.
 

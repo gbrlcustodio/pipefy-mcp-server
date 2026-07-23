@@ -22,6 +22,7 @@ REMOTE_SEED = frozenset(
         "create_ipaas_connection",
         "search_pipes",
         "get_organization",
+        "list_organizations",
         "get_pipe",
         "get_card",
         "get_cards",

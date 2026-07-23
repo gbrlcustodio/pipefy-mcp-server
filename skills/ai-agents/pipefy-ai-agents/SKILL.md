@@ -322,3 +322,4 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
 - [skills/automations/pipefy-automations/SKILL.md](../../automations/pipefy-automations/SKILL.md) — traditional automations and AI automations (different from AI agents).
 - [skills/observability/pipefy-observability/SKILL.md](../../observability/pipefy-observability/SKILL.md) — agent execution logs and credit usage.
 - [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — Recipe 2 inspects full behavior config via `execute_graphql`.
+- `docs/mcp/tools/identifiers.md` — canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id (AI agents scope by `repo_uuid` = pipe UUID).

@@ -233,3 +233,4 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 - `skills/relations/` — link pipes and cards across workflows.
 - `skills/automations/` — add automation rules to a pipe.
 - `skills/introspection/` — discover field types and mutation signatures.
+- `docs/mcp/tools/identifiers.md` — canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id (e.g. `update_card_field` uses a field slug).

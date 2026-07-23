@@ -15,6 +15,8 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 
 ## Identifiers reference
 
+Full cross-tool map: `docs/mcp/tools/identifiers.md`.
+
 | Concept | What tools expect | How to obtain |
 |---------|-------------------|---------------|
 | **Pipe for AI agent logs** | `repo_uuid` — the pipe **UUID** | `get_pipe` with numeric `pipe_id`; use `pipe.uuid`. |

@@ -12,6 +12,8 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, and
 
 ### Pipefy IDs (type safety)
 
+Which **form** each tool wants (slug vs `internal_id` vs uuid vs numeric id) is the canonical [Identifiers map](identifiers.md); this section covers string-vs-int type safety and coercion.
+
 Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most other nodes.
 
 - **Prefer string arguments** when calling tools (e.g. `card_id: "1332881010"`, `pipe_id: "306996634"`). This matches API responses (`get_pipe`, `get_card`, `create_card`, etc.).

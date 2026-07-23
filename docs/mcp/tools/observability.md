@@ -8,6 +8,8 @@ Read-only observability tools use `readOnlyHint=True`. The async export mutation
 
 ## Identifiers (avoid mixing pipe vs automation vs org)
 
+> Full cross-tool map: [identifiers.md](identifiers.md).
+
 | Concept | What observability tools expect | How to obtain it |
 |--------|--------------------------------|------------------|
 | **Pipe for AI agent logs** | `repo_uuid` — the pipe **UUID** | `get_pipe` with numeric `pipe_id`; use `pipe.uuid` as `repo_uuid`. |

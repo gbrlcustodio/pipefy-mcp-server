@@ -14,9 +14,11 @@ from pipefy_sdk.models.ai_agent import (
     UpdateAiAgentInput,
 )
 from pipefy_sdk.models.ai_automation import (
+    CONDITION_OPERATIONS,
     AutomationActionParamsInput,
     AutomationConditionInput,
     AutomationEventParamsInput,
+    ConditionExpressionInput,
     CreateAiAutomationInput,
     FieldMapInput,
     UpdateAiAutomationInput,
@@ -65,6 +67,8 @@ __all__ = [
     "BehaviorPayload",
     "CardTarget",
     "CommentInput",
+    "CONDITION_OPERATIONS",
+    "ConditionExpressionInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
     "CreatePortalElementInput",

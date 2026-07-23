@@ -34,7 +34,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup create` | shipped | Knowledge bases; pipe-scoped (`--pipe-uuid`, `--name`, `--description` <=900, `--source-repo-id` numeric pipe ID, `--output-fields` JSON array 1-30, `--conditions` JSON array, optional `--search-query`). Conditions are typed client-side (static needs a string value; AI-filled needs the input trio). CLI gates on the read-access probe. |
 | `create_ai_knowledge_base_document` | `pipefy kb document create` | shipped | Knowledge bases; one-shot PDF upload (presigned URL, S3 PUT, create mutation). Pipe-scoped (`--pipe-uuid`, `--file`, `--name`, `--description` <=900, all required). `.pdf` and 20 MiB cap enforced client-side; step-tagged errors (`file_read`/`presigned_url`/`s3_upload`/`kb_create`). CLI gates on the read-access probe. Indexing is asynchronous. |
 | `create_ai_knowledge_base_plain_text` | `pipefy kb plain-text create` | shipped | Knowledge bases; pipe-scoped (`--pipe-uuid`, `--name`, `--content` <=3500, `--description` <=900, all required). CLI gates on the read-access probe; limits fail fast client-side. |
-| `create_automation` | `pipefy automation create` | shipped | (`--pipe`, `--name`, `--trigger-id`, `--action-id`, optional `--extra` JSON). |
+| `create_automation` | `pipefy automation create` | shipped | (`--pipe`, `--name`, `--trigger-id`, `--action-id`, optional `--condition` / `--extra` JSON). First-class typed `condition` (expressions + AND-of-ORs `expressions_structure`; `field_address` = internal_id). |
 | `create_card` | `pipefy card create` | shipped | (`--fields` JSON, optional `--title`, optional `--phase-id` for `CreateCardInput.phase_id`). |
 | `create_card_relation` | `pipefy relation card create` | shipped | — |
 | `create_field_condition` | `pipefy field-condition create` | shipped | (`--phase`, `--name`, `--condition`, `--actions` JSON). |
@@ -182,7 +182,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup update` | shipped | Knowledge bases; full-replacement update (`--id`, `--pipe-uuid`, required `--source-repo-id`/`--output-fields`/`--conditions` every call; omitted `--search-query` clears it; only `--name`/`--description` are partial). CLI gates on the read-access probe. |
 | `update_ai_knowledge_base_document` | `pipefy kb document update` | shipped | Knowledge bases; metadata-only partial update (`--id`, `--pipe-uuid`, optional `--name`/`--description`, at least one); no file replacement. CLI gates on the read-access probe. |
 | `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | shipped | Knowledge bases; partial update (`--id`, `--pipe-uuid`, optional `--name`/`--content`/`--description`, at least one). CLI gates on the read-access probe; limits fail fast client-side. |
-| `update_automation` | `pipefy automation update` | shipped | (`--extra` JSON). |
+| `update_automation` | `pipefy automation update` | shipped | (`--condition` and/or `--extra` JSON; at least one required). First-class typed `condition` replaces the rule's condition. |
 | `update_card` | `pipefy card update` | shipped | (`--field-updates` JSON, optional title/labels/assignees/due-date). |
 | `update_card_field` | `pipefy card update` | shipped | Use `--field-updates` JSON array (). |
 | `update_comment` | `pipefy card comment update` | shipped | — |

@@ -678,7 +678,7 @@ class TestCreateAiAutomation:
             )
         assert result.isError is False
         validated_input = mock_pipefy_client.create_ai_automation.call_args[0][0]
-        assert validated_input.condition.model_dump(mode="python") == DEFAULT_CONDITION
+        assert validated_input.condition.to_api_payload() == DEFAULT_CONDITION
 
     async def test_explicit_condition_overrides_default(
         self,

@@ -7,7 +7,11 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import CreateSendTaskAutomationInput, PipefyId
+from pipefy_sdk import (
+    AutomationConditionInput,
+    CreateSendTaskAutomationInput,
+    PipefyId,
+)
 from pipefy_sdk.automation_preflight import AutomationPreflightError
 from pydantic import ValidationError
 
@@ -38,6 +42,31 @@ def _normalize_simulation_action_id(value: str | int) -> str | None:
         s = value.strip()
         return s if s else None
     return None
+
+
+def _parse_condition_arg(
+    condition: dict[str, Any] | None,
+) -> tuple[AutomationConditionInput | None, dict[str, Any] | None]:
+    """Parse a raw ``condition`` dict into the typed model at the tool boundary.
+
+    Returns ``(model, None)`` on success (``(None, None)`` when omitted) or
+    ``(None, error_payload)`` when the shape is invalid.
+    """
+    if condition is None:
+        return None, None
+    try:
+        parsed = AutomationConditionInput.model_validate(condition)
+    except ValidationError as exc:
+        return None, build_automation_error_payload(f"Invalid 'condition': {exc}")
+    if not parsed.expressions:
+        # An expressionless condition serializes to an empty payload that would
+        # still win over extra_input.condition — almost always a mistake. Omit
+        # condition to leave the rule unconditional.
+        return None, build_automation_error_payload(
+            "Invalid 'condition': provide at least one expression, or omit "
+            "condition to leave the rule unconditional."
+        )
+    return parsed, None
 
 
 class AutomationTools:
@@ -376,6 +405,7 @@ class AutomationTools:
             action_id: PipefyId,
             active: bool = True,
             action_repo_id: PipefyId | None = None,
+            condition: dict[str, Any] | None = None,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -422,6 +452,23 @@ class AutomationTools:
             - ``%{automation_event_execution_datetime}`` — automation run timestamp
             - ``%{<internal_id>}`` — copy from another field (digits only, e.g. ``%{429659034}``)
 
+            **Condition** (``condition``) — gate the rule on field tests. It is a
+            ``ConditionInput``: ``{"expressions": [...], "expressions_structure": [[...]]}``.
+            Each expression is ``{"field_address": "<internal_id>", "operation": "<op>",
+            "value": "<value>", "structure_id": <int>}``. ``field_address`` is the field
+            **internal_id** (numeric; the last dotted segment when addressing a connected
+            card's field), **not** a slug. ``expressions_structure`` groups expressions by
+            ``structure_id`` as AND-of-ORs: each inner array is OR'd, the inner arrays are
+            AND'd — e.g. ``[[0, 1], [2]]`` is ``(expr0 OR expr1) AND expr2``. ``operation``
+            is one of: ``equals``, ``not_equals``, ``present``, ``blank``,
+            ``string_contains``, ``string_not_contains``, ``number_greater_than``,
+            ``number_less_than``, ``date_is_today``, ``date_is_yesterday``,
+            ``date_in_current_week``, ``date_in_last_week``, ``date_in_current_month``,
+            ``date_in_last_month``, ``date_in_current_year``, ``date_in_last_year``,
+            ``date_is``, ``date_is_after``, ``date_is_before`` (the API validates the value).
+            Omit ``value`` for ``present``/``blank``. Passing ``condition`` wins over any
+            ``condition`` nested in ``extra_input``.
+
             Discover via: ``get_start_form_fields(pipe_id)``, ``get_phase_fields(phase_id)`` →
             ``internal_id``; ``get_automation_events(pipe_id)`` and ``get_automation_actions(pipe_id)``
             for trigger/action ids; ``get_automation_event_attributes`` for official ``field_map``
@@ -434,6 +481,7 @@ class AutomationTools:
                 action_id: Action type ID from ``get_automation_actions``.
                 active: When True (default), the rule is created **enabled**. Set False to start disabled. If ``extra_input`` includes ``active``, that value wins.
                 action_repo_id: Pipe ID where the action executes (destination pipe). Defaults to ``pipe_id``. Required for cross-pipe actions.
+                condition: Optional typed trigger condition (see **Condition** above). Wins over ``extra_input.condition``.
                 extra_input: Optional extra fields for the mutation input; top-level keys are snake_case (mirror ``get_automation`` output).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -461,6 +509,9 @@ class AutomationTools:
             )
             if bad is not None:
                 return bad
+            parsed_condition, cond_err = _parse_condition_arg(condition)
+            if cond_err is not None:
+                return cond_err
             try:
                 raw = await client.create_automation(
                     pid,
@@ -469,6 +520,7 @@ class AutomationTools:
                     aid,
                     active=active,
                     action_repo_id=arid,
+                    condition=parsed_condition,
                     extra_input=extra_input,
                 )
             except AutomationPreflightError as preflight_exc:
@@ -594,6 +646,7 @@ class AutomationTools:
         async def update_automation(
             ctx: Context,
             automation_id: PipefyId,
+            condition: dict[str, Any] | None = None,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -606,11 +659,20 @@ class AutomationTools:
             ``update_card_field`` rules (same shape as ``create_automation``: numeric ``fieldId``,
             ``inputMode``, ``value``, ``card_id``, ``fields_map_order``).
 
+            Pass ``condition`` to replace the rule's trigger condition; its shape, the
+            ``field_address`` = internal_id rule, the ``expressions_structure`` AND-of-ORs
+            grouping, and the ``operation`` values are documented on ``create_automation``.
+            A ``condition`` argument wins over any ``condition`` in ``extra_input``.
+
             ``field_map`` and move-transition preflight run on ``create_automation`` only, not on
             this tool. Invalid ``fieldId`` or impossible phase transitions may still fail at the API.
 
+            Provide ``condition`` and/or ``extra_input`` — an update with neither
+            changes nothing and is rejected.
+
             Args:
                 automation_id: Automation rule ID.
+                condition: Optional typed trigger condition to replace (see ``create_automation``).
                 extra_input: Optional fields to patch on the rule.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -623,9 +685,17 @@ class AutomationTools:
             )
             if bad is not None:
                 return bad
+            parsed_condition, cond_err = _parse_condition_arg(condition)
+            if cond_err is not None:
+                return cond_err
+            if parsed_condition is None and not extra_input:
+                return build_automation_error_payload(
+                    "Nothing to update: provide 'condition' and/or 'extra_input'."
+                )
             try:
                 raw = await client.update_automation(
                     rid,
+                    condition=parsed_condition,
                     extra_input=extra_input,
                 )
             except Exception as exc:  # noqa: BLE001

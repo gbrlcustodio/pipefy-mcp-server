@@ -52,7 +52,7 @@ def _make_lifespan(
     async def lifespan(_app: FastMCP) -> AsyncIterator[McpRuntime]:
         logger.info(
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
-            "enabled" if runtime.settings.mcp.unified_envelope else "disabled",
+            "enabled" if runtime.unified_envelope else "disabled",
         )
         yield runtime
 

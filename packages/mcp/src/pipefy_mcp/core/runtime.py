@@ -59,10 +59,15 @@ class McpRuntime:
         inbound_auth: ResourceServerAuth | None = None,
         transport_security: TransportSecuritySettings | None = None,
     ) -> None:
-        self._settings = settings
         self._identity = identity
         self.inbound_auth = inbound_auth
         self.transport_security = transport_security
+        # Narrow per-deployment facts resolved at startup. The runtime deliberately
+        # holds no Settings tree: tools reach it off the request context, so
+        # exposing the tree would let tool code read any process-global value at
+        # call time (#405; see the "Process-global configuration" section of AGENTS.md).
+        self.is_remote = settings.mcp.profile == "remote"
+        self.unified_envelope = settings.mcp.unified_envelope
         self._engine = PipefyEngine.build(settings.pipefy, surface="mcp")
         # Per-deployment iPaaS wiring; None only when the operator blanks the
         # client id, and the iPaaS tools then report the capability disabled.
@@ -158,11 +163,6 @@ class McpRuntime:
         profile the identity ignores it and returns the one startup credential.
         """
         return self._engine.session(self._identity.resolve(request))
-
-    @property
-    def settings(self) -> Settings:
-        """The resolved settings this runtime was built from."""
-        return self._settings
 
     @property
     def ipaas_gateway(self) -> IpaasGateway | None:

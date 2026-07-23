@@ -32,10 +32,12 @@ def is_remote_profile(ctx: Context) -> bool:
     read the server's own environment) rejects those inputs per call. Read
     off the runtime, not the module-global settings singleton, so embedders
     and tests that build a runtime from explicit settings get the same
-    answer the serving profile was resolved from.
+    answer the serving profile was resolved from. The runtime exposes this as
+    a resolved boolean, not the settings tree, so tool code cannot reach any
+    other process-global value through the request context (see #405).
     """
     runtime: McpRuntime = ctx.request_context.lifespan_context
-    return runtime.settings.mcp.profile == "remote"
+    return runtime.is_remote
 
 
 def get_pipefy_client(ctx: Context) -> PipefyClient:

@@ -71,6 +71,30 @@ class TestMcpRuntime:
         McpRuntime(_settings(), StartupIdentity(StaticBearerAuth("tok")))
 
     @pytest.mark.unit
+    def test_exposes_narrow_deployment_flags_not_the_settings_tree(self):
+        """The runtime surfaces resolved per-deployment booleans, never Settings itself.
+
+        Tools reach the runtime off the request context, so exposing the whole
+        settings tree would let tool code read any process-global value at call
+        time (#405). Only the narrow deployment flags are surfaced.
+        """
+        runtime = McpRuntime(_settings(), RequestScopedIdentity())
+
+        assert runtime.is_remote is False
+        assert runtime.unified_envelope is True
+        assert not hasattr(runtime, "settings")
+
+    @pytest.mark.unit
+    def test_unified_envelope_flag_follows_the_setting(self):
+        settings = Settings(
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            auth=AuthSettings(),
+            mcp=McpSettings(unified_envelope=False),
+        )
+
+        assert McpRuntime(settings, RequestScopedIdentity()).unified_envelope is False
+
+    @pytest.mark.unit
     def test_startup_identity_session_binds_the_resolved_auth(self):
         """The stdio profile's one startup credential backs every session."""
         auth = StaticBearerAuth("startup-token")
@@ -129,6 +153,7 @@ class TestForProfile:
         runtime = McpRuntime.for_profile(remote_rs_settings())
 
         assert runtime.inbound_auth is not None
+        assert runtime.is_remote is True
         assert isinstance(runtime._identity, RequestScopedIdentity)
 
     @pytest.mark.unit

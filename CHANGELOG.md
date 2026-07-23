@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **MCP / CLI**: `list_organizations` (`pipefy org list`) — list the organizations the caller can access with no id required, the zero-knowledge entry point for discovery. Returns `id`, `uuid`, `name`, `planName`, `role`, `membersCount`, `pipesCount`, `createdAt` per org; an empty result is valid (not an error). Read-only and remote-safe. Closes #383.
 - **Docs / skills**: hosted MCP (`mcp.pipefy.com`) install snippet on the root README front door; first-time agent checklist [`pipefy-toolkit-setup`](skills/onboarding/pipefy-toolkit-setup/SKILL.md) (path choice / ask-your-agent / verify — commands stay in `README.md#installation`, per #246).
 
 ### Fixed

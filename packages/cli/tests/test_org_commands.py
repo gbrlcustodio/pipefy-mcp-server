@@ -60,7 +60,7 @@ def test_org_get_missing_id_and_env_exits_2(
     result = runner.invoke(app, ["org", "get", "--json"])
     assert result.exit_code == 2
     assert "PIPEFY_ORG_ID" in (result.stderr or "")
-    assert "pipe list" in (result.stderr or "")
+    assert "org list" in (result.stderr or "")
 
 
 def test_org_list_returns_accessible_orgs(

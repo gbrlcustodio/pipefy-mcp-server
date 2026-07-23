@@ -45,6 +45,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 
 | Tool (MCP) | CLI equivalent | Read-only |
 |------------|----------------|-----------|
+| `list_organizations` | `pipefy org list` | Yes |
 | `get_organization` | `pipefy org get` | Yes |
 
 ## Steps

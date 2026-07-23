@@ -4,7 +4,7 @@ description: >
   Use this skill when you need to discover GraphQL type shapes, mutation
   signatures, enum values, or execute arbitrary GraphQL as a fallback.
   This is the first fallback tier (Tier 2) when dedicated MCP tools fail
-  or don't exist for an operation. 6 MCP tools.
+  or don't exist for an operation. 7 MCP tools.
 tags: [pipefy, introspection, graphql, schema, fallback]
 ---
 

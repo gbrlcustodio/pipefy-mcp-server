@@ -16,8 +16,8 @@ org_app = typer.Typer(help="Organization operations.", no_args_is_help=True)
 
 _MISSING_ORG_ID = (
     "Missing organization id. Pass ORGANIZATION_ID as the first argument, set "
-    "PIPEFY_ORG_ID in the environment, or obtain an id from "
-    "`pipefy pipe list --json` (organizations[].id)."
+    "PIPEFY_ORG_ID in the environment, or list the organizations you can "
+    "access with `pipefy org list --json` and copy an `id`."
 )
 
 

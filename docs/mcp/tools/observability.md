@@ -8,12 +8,14 @@ Read-only observability tools use `readOnlyHint=True`. The async export mutation
 
 ## Identifiers (avoid mixing pipe vs automation vs org)
 
+> Full cross-tool map: [identifiers.md](identifiers.md#observability).
+
 | Concept | What observability tools expect | How to obtain it |
 |--------|--------------------------------|------------------|
 | **Pipe for AI agent logs** | `repo_uuid` — the pipe **UUID** | `get_pipe` with numeric `pipe_id`; use `pipe.uuid` as `repo_uuid`. |
 | **Pipe for automation logs (all rules)** | `repo_id` — pipe id as **string** (numeric id is fine) | Same id you see in the Pipefy URL / `get_pipe` → `pipe.id`. |
 | **Single automation logs** | `automation_id` — **not** the pipe id | `get_automations` with `pipe_id` lists rules and their `id` values. |
-| **Organization for usage queries** | `organization_uuid` — org **UUID** | `get_organization(organization_id)` returns the `uuid` directly. Alternatively: `execute_graphql` with `pipe(id: $id) { organization { uuid } }`. |
+| **Organization for usage queries** | `organization_uuid` — **UUID or numeric org id** | `get_organization(organization_id)` returns the `uuid`; a numeric org id also works (resolved server-side). |
 | **Organization for credit dashboard** | `organization_uuid` in the tool | **UUID** or **numeric org id** (string); numeric ids are resolved server-side before calling the API. |
 | **Organization for execution metrics** | `organization_id` on `get_automation_execution_metrics` | Numeric org id (same as URLs / exports); optional `automation_ids` from `get_automations`. |
 | **Organization for export** | `organization_id` on `export_automation_jobs` | Numeric org id (as used in URLs / exports); differs from the usage tools’ UUID parameter name. |
@@ -36,8 +38,8 @@ Empty lists (`totalCount: 0`) are valid: the pipe or automation may have no rece
 `get_automation_logs` **cannot** be called with a pipe id alone. If you guess an `automation_id` from `get_automations`, that rule may have **zero** log rows while another rule on the same pipe has rows — use `get_automation_logs_by_repo` first when exploring.
 
 **Org usage and credits**  
-1. `get_agents_usage` and `get_automations_usage` need the org **UUID** and ISO8601 `filter_date_from` / `filter_date_to` values.  
-2. `get_ai_credit_usage` accepts org UUID **or** numeric org id; `period` is `current_month`, `last_month`, or `last_3_months`.  
+1. `get_agents_usage` and `get_automations_usage` take the org **UUID or numeric org id** and ISO8601 `filter_date_from` / `filter_date_to` values.  
+2. `get_ai_credit_usage` also accepts org UUID **or** numeric org id; `period` is `current_month`, `last_month`, or `last_3_months`.  
 3. **`get_automations_usage` `usage`** is an **execution count** (runs), not AI credits. **`get_agents_usage` `usage`** aligns with AI credit consumption for agents — compare with `get_ai_credit_usage` for the dashboard view, not with automation run totals.
 
 **Per-automation execution metrics (rolling window)**  
@@ -72,8 +74,8 @@ Empty lists (`totalCount: 0`) are valid: the pipe or automation may have no rece
 
 | Tool | Read-only | Role |
 |------|-----------|------|
-| `get_agents_usage` | Yes | AI agent usage stats for an org within a date range. `filter_date_from` / `filter_date_to` (ISO8601). Optional `filters`, `search`, `sort`. Returns total **AI credits** consumed and per-agent breakdown. Requires org **UUID** (see Identifiers). |
-| `get_automations_usage` | Yes | Automation usage stats for an org. Same date-range and filter inputs as `get_agents_usage`. Returns total **execution count** and per-automation breakdown (not the same unit as AI credits). Requires org **UUID**. |
+| `get_agents_usage` | Yes | AI agent usage stats for an org within a date range. `filter_date_from` / `filter_date_to` (ISO8601). Optional `filters`, `search`, `sort`. Returns total **AI credits** consumed and per-agent breakdown. Takes org **UUID or numeric** (see Identifiers). |
+| `get_automations_usage` | Yes | Automation usage stats for an org. Same date-range and filter inputs as `get_agents_usage`. Returns total **execution count** and per-automation breakdown (not the same unit as AI credits). Takes org **UUID or numeric**. |
 | `get_ai_credit_usage` | Yes | AI credit dashboard for an org: credit limit, total consumption, per-resource breakdown (AI Agents vs Assistants), addon status. `organization_uuid` may be the org UUID or the **numeric organization id** (string). `period`: `current_month`, `last_month`, or `last_3_months`. |
 | `get_automation_execution_metrics` | Yes | Per-automation rolling-window metrics (`totalRuns`, `successRate`, `failureRate`, `averageDuration`, `lastRun`). Uses numeric `organization_id`; optional `automation_ids` / filters / sort; paginated (`first` ≤ 50, `after`). Partial success returns `partial_errors` for denied ids. |
 

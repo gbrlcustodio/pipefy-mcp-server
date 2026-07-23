@@ -243,3 +243,4 @@ Use this pattern for approvals, financial decisions, content publication, and an
 - [skills/observability/pipefy-observability/SKILL.md](../../observability/pipefy-observability/SKILL.md) — execution logs and usage stats.
 - [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — discover trigger and action types via raw schema.
 - [skills/process-design/pipefy-process-design/SKILL.md](../../process-design/pipefy-process-design/SKILL.md) — Orchestration patterns (agentic + human validation).
+- `docs/mcp/tools/identifiers.md#field-references-slug-vs-internal_id` — canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id (`field_address` and `field_map[].fieldId` want internal_id).

@@ -86,6 +86,8 @@ Official **event-scoped** catalog only: `get_automation_event_attributes` (MCP) 
 
 #### Slug vs `internal_id`
 
+Full cross-tool identifier map: [identifiers.md](identifiers.md#field-references-slug-vs-internal_id).
+
 | Surface | Field identifier |
 | --- | --- |
 | MCP `update_card_field` (`field_id` arg) | **slug** (`id` on field rows from `get_phase_fields`) |

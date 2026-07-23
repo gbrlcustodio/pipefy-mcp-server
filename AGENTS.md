@@ -9,7 +9,7 @@
 - **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
 - **`docs/dependencies.md`** — Rationale for runtime dependencies.
 - **`docs/architecture.md`**: Intra-package layering (domain, adapter, composition root), type ownership at boundaries, ports, and the alternative-constructor guide.
-- **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior).
+- **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior). Includes `identifiers.md`, the canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id.
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
 - **`docs/sdk/README.md`** — Using `pipefy` as a library.
 - **`skills/AGENTS.md`** — Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.

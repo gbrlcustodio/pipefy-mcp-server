@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Docs / skills**: hosted MCP (`mcp.pipefy.com`) install snippet on the root README front door; first-time agent checklist [`pipefy-toolkit-setup`](skills/onboarding/pipefy-toolkit-setup/SKILL.md) (path choice / ask-your-agent / verify — commands stay in `README.md#installation`, per #246).
 
+### Changed
+
+- **MCP / CLI / SDK**: automation `condition` is now a first-class, typed input on `create_automation` and `update_automation` (CLI `--condition`), instead of only riding opaquely inside `extra_input`. A new `ConditionExpressionInput` types the expression interior (`field_address` = field `internal_id`, `operation`, `value`, `structure_id`), the documented operations are exported as `CONDITION_OPERATIONS` (soft enum — any value passes, the API validates), and the `expressions_structure` AND-of-ORs grouping is documented. An explicit `condition` wins over any `condition` in `extra_input`; `pipefy automation update` no longer requires `--extra` (pass `--condition` and/or `--extra`). Closes #387.
+
 ### Fixed
 
 - **Installer**: Claude Code next-steps print `/pipefy:pipefy-login` (and the full plugin slash sequence) instead of the stale `/pipefy-login` label.

@@ -888,6 +888,24 @@ Usage: pipefy automation create [OPTIONS]
 │    --action-repo                               TEXT  Destination pipe id for │
 │                                                      cross-pipe actions      │
 │                                                      (defaults to --pipe).   │
+│    --condition                                 TEXT  Optional JSON           │
+│                                                      ConditionInput:         │
+│                                                      {"expressions":         │
+│                                                      [{"field_address":      │
+│                                                      "<internal_id>",        │
+│                                                      "operation": "equals",  │
+│                                                      "value": "x",           │
+│                                                      "structure_id": 0}],    │
+│                                                      "expressions_structure… │
+│                                                      [[0]]}. field_address   │
+│                                                      is a field internal_id  │
+│                                                      (not a slug);           │
+│                                                      operations include      │
+│                                                      equals, not_equals,     │
+│                                                      present, blank,         │
+│                                                      string_contains,        │
+│                                                      number_greater_than,    │
+│                                                      date_is_after.          │
 │    --extra                                     TEXT  Optional JSON object:   │
 │                                                      extra                   │
 │                                                      CreateAutomationInput   │
@@ -1115,13 +1133,20 @@ Usage: pipefy automation update [OPTIONS] AUTOMATION_ID
 │ *    automation_id      TEXT  Automation rule id. [required]                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --extra          TEXT  JSON object: UpdateAutomationInput fields to       │
-│                           patch. Top-level keys are snake_case (e.g.         │
-│                           action_params, event_params); camelCase is also    │
-│                           accepted.                                          │
-│                           [required]                                         │
-│    --json   -j            Print machine-readable JSON to stdout.             │
-│    --help                 Show this message and exit.                        │
+│ --condition          TEXT  Optional JSON ConditionInput: {"expressions":     │
+│                            [{"field_address": "<internal_id>", "operation":  │
+│                            "equals", "value": "x", "structure_id": 0}],      │
+│                            "expressions_structure": [[0]]}. field_address is │
+│                            a field internal_id (not a slug); operations      │
+│                            include equals, not_equals, present, blank,       │
+│                            string_contains, number_greater_than,             │
+│                            date_is_after.                                    │
+│ --extra              TEXT  JSON object: UpdateAutomationInput fields to      │
+│                            patch. Top-level keys are snake_case (e.g.        │
+│                            action_params, event_params); camelCase is also   │
+│                            accepted.                                         │
+│ --json       -j            Print machine-readable JSON to stdout.            │
+│ --help                     Show this message and exit.                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP automation/usage

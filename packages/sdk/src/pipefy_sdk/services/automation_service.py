@@ -7,7 +7,6 @@ from typing import Any, cast
 
 from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.models.ai_automation import (
-    AutomationConditionInput,
     AutomationEventParamsInput,
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
@@ -45,17 +44,6 @@ ACTION_ID_GENERATE_WITH_AI = "generate_with_ai"
 _AUTOMATION_EVENT_ATTRIBUTE_GRAPHQL_KEYS: tuple[tuple[str, str], ...] = (
     ("automationEventExecutionDatetime", "automation_event_execution_datetime"),
 )
-
-
-def _automation_condition_for_api(
-    condition: AutomationConditionInput,
-) -> dict[str, Any]:
-    """Serialize condition for GraphQL without injecting unset model defaults."""
-    return condition.model_dump(
-        mode="python",
-        exclude_unset=True,
-        exclude_none=True,
-    )
 
 
 def _automation_event_params_for_api(
@@ -431,7 +419,7 @@ class AutomationService:
                     skills_ids=automation_input.skills_ids,
                 )
             },
-            condition=_automation_condition_for_api(automation_input.condition),
+            condition=automation_input.condition.to_api_payload(),
             event_params=(
                 _automation_event_params_for_api(event_params)
                 if event_params is not None
@@ -476,11 +464,7 @@ class AutomationService:
                 if event_params is not None
                 else None
             ),
-            condition=(
-                _automation_condition_for_api(condition)
-                if condition is not None
-                else None
-            ),
+            condition=(condition.to_api_payload() if condition is not None else None),
         )
         automation_id = _extract_automation_id(raw, "updateAutomation")
         return {

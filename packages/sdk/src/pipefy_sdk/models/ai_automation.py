@@ -26,19 +26,99 @@ DEFAULT_CONDITION: dict[str, Any] = {
 }
 
 
-class AutomationConditionInput(BaseModel):
-    """Pipefy ``ConditionInput``-shaped payload. Unknown top-level keys are preserved."""
+# The operations Pipefy's condition engine accepts. Documented here for
+# discoverability; treated as a soft enum (any string passes through, the API
+# validates on write) so the set can grow server-side without an SDK release.
+CONDITION_OPERATIONS: tuple[str, ...] = (
+    "equals",
+    "not_equals",
+    "present",
+    "blank",
+    "string_contains",
+    "string_not_contains",
+    "number_greater_than",
+    "number_less_than",
+    "date_is_today",
+    "date_is_yesterday",
+    "date_in_current_week",
+    "date_in_last_week",
+    "date_in_current_month",
+    "date_in_last_month",
+    "date_in_current_year",
+    "date_in_last_year",
+    "date_is",
+    "date_is_after",
+    "date_is_before",
+)
+
+
+class ConditionExpressionInput(BaseModel):
+    """One Pipefy ``ConditionExpressionInput`` — a single field test in a condition.
+
+    Every field is optional at the GraphQL layer; the API validates the combination.
+    ``operation`` is a soft enum: any value passes through (see
+    :data:`CONDITION_OPERATIONS` for the documented set). ``field_address`` is a field
+    ``internal_id`` (the last dotted segment when addressing a connected card's field,
+    e.g. ``<connectorFieldId>.<targetFieldId>``), never a field slug. ``extra="allow"``
+    round-trips unknown keys.
+    """
 
     model_config = ConfigDict(extra="allow")
 
-    expressions: list[dict[str, Any]] = Field(
+    field_address: str | None = Field(
+        default=None,
+        description="Field internal_id to test (last dotted segment for a connected field); not a slug.",
+    )
+    operation: str | None = Field(
+        default=None,
+        description=(
+            "Comparison operation, e.g. equals, not_equals, present, blank, "
+            "string_contains, number_greater_than, date_is_after. Soft enum — any "
+            "value passes; the API validates it."
+        ),
+    )
+    value: str | None = Field(
+        default=None,
+        description="Value (or field id) to compare against. Omit for present/blank.",
+    )
+    structure_id: str | int | None = Field(
+        default=None,
+        description="Groups this expression within expressions_structure.",
+    )
+    id: str | None = Field(
+        default=None,
+        description="Existing condition-expression id, when editing one in place.",
+    )
+
+
+class AutomationConditionInput(BaseModel):
+    """Pipefy ``ConditionInput``-shaped payload. Unknown top-level keys are preserved.
+
+    ``expressions_structure`` is an array of arrays that groups the ``expressions``
+    (by their ``structure_id``) into an AND-of-ORs tree: each inner array is OR'd,
+    and the inner arrays are AND'd together — e.g. ``[[0, 1], [2]]`` means
+    ``(expr0 OR expr1) AND expr2``.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    expressions: list[ConditionExpressionInput] = Field(
         default_factory=list,
-        description="Condition expressions (Pipefy ConditionInput).",
+        description="Condition expressions (Pipefy ConditionExpressionInput).",
     )
     expressions_structure: list[Any] | None = Field(
         default=None,
-        description="Expression grouping indices for Pipefy condition trees.",
+        description="AND-of-ORs grouping of expressions by structure_id (array of arrays).",
     )
+
+    def to_api_payload(self) -> dict[str, Any]:
+        """Serialize to the GraphQL ``ConditionInput`` shape, omitting unset/None keys.
+
+        Only the keys the caller actually set are emitted, so an expression that
+        provides just ``field_address``/``operation``/``value`` does not send empty
+        ``structure_id``/``id`` fields.
+        """
+        return self.model_dump(mode="python", exclude_unset=True, exclude_none=True)
 
 
 class FieldMapInput(BaseModel):

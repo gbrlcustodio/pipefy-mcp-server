@@ -768,6 +768,108 @@ def test_automation_create_accepts_event_id_alias(
     assert kwargs.get("active") is False
 
 
+def test_automation_create_accepts_condition_option(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``automation create --condition`` parses JSON into a typed condition."""
+    oauth_env("aut-cond")
+    mock_client = MagicMock()
+    mock_client.create_automation = AsyncMock(
+        return_value={"createAutomation": {"automation": {"id": "55"}}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation",
+                "create",
+                "--pipe",
+                "1",
+                "--name",
+                "Rule",
+                "--event-id",
+                "card_created",
+                "--action-id",
+                "move_single_card",
+                "--condition",
+                json.dumps(
+                    {
+                        "expressions": [
+                            {"field_address": "9001", "operation": "present"}
+                        ],
+                        "expressions_structure": [[0]],
+                    }
+                ),
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    sent = mock_client.create_automation.call_args.kwargs["condition"]
+    assert sent.to_api_payload() == {
+        "expressions": [{"field_address": "9001", "operation": "present"}],
+        "expressions_structure": [[0]],
+    }
+
+
+def test_automation_update_accepts_condition_only(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``automation update`` works with only ``--condition`` (``--extra`` no longer required)."""
+    oauth_env("aut-cond-up")
+    mock_client = MagicMock()
+    mock_client.update_automation = AsyncMock(
+        return_value={"updateAutomation": {"automation": {"id": "a7"}}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation",
+                "update",
+                "a7",
+                "--condition",
+                json.dumps(
+                    {"expressions": [{"field_address": "9001", "operation": "blank"}]}
+                ),
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    sent = mock_client.update_automation.call_args.kwargs["condition"]
+    assert sent.to_api_payload() == {
+        "expressions": [{"field_address": "9001", "operation": "blank"}]
+    }
+
+
+def test_automation_update_requires_extra_or_condition(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``automation update`` with neither ``--extra`` nor ``--condition`` is rejected."""
+    oauth_env("aut-up-empty")
+    mock_client = MagicMock()
+    mock_client.update_automation = AsyncMock()
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(app, ["automation", "update", "a7", "--json"])
+
+    assert r.exit_code != 0
+    assert "condition" in r.stderr.lower()
+    mock_client.update_automation.assert_not_called()
+
+
 def _ai_automation_row(prompt: str, field_ids: list[str]) -> dict:
     return {
         "id": "auto-1",

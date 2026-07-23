@@ -5,14 +5,59 @@ from _shared.fixture_ids import EXAMPLE_FIELD_INTERNAL_ID
 from pydantic import ValidationError
 
 from pipefy_sdk.models.ai_automation import (
+    CONDITION_OPERATIONS,
     DEFAULT_CONDITION,
     AutomationActionParamsInput,
     AutomationConditionInput,
     AutomationEventParamsInput,
+    ConditionExpressionInput,
     CreateAiAutomationInput,
     FieldMapInput,
     UpdateAiAutomationInput,
 )
+
+
+@pytest.mark.unit
+def test_condition_expression_input_types_the_interior():
+    """Expressions parse into ConditionExpressionInput with the documented fields."""
+    cond = AutomationConditionInput.model_validate(
+        {
+            "expressions": [
+                {
+                    "field_address": "900000101",
+                    "operation": "equals",
+                    "value": "Done",
+                    "structure_id": 0,
+                }
+            ],
+            "expressions_structure": [[0]],
+        }
+    )
+    assert isinstance(cond.expressions[0], ConditionExpressionInput)
+    assert cond.expressions[0].field_address == "900000101"
+    assert cond.expressions[0].operation == "equals"
+
+
+@pytest.mark.unit
+def test_condition_operation_is_a_soft_enum():
+    """Any operation string is accepted; the API validates the value, not the model."""
+    cond = AutomationConditionInput.model_validate(
+        {"expressions": [{"field_address": "1", "operation": "totally_made_up"}]}
+    )
+    assert cond.expressions[0].operation == "totally_made_up"
+    # The documented set is exposed for discoverability.
+    assert "equals" in CONDITION_OPERATIONS
+    assert "date_is_after" in CONDITION_OPERATIONS
+
+
+@pytest.mark.unit
+def test_condition_to_api_payload_omits_unset_expression_fields():
+    """A partial expression sends only the keys the caller set (no empty id/structure_id)."""
+    cond = AutomationConditionInput.model_validate(
+        {"expressions": [{"field_address": "1", "operation": "present"}]}
+    )
+    payload = cond.to_api_payload()
+    assert payload == {"expressions": [{"field_address": "1", "operation": "present"}]}
 
 
 @pytest.mark.unit
@@ -150,7 +195,7 @@ def test_create_ai_automation_input_condition_defaults_to_placeholder():
         prompt="Summarize %{133}",
         field_ids=["133"],
     )
-    assert inp.condition.model_dump(mode="python") == DEFAULT_CONDITION
+    assert inp.condition.to_api_payload() == DEFAULT_CONDITION
     inp2 = CreateAiAutomationInput(
         name="My Automation",
         event_id="card_created",
@@ -178,7 +223,7 @@ def test_create_ai_automation_input_condition_explicit_override():
         field_ids=["133"],
         condition=custom,
     )
-    assert inp.condition.model_dump(mode="python") == custom
+    assert inp.condition.to_api_payload() == custom
 
 
 @pytest.mark.unit

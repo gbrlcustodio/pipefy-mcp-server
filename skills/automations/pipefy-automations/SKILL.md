@@ -84,6 +84,27 @@ Logs, usage, and job exports for automations live in [skills/observability/pipef
 
 ---
 
+## Conditions — gate a rule on field tests
+
+`create_automation` and `update_automation` take a first-class `condition` (CLI: `--condition`). Do **not** guess the shape from GraphQL introspection — it is:
+
+```json
+{
+  "expressions": [
+    {"field_address": "900000101", "operation": "equals", "value": "Done", "structure_id": 0}
+  ],
+  "expressions_structure": [[0]]
+}
+```
+
+- `field_address` is the field **`internal_id`** (numeric, from `get_start_form_fields` / `get_phase_fields`), **not** the slug. For a connected card's field use `<connectorFieldId>.<targetFieldId>`.
+- `operation` (soft enum — any value is passed through, the API validates): `equals`, `not_equals`, `present`, `blank`, `string_contains`, `string_not_contains`, `number_greater_than`, `number_less_than`, `date_is_today`, `date_is_yesterday`, `date_in_current_week`, `date_in_last_week`, `date_in_current_month`, `date_in_last_month`, `date_in_current_year`, `date_in_last_year`, `date_is`, `date_is_after`, `date_is_before`. Omit `value` for `present` / `blank`.
+- `expressions_structure` groups expressions (by `structure_id`) as AND-of-ORs: inner arrays are OR'd, the inner arrays are AND'd — `[[0, 1], [2]]` is `(expr0 OR expr1) AND expr2`.
+
+Omit `condition` to leave a traditional rule unconditional (no default is injected). A `condition` argument wins over any `condition` in `extra_input`.
+
+---
+
 ## Steps — update a card field with a dynamic value
 
 Use when the user wants an if/then rule to **stamp or copy values** onto the triggering card (for example, set a datetime when `card_created` fires). This is **`create_automation`** with `action_id: update_card_field` and `extra_input.action_params.field_map` — **not** the MCP tool `update_card_field` (that tool uses field **slug** for one-off card edits).

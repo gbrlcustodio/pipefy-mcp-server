@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from pipefy_sdk import PresignedUploadTarget
 from pydantic import ValidationError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
@@ -53,6 +54,21 @@ def build_upload_success_payload(
     if table_record_id is not None:
         payload["table_record_id"] = table_record_id
     return payload
+
+
+def build_presigned_success_payload(target: PresignedUploadTarget) -> dict[str, Any]:
+    """Structured success payload for a minted presigned upload target.
+
+    Carries the S3 PUT ``upload_url`` the caller uploads to and the
+    ``storage_path`` (object key) to store on the field afterward — never the
+    url. ``expires_in_seconds`` may be None if the url declares no expiry.
+    """
+    return {
+        "success": True,
+        "upload_url": target["upload_url"],
+        "storage_path": target["storage_path"],
+        "expires_in_seconds": target["expires_in_seconds"],
+    }
 
 
 def build_upload_error_payload(
@@ -131,6 +147,7 @@ def map_upload_error_to_message(exc: BaseException) -> str:
 
 __all__ = [
     "UploadFlowStep",
+    "build_presigned_success_payload",
     "build_upload_error_payload",
     "build_upload_success_payload",
     "format_s3_upload_failure",

@@ -912,3 +912,75 @@ async def test_upload_attachment_to_table_record_rejects_file_path_on_remote(
     assert payload["step"] == "validation"
     assert "hosted server" in payload["error"]["message"]
     mock_attachment_client.upload_attachment.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# create_attachment_presigned_url (handshake)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_create_attachment_presigned_url_success(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+):
+    mock_attachment_client.create_attachment_presigned_url = AsyncMock(
+        return_value={
+            "upload_url": "https://pipefy-uploads.s3.amazonaws.com/orgs/o/uploads/u/r.pdf?X-Amz-Expires=300",
+            "storage_path": "orgs/o/uploads/u/r.pdf",
+            "expires_in_seconds": 300,
+        }
+    )
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "create_attachment_presigned_url",
+            {"organization_id": "42", "file_name": "r.pdf"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["storage_path"] == "orgs/o/uploads/u/r.pdf"
+    assert payload["expires_in_seconds"] == 300
+    assert payload["upload_url"].startswith("https://pipefy-uploads.s3.amazonaws.com/")
+    mock_attachment_client.create_attachment_presigned_url.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_create_attachment_presigned_url_blank_file_name(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+):
+    mock_attachment_client.create_attachment_presigned_url = AsyncMock()
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "create_attachment_presigned_url",
+            {"organization_id": "42", "file_name": "   "},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["step"] == "validation"
+    assert "file_name" in payload["error"]["message"]
+    mock_attachment_client.create_attachment_presigned_url.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_create_attachment_presigned_url_presigned_failure(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+):
+    mock_attachment_client.create_attachment_presigned_url = AsyncMock(
+        side_effect=AttachmentUploadError(
+            "Pipefy did not return a presigned upload URL.",
+            step="presigned_url",
+        )
+    )
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "create_attachment_presigned_url",
+            {"organization_id": "42", "file_name": "r.pdf"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["step"] == "presigned_url"

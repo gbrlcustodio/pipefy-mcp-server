@@ -22,6 +22,7 @@ from pipefy_sdk import (
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.attachment_tool_helpers import (
+    build_presigned_success_payload,
     build_upload_error_payload,
     build_upload_success_payload,
     format_s3_upload_failure,
@@ -296,3 +297,54 @@ class AttachmentTools:
                 data.field_id,
                 {"table_record_id": data.table_record_id},
             )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
+        )
+        async def create_attachment_presigned_url(
+            ctx: Context[ServerSession, None],
+            organization_id: PipefyId,
+            file_name: str,
+            content_type: str | None = None,
+            content_length: int | None = None,
+        ) -> dict[str, Any]:
+            """Mint a presigned S3 upload target for an attachment — no bytes uploaded.
+
+            Use this to attach a file the MCP server itself cannot read: a local
+            file on the hosted server, or bytes too large to inline. The client
+            does the upload; three steps:
+
+            1. Call this to get ``upload_url`` (the S3 PUT url) and ``storage_path``
+               (the object key to store).
+            2. From an environment that can reach the upload host, HTTP ``PUT`` the
+               file bytes to ``upload_url`` within ``expires_in_seconds`` (send
+               ``Content-Type`` / ``Content-Length`` matching what you passed here).
+            3. Set the attachment field to ``[storage_path]`` via ``update_card_field``
+               or ``set_table_record_field_value``. Store ``storage_path``, never the url.
+
+            Args:
+                organization_id: Pipefy organization id (numeric or uuid). Use ``get_organization`` or ``get_pipe`` to find it.
+                file_name: File name including extension; names the stored object.
+                content_type: Optional MIME type to sign into the upload.
+                content_length: Optional exact byte length to sign into the upload.
+            """
+            client = get_pipefy_client(ctx)
+            if not file_name or not file_name.strip():
+                return build_upload_error_payload(
+                    message="file_name must be a non-empty string.",
+                    step="validation",
+                )
+            await ctx.debug(
+                f"create_attachment_presigned_url: org={organization_id!r} file_name={file_name!r}"
+            )
+            try:
+                target = await client.create_attachment_presigned_url(
+                    organization_id=organization_id,
+                    file_name=file_name.strip(),
+                    content_type=content_type,
+                    content_length=content_length,
+                )
+            except AttachmentUploadError as exc:
+                return _upload_error_envelope(exc)
+            return build_presigned_success_payload(target)

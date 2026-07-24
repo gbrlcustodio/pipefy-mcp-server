@@ -202,6 +202,20 @@ class AttachmentUploadResult(TypedDict):
     download_url: str | None
 
 
+class PresignedUploadTarget(TypedDict):
+    """A minted presigned upload target — where a client PUTs bytes, and what to store.
+
+    ``upload_url`` is the short-lived S3 PUT url the caller uploads to;
+    ``storage_path`` is the object key to set on the attachment field afterward
+    (never the url). The SDK transfers no bytes for this call. No download url is
+    included — it is minted on read once the field is set.
+    """
+
+    upload_url: str
+    storage_path: str
+    expires_in_seconds: int | None
+
+
 def _resolve_one_source(
     file_path: str | None, file_url: str | None
 ) -> tuple[str | None, str | None]:

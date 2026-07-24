@@ -10,6 +10,7 @@ from graphql import DocumentNode
 
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.graphql_executor import GraphQLExecutor, PipefyGraphQLError
+from pipefy_sdk.graphql_problem import GraphQLProblemKind, classify_exception
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
     CreatePortalInput,
@@ -61,13 +62,15 @@ _PORTAL_PERMISSION_MESSAGE = (
 def _map_portal_permission_error(
     exc: PipefyGraphQLError,
 ) -> PortalPermissionError | None:
-    """Return ``PortalPermissionError`` only for PERMISSION_DENIED; else ``None``."""
-    for err in exc.errors or []:
-        if not isinstance(err, dict):
-            continue
-        extensions = err.get("extensions") or {}
-        if extensions.get("code") == "PERMISSION_DENIED":
-            return PortalPermissionError(_PORTAL_PERMISSION_MESSAGE)
+    """Return ``PortalPermissionError`` only for PERMISSION_DENIED; else ``None``.
+
+    Delegates classification to the shared ``classify_exception`` so portal
+    permission mapping reads the same ``extensions.code`` signal the rest of the
+    SDK does, rather than re-deriving it here.
+    """
+    problem = classify_exception(exc)
+    if problem is not None and problem.kind is GraphQLProblemKind.PERMISSION_DENIED:
+        return PortalPermissionError(_PORTAL_PERMISSION_MESSAGE)
     return None
 
 

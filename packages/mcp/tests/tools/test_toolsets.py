@@ -12,7 +12,14 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
-from pipefy_mcp.tools.toolsets import DOMAINS, resolve_selection
+from pipefy_mcp.tools.toolsets import (
+    DOMAIN_DESCRIPTIONS,
+    DOMAINS,
+    POWER_GRAPHQL_TOOLS,
+    domain_of,
+    resolve_selection,
+    wants_power,
+)
 
 EXPECTED_DOMAINS = frozenset(
     {
@@ -64,6 +71,16 @@ class TestDomainPartition:
         orphans = sorted(PIPEFY_TOOL_NAMES - covered)
         assert not orphans, f"registered tools with no domain: {orphans}"
 
+    def test_every_domain_has_a_description(self):
+        """``get_tool_categories`` reads ``DOMAIN_DESCRIPTIONS``; keys must match."""
+        assert set(DOMAIN_DESCRIPTIONS) == set(DOMAINS)
+        assert all(text.strip() for text in DOMAIN_DESCRIPTIONS.values())
+
+    def test_domain_of_maps_names_to_their_domain(self):
+        assert domain_of("get_pipe") == "workflow"
+        assert domain_of("get_table") == "database"
+        assert domain_of("not_a_tool") is None
+
 
 class TestResolveSelection:
     """``resolve_selection`` maps a comma-spec to a set of tool names or None."""
@@ -98,6 +115,21 @@ class TestResolveSelection:
         message = str(exc.value)
         assert "bogus" in message
         assert "workflow" in message  # lists the known toolsets
+
+    @pytest.mark.parametrize("spec", ["power", "architect"])
+    def test_power_keywords_are_known_and_yield_no_domain_selection(self, spec):
+        """``power`` / ``architect`` validate (no raise); the registry applies them."""
+        assert resolve_selection(spec) is None
+
+
+class TestWantsPower:
+    @pytest.mark.parametrize("spec", ["power", "architect", "PoWeR", "workflow,power"])
+    def test_true_when_a_power_keyword_is_present(self, spec):
+        assert wants_power(spec) is True
+
+    @pytest.mark.parametrize("spec", [None, "", "workflow", "all", "default"])
+    def test_false_otherwise(self, spec):
+        assert wants_power(spec) is False
 
 
 def _registry_with_all_tools() -> tuple[ToolRegistry, FastMCP]:
@@ -146,3 +178,33 @@ class TestApplyToolsetSelection:
         registry.apply_toolset_selection("intelligence")
         # create_llm_provider is in `intelligence` but not remote-safe (floored out).
         assert "create_llm_provider" not in _live_pipefy_names(mcp)
+
+
+_META_TOOLS = frozenset(
+    {"get_tool_categories", "search_tools", "describe_tool", "execute_tool"}
+)
+
+
+class TestApplyPowerProfile:
+    """``apply_power_profile`` hides curated tools behind the catalog meta-tools."""
+
+    def test_local_exposes_meta_tools_and_raw_graphql_only(self):
+        registry, mcp = _registry_with_all_tools()
+        hidden = registry.apply_power_profile()
+        visible = {t.name for t in mcp._tool_manager.list_tools()}
+        # Only the 4 meta-tools plus the 5 raw-GraphQL tools remain visible.
+        assert visible == _META_TOOLS | POWER_GRAPHQL_TOOLS
+        # Everything else is hidden but snapshotted (reachable via execute_tool).
+        assert "get_pipe" in hidden
+        assert hidden == set(PIPEFY_TOOL_NAMES) - POWER_GRAPHQL_TOOLS
+
+    def test_remote_then_power_hides_only_the_floored_surface(self):
+        """Power runs after the floor: the visible raw-GraphQL set is floor ∩ power."""
+        registry, mcp = _registry_with_all_tools()
+        registry.apply_remote_profile(remote_mode=True)
+        floored = _live_pipefy_names(mcp)
+        hidden = registry.apply_power_profile()
+        # A tool the floor already withheld is never in the power catalog.
+        assert "create_llm_provider" not in hidden
+        # Hidden catalog is exactly the floored surface minus the visible raw-GraphQL.
+        assert hidden == floored - POWER_GRAPHQL_TOOLS

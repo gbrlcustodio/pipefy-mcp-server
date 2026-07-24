@@ -18,6 +18,7 @@ from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.observability.wiring import wire_hosted_observability
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
+from pipefy_mcp.tools.toolsets import resolve_selection, wants_power
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
 logger = logging.getLogger(__name__)
@@ -72,13 +73,22 @@ def _register_pipefy_tools(
 
     The remote floor then the toolset selection are applied in that order, so a
     ``toolsets`` selection narrows within the surviving surface and never widens it.
+    The ``power`` selection is a distinct branch: rather than narrow by domain, it
+    hides the curated tools behind the catalog meta-tools (still post-floor).
     """
     install_pipefy_validation_envelope()
     registry = ToolRegistry(mcp=app)
     registry.check_for_name_collisions()
     registry.register_tools()
     registry.apply_remote_profile(remote_mode=remote_mode)
-    registry.apply_toolset_selection(toolsets)
+    if wants_power(toolsets):
+        # Validate the spec before applying power: apply_power_profile does not call
+        # resolve_selection, so without this an unknown token (e.g. "power,typo")
+        # would silently start the server, unlike the fail-closed domain path.
+        resolve_selection(toolsets)
+        registry.apply_power_profile()
+    else:
+        registry.apply_toolset_selection(toolsets)
 
 
 def default_tool_middlewares(settings: Settings) -> list[ToolCallMiddleware]:

@@ -240,17 +240,69 @@ DOMAINS: dict[str, frozenset[str]] = {
     ),
 }
 
+# One-line subject each domain owns, surfaced by the ``get_tool_categories``
+# meta-tool. Keys must match ``DOMAINS`` (asserted by the drift-guard).
+DOMAIN_DESCRIPTIONS: dict[str, str] = {
+    "workflow": "Running a process: pipes, phases, fields, labels, field conditions, cards, comments, card attachments, inbox email, and pipe/card relations.",
+    "database": "Pipefy database tables: tables, table fields, table relations, records, and record attachments.",
+    "interfaces": "No-code page building: portals, pages, elements, and sub-portals.",
+    "automation": "Pipefy-native rule (if/then) and AI automations, plus their execution logs, metrics, usage, and job exports.",
+    "intelligence": "AI capability: agents, LLM providers, knowledge bases, available models, and AI usage and credits.",
+    "analytics": "Reporting: pipe and organization reports and their exports.",
+    "governance": "Organization administration: organization, members, roles, service accounts, and audit-log export.",
+    "integration": "Connecting to the outside: webhooks, iPaaS, and the raw GraphQL API (introspection and arbitrary execution).",
+}
+
+# The raw-GraphQL escape hatch. The ``power`` profile keeps these five visible
+# alongside the catalog meta-tools; they stay reachable by name for schema
+# discovery and arbitrary execution. Pinned independently of the ``integration``
+# domain, which also owns them, so the power branch does not depend on domain data.
+POWER_GRAPHQL_TOOLS = frozenset(
+    {
+        "search_schema",
+        "introspect_query",
+        "introspect_mutation",
+        "introspect_type",
+        "execute_graphql",
+    }
+)
+
 # Reserved keywords that mean "no curation" — the full (post-floor) surface.
 _NO_CURATION = frozenset({"all", "default"})
+
+# Reserved keywords that select the ``power`` discovery profile: hide the curated
+# tools behind catalog meta-tools. ``architect`` is the persona alias for ``power``.
+POWER_TOOLSETS = frozenset({"power", "architect"})
+
+_KEYWORDS = _NO_CURATION | POWER_TOOLSETS
+
+
+def _parse(spec: str | None) -> list[str]:
+    """Split a comma-spec into normalized (trimmed, lower-cased) names."""
+    if spec is None:
+        return []
+    return [part.strip().lower() for part in spec.split(",") if part.strip()]
+
+
+def domain_of(name: str) -> str | None:
+    """Return the subject domain owning ``name``, or ``None`` if unclassified."""
+    return next((domain for domain, tools in DOMAINS.items() if name in tools), None)
+
+
+def wants_power(spec: str | None) -> bool:
+    """True when ``spec`` selects the ``power`` discovery profile."""
+    return any(name in POWER_TOOLSETS for name in _parse(spec))
 
 
 def resolve_selection(spec: str | None) -> frozenset[str] | None:
     """Resolve a ``--toolsets`` / ``PIPEFY_MCP_TOOLSETS`` spec to a set of tool names.
 
     ``spec`` is a comma-separated list of subject-domain names (case-insensitive).
-    Returns the union of the named domains' tools, or ``None`` for no curation —
-    an empty spec or the ``all`` / ``default`` keywords. ``None`` means the caller
-    applies no selection at all (backward-compatible default).
+    Returns the union of the named domains' tools, or ``None`` for no domain
+    narrowing — an empty spec, the ``all`` / ``default`` keywords, or a ``power`` /
+    ``architect`` keyword (whose profile the registry applies separately; here it
+    contributes no domain selection). ``None`` means the caller applies no tool
+    filtering at all (backward-compatible default).
 
     Selection only ever narrows: the returned names are matched against the
     already-registered (and, on the remote profile, already-floored) surface, so a
@@ -261,17 +313,15 @@ def resolve_selection(spec: str | None) -> frozenset[str] | None:
             The message names the unknown values and lists the known toolsets, so
             the CLI can render it as a usage error.
     """
-    if spec is None:
-        return None
-    names = [part.strip().lower() for part in spec.split(",") if part.strip()]
+    names = _parse(spec)
     if not names:
         return None
-    unknown = [n for n in names if n not in DOMAINS and n not in _NO_CURATION]
+    unknown = [n for n in names if n not in DOMAINS and n not in _KEYWORDS]
     if unknown:
-        known = ", ".join(sorted(set(DOMAINS) | _NO_CURATION))
+        known = ", ".join(sorted(set(DOMAINS) | _KEYWORDS))
         raise ValueError(
             f"unknown toolset(s): {', '.join(unknown)}. Known toolsets: {known}."
         )
-    if any(n in _NO_CURATION for n in names):
+    if any(n in _KEYWORDS for n in names):
         return None
     return frozenset().union(*(DOMAINS[n] for n in names))

@@ -8,8 +8,9 @@ the build). The "Subject-domain taxonomy" section in ``packages/mcp/AGENTS.md``
 covers the Domain vs Profile distinction, what each domain owns, and why subject
 domains are chosen over the doc-area grouping.
 
-Persona *profiles* (overlapping, journey-sized selections) are a separate axis
-added on top of this partition; they are not defined here.
+Persona *profiles* (``PROFILES``) are the second, overlapping axis: curated
+journey-sized selections that cut across domains, each grounded in a canonical
+Pipefy role scope. A tool may appear in many profiles; they are not a partition.
 """
 
 from __future__ import annotations
@@ -253,6 +254,348 @@ DOMAIN_DESCRIPTIONS: dict[str, str] = {
     "integration": "Connecting to the outside: webhooks, iPaaS, and the raw GraphQL API (introspection and arbitrary execution).",
 }
 
+# Persona profiles: overlapping, journey-sized selections that cut across
+# domains. Unlike ``DOMAINS`` these are NOT a partition — a tool may appear in
+# many. Each is grounded in a canonical Pipefy role scope (see AGENTS.md).
+# The subset drift-guard keeps every name a registered tool.
+PROFILES: dict[str, frozenset[str]] = {
+    # External requester (org external_guest): submit a request and track your own cards.
+    "requester": frozenset(
+        {
+            "add_card_comment",
+            "create_attachment_presigned_url",
+            "create_card",
+            "get_card",
+            "get_card_inbox_emails",
+            "get_start_form_fields",
+            "send_inbox_email",
+            "upload_attachment_to_card",
+        }
+    ),
+    # Case operator (pipe member): run existing cards day to day; no pipe configuration.
+    "operator": frozenset(
+        {
+            "add_card_comment",
+            "create_attachment_presigned_url",
+            "create_card",
+            "create_card_relation",
+            "delete_card",
+            "delete_card_relation",
+            "delete_comment",
+            "fill_card_phase_fields",
+            "find_cards",
+            "find_records",
+            "get_card",
+            "get_card_inbox_emails",
+            "get_card_relations",
+            "get_cards",
+            "get_email_templates",
+            "get_field_condition",
+            "get_field_conditions",
+            "get_labels",
+            "get_phase_allowed_move_targets",
+            "get_phase_cards",
+            "get_phase_cards_count",
+            "get_phase_fields",
+            "get_pipe",
+            "get_pipe_members",
+            "get_pipe_relations",
+            "get_start_form_fields",
+            "get_table",
+            "get_table_record",
+            "get_table_records",
+            "get_table_relations",
+            "get_tables",
+            "move_card_to_phase",
+            "search_pipes",
+            "search_tables",
+            "send_inbox_email",
+            "update_card",
+            "update_card_field",
+            "update_comment",
+            "upload_attachment_to_card",
+        }
+    ),
+    # Process manager (pipe admin, oversight): the operator surface plus reports, execution logs, and audit export.
+    "manager": frozenset(
+        {
+            "add_card_comment",
+            "create_attachment_presigned_url",
+            "create_card",
+            "create_card_relation",
+            "create_organization_report",
+            "create_pipe_report",
+            "delete_card",
+            "delete_card_relation",
+            "delete_comment",
+            "delete_organization_report",
+            "delete_pipe_report",
+            "export_automation_jobs",
+            "export_organization_report",
+            "export_pipe_audit_logs",
+            "export_pipe_report",
+            "fill_card_phase_fields",
+            "find_cards",
+            "find_records",
+            "get_agents_usage",
+            "get_ai_agent",
+            "get_ai_agent_log_details",
+            "get_ai_agent_logs",
+            "get_ai_agents",
+            "get_ai_automation",
+            "get_ai_automations",
+            "get_ai_credit_usage",
+            "get_automation",
+            "get_automation_execution_metrics",
+            "get_automation_jobs_export",
+            "get_automation_jobs_export_csv",
+            "get_automation_logs",
+            "get_automation_logs_by_repo",
+            "get_automations",
+            "get_automations_usage",
+            "get_card",
+            "get_card_inbox_emails",
+            "get_card_relations",
+            "get_cards",
+            "get_email_templates",
+            "get_field_condition",
+            "get_field_conditions",
+            "get_labels",
+            "get_organization_report",
+            "get_organization_report_export",
+            "get_organization_reports",
+            "get_phase_allowed_move_targets",
+            "get_phase_cards",
+            "get_phase_cards_count",
+            "get_phase_fields",
+            "get_pipe",
+            "get_pipe_members",
+            "get_pipe_relations",
+            "get_pipe_report",
+            "get_pipe_report_columns",
+            "get_pipe_report_export",
+            "get_pipe_report_filterable_fields",
+            "get_pipe_reports",
+            "get_start_form_fields",
+            "get_table",
+            "get_table_record",
+            "get_table_records",
+            "get_table_relations",
+            "get_tables",
+            "move_card_to_phase",
+            "search_pipes",
+            "search_tables",
+            "send_inbox_email",
+            "update_card",
+            "update_card_field",
+            "update_comment",
+            "update_organization_report",
+            "update_pipe_report",
+            "upload_attachment_to_card",
+        }
+    ),
+    # Pipe builder (pipe admin): configure pipes, phases, fields, conditions, automations, and AI agents.
+    "builder": frozenset(
+        {
+            "clone_pipe",
+            "create_ai_agent",
+            "create_ai_automation",
+            "create_ai_knowledge_base_data_lookup",
+            "create_ai_knowledge_base_document",
+            "create_ai_knowledge_base_plain_text",
+            "create_automation",
+            "create_field_condition",
+            "create_label",
+            "create_phase",
+            "create_phase_field",
+            "create_pipe",
+            "create_pipe_relation",
+            "create_send_task_automation",
+            "delete_ai_agent",
+            "delete_ai_automation",
+            "delete_ai_knowledge_base_data_lookup",
+            "delete_ai_knowledge_base_document",
+            "delete_ai_knowledge_base_plain_text",
+            "delete_automation",
+            "delete_field_condition",
+            "delete_label",
+            "delete_phase",
+            "delete_phase_field",
+            "delete_pipe",
+            "delete_pipe_relation",
+            "execute_graphql",
+            "get_ai_agent",
+            "get_ai_agents",
+            "get_ai_automation",
+            "get_ai_automations",
+            "get_ai_knowledge_base_data_lookup",
+            "get_ai_knowledge_base_document",
+            "get_ai_knowledge_base_plain_text",
+            "get_ai_knowledge_bases",
+            "get_automation",
+            "get_automation_actions",
+            "get_automation_event_attributes",
+            "get_automation_events",
+            "get_automations",
+            "get_available_ai_models",
+            "get_field_condition",
+            "get_field_conditions",
+            "get_labels",
+            "get_phase_allowed_move_targets",
+            "get_phase_fields",
+            "get_pipe",
+            "get_pipe_members",
+            "get_pipe_relations",
+            "get_start_form_fields",
+            "get_table_relations",
+            "introspect_mutation",
+            "introspect_query",
+            "introspect_type",
+            "search_pipes",
+            "search_schema",
+            "simulate_automation",
+            "toggle_ai_agent_status",
+            "update_ai_agent",
+            "update_ai_automation",
+            "update_ai_knowledge_base_data_lookup",
+            "update_ai_knowledge_base_document",
+            "update_ai_knowledge_base_plain_text",
+            "update_automation",
+            "update_field_condition",
+            "update_label",
+            "update_phase",
+            "update_phase_field",
+            "update_pipe",
+            "update_pipe_relation",
+            "validate_ai_agent_behaviors",
+            "validate_ai_automation_prompt",
+            "validate_knowledge_base_access",
+        }
+    ),
+    # Org administrator (super admin): members, roles, service accounts, LLM providers, webhooks, and org reports.
+    "admin": frozenset(
+        {
+            "add_service_account_to_pipe",
+            "create_ipaas_connection",
+            "create_llm_provider",
+            "create_organization_report",
+            "create_service_account",
+            "create_webhook",
+            "delete_llm_provider",
+            "delete_organization_report",
+            "delete_service_account",
+            "delete_webhook",
+            "export_organization_report",
+            "export_pipe_audit_logs",
+            "get_available_ai_models",
+            "get_default_llm_provider",
+            "get_email_templates",
+            "get_ipaas_connection_auth_url",
+            "get_ipaas_tools",
+            "get_llm_provider_dependencies",
+            "get_llm_providers",
+            "get_organization",
+            "get_organization_report",
+            "get_organization_report_export",
+            "get_organization_reports",
+            "get_webhooks",
+            "invite_members",
+            "list_organizations",
+            "remove_member_from_pipe",
+            "reset_default_llm_provider",
+            "send_email_with_template",
+            "set_default_llm_provider",
+            "set_llm_provider_active_status",
+            "set_role",
+            "update_llm_provider",
+            "update_organization_report",
+            "update_webhook",
+            "validate_llm_provider_access",
+        }
+    ),
+    # Auditor (read-only): every read tool plus audit-log export, to reconstruct history.
+    "auditor": frozenset(
+        {
+            "export_pipe_audit_logs",
+            "find_cards",
+            "find_records",
+            "get_agents_usage",
+            "get_ai_agent",
+            "get_ai_agent_log_details",
+            "get_ai_agent_logs",
+            "get_ai_agents",
+            "get_ai_automation",
+            "get_ai_automations",
+            "get_ai_credit_usage",
+            "get_ai_knowledge_base_data_lookup",
+            "get_ai_knowledge_base_document",
+            "get_ai_knowledge_base_plain_text",
+            "get_ai_knowledge_bases",
+            "get_automation",
+            "get_automation_actions",
+            "get_automation_event_attributes",
+            "get_automation_events",
+            "get_automation_execution_metrics",
+            "get_automation_jobs_export",
+            "get_automation_jobs_export_csv",
+            "get_automation_logs",
+            "get_automation_logs_by_repo",
+            "get_automations",
+            "get_automations_usage",
+            "get_available_ai_models",
+            "get_card",
+            "get_card_inbox_emails",
+            "get_card_relations",
+            "get_cards",
+            "get_default_llm_provider",
+            "get_email_templates",
+            "get_field_condition",
+            "get_field_conditions",
+            "get_ipaas_connection_auth_url",
+            "get_ipaas_tools",
+            "get_labels",
+            "get_llm_provider_dependencies",
+            "get_llm_providers",
+            "get_organization",
+            "get_organization_report",
+            "get_organization_report_export",
+            "get_organization_reports",
+            "get_phase_allowed_move_targets",
+            "get_phase_cards",
+            "get_phase_cards_count",
+            "get_phase_fields",
+            "get_pipe",
+            "get_pipe_members",
+            "get_pipe_relations",
+            "get_pipe_report",
+            "get_pipe_report_columns",
+            "get_pipe_report_export",
+            "get_pipe_report_filterable_fields",
+            "get_pipe_reports",
+            "get_portal",
+            "get_start_form_fields",
+            "get_table",
+            "get_table_record",
+            "get_table_records",
+            "get_table_relations",
+            "get_tables",
+            "get_webhooks",
+            "introspect_mutation",
+            "introspect_query",
+            "introspect_type",
+            "list_organizations",
+            "list_portals",
+            "search_pipes",
+            "search_schema",
+            "search_tables",
+            "validate_ai_agent_behaviors",
+            "validate_ai_automation_prompt",
+            "validate_knowledge_base_access",
+            "validate_llm_provider_access",
+        }
+    ),
+}
+
 # The raw-GraphQL escape hatch. The ``power`` profile keeps these five visible
 # alongside the catalog meta-tools; they stay reachable by name for schema
 # discovery and arbitrary execution. Pinned independently of the ``integration``
@@ -297,31 +640,35 @@ def wants_power(spec: str | None) -> bool:
 def resolve_selection(spec: str | None) -> frozenset[str] | None:
     """Resolve a ``--toolsets`` / ``PIPEFY_MCP_TOOLSETS`` spec to a set of tool names.
 
-    ``spec`` is a comma-separated list of subject-domain names (case-insensitive).
-    Returns the union of the named domains' tools, or ``None`` for no domain
+    ``spec`` is a comma-separated list of subject-domain and persona-profile names
+    (case-insensitive), unioned. Returns that union, or ``None`` for no domain
     narrowing — an empty spec, the ``all`` / ``default`` keywords, or a ``power`` /
     ``architect`` keyword (whose profile the registry applies separately; here it
-    contributes no domain selection). ``None`` means the caller applies no tool
-    filtering at all (backward-compatible default).
+    contributes no selection). ``None`` means the caller applies no tool filtering
+    at all (backward-compatible default).
 
     Selection only ever narrows: the returned names are matched against the
     already-registered (and, on the remote profile, already-floored) surface, so a
     name here can never widen the surface past the floor.
 
     Raises:
-        ValueError: if any name is neither a known domain nor a reserved keyword.
-            The message names the unknown values and lists the known toolsets, so
-            the CLI can render it as a usage error.
+        ValueError: if any name is neither a known domain/profile nor a reserved
+            keyword. The message names the unknown values and lists the known
+            toolsets, so the CLI can render it as a usage error.
     """
     names = _parse(spec)
     if not names:
         return None
-    unknown = [n for n in names if n not in DOMAINS and n not in _KEYWORDS]
+    known_names = set(DOMAINS) | set(PROFILES) | _KEYWORDS
+    unknown = [n for n in names if n not in known_names]
     if unknown:
-        known = ", ".join(sorted(set(DOMAINS) | _KEYWORDS))
+        known = ", ".join(sorted(known_names))
         raise ValueError(
             f"unknown toolset(s): {', '.join(unknown)}. Known toolsets: {known}."
         )
     if any(n in _KEYWORDS for n in names):
         return None
-    return frozenset().union(*(DOMAINS[n] for n in names))
+    selected: set[str] = set()
+    for name in names:
+        selected |= DOMAINS.get(name) or PROFILES[name]
+    return frozenset(selected)

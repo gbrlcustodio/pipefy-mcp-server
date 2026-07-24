@@ -1007,6 +1007,36 @@ async def test_create_portal_element_graphql_error_is_not_portal_permission_erro
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_portal_permission_mapping_only_inspects_the_first_error() -> None:
+    """A PERMISSION_DENIED that is not the first error re-raises PipefyGraphQLError.
+
+    Permission mapping delegates to ``classify_exception``, which classifies the
+    first error only. Portal responses carry a single error in practice, so this
+    narrowing (versus scanning every error) is not observable there. Pinning it
+    keeps a future contributor from reading the first-error behavior as a bug.
+    """
+    service, _public, interfaces_executor = _make_interfaces_service(
+        _CREATE_ELEMENT_RESPONSE,
+    )
+    interfaces_executor.execute_query = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {"message": "Bad input", "extensions": {"code": "BAD_REQUEST"}},
+                {"message": "Denied", "extensions": {"code": "PERMISSION_DENIED"}},
+            ],
+        )
+    )
+
+    with pytest.raises(PipefyGraphQLError):
+        await service.create_portal_element(
+            _PAGE_ID,
+            type="link",
+            metadata={"linkName": "Test", "linkUrl": "https://example.com"},
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_portal_element_rejects_invalid_metadata_before_graphql() -> None:
     """CreatePortalElementInput validation must run before execute_query."""
     service, _public, interfaces_executor = _make_interfaces_service(

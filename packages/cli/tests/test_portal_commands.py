@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _shared.fixture_ids import EXAMPLE_PIPE_REPO_ID
+from pipefy_sdk import PipefyGraphQLError
 
 from pipefy_cli.main import app
 
@@ -1520,3 +1521,34 @@ def test_portal_sub_portal_rejects_blank_ids_exit_2(
     assert result.exit_code == 2
     assert "non-empty" in _sub_portal_validation_stderr(result)
     getattr(mock_client, client_method).assert_not_called()
+
+
+def test_portal_sub_portal_detach_graphql_error_exits_1(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """A non-permission GraphQL error on an internal-API portal command exits 1.
+
+    This path used to arrive as a ValueError (the ``[code=...]`` envelope) and
+    exit 2, the usage-error code. It now raises PipefyGraphQLError and exits 1,
+    aligned with public-API command failures. Permission errors still exit 2 via
+    PortalPermissionError, unchanged.
+    """
+    oauth_env("portal-sub-detach-error")
+    mock_client = MagicMock()
+    mock_client.delete_sub_portal_element = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [{"message": "Something went wrong on the server"}]
+        )
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["portal", "sub-portal", "detach", "portal-uuid-1", "element-1", "--yes"],
+        )
+    assert result.exit_code == 1, result.stdout + (result.stderr or "")
+    mock_client.delete_sub_portal_element.assert_awaited_once_with(
+        "portal-uuid-1", "element-1"
+    )

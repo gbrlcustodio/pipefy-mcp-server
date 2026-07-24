@@ -4,11 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.llm_provider_tools import LlmProviderTools
@@ -39,27 +38,25 @@ SYSTEM_NODE = {
 }
 
 
-def permission_denied_error() -> TransportQueryError:
-    return TransportQueryError(
-        "denied",
-        errors=[
+def permission_denied_error() -> PipefyGraphQLError:
+    return PipefyGraphQLError(
+        [
             {
                 "message": "Permission denied",
                 "extensions": {"code": "PERMISSION_DENIED", "correlation_id": "corr-9"},
             }
-        ],
+        ]
     )
 
 
-def not_found_error() -> TransportQueryError:
-    return TransportQueryError(
-        "missing",
-        errors=[
+def not_found_error() -> PipefyGraphQLError:
+    return PipefyGraphQLError(
+        [
             {
                 "message": "Couldn't find LlmProvider with id bogus",
                 "extensions": {"code": "RESOURCE_NOT_FOUND"},
             }
-        ],
+        ]
     )
 
 
@@ -210,14 +207,13 @@ async def test_get_available_ai_models_invalid_enum_surfaces_api_error(
     provider_session, mock_provider_client, extract_payload
 ):
     mock_provider_client.get_available_ai_models = AsyncMock(
-        side_effect=TransportQueryError(
-            "bad enum",
-            errors=[
+        side_effect=PipefyGraphQLError(
+            [
                 {
                     "message": "Invalid provider name",
                     "extensions": {"code": "INVALID_ARGUMENTS"},
                 }
-            ],
+            ]
         )
     )
     async with provider_session as session:

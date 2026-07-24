@@ -3,34 +3,31 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 import pipefy_mcp.settings as settings_mod
 from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
 
 
 def _make_permission_denied_exc(message="forbidden"):
-    return TransportQueryError(
-        message,
-        errors=[
+    return PipefyGraphQLError(
+        [
             {
                 "message": message,
                 "extensions": {"code": "PERMISSION_DENIED"},
             }
-        ],
+        ]
     )
 
 
 def _make_non_permission_exc(message="not found"):
-    return TransportQueryError(
-        message,
-        errors=[
+    return PipefyGraphQLError(
+        [
             {
                 "message": message,
                 "extensions": {"code": "NOT_FOUND"},
             }
-        ],
+        ]
     )
 
 

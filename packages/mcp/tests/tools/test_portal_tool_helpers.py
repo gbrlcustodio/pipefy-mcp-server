@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.exceptions import PortalPermissionError
 
@@ -30,7 +29,7 @@ def test_map_portal_error_returns_portal_permission_message() -> None:
 @pytest.mark.unit
 def test_map_portal_error_permission_denied_transport_query_error() -> None:
     """GraphQL PERMISSION_DENIED codes map to portal permission guidance."""
-    exc = TransportQueryError("forbidden")
+    exc = PipefyGraphQLError([{"message": "forbidden"}])
     exc.errors = [{"extensions": {"code": "PERMISSION_DENIED"}}]
     assert "create_portal" in map_portal_error_to_message(exc)
     assert "manage_portals" in map_portal_error_to_message(exc)

@@ -4,11 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.organization_tools import OrganizationTools
@@ -87,7 +86,7 @@ async def test_get_organization_transport_error(
     org_session, mock_org_client, extract_payload
 ):
     mock_org_client.get_organization = AsyncMock(
-        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+        side_effect=PipefyGraphQLError([{"message": "timeout"}])
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "123"})
@@ -140,7 +139,7 @@ async def test_list_organizations_transport_error(
     org_session, mock_org_client, extract_payload
 ):
     mock_org_client.list_organizations = AsyncMock(
-        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+        side_effect=PipefyGraphQLError([{"message": "timeout"}])
     )
     async with org_session as session:
         result = await session.call_tool("list_organizations", {})

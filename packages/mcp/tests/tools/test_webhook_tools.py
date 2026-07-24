@@ -5,11 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _shared.pagination_test_defaults import DEFAULT_FIRST
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.webhook_tools import WebhookTools
@@ -91,8 +90,8 @@ async def test_send_inbox_email_success(
 async def test_send_inbox_email_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
-    mock_webhook_client.send_inbox_email.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "inbox not enabled"}]
+    mock_webhook_client.send_inbox_email.side_effect = PipefyGraphQLError(
+        [{"message": "inbox not enabled"}]
     )
 
     async with webhook_session as session:
@@ -189,8 +188,8 @@ async def test_send_email_with_template_success(
 async def test_send_email_with_template_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
-    mock_webhook_client.send_email_with_template.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "template not found"}]
+    mock_webhook_client.send_email_with_template.side_effect = PipefyGraphQLError(
+        [{"message": "template not found"}]
     )
 
     async with webhook_session as session:
@@ -313,8 +312,8 @@ async def test_create_webhook_success(
 async def test_create_webhook_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
-    mock_webhook_client.create_webhook.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "invalid url"}]
+    mock_webhook_client.create_webhook.side_effect = PipefyGraphQLError(
+        [{"message": "invalid url"}]
     )
 
     async with webhook_session as session:
@@ -391,8 +390,8 @@ class TestGetWebhooks:
     async def test_graphql_error(
         self, webhook_session, mock_webhook_client, extract_payload
     ):
-        mock_webhook_client.get_webhooks.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "pipe not found"}]
+        mock_webhook_client.get_webhooks.side_effect = PipefyGraphQLError(
+            [{"message": "pipe not found"}]
         )
 
         async with webhook_session as session:
@@ -461,8 +460,8 @@ class TestUpdateWebhook:
     async def test_graphql_error(
         self, webhook_session, mock_webhook_client, extract_payload
     ):
-        mock_webhook_client.update_webhook.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "webhook gone"}]
+        mock_webhook_client.update_webhook.side_effect = PipefyGraphQLError(
+            [{"message": "webhook gone"}]
         )
 
         async with webhook_session as session:
@@ -541,8 +540,8 @@ async def test_delete_webhook_success(
 async def test_delete_webhook_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
-    mock_webhook_client.delete_webhook.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "webhook not found"}]
+    mock_webhook_client.delete_webhook.side_effect = PipefyGraphQLError(
+        [{"message": "webhook not found"}]
     )
 
     async with webhook_session as session:
@@ -639,8 +638,8 @@ async def test_get_card_inbox_emails_with_type_filter(
 async def test_get_card_inbox_emails_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
-    mock_webhook_client.get_card_inbox_emails.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "card not found"}]
+    mock_webhook_client.get_card_inbox_emails.side_effect = PipefyGraphQLError(
+        [{"message": "card not found"}]
     )
 
     async with webhook_session as session:
@@ -1004,8 +1003,8 @@ async def test_create_webhook_rejects_invalid_pipe_id(
 async def test_get_email_templates_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
-    mock_webhook_client.get_email_templates.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "pipe not found"}]
+    mock_webhook_client.get_email_templates.side_effect = PipefyGraphQLError(
+        [{"message": "pipe not found"}]
     )
 
     async with webhook_session as session:

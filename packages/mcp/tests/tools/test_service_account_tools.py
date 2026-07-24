@@ -5,11 +5,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.service_account_tools import ServiceAccountTools
@@ -282,8 +281,8 @@ async def test_create_service_account_rejects_blank_org(
 async def test_create_service_account_graphql_error(
     sa_session, mock_sa_client, extract_payload
 ):
-    mock_sa_client.create_service_account.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "not allowed"}]
+    mock_sa_client.create_service_account.side_effect = PipefyGraphQLError(
+        [{"message": "not allowed"}]
     )
     async with sa_session as session:
         result = await session.call_tool(

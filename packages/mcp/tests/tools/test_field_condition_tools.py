@@ -8,7 +8,7 @@ import pytest
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
@@ -107,13 +107,10 @@ class TestGetFieldConditions:
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        from gql.transport.exceptions import TransportQueryError
-
-        mock_pipefy_client.get_field_conditions.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        mock_pipefy_client.get_field_conditions.side_effect = PipefyGraphQLError(
+            [
                 {"message": "Denied", "extensions": {"code": "PERMISSION_DENIED"}},
-            ],
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -185,13 +182,10 @@ class TestGetFieldCondition:
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        from gql.transport.exceptions import TransportQueryError
-
-        mock_pipefy_client.get_field_condition.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        mock_pipefy_client.get_field_condition.side_effect = PipefyGraphQLError(
+            [
                 {"message": "Not found", "extensions": {"code": "RESOURCE_NOT_FOUND"}},
-            ],
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(

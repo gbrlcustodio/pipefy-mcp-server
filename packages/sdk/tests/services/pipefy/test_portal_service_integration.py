@@ -26,8 +26,8 @@ from _shared.live_settings import (
     live_resolved_auth,
     require_live_creds,
 )
-from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.client import build_executors
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.services.portal_service import PortalService
@@ -218,7 +218,7 @@ async def test_live_update_portal_element_on_bootstrapped_page(
             type="link",
             metadata=metadata,
         )
-    except TransportQueryError as exc:
+    except PipefyGraphQLError as exc:
         pytest.skip(
             f"updateElement failed on org {org_uuid} (Interfaces API): {exc.errors}"
         )
@@ -258,7 +258,7 @@ async def test_live_create_portal_element_on_bootstrapped_page(
         )
     except PortalPermissionError:
         pytest.skip(f"Token lacks manage_portals on org {org_uuid}")
-    except TransportQueryError as exc:
+    except PipefyGraphQLError as exc:
         codes = [
             (err.get("extensions") or {}).get("code")
             for err in (exc.errors or [])
@@ -278,7 +278,7 @@ async def test_live_create_portal_element_on_bootstrapped_page(
     try:
         await live_portal_service.delete_portal_element(element_id, page_id)
         await live_portal_service.delete_portal_page(portal_uuid, page_id)
-    except (PortalPermissionError, TransportQueryError, ValueError) as exc:
+    except (PortalPermissionError, PipefyGraphQLError, ValueError) as exc:
         pytest.fail(
             f"Failed to clean up portal element/page after create smoke: {exc}",
             pytrace=False,
@@ -331,7 +331,7 @@ async def test_live_publish_sub_portal_cycle(
                 element_id,
                 sub_portal_uuid,
             )
-        except TransportQueryError as exc:
+        except PipefyGraphQLError as exc:
             pytest.skip(
                 f"publish_sub_portal failed on org {org_uuid} (internal_api): {exc}"
             )
@@ -346,7 +346,7 @@ async def test_live_publish_sub_portal_cycle(
 
         try:
             await live_portal_service.unpublish_sub_portal(portal_uuid, element_id)
-        except TransportQueryError as exc:
+        except PipefyGraphQLError as exc:
             pytest.skip(
                 f"unpublish_sub_portal failed on org {org_uuid} (internal_api): {exc}"
             )
@@ -362,5 +362,5 @@ async def test_live_publish_sub_portal_cycle(
         if sub_portal_uuid:
             try:
                 await live_portal_service.delete_sub_portal(sub_portal_uuid)
-            except (PortalPermissionError, TransportQueryError, ValueError):
+            except (PortalPermissionError, PipefyGraphQLError, ValueError):
                 pass

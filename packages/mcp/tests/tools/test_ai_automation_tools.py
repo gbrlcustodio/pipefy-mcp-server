@@ -4,7 +4,6 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -110,8 +109,8 @@ class TestGetAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.get_automation.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "boom"}]
+        mock_pipefy_client.get_automation.side_effect = PipefyGraphQLError(
+            [{"message": "boom"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -173,10 +172,7 @@ class TestGetAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        err = TransportQueryError(
-            "failed",
-            errors=[{"message": "nope", "extensions": {"code": "GONE"}}],
-        )
+        err = PipefyGraphQLError([{"message": "nope", "extensions": {"code": "GONE"}}])
         mock_pipefy_client.get_automation.side_effect = err
         async with client_session as session:
             result = await session.call_tool(
@@ -315,8 +311,8 @@ class TestGetAiAutomations:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.get_automations.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "no access"}]
+        mock_pipefy_client.get_automations.side_effect = PipefyGraphQLError(
+            [{"message": "no access"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -434,8 +430,8 @@ class TestDeleteAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.delete_automation.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "forbidden"}]
+        mock_pipefy_client.delete_automation.side_effect = PipefyGraphQLError(
+            [{"message": "forbidden"}]
         )
         async with client_session as session:
             result = await session.call_tool(

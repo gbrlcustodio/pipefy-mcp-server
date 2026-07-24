@@ -4,7 +4,6 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -97,8 +96,8 @@ async def test_get_automation_success(
 async def test_get_automation_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.get_automation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "not found"}]
+    mock_automation_client.get_automation.side_effect = PipefyGraphQLError(
+        [{"message": "not found"}]
     )
 
     async with automation_session as session:
@@ -251,8 +250,8 @@ async def test_get_automations_success(
 async def test_get_automations_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.get_automations.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "denied"}]
+    mock_automation_client.get_automations.side_effect = PipefyGraphQLError(
+        [{"message": "denied"}]
     )
 
     async with automation_session as session:
@@ -289,8 +288,8 @@ async def test_get_automation_actions_success(
 async def test_get_automation_actions_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.get_automation_actions.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "bad pipe"}]
+    mock_automation_client.get_automation_actions.side_effect = PipefyGraphQLError(
+        [{"message": "bad pipe"}]
     )
 
     async with automation_session as session:
@@ -324,8 +323,8 @@ async def test_get_automation_events_success(
 async def test_get_automation_events_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.get_automation_events.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "nope"}]
+    mock_automation_client.get_automation_events.side_effect = PipefyGraphQLError(
+        [{"message": "nope"}]
     )
 
     async with automation_session as session:
@@ -690,8 +689,8 @@ async def test_create_automation_passes_action_repo_id(
 async def test_create_automation_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.create_automation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "invalid event"}]
+    mock_automation_client.create_automation.side_effect = PipefyGraphQLError(
+        [{"message": "invalid event"}]
     )
 
     async with automation_session as session:
@@ -801,8 +800,8 @@ async def test_update_automation_success(
 async def test_update_automation_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.update_automation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "not found"}]
+    mock_automation_client.update_automation.side_effect = PipefyGraphQLError(
+        [{"message": "not found"}]
     )
 
     async with automation_session as session:
@@ -838,8 +837,8 @@ async def test_delete_automation_success(
 async def test_delete_automation_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.delete_automation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "forbidden"}]
+    mock_automation_client.delete_automation.side_effect = PipefyGraphQLError(
+        [{"message": "forbidden"}]
     )
 
     async with automation_session as session:
@@ -937,8 +936,8 @@ async def test_simulate_automation_success(
 async def test_simulate_automation_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.simulate_automation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "bad simulation"}]
+    mock_automation_client.simulate_automation.side_effect = PipefyGraphQLError(
+        [{"message": "bad simulation"}]
     )
 
     async with automation_session as session:
@@ -1108,8 +1107,8 @@ async def test_create_send_task_automation_validation_scheduler(
 async def test_create_send_task_automation_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.create_send_task_automation.side_effect = (
-        TransportQueryError("failed", errors=[{"message": "mutation blocked"}])
+    mock_automation_client.create_send_task_automation.side_effect = PipefyGraphQLError(
+        [{"message": "mutation blocked"}]
     )
 
     async with automation_session as session:
@@ -1149,14 +1148,13 @@ async def test_create_send_task_automation_listed_not_read_only(automation_sessi
 async def test_create_automation_cross_pipe_permission_denied_enriches_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.create_automation.side_effect = TransportQueryError(
-        "forbidden",
-        errors=[
+    mock_automation_client.create_automation.side_effect = PipefyGraphQLError(
+        [
             {
                 "message": "forbidden",
                 "extensions": {"code": "PERMISSION_DENIED"},
             }
-        ],
+        ]
     )
     # get_pipe_members fails for the target pipe
     mock_automation_client.get_pipe_members.side_effect = RuntimeError("no access")

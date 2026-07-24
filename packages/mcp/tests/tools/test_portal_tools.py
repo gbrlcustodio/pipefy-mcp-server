@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
-from gql.transport.exceptions import TransportError, TransportQueryError
+from gql.transport.exceptions import TransportError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -312,7 +312,7 @@ async def test_list_portals_transport_error_returns_error_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
     mock_portal_client.list_portals = AsyncMock(
-        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+        side_effect=PipefyGraphQLError([{"message": "timeout"}])
     )
 
     async with portal_session as session:
@@ -333,7 +333,7 @@ async def test_get_portal_transport_error_returns_error_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
     mock_portal_client.get_portal = AsyncMock(
-        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+        side_effect=PipefyGraphQLError([{"message": "timeout"}])
     )
 
     async with portal_session as session:
@@ -1107,7 +1107,7 @@ async def test_update_portal_page_layout_fails_when_success_false(
 async def test_update_portal_page_layout_permission_denied_returns_actionable_error(
     portal_session, mock_portal_client, extract_payload
 ):
-    exc = TransportQueryError("forbidden")
+    exc = PipefyGraphQLError([{"message": "forbidden"}])
     exc.errors = [{"extensions": {"code": "PERMISSION_DENIED"}}]
     mock_portal_client.update_portal_page_layout = AsyncMock(side_effect=exc)
 
@@ -1130,7 +1130,7 @@ async def test_update_portal_page_layout_transport_error_returns_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
     mock_portal_client.update_portal_page_layout = AsyncMock(
-        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+        side_effect=PipefyGraphQLError([{"message": "timeout"}])
     )
 
     async with portal_session as session:

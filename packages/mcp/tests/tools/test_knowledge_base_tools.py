@@ -4,11 +4,14 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import KnowledgeBaseDocumentUploadError, PipefyClient
+from pipefy_sdk import (
+    KnowledgeBaseDocumentUploadError,
+    PipefyClient,
+    PipefyGraphQLError,
+)
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.knowledge_base_tools import KnowledgeBaseTools
@@ -51,27 +54,25 @@ DATA_LOOKUP_FULL = {
 STATIC_CONDITION = {"field": "title", "operator": "contains", "value": "urgent"}
 
 
-def permission_denied_error() -> TransportQueryError:
-    return TransportQueryError(
-        "denied",
-        errors=[
+def permission_denied_error() -> PipefyGraphQLError:
+    return PipefyGraphQLError(
+        [
             {
                 "message": "Permission denied",
                 "extensions": {"code": "PERMISSION_DENIED", "correlation_id": "corr-9"},
             }
-        ],
+        ]
     )
 
 
-def not_found_error() -> TransportQueryError:
-    return TransportQueryError(
-        "missing",
-        errors=[
+def not_found_error() -> PipefyGraphQLError:
+    return PipefyGraphQLError(
+        [
             {
                 "message": "Couldn't find Pipe with uuid bogus",
                 "extensions": {"code": "RESOURCE_NOT_FOUND"},
             }
-        ],
+        ]
     )
 
 

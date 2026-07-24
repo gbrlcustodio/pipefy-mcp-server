@@ -2,7 +2,6 @@
 
 import pytest
 from _shared.fixture_ids import make_pipe_id
-from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk import PipefyGraphQLError
 
 from pipefy_mcp.tools.ai_tool_helpers import (
@@ -162,9 +161,7 @@ def test_enrich_includes_behavior_summary():
 @pytest.mark.unit
 def test_enrich_adds_record_not_saved_hint():
     behaviors = _make_behaviors(("B1", "card_created", "update_card"))
-    exc = TransportQueryError(
-        "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
-    )
+    exc = PipefyGraphQLError([{"message": "RECORD_NOT_SAVED"}])
     result = enrich_behavior_error(exc, behaviors)
     assert "RECORD_NOT_SAVED" in result
     assert "metadata is complete" in result

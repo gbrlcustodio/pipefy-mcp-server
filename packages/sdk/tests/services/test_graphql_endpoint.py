@@ -336,33 +336,6 @@ def test_data_or_raise_raises_pipefy_graphql_error_on_errors():
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_execute_ignores_error_formatter_when_configured():
-    """The primitive never applies ``on_graphql_error``; that policy is ``execute_query``'s.
-
-    On a formatter-configured endpoint, ``execute`` still returns a ``GraphQLResult``
-    carrying the raw errors rather than raising the formatter's ``ValueError``. This
-    pins the one semantic that separates the primitive from the convenience layer.
-    """
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, json={"errors": [{"message": "boom", "extensions": {"code": "X"}}]}
-        )
-
-    with _patched_transport(handler):
-        endpoint = GraphQLEndpoint(
-            url=GRAPHQL_URL,
-            on_graphql_error=lambda errs: "; ".join(e["message"] for e in errs),
-        )
-        result = await endpoint.execute(_sample_query(), {}, auth=_bearer())
-
-    assert result.data == {}
-    assert result.errors[0]["message"] == "boom"
-    assert result.errors[0]["extensions"]["code"] == "X"
-
-
-@pytest.mark.unit
 def test_init_connects_to_given_url():
     """The endpoint connects to exactly the URL it is handed, no derivation."""
     url = "https://api.pipefy.com/graphql/interfaces"

@@ -560,6 +560,26 @@ async def test_url_downloader_downloads_bytes():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [300, 304, 204, 206, 404, 500])
+async def test_url_downloader_requires_200_before_reading_body(status):
+    """Only a plain 200 is read as file bytes; a non-followed 3xx (300/304), a
+    bodyless 2xx (204/206), or a 4xx/5xx fails status-only with no URL echoed."""
+    url = "https://files.example/report.pdf?sig=secret"
+    with (
+        patch(_GUARD, new=AsyncMock()),
+        patch(_DNS_GUARD, new=AsyncMock()),
+        respx.mock,
+    ):
+        respx.get(url).mock(return_value=httpx.Response(status, content=b"NOPE"))
+        downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)
+        with pytest.raises(
+            ValueError, match=rf"^URL download failed: HTTP {status}\.$"
+        ):
+            await downloader.download(url)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_url_downloader_rejects_disallowed_port():
     """A non-standard port is rejected before any network call."""
     downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)

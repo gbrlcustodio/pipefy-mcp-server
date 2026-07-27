@@ -183,7 +183,10 @@ class HttpxUrlDownloader:
                         current_url = urljoin(current_url, location.strip())
                         await self._validate_fetch_target(current_url)
                         continue
-                    if response.status_code >= 400:
+                    if response.status_code != 200:
+                        # Only a plain 200 carries a body to treat as the file:
+                        # an unfollowed 3xx (300/304), a bodyless 2xx (204/206),
+                        # or a 4xx/5xx must not upload as file bytes.
                         # Status only — never echo the (possibly signed) source URL.
                         raise ValueError(
                             f"URL download failed: HTTP {response.status_code}."

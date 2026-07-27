@@ -301,6 +301,7 @@ class PipefyClient:
             executor=ex.public,
             card_service=self._card_service,
             table_service=self._table_service,
+            settings=settings,
         )
         self._introspection_service = SchemaIntrospectionService(executor=ex.public)
         self._advanced_automations_service = AdvancedAutomationsService(

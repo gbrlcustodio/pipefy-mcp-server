@@ -205,7 +205,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_table_field` | `pipefy table field update` | shipped | `--table` recommended; `--label`/`--description`/`--required`/`--options` or `--extra`. |
 | `update_table_record` | `pipefy record update` | shipped | (``--fields`` JSON). |
 | `update_webhook` | `pipefy webhook update` | shipped | — |
-| `upload_attachment_to_card` | `pipefy attachment upload --card` | shipped | (also needs `--organization`, `--field`, `--file`). |
+| `upload_attachment_to_card` | `pipefy attachment upload --card` | shipped | (also needs `--organization`, `--field`, `--file`). MCP accepts `file_path` (local) or `file_url` (downloaded, SSRF-guarded); remote-safe via `file_url`, `file_path` rejected on the hosted profile. CLI is local `--file` only. |
 | `upload_attachment_to_table_record` | `pipefy attachment upload --record` | shipped | (same supporting flags as card). |
 | `validate_ai_agent_behaviors` | `pipefy agent validate-behaviors` | shipped | AI Agents validation tooling. |
 | `validate_ai_automation_prompt` | `pipefy ai-automation validate-prompt` | shipped | AI Automations validation tooling. |

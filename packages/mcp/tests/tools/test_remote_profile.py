@@ -175,8 +175,8 @@ REMOTE_SEED = frozenset(
         # set_table_record_field_value that reach the public API with the
         # request-scoped bearer and are governed by API permissions; no filesystem or
         # per-user process-global settings reads, every input a per-request value.
-        # Deletes carry the two-step confirm UX guard. upload_attachment_to_table_record
-        # stays withheld (local-file input, tracked by #305).
+        # Deletes carry the two-step confirm UX guard.
+        # (upload_attachment_to_table_record is remote-safe via file_url; #305, below.)
         "create_table",
         "update_table",
         "delete_table",
@@ -294,6 +294,13 @@ REMOTE_SEED = frozenset(
         "set_default_llm_provider",
         "reset_default_llm_provider",
         "set_llm_provider_active_status",
+        # attachment uploads (#305): remote-safe via the file_url input, which the
+        # SDK downloads under an SSRF guard + 100 MiB cap (no filesystem read, no
+        # per-user settings). The local file_path input is rejected per call under
+        # the remote profile (is_remote_profile) — the exposure-vs-input-restriction
+        # pattern — so the hosted surface accepts only URL sources.
+        "upload_attachment_to_card",
+        "upload_attachment_to_table_record",
     }
 )
 
@@ -339,9 +346,14 @@ class TestApplyRemoteProfile:
         exposed = _registered_names(mcp) & set(PIPEFY_TOOL_NAMES)
         assert exposed == set(REMOTE_SEED)
         assert withheld == set(PIPEFY_TOOL_NAMES) - set(REMOTE_SEED)
-        # Filesystem-bound tools must never be exposed remotely.
-        assert "upload_attachment_to_card" not in exposed
-        assert "upload_attachment_to_table_record" not in exposed
+        # The attachment tools are exposed via their file_url source; the local
+        # file_path input is rejected per call under the remote profile (tested in
+        # test_attachment_tools.py), not by withholding the tool.
+        assert "upload_attachment_to_card" in exposed
+        assert "upload_attachment_to_table_record" in exposed
+        # Tools whose only source is a local file stay withheld entirely.
+        assert "create_ai_knowledge_base_document" not in exposed
+        assert "create_llm_provider" not in exposed
 
 
 class TestSeedDriftGuard:

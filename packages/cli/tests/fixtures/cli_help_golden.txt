@@ -695,7 +695,32 @@ Usage: pipefy attachment [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ upload   Upload a local file to a card or table record attachment field.     │
+│ upload    Upload a local file to a card or table record attachment field.    │
+│ presign   Mint a presigned S3 upload target without transferring any bytes.  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP attachment/presign
+Usage: pipefy attachment presign [OPTIONS]
+
+ Mint a presigned S3 upload target without transferring any bytes.
+
+ Returns the PUT ``upload_url`` and the ``storage_path`` (object key). Upload
+ the file to ``upload_url`` yourself within ``expires_in_seconds``, then set
+ the attachment field to ``storage_path`` (never the url).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --file-name                   TEXT     File name including extension;     │
+│                                           names the stored object.           │
+│                                           [required]                         │
+│ *  --organization,--org          TEXT     Organization id (numeric or uuid). │
+│                                           [required]                         │
+│    --content-type                TEXT     Optional MIME type to sign into    │
+│                                           the upload.                        │
+│    --content-length              INTEGER  Optional exact byte length to sign │
+│                                           into the upload.                   │
+│    --json                -j               Print machine-readable JSON to     │
+│                                           stdout.                            │
+│    --help                                 Show this message and exit.        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP attachment/upload

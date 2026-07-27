@@ -719,3 +719,62 @@ async def test_upload_attachment_url_download_failure_maps_to_download_step():
         )
     assert ctx.value.step == "download"
     assert isinstance(ctx.value.__cause__, ValueError)
+
+
+# create_presigned_url (handshake)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_presigned_url_returns_target():
+    service, _ = _make_service(
+        presigned_payload={
+            "createPresignedUrl": {
+                "url": (
+                    "https://pipefy-uploads.s3.amazonaws.com/orgs/o1/uploads/u2/"
+                    "report.pdf?X-Amz-Expires=300&X-Amz-Algorithm=AWS4-HMAC-SHA256"
+                ),
+                "downloadUrl": "https://app.pipefy.com/dl/9",
+            }
+        }
+    )
+    target = await service.create_presigned_url(
+        organization_id="o1", file_name="report.pdf"
+    )
+    assert target["upload_url"].startswith("https://pipefy-uploads.s3.amazonaws.com/")
+    assert target["storage_path"] == "orgs/o1/uploads/u2/report.pdf"
+    assert "download_url" not in target
+    assert target["expires_in_seconds"] == 300
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_presigned_url_missing_url_maps_to_presigned_step():
+    service, _ = _make_service(
+        presigned_payload={"createPresignedUrl": {"url": None, "downloadUrl": None}}
+    )
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.create_presigned_url(organization_id="o", file_name="f.pdf")
+    assert ctx.value.step == "presigned_url"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_presigned_url_pathless_url_maps_to_presigned_step():
+    service, _ = _make_service(
+        presigned_payload={
+            "createPresignedUrl": {"url": "https://host", "downloadUrl": None}
+        }
+    )
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.create_presigned_url(organization_id="o", file_name="f.pdf")
+    assert ctx.value.step == "presigned_url"
+
+
+@pytest.mark.unit
+def test_parse_expires_in():
+    from pipefy_sdk.services.attachment_service import _parse_expires_in
+
+    assert _parse_expires_in("https://x/k?X-Amz-Expires=300&a=b") == 300
+    assert _parse_expires_in("https://x/k") is None
+    assert _parse_expires_in("https://x/k?X-Amz-Expires=abc") is None

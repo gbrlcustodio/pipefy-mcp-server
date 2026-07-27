@@ -301,6 +301,11 @@ REMOTE_SEED = frozenset(
         # pattern — so the hosted surface accepts only URL sources.
         "upload_attachment_to_card",
         "upload_attachment_to_table_record",
+        # attachment presigned-url handshake (#506): mints an S3 upload target
+        # (createPresignedUrl) for a client-side upload; reaches the public API with
+        # the request-scoped bearer, reads no filesystem, transfers no bytes through
+        # the server, returns no durable secret.
+        "create_attachment_presigned_url",
     }
 )
 

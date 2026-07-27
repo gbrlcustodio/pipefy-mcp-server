@@ -43,6 +43,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "clone_pipe",
         "create_ai_agent",
         "create_ai_automation",
+        "create_attachment_presigned_url",
         "create_automation",
         "create_card",
         "create_card_relation",

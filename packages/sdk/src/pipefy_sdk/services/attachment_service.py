@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 from typing import Any, Protocol, assert_never
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import httpx
 from httpx import Timeout
@@ -21,6 +21,7 @@ from pipefy_sdk.models.attachment import (
     AttachmentUploadError,
     AttachmentUploadResult,
     CardTarget,
+    PresignedUploadTarget,
     TableRecordTarget,
 )
 from pipefy_sdk.queries.attachment_queries import (
@@ -47,6 +48,14 @@ def _assert_port_allowed(url: str) -> None:
     port = urlparse(url).port
     if port not in _ALLOWED_PORTS:
         raise ValueError(f"file_url: port {port} is not allowed (only 80 and 443).")
+
+
+def _parse_expires_in(url: str) -> int | None:
+    """Read ``X-Amz-Expires`` (seconds) off a presigned URL, or None if absent."""
+    values = parse_qs(urlparse(url).query).get("X-Amz-Expires")
+    if values and values[0].isdigit():
+        return int(values[0])
+    return None
 
 
 class _SSRFSafeAsyncTransport(httpx.AsyncHTTPTransport):
@@ -280,7 +289,7 @@ class AttachmentService:
         content_length = len(file_bytes)
 
         try:
-            presigned = await self._create_presigned_url(
+            presigned = await self._request_presigned_url(
                 organization_id,
                 file_name,
                 effective_type,
@@ -382,7 +391,56 @@ class AttachmentService:
             raise AttachmentUploadError(str(exc), step="file_read") from exc
         return file.bytes
 
-    async def _create_presigned_url(
+    async def create_presigned_url(
+        self,
+        *,
+        organization_id: str,
+        file_name: str,
+        content_type: str | None = None,
+        content_length: int | None = None,
+    ) -> PresignedUploadTarget:
+        """Mint a presigned upload target without transferring any bytes.
+
+        Returns the PUT ``upload_url`` a client uploads to, the ``storage_path``
+        (object key) to set on the attachment field afterward, and the url's
+        ``expires_in_seconds``. The bytes never pass through the SDK: the caller
+        PUTs them to ``upload_url`` within the expiry, then stores
+        ``storage_path`` on the field — not the url. (No download url is
+        returned; it is minted on read once the field is set.)
+
+        Raises:
+            AttachmentUploadError: ``step="presigned_url"`` when Pipefy returns
+                no url or an unusable one.
+        """
+        try:
+            presigned = await self._request_presigned_url(
+                organization_id, file_name, content_type, content_length
+            )
+        except Exception as exc:
+            raise AttachmentUploadError(
+                f"Presigned URL request failed: {exc}", step="presigned_url"
+            ) from exc
+
+        upload_url = presigned.get("url")
+        if not isinstance(upload_url, str) or not upload_url.strip():
+            raise AttachmentUploadError(
+                "Pipefy did not return a presigned upload URL. "
+                "Check organization_id and file_name, then retry.",
+                step="presigned_url",
+            )
+        upload_url = upload_url.strip()
+        try:
+            storage_path = self._extract_storage_path(upload_url)
+        except ValueError as exc:
+            raise AttachmentUploadError(str(exc), step="presigned_url") from exc
+
+        return PresignedUploadTarget(
+            upload_url=upload_url,
+            storage_path=storage_path,
+            expires_in_seconds=_parse_expires_in(upload_url),
+        )
+
+    async def _request_presigned_url(
         self,
         organization_id: str,
         file_name: str,

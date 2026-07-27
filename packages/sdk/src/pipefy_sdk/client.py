@@ -35,6 +35,7 @@ from pipefy_sdk.models.attachment import (
     Attachment,
     AttachmentTarget,
     AttachmentUploadResult,
+    PresignedUploadTarget,
 )
 from pipefy_sdk.models.knowledge_base import DataLookupCondition
 from pipefy_sdk.services.advanced_automations_service import AdvancedAutomationsService
@@ -2163,6 +2164,27 @@ class PipefyClient:
         """
         return await self._attachment_service.upload_attachment(
             attachment, organization_id=organization_id, target=target
+        )
+
+    async def create_attachment_presigned_url(
+        self,
+        *,
+        organization_id: str,
+        file_name: str,
+        content_type: str | None = None,
+        content_length: int | None = None,
+    ) -> PresignedUploadTarget:
+        """Mint a presigned upload target (no bytes transferred).
+
+        The caller PUTs the file bytes to the returned ``upload_url`` and then
+        stores ``storage_path`` on the attachment field. See
+        :meth:`AttachmentService.create_presigned_url`.
+        """
+        return await self._attachment_service.create_presigned_url(
+            organization_id=organization_id,
+            file_name=file_name,
+            content_type=content_type,
+            content_length=content_length,
         )
 
     async def introspect_type(

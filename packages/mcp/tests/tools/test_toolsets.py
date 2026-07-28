@@ -16,6 +16,7 @@ from pipefy_mcp.tools.toolsets import (
     DOMAIN_DESCRIPTIONS,
     DOMAINS,
     POWER_GRAPHQL_TOOLS,
+    PROFILES,
     domain_of,
     resolve_selection,
     wants_power,
@@ -121,6 +122,14 @@ class TestResolveSelection:
         """``power`` / ``architect`` validate (no raise); the registry applies them."""
         assert resolve_selection(spec) is None
 
+    def test_resolves_a_persona_profile_to_its_tools(self):
+        assert resolve_selection("requester") == PROFILES["requester"]
+
+    def test_unions_a_domain_and_a_profile(self):
+        assert resolve_selection("database,admin") == (
+            DOMAINS["database"] | PROFILES["admin"]
+        )
+
 
 class TestWantsPower:
     @pytest.mark.parametrize("spec", ["power", "architect", "PoWeR", "workflow,power"])
@@ -178,6 +187,39 @@ class TestApplyToolsetSelection:
         registry.apply_toolset_selection("intelligence")
         # create_llm_provider is in `intelligence` but not remote-safe (floored out).
         assert "create_llm_provider" not in _live_pipefy_names(mcp)
+
+    def test_selects_a_persona_profile(self):
+        registry, mcp = _registry_with_all_tools()
+        registry.apply_toolset_selection("requester")
+        assert _live_pipefy_names(mcp) == set(PROFILES["requester"])
+
+
+EXPECTED_PROFILES = frozenset(
+    {"requester", "operator", "manager", "builder", "admin", "auditor"}
+)
+
+
+class TestProfiles:
+    """``PROFILES`` are overlapping, journey-sized subsets of the registered tools."""
+
+    def test_profile_keys_are_the_locked_set(self):
+        assert set(PROFILES) == EXPECTED_PROFILES
+
+    def test_every_profile_is_a_non_empty_subset_of_registered_tools(self):
+        for name, tools in PROFILES.items():
+            assert tools, f"empty profile: {name}"
+            phantom = sorted(tools - PIPEFY_TOOL_NAMES)
+            assert not phantom, (
+                f"profile {name} references unregistered tools: {phantom}"
+            )
+
+    def test_profile_names_never_collide_with_domains_or_keywords(self):
+        reserved = set(DOMAINS) | {"all", "default", "power", "architect"}
+        assert set(PROFILES).isdisjoint(reserved)
+
+    def test_operator_is_contained_in_manager(self):
+        """Manager is the operator surface plus oversight, so it must be a superset."""
+        assert PROFILES["operator"] <= PROFILES["manager"]
 
 
 _META_TOOLS = frozenset(

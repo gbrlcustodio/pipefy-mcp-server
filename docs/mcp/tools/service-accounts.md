@@ -16,7 +16,8 @@ Create and delete organization **service accounts** — OAuth2 machine identitie
 - `create_service_account` returns the **client secret** and **token endpoint** in its response, and there is **no query to read them back** — capture and store them at creation time.
 - The secret is returned to the caller because it is needed to authenticate the account (mint access tokens via the OAuth2 client-credentials grant against the token endpoint). It is never logged.
 - Both tools are **remote-safe**: each reaches the API with the request-scoped caller's bearer and is fully governed by API permissions (org-admin to create/delete). The returned client secret goes to the authenticated caller only and is never logged (the hosted logging layer excludes response bodies).
-- Response shape: on MCP the account is under `data.serviceAccount`, so the credentials are at `data.serviceAccount.client.secret` and `data.serviceAccount.token.endpoint`; the CLI prints the raw payload under `createServiceAccount.serviceAccount`.
+- Response shape: on MCP the account is under `data.serviceAccount`, so the credentials are at `data.serviceAccount.client.secret` and `data.serviceAccount.token.endpoint`; the CLI prints the payload under `createServiceAccount.serviceAccount` alongside a top-level `success`.
+- CLI exit codes: `pipefy service-account create` and `pipefy service-account delete` exit **1** when the mutation's `success` flag is not true, and `create` also exits 1 when a reported success carries no `client.secret` — so a script can tell a provisioned account from a soft failure. A failed `create` prints only `success: false`, the error, and the account UUID when the payload carried one; the payload itself (and any secret in it) is never printed on a failure path.
 
 ## Lifecycle
 

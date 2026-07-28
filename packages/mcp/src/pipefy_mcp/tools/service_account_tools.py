@@ -138,6 +138,10 @@ class ServiceAccountTools:
                 )
             account = (raw or {}).get("createServiceAccount") or {}
             service_account = account.get("serviceAccount") or {}
+            if not account.get("success"):
+                return tool_error("Create service account did not succeed.")
+            # The payload promises a one-shot secret; without it there is nothing
+            # to hand back even though the API reported success.
             if not (service_account.get("client") or {}).get("secret"):
                 return _missing_secret_error(service_account.get("uuid"))
             data: dict[str, Any] = dict(account)

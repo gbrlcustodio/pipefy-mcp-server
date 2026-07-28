@@ -17,7 +17,8 @@ Create and delete organization **service accounts** — OAuth2 machine identitie
 - The secret is returned to the caller because it is needed to authenticate the account (mint access tokens via the OAuth2 client-credentials grant against the token endpoint). It is never logged.
 - Both tools are **remote-safe**: each reaches the API with the request-scoped caller's bearer and is fully governed by API permissions (org-admin to create/delete). The returned client secret goes to the authenticated caller only and is never logged (the hosted logging layer excludes response bodies).
 - Response shape: on MCP the account is under `data.serviceAccount`, so the credentials are at `data.serviceAccount.client.secret` and `data.serviceAccount.token.endpoint`; the CLI prints the raw payload under `createServiceAccount.serviceAccount`.
-- A create response without a `client.secret` **fails closed** — the tool returns an error instead of claiming credentials it never received. When that response still carried an account UUID, the error names it (and repeats it at `error.details.service_account_uuid`): the account may exist with credentials nobody holds, so delete it with `delete_service_account` before retrying. No value from the response is echoed into the error.
+- A create response is only reported as created when `createServiceAccount.success` is `true`. A soft failure is an error (`Create service account did not succeed.`), even if a secret rode along in the payload.
+- A create response that reports success but carries no `client.secret` **fails closed** — the tool returns an error instead of claiming credentials it never received. When that response still carried an account UUID, the error names it (and repeats it at `error.details.service_account_uuid`): the account may exist with credentials nobody holds, so delete it with `delete_service_account` before retrying. No value from the response is echoed into the error.
 
 ## Lifecycle
 

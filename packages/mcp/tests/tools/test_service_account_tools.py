@@ -52,13 +52,14 @@ async def test_create_service_account_success(
 ):
     mock_sa_client.create_service_account.return_value = {
         "createServiceAccount": {
+            "success": True,
             "serviceAccount": {
                 "id": "1",
                 "uuid": "u1",
                 "email": "sa@x.com",
                 "client": {"id": "cid", "secret": "csecret"},
                 "token": {"endpoint": "https://token"},
-            }
+            },
         }
     }
     async with sa_session as session:
@@ -90,7 +91,10 @@ async def test_create_service_account_passes_expiration(
     sa_session, mock_sa_client, extract_payload
 ):
     mock_sa_client.create_service_account.return_value = {
-        "createServiceAccount": {"serviceAccount": {"client": {"secret": "csecret"}}}
+        "createServiceAccount": {
+            "success": True,
+            "serviceAccount": {"client": {"secret": "csecret"}},
+        }
     }
     async with sa_session as session:
         await session.call_tool(
@@ -121,11 +125,12 @@ async def test_create_service_account_with_pipe_ids_chains_and_verifies(
 ):
     mock_sa_client.create_service_account.return_value = {
         "createServiceAccount": {
+            "success": True,
             "serviceAccount": {
                 "email": "sa@x.com",
                 "uuid": "u",
                 "client": {"secret": "csecret"},
-            }
+            },
         },
         "pipe_memberships": [{"pipe_id": "100", "invited": True}],
     }
@@ -169,10 +174,11 @@ async def test_create_service_account_pipe_ids_null_members_still_returns_secret
     the tool and strand the one-time client secret."""
     mock_sa_client.create_service_account.return_value = {
         "createServiceAccount": {
+            "success": True,
             "serviceAccount": {
                 "email": "sa@x.com",
                 "client": {"id": "cid", "secret": "csecret"},
-            }
+            },
         },
         "pipe_memberships": [{"pipe_id": "100", "invited": True}],
     }
@@ -297,14 +303,59 @@ async def test_create_service_account_graphql_error(
     [
         pytest.param({"createServiceAccount": None}, id="null-mutation-node"),
         pytest.param(
-            {"createServiceAccount": {"serviceAccount": None}}, id="null-account"
+            {
+                "createServiceAccount": {
+                    "success": False,
+                    "serviceAccount": {"client": {"secret": "csecret"}},
+                }
+            },
+            id="soft-failure-with-secret",
+        ),
+    ],
+)
+async def test_create_service_account_soft_failure_is_not_reported_as_created(
+    sa_session, mock_sa_client, extract_payload, raw
+):
+    """The API's own success flag decides, even when a secret rode along."""
+    mock_sa_client.create_service_account.return_value = raw
+    async with sa_session as session:
+        result = await session.call_tool(
+            "create_service_account",
+            {"organization_uuid": ORG, "name": "sa", "role": "normal"},
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "once" not in json.dumps(payload)
+    assert "csecret" not in json.dumps(payload)
+    assert "did not succeed" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sa_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param(
+            {"createServiceAccount": {"success": True, "serviceAccount": None}},
+            id="null-account",
         ),
         pytest.param(
-            {"createServiceAccount": {"serviceAccount": {"client": None}}},
+            {
+                "createServiceAccount": {
+                    "success": True,
+                    "serviceAccount": {"client": None},
+                }
+            },
             id="null-client",
         ),
         pytest.param(
-            {"createServiceAccount": {"serviceAccount": {"client": {"secret": None}}}},
+            {
+                "createServiceAccount": {
+                    "success": True,
+                    "serviceAccount": {"client": {"secret": None}},
+                }
+            },
             id="null-secret",
         ),
     ],
@@ -312,7 +363,7 @@ async def test_create_service_account_graphql_error(
 async def test_create_service_account_without_secret_fails_closed(
     sa_session, mock_sa_client, extract_payload, raw
 ):
-    """No usable one-shot secret means no success and no 'shown only once' claim."""
+    """A reported success with no usable one-shot secret is still a failure."""
     mock_sa_client.create_service_account.return_value = raw
     async with sa_session as session:
         result = await session.call_tool(
@@ -334,7 +385,8 @@ async def test_create_service_account_without_secret_surfaces_uuid_for_cleanup(
     """The account may exist unreachable, so the caller needs its UUID to delete it."""
     mock_sa_client.create_service_account.return_value = {
         "createServiceAccount": {
-            "serviceAccount": {"uuid": "u1", "email": "sa@x.com", "client": None}
+            "success": True,
+            "serviceAccount": {"uuid": "u1", "email": "sa@x.com", "client": None},
         }
     }
     async with sa_session as session:
@@ -356,6 +408,7 @@ async def test_create_service_account_failure_never_echoes_secret(
     """A secret arriving under an unexpected shape must not leak into the error."""
     mock_sa_client.create_service_account.return_value = {
         "createServiceAccount": {
+            "success": True,
             "serviceAccount": None,
             "client": {"secret": "csecret"},
         }

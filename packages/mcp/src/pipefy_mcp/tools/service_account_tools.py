@@ -251,8 +251,9 @@ def _missing_secret_error(account_uuid: Any) -> dict[str, Any]:
     if uuid_text is None:
         return tool_error(
             "Create service account returned no client secret and no account UUID. "
-            "The secret cannot be read back; check the organization for a stray "
-            "account before retrying."
+            "The secret cannot be read back, and there is no API or tool to list "
+            "organization service accounts. Do not retry create until a human "
+            "confirms in org settings whether a stray account was created."
         )
     return tool_error(
         "Create service account returned no client secret. The secret cannot be "

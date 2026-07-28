@@ -220,8 +220,8 @@ The login worked but `keyring` couldn't write the entry.
 
 **macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecInvalidOwnerEdit` from Security.framework ("Invalid attempt to change the owner of this item") — not `errSecParam` (`-50`). The `keyring` macOS backend deletes any existing item and re-adds it on every write, so a stale entry created by another Python binary (for example a previous `uvx` cache path, or a login from Terminal.app followed by a write from an IDE/agent host) can surface this error. The root cause is not fully pinned; treat the steps below as remediation, not a proven mechanism.
 
-1. Run `pipefy auth logout` to clear the keychain entry (`delete_session`), then `pipefy auth login` again.
-2. If logout cannot delete the item, remove it manually: `security delete-generic-password -s pipefy`, then retry login.
+1. Clear the entry with `pipefy auth logout`. If it reports `Not signed in. Nothing to do.` (or fails), remove it directly with `security delete-generic-password -s pipefy` — today logout early-returns when `load_session` cannot read the item, so a stale/unreadable entry can look like "already clean" without deleting anything.
+2. Run `pipefy auth login` again.
 3. Prefer running that login from a regular **Terminal.app** session; if macOS prompts for keychain access, click **Always Allow**.
 4. If the OS keychain remains unusable, set `PIPEFY_KEYCHAIN_BACKEND=file` (plaintext under the Pipefy config directory) or use a static `PIPEFY_TOKEN`.
 
@@ -229,7 +229,7 @@ Stable installs (`uv tool install` / wheel) keep a stable Python binary path acr
 
 **Linux (headless / CI).** Usually no Secret Service daemon — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` for a plaintext file backend under the Pipefy config directory, or use a static `PIPEFY_TOKEN`.
 
-**Windows.** Credential Manager may reject the write (including from non-interactive callers). Run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`. A dedicated encrypted Windows backend for oversized sessions is tracked separately.
+**Windows.** Credential Manager may reject the write (including from non-interactive callers). Run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`.
 
 When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the CLI hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
 

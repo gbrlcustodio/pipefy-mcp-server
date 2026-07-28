@@ -35,6 +35,8 @@ Integration tests (`pytest -m integration -k portal`) need **`PIPEFY_PORTAL_ORG_
 
 ## Identifiers
 
+> Full cross-tool map: [identifiers.md](identifiers.md#organization-portal-relations-reports).
+
 | Concept | Tool parameter | Notes |
 |--------|----------------|-------|
 | **Organization for list/create** | `organization_uuid` on `list_portals`, `create_portal` | Organization **UUID** or **numeric org id** (string or unquoted integer via MCP). Numeric ids resolve to UUID via public GraphQL before the Interfaces call. |

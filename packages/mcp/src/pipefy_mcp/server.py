@@ -18,6 +18,7 @@ from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.observability.wiring import wire_hosted_observability
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
+from pipefy_mcp.tools.toolsets import resolve_selection, wants_power
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
 logger = logging.getLogger(__name__)
@@ -52,14 +53,16 @@ def _make_lifespan(
     async def lifespan(_app: FastMCP) -> AsyncIterator[McpRuntime]:
         logger.info(
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
-            "enabled" if runtime.settings.mcp.unified_envelope else "disabled",
+            "enabled" if runtime.unified_envelope else "disabled",
         )
         yield runtime
 
     return lifespan
 
 
-def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
+def _register_pipefy_tools(
+    app: FastMCP, *, remote_mode: bool, toolsets: str | None
+) -> None:
     """Register every Pipefy tool on ``app`` exactly once, at construction.
 
     Shared by both transports. Tools take no client at registration: each opens a
@@ -67,12 +70,25 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so registration is
     decoupled from how or when the runtime builds its engine. Registration never
     repeats, so there is no repeat-visit bookkeeping to maintain.
+
+    The remote floor then the toolset selection are applied in that order, so a
+    ``toolsets`` selection narrows within the surviving surface and never widens it.
+    The ``power`` selection is a distinct branch: rather than narrow by domain, it
+    hides the curated tools behind the catalog meta-tools (still post-floor).
     """
     install_pipefy_validation_envelope()
     registry = ToolRegistry(mcp=app)
     registry.check_for_name_collisions()
     registry.register_tools()
     registry.apply_remote_profile(remote_mode=remote_mode)
+    if wants_power(toolsets):
+        # Validate the spec before applying power: apply_power_profile does not call
+        # resolve_selection, so without this an unknown token (e.g. "power,typo")
+        # would silently start the server, unlike the fail-closed domain path.
+        resolve_selection(toolsets)
+        registry.apply_power_profile()
+    else:
+        registry.apply_toolset_selection(toolsets)
 
 
 def default_tool_middlewares(settings: Settings) -> list[ToolCallMiddleware]:
@@ -135,7 +151,11 @@ def build_pipefy_mcp_server(
         auth=auth,
         transport_security=runtime.transport_security,
     )
-    _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
+    _register_pipefy_tools(
+        app,
+        remote_mode=settings.mcp.profile == "remote",
+        toolsets=settings.mcp.toolsets,
+    )
     # Wrap the tool-call handler with the built-in chain plus any consumer middleware.
     # Both transports serve this app, so tool calls over stdio and HTTP alike run
     # through the chain; the install is a no-op when the combined list is empty.

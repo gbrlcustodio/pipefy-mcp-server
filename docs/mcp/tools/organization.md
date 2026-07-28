@@ -1,26 +1,21 @@
 # Organization
 
-Fetch organization details directly by ID. **1 tool.**
+Discover the organizations you can access, or fetch one by ID. **2 tools.**
 
 ---
 
 | Tool | Read-only | Role |
 |------|-----------|------|
-| `get_organization` | Yes | Fetches org details: `id`, `uuid`, `name`, `planName`, `role`, `membersCount`, `pipesCount`, `createdAt`. |
+| `list_organizations` | Yes | Lists organizations the caller can access — no id required. Each entry has `id`, `uuid`, `name`, `planName`, `role`, `membersCount`, `pipesCount`, `createdAt`. |
+| `get_organization` | Yes | Fetches one org's details by ID: `id`, `uuid`, `name`, `planName`, `role`, `membersCount`, `pipesCount`, `createdAt`. |
 
-**`organization_id`** matches GraphQL: use a **string** (e.g. `"123456789"` — numeric segment from `https://app.pipefy.com/organizations/<org_id>/...` or from `search_pipes`). Unquoted JSON integers are coerced to the same string form. See [Pipefy IDs in pipes & cards](pipes-and-cards.md#pipefy-ids-type-safety).
+**`organization_id`** (for `get_organization`) matches GraphQL: use a **string** (e.g. `"123456789"` — numeric segment from `https://app.pipefy.com/organizations/<org_id>/...` or from `list_organizations` / `search_pipes`). Unquoted JSON integers are coerced to the same string form. See [Pipefy IDs in pipes & cards](pipes-and-cards.md#pipefy-ids-type-safety).
 
-## Why a dedicated tool?
+## Discovering organizations
 
-The organization ID is required by many tools (reports, automations, observability) but previously had no direct fetch path. Agents had to derive it through multi-step workarounds:
+`list_organizations` is the zero-knowledge entry point: it answers "which organizations do I have access to?" with no id required, so it is the natural first call when onboarding to a session. The API scopes the result to the caller's own access, and an empty list means the caller belongs to no organization. Use the returned `id` / `uuid` for the tools that require one (reports, automations, observability, portals).
 
-1. `search_pipes` or `get_pipe` to find a pipe in the org
-2. Extract the org ID from the pipe response
-3. Use the org ID in the actual tool call
-
-`get_organization` eliminates this pattern. If you already know the org ID (from a prior `search_pipes` call or the Pipefy URL), use it directly.
-
-## Discovering the org ID
+Other paths to an org id, when you already have context:
 
 - From `search_pipes`: the response groups pipes by organization; each org includes `id` and `name`.
 - From the Pipefy URL: the org ID is the numeric segment in `https://app.pipefy.com/organizations/<org_id>/...`.

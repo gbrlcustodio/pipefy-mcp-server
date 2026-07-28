@@ -41,3 +41,27 @@ class OrganizationTools:
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(str(exc))
             return build_success_payload(result, include_parsed=True)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
+        )
+        async def list_organizations(ctx: Context) -> dict:
+            """List the Pipefy organizations you can access.
+
+            The zero-knowledge entry point for discovery: answers "which
+            organizations do I have access to?" with no id required. Use it to
+            obtain the ``id`` / ``uuid`` other tools need (reports, automations,
+            observability, portals). Each entry has id, uuid, name, plan, your
+            role in it, members count, pipes count, and creation date. An empty
+            list means you belong to no organization.
+
+            The response includes both ``result`` (pretty-printed JSON string)
+            and ``data`` (parsed dict) for convenience.
+            """
+            client = get_pipefy_client(ctx)
+            try:
+                result = await client.list_organizations()
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(str(exc))
+            return build_success_payload({"organizations": result}, include_parsed=True)

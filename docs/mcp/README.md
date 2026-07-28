@@ -7,6 +7,7 @@ Material in this tree describes **`pipefy-mcp-server`**: the MCP process, tool b
 | Path | Description |
 |------|-------------|
 | [`tools/cross-cutting.md`](tools/cross-cutting.md) | Shared conventions: pagination, IDs, `debug`, destructive deletes, permissions, errors |
+| [`tools/identifiers.md`](tools/identifiers.md) | Canonical map: which tool/argument expects slug vs internal_id vs uuid vs numeric id |
 | [`tools/pipes-and-cards.md`](tools/pipes-and-cards.md) | Pipes, phases, fields, labels, cards, field conditions, card attachments |
 | [`tools/database-tables.md`](tools/database-tables.md) | Tables, records, table fields, table-record attachments |
 | [`tools/relations.md`](tools/relations.md) | Pipe and card relations |

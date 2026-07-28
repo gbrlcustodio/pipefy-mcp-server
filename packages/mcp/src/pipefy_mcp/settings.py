@@ -82,6 +82,20 @@ class McpSettings(BaseSettings):
         ),
     )
 
+    toolsets: str | None = Field(
+        default=None,
+        description=(
+            "Comma-separated toolset selection (env: PIPEFY_MCP_TOOLSETS), applied "
+            "after the remote floor to narrow the exposed surface. Names are "
+            "subject domains (workflow, database, interfaces, automation, "
+            "intelligence, analytics, governance, integration) or persona profiles "
+            "(requester, operator, manager, builder, admin, auditor); 'power' (alias "
+            "'architect') instead exposes the catalog meta-tools; 'all'/'default' or "
+            "unset keep the full surface. An unknown name is a startup error. "
+            "Resolved once at registration, not per call."
+        ),
+    )
+
     transport: Literal["stdio", "http"] | None = Field(
         default=None,
         description=(
@@ -491,6 +505,7 @@ def resolve_mcp_settings(
     transport: str | None,
     host: str | None,
     port: int | None,
+    toolsets: str | None = None,
 ) -> Settings:
     """Resolve the full :class:`Settings` honoring the launch flags as init-kwargs.
 
@@ -519,6 +534,8 @@ def resolve_mcp_settings(
         init["host"] = host
     if port is not None:
         init["port"] = port
+    if toolsets is not None:
+        init["toolsets"] = toolsets
     try:
         return Settings(mcp=McpSettings(**init))
     except ValidationError as exc:

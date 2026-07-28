@@ -19,6 +19,7 @@ from tools.conftest import build_tool_test_server
 def mock_org_client():
     client = MagicMock(PipefyClient)
     client.get_organization = AsyncMock()
+    client.list_organizations = AsyncMock()
     return client
 
 
@@ -90,6 +91,59 @@ async def test_get_organization_transport_error(
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "123"})
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    err = payload.get("error")
+    assert isinstance(err, dict) and "message" in err
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("org_session", [None], indirect=True)
+async def test_list_organizations_success(
+    org_session, mock_org_client, extract_payload
+):
+    mock_org_client.list_organizations = AsyncMock(
+        return_value=[
+            {"id": "123", "uuid": "abc", "name": "My Org", "role": "admin"},
+            {"id": "456", "uuid": "def", "name": "Other Org", "role": "member"},
+        ]
+    )
+    async with org_session as session:
+        result = await session.call_tool("list_organizations", {})
+    assert result.isError is False
+    mock_org_client.list_organizations.assert_awaited_once_with()
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "My Org" in payload["result"]
+    assert [o["name"] for o in payload["data"]["organizations"]] == [
+        "My Org",
+        "Other Org",
+    ]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("org_session", [None], indirect=True)
+async def test_list_organizations_empty(org_session, mock_org_client, extract_payload):
+    mock_org_client.list_organizations = AsyncMock(return_value=[])
+    async with org_session as session:
+        result = await session.call_tool("list_organizations", {})
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["organizations"] == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("org_session", [None], indirect=True)
+async def test_list_organizations_transport_error(
+    org_session, mock_org_client, extract_payload
+):
+    mock_org_client.list_organizations = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+    )
+    async with org_session as session:
+        result = await session.call_tool("list_organizations", {})
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False

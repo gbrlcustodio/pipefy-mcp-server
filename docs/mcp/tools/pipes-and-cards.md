@@ -1,6 +1,6 @@
 # Pipes & Cards
 
-Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **40 tools.** (Card-to-card relation tools `get_card_relations` / `delete_card_relation` / `create_card_relation` are documented in [Connections & Relations](relations.md).)
+Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **41 tools.** (Card-to-card relation tools `get_card_relations` / `delete_card_relation` / `create_card_relation` are documented in [Connections & Relations](relations.md).)
 
 ## Cross-cutting patterns
 
@@ -11,6 +11,8 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, and
 - **Destructive deletes** (`delete_pipe`, `delete_card`) use a two-step flow: first call returns a preview, then `confirm=true` after user approval.
 
 ### Pipefy IDs (type safety)
+
+Which **form** each tool wants (slug vs `internal_id` vs uuid vs numeric id) is the canonical [Identifiers map](identifiers.md#field-references-slug-vs-internal_id); this section covers string-vs-int type safety and coercion.
 
 Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most other nodes.
 
@@ -65,7 +67,8 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | `update_card_field` | Single-field update (`updateCardField`). |
 | `update_card` | Metadata (title, assignees, labels, due date) and/or multiple custom fields via `field_updates`. |
 | `delete_card` | Two-step: default preview; `confirm=true` after explicit user confirmation. `card_id` is a **string** in the API; pass `"…"` or a coerced positive integer (see [Pipefy IDs](#pipefy-ids-type-safety)). |
-| `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call**: to attach multiple files, call the tool once per file. `file_path` is the local filesystem path the MCP server reads; supports `~` expansion. `file_name` is inferred from the path's basename when omitted. Optional `content_type` is inferred from `file_name` when omitted. Files larger than **100 MiB** are rejected locally before any network call. **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid: using the uuid returns `RESOURCE_NOT_FOUND`. |
+| `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call**: to attach multiple files, call the tool once per file. Provide **exactly one source**: `file_path` (a local filesystem path the MCP server reads; supports `~` expansion; local profile only) or `file_url` (an HTTPS URL the server downloads under an SSRF guard — http only if the deployment enables insecure URLs; works on any profile). On the hosted server `file_path` is rejected — pass `file_url`. `file_name` is inferred from the source basename when omitted (supply it explicitly when a URL has none); optional `content_type` is inferred from `file_name`. Either source is rejected above **100 MiB** before the presigned request. **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid: using the uuid returns `RESOURCE_NOT_FOUND`. |
+| `create_attachment_presigned_url` | Mints an S3 upload target (`upload_url`, `storage_path` object key, `expires_in_seconds`) for an org + `file_name`, **without transferring bytes** — for attaching a file the server can't read (a local file on the hosted profile, or bytes too large to inline). The client PUTs the file to `upload_url` within the expiry, then sets an attachment field to `[storage_path]` via `update_card_field` / `set_table_record_field_value` (store the key, never the url). Remote-safe. |
 
 **Choosing card updates:** `update_card_field` = one field, full replacement. `update_card` + `field_updates` = several custom fields at once. `update_card` with attribute args = metadata (combinable with `field_updates`).
 

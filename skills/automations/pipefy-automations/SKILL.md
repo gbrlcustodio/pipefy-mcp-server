@@ -21,8 +21,8 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 |------------|-----|---------|
 | `get_automations` | `pipefy automation list` | List all automations for a pipe. |
 | `get_automation` | `pipefy automation get` | Single automation with full rule config — returns `event_params` and `action_params` (including `aiParams` for AI rules). |
-| `create_automation` | `pipefy automation create` | Create an if/then rule. `active` defaults to true. |
-| `update_automation` | `pipefy automation update` | Patch a rule via `extra_input` (`UpdateAutomationInput` fields). |
+| `create_automation` | `pipefy automation create` | Create an if/then rule. `active` defaults to true. First-class typed `condition` (see [Conditions](#conditions--gate-a-rule-on-field-tests)); other fields via `extra_input`. |
+| `update_automation` | `pipefy automation update` | Patch a rule: first-class typed `condition` (see [Conditions](#conditions--gate-a-rule-on-field-tests)) and/or `extra_input`. |
 | `delete_automation` | `pipefy automation delete` | **(Two-step destructive)** |
 | `simulate_automation` | `pipefy automation simulate` | **AI-only** dry-run (`generate_with_ai` action). |
 | `get_automation_events` | `pipefy automation events list` | Available trigger events. |
@@ -81,6 +81,27 @@ Logs, usage, and job exports for automations live in [skills/observability/pipef
 2. **Discover actions** for the pipe: `get_automation_actions pipe_id=67890`. (Always discover first; never guess `trigger_id` / `action_id`.)
 3. **Build the rule** with the discovered IDs and call `create_automation`.
 4. **Verify** by reading back with `get_automation`.
+
+---
+
+## Conditions — gate a rule on field tests
+
+`create_automation` and `update_automation` take a first-class `condition` (CLI: `--condition`). Do **not** guess the shape from GraphQL introspection — it is:
+
+```json
+{
+  "expressions": [
+    {"field_address": "900000101", "operation": "equals", "value": "Done", "structure_id": 0}
+  ],
+  "expressions_structure": [[0]]
+}
+```
+
+- `field_address` is the field **`internal_id`** (numeric, from `get_start_form_fields` / `get_phase_fields`), **not** the slug. For a connected card's field use `<connectorFieldId>.<targetFieldId>`.
+- `operation` (soft enum — any value is passed through, the API validates): `equals`, `not_equals`, `present`, `blank`, `string_contains`, `string_not_contains`, `number_greater_than`, `number_less_than`, `date_is_today`, `date_is_yesterday`, `date_in_current_week`, `date_in_last_week`, `date_in_current_month`, `date_in_last_month`, `date_in_current_year`, `date_in_last_year`, `date_is`, `date_is_after`, `date_is_before`. Omit `value` for `present` / `blank`.
+- `expressions_structure` groups expressions (by `structure_id`) as AND-of-ORs: inner arrays are OR'd, the inner arrays are AND'd — `[[0, 1], [2]]` is `(expr0 OR expr1) AND expr2`.
+
+Omit `condition` to leave a traditional rule unconditional (no default is injected). A `condition` argument wins over any `condition` in `extra_input`.
 
 ---
 
@@ -222,3 +243,4 @@ Use this pattern for approvals, financial decisions, content publication, and an
 - [skills/observability/pipefy-observability/SKILL.md](../../observability/pipefy-observability/SKILL.md) — execution logs and usage stats.
 - [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — discover trigger and action types via raw schema.
 - [skills/process-design/pipefy-process-design/SKILL.md](../../process-design/pipefy-process-design/SKILL.md) — Orchestration patterns (agentic + human validation).
+- `docs/mcp/tools/identifiers.md#field-references-slug-vs-internal_id` — canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id (`field_address` and `field_map[].fieldId` want internal_id).

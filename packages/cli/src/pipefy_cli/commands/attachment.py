@@ -78,7 +78,10 @@ def attachment_upload(
     card_id = str(card).strip() if card is not None else None
     record_id = str(record).strip() if record is not None else None
 
-    attachment = Attachment(path=file, content_type=content_type)
+    try:
+        attachment = Attachment(path=file, content_type=content_type)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     if card_id is not None:
         target = CardTarget(card_id=card_id, field_id=field_str)
     else:
@@ -117,6 +120,73 @@ def attachment_upload(
             "field_id": result["field_id"],
             "download_url": result["download_url"],
             **target_payload,
+        }
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@attachment_app.command("presign")
+def attachment_presign(
+    ctx: typer.Context,
+    file_name: str = typer.Option(
+        ...,
+        "--file-name",
+        help="File name including extension; names the stored object.",
+    ),
+    organization: str = typer.Option(
+        ...,
+        "--organization",
+        "--org",
+        help="Organization id (numeric or uuid).",
+    ),
+    content_type: str | None = typer.Option(
+        None,
+        "--content-type",
+        help="Optional MIME type to sign into the upload.",
+    ),
+    content_length: int | None = typer.Option(
+        None,
+        "--content-length",
+        help="Optional exact byte length to sign into the upload.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Mint a presigned S3 upload target without transferring any bytes.
+
+    Returns the PUT ``upload_url`` and the ``storage_path`` (object key). Upload
+    the file to ``upload_url`` yourself within ``expires_in_seconds``, then set
+    the attachment field to ``storage_path`` (never the url).
+    """
+    org_str = str(organization).strip()
+    name_str = str(file_name).strip()
+    if not org_str or not name_str:
+        raise typer.BadParameter("--organization and --file-name must be non-empty.")
+
+    async def factory(client: PipefyClient) -> dict[str, object]:
+        try:
+            target = await client.create_attachment_presigned_url(
+                organization_id=org_str,
+                file_name=name_str,
+                content_type=content_type,
+                content_length=content_length,
+            )
+        except AttachmentUploadError as exc:
+            return {"success": False, "step": exc.step, "message": str(exc)}
+
+        return {
+            "success": True,
+            "message": (
+                "Presigned upload target minted. PUT the file to upload_url, "
+                "then store storage_path on the attachment field."
+            ),
+            "upload_url": target["upload_url"],
+            "storage_path": target["storage_path"],
+            "expires_in_seconds": target["expires_in_seconds"],
         }
 
     run_cli_command(ctx, json_out, factory)

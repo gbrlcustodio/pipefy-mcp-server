@@ -4,13 +4,13 @@ description: >
   Use this skill when you need to discover GraphQL type shapes, mutation
   signatures, enum values, or execute arbitrary GraphQL as a fallback.
   This is the first fallback tier (Tier 2) when dedicated MCP tools fail
-  or don't exist for an operation. 6 MCP tools.
+  or don't exist for an operation. 7 MCP tools.
 tags: [pipefy, introspection, graphql, schema, fallback]
 ---
 
 # Introspection & Raw GraphQL
 
-Schema discovery, organization info, and a fallback executor. **6 MCP tools.**
+Schema discovery, organization info, and a fallback executor. **7 MCP tools.**
 
 This is **Tier 2** in the resolution strategy: when a dedicated MCP tool fails or doesn't exist, use introspection to understand the API, then `execute_graphql` to run the operation directly.
 
@@ -30,6 +30,7 @@ This is **Tier 2** in the resolution strategy: when a dedicated MCP tool fails o
 | `search_schema` | `pipefy introspect schema search` | Yes | Keyword search on type names/descriptions. Optional `kind` filter. |
 | `execute_graphql` | `pipefy graphql exec` | No | Execute arbitrary GraphQL (`--yes` required for mutations). |
 | `get_organization` | `pipefy org get` | Yes | Load organization info (name, plan, UUID, member count, pipe count). |
+| `list_organizations` | `pipefy org list` | Yes | List organizations the caller can access — no id required. The zero-knowledge entry point for org discovery. |
 
 ---
 
@@ -173,9 +174,11 @@ introspect_type('CreateAutomationInput')    # see all inputFields
 
 Compare with the tool's primary arguments to know which keys are additive via `extra_input`.
 
-### Recipe 5 — Get organization ID from a pipe
+### Recipe 5 — Discover organization IDs
 
-Several tools need `organization_id` but the user only has a pipe ID:
+To answer "which organizations do I have access to?" with nothing in hand, call `list_organizations` — it needs no id and returns each org's `id`, `uuid`, `name`, and your role. That is the entry point; reach for the GraphQL fallbacks below only when you already have a pipe.
+
+When the user only has a pipe ID and needs its `organization_id`:
 
 ```
 execute_graphql query='query($id: ID!) { pipe(id: $id) { organization { id uuid name } } }' variables='{"id":"<pipe-id>"}'

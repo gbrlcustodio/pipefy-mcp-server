@@ -27,6 +27,7 @@ from pipefy_sdk.models.ai_agent import (
     UpdateAiAgentInput,
 )
 from pipefy_sdk.models.ai_automation import (
+    AutomationConditionInput,
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
@@ -34,6 +35,7 @@ from pipefy_sdk.models.attachment import (
     Attachment,
     AttachmentTarget,
     AttachmentUploadResult,
+    PresignedUploadTarget,
 )
 from pipefy_sdk.models.knowledge_base import DataLookupCondition
 from pipefy_sdk.services.advanced_automations_service import AdvancedAutomationsService
@@ -300,6 +302,7 @@ class PipefyClient:
             executor=ex.public,
             card_service=self._card_service,
             table_service=self._table_service,
+            settings=settings,
         )
         self._introspection_service = SchemaIntrospectionService(executor=ex.public)
         self._advanced_automations_service = AdvancedAutomationsService(
@@ -908,6 +911,7 @@ class PipefyClient:
         *,
         active: bool = True,
         action_repo_id: str | None = None,
+        condition: AutomationConditionInput | None = None,
         extra_input: dict[str, Any] | None = None,
     ) -> CreateAutomationMutationResult:
         """Create a traditional automation rule (optional ``extra_input`` uses CreateAutomationInput field names).
@@ -931,6 +935,8 @@ class PipefyClient:
             action_repo_id: Pipe ID where the action executes. Defaults to ``pipe_id``.
                 For cross-pipe actions (``create_connected_card``, ``move_card_to_pipe``),
                 pass the **destination** pipe ID.
+            condition: Typed trigger condition. When set, it is serialized and sent as the
+                mutation's ``condition``; it wins over any ``condition`` in ``extra_input``.
             extra_input: Extra ``CreateAutomationInput`` keys. Top-level keys are snake_case
                 (``action_params``, ``event_params``, ...) and are normalized to the exact API
                 field names before sending. ``active`` here overrides the ``active`` argument.
@@ -940,6 +946,11 @@ class PipefyClient:
                 destination ``fieldId`` is invalid.
         """
         extra_input = normalize_automation_input_keys(extra_input)
+        if condition is not None:
+            extra_input = {
+                **(extra_input or {}),
+                "condition": condition.to_api_payload(),
+            }
         await validate_traditional_automation_move_transition(
             self, trigger_id, action_id, extra_input
         )
@@ -983,16 +994,24 @@ class PipefyClient:
     async def update_automation(
         self,
         automation_id: str,
+        *,
+        condition: AutomationConditionInput | None = None,
         extra_input: dict[str, Any] | None = None,
     ) -> UpdateAutomationMutationResult:
         """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names).
 
         Top-level ``extra_input`` keys are snake_case and are normalized to the exact API field
-        names before sending, as in :meth:`create_automation`.
+        names before sending, as in :meth:`create_automation`. A typed ``condition`` is serialized
+        and wins over any ``condition`` in ``extra_input``.
 
         Does not run ``field_map`` or move-transition preflight (those run on ``create_automation`` only).
         """
         extra_input = normalize_automation_input_keys(extra_input)
+        if condition is not None:
+            extra_input = {
+                **(extra_input or {}),
+                "condition": condition.to_api_payload(),
+            }
         return await self._automation_service.update_automation(
             automation_id, **(extra_input or {})
         )
@@ -1768,6 +1787,10 @@ class PipefyClient:
         """
         return await self._organization_service.get_organization(organization_id)
 
+    async def list_organizations(self) -> list[dict[str, Any]]:
+        """List the organizations the caller can access (no id required)."""
+        return await self._organization_service.list_organizations()
+
     async def get_advanced_automations_token(self, pipe_id: str | int) -> str:
         """Mint a short-lived advanced-automations (iPaaS) access token for a pipe.
 
@@ -2141,6 +2164,27 @@ class PipefyClient:
         """
         return await self._attachment_service.upload_attachment(
             attachment, organization_id=organization_id, target=target
+        )
+
+    async def create_attachment_presigned_url(
+        self,
+        *,
+        organization_id: str,
+        file_name: str,
+        content_type: str | None = None,
+        content_length: int | None = None,
+    ) -> PresignedUploadTarget:
+        """Mint a presigned upload target (no bytes transferred).
+
+        The caller PUTs the file bytes to the returned ``upload_url`` and then
+        stores ``storage_path`` on the attachment field. See
+        :meth:`AttachmentService.create_presigned_url`.
+        """
+        return await self._attachment_service.create_presigned_url(
+            organization_id=organization_id,
+            file_name=file_name,
+            content_type=content_type,
+            content_length=content_length,
         )
 
     async def introspect_type(

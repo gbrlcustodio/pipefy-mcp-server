@@ -60,8 +60,9 @@ def test_upload_attachment_to_card_accepts_string_card_id():
 
 
 @pytest.mark.unit
-def test_upload_attachment_to_card_requires_file_path():
-    with pytest.raises(ValidationError):
+def test_upload_attachment_to_card_requires_a_source():
+    """Neither file_path nor file_url provided is rejected (exactly-one-of)."""
+    with pytest.raises(ValidationError, match="exactly one of file_path or file_url"):
         UploadAttachmentToCardInput(
             **_base_kwargs(),
             card_id=1,
@@ -69,13 +70,49 @@ def test_upload_attachment_to_card_requires_file_path():
 
 
 @pytest.mark.unit
-def test_upload_attachment_to_card_rejects_blank_file_path():
-    """NonBlankStr rejects whitespace-only values."""
-    with pytest.raises(ValidationError):
+def test_upload_attachment_to_card_rejects_blank_source():
+    """A whitespace-only source counts as absent, so it fails exactly-one-of."""
+    with pytest.raises(ValidationError, match="exactly one of file_path or file_url"):
         UploadAttachmentToCardInput(
             **_base_kwargs(),
             card_id=1,
             file_path="   ",
+        )
+
+
+@pytest.mark.unit
+def test_upload_attachment_to_card_accepts_file_url():
+    data = UploadAttachmentToCardInput(
+        **_base_kwargs(),
+        card_id=1,
+        file_url="https://files.example/report.pdf",
+    )
+    assert data.file_url == "https://files.example/report.pdf"
+    assert data.file_path is None
+
+
+@pytest.mark.unit
+def test_upload_attachment_to_card_blank_path_beside_url_normalizes_to_none():
+    """A blank file_path alongside a real file_url normalizes to a single source."""
+    data = UploadAttachmentToCardInput(
+        **_base_kwargs(),
+        card_id=1,
+        file_path="   ",
+        file_url="https://files.example/report.pdf",
+    )
+    assert data.file_path is None
+    assert data.file_url == "https://files.example/report.pdf"
+
+
+@pytest.mark.unit
+def test_upload_attachment_to_card_rejects_both_sources():
+    """Providing both file_path and file_url is rejected (exactly-one-of)."""
+    with pytest.raises(ValidationError, match="exactly one of file_path or file_url"):
+        UploadAttachmentToCardInput(
+            **_base_kwargs(),
+            card_id=1,
+            file_path="/tmp/f.pdf",
+            file_url="https://files.example/report.pdf",
         )
 
 
@@ -243,7 +280,45 @@ def test_attachment_construction_stays_pure_for_missing_path():
     """Construction does not touch the filesystem; the path is recorded as-is."""
     attachment = Attachment(path=Path("/does/not/exist/anywhere.bin"))
     assert attachment.path == Path("/does/not/exist/anywhere.bin")
+    assert attachment.url is None
     assert attachment.name == "anywhere.bin"
+
+
+@pytest.mark.unit
+def test_attachment_url_source_name_from_url_basename():
+    attachment = Attachment(url="https://files.example/a/b/report.pdf?sig=abc")
+    assert attachment.path is None
+    assert attachment.url == "https://files.example/a/b/report.pdf?sig=abc"
+    assert attachment.name == "report.pdf"
+    assert attachment.content_type == "application/pdf"
+
+
+@pytest.mark.unit
+def test_attachment_url_source_explicit_name_wins():
+    attachment = Attachment(url="https://files.example/", name="invoice.csv")
+    assert attachment.name == "invoice.csv"
+    assert attachment.content_type == "text/csv"
+
+
+@pytest.mark.unit
+def test_attachment_url_without_basename_raises():
+    """A URL whose path has no basename (and no explicit name) is rejected at construction."""
+    with pytest.raises(ValueError, match="file name"):
+        Attachment(url="https://files.example/")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"path": Path("/tmp/f.pdf"), "url": "https://files.example/f.pdf"},
+        {"url": "   "},
+    ],
+)
+def test_attachment_requires_exactly_one_source(kwargs):
+    with pytest.raises(ValueError, match="exactly one of path or url"):
+        Attachment(**kwargs)
 
 
 # Target value objects

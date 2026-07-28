@@ -159,7 +159,7 @@ This returns valid `type` enum values and their descriptions.
 | `add_card_comment` | `pipefy card comment add <id>` | No | Add a text comment to a card. |
 | `update_comment` | `pipefy card comment update` | No | Update an existing card comment. |
 | `delete_comment` | `pipefy card comment delete` | No | **Two-step destructive.** |
-| `upload_attachment_to_card` | `pipefy attachment upload --card` | No | Upload a local file to an attachment field (`field_id` must be the field slug). |
+| `upload_attachment_to_card` | `pipefy attachment upload --card` | No | Attach a file to an attachment field (`field_id` = slug). Exactly one source: `file_path` (local; local profile only) or `file_url` (downloaded, SSRF-guarded; any profile — required on the hosted server). See [`pipefy-attachments`](../../attachments/pipefy-attachments/SKILL.md). |
 
 ### Steps — create a card
 
@@ -233,3 +233,4 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 - `skills/relations/` — link pipes and cards across workflows.
 - `skills/automations/` — add automation rules to a pipe.
 - `skills/introspection/` — discover field types and mutation signatures.
+- `docs/mcp/tools/identifiers.md#field-references-slug-vs-internal_id` — canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id (e.g. `update_card_field` uses a field slug).

@@ -1037,6 +1037,36 @@ async def test_portal_permission_mapping_only_inspects_the_first_error() -> None
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("code", ["FORBIDDEN", "UNAUTHORIZED"])
+async def test_portal_permission_mapping_covers_permission_code_synonyms(
+    code: str,
+) -> None:
+    """FORBIDDEN and UNAUTHORIZED also map to ``PortalPermissionError``.
+
+    The shared ``classify_exception`` groups these with PERMISSION_DENIED, so
+    delegating to it widened portal mapping beyond the one literal code the old
+    hand-rolled scan matched. Portal returns PERMISSION_DENIED today; pinning the
+    synonyms records that the widening is intended, not accidental.
+    """
+    service, _public, interfaces_executor = _make_interfaces_service(
+        _CREATE_ELEMENT_RESPONSE,
+    )
+    interfaces_executor.execute_query = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [{"message": "Denied", "extensions": {"code": code}}],
+        )
+    )
+
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
+        await service.create_portal_element(
+            _PAGE_ID,
+            type="link",
+            metadata={"linkName": "Test", "linkUrl": "https://example.com"},
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_portal_element_rejects_invalid_metadata_before_graphql() -> None:
     """CreatePortalElementInput validation must run before execute_query."""
     service, _public, interfaces_executor = _make_interfaces_service(

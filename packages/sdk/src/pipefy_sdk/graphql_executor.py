@@ -26,11 +26,13 @@ class GraphQLResult:
     errors: list[dict[str, Any]]
 
 
-def _graphql_error_message(errors: list[dict[str, Any]]) -> str:
+def _graphql_error_message(errors: list[Any]) -> str:
     """Join the human-readable messages from raw GraphQL error dicts.
 
     Tolerates a non-conforming ``errors`` element that is not a dict (a server may
     return a bare string), matching the sibling extractors in the MCP tool layer.
+    ``list[Any]`` rather than ``list[dict]`` states that tolerance in the
+    signature: this text is built from whatever the wire actually carried.
     """
     parts = [
         (err.get("message") if isinstance(err, dict) else str(err)) or "Unknown error"
@@ -46,9 +48,13 @@ class PipefyGraphQLError(Exception):
     exception. ``errors`` is the raw per-node error dict list (each with its own
     ``message`` and ``extensions``); consumers read codes and correlation ids off
     that structure rather than parsing the message string.
+
+    Typed ``list[Any]`` because it carries the payload verbatim: a well-behaved
+    server sends dicts, and every consumer already ``isinstance``-guards each
+    element rather than trusting the shape.
     """
 
-    def __init__(self, errors: list[dict[str, Any]]) -> None:
+    def __init__(self, errors: list[Any]) -> None:
         self.errors = errors
         super().__init__(_graphql_error_message(errors))
 

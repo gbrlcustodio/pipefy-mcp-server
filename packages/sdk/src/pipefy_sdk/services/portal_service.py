@@ -62,11 +62,15 @@ _PORTAL_PERMISSION_MESSAGE = (
 def _map_portal_permission_error(
     exc: PipefyGraphQLError,
 ) -> PortalPermissionError | None:
-    """Return ``PortalPermissionError`` only for PERMISSION_DENIED; else ``None``.
+    """Return ``PortalPermissionError`` for a permission-denied error; else ``None``.
 
     Delegates classification to the shared ``classify_exception`` so portal
     permission mapping reads the same ``extensions.code`` signal the rest of the
-    SDK does, rather than re-deriving it here.
+    SDK does, rather than re-deriving it here. Two consequences of sharing the
+    classifier, neither observable on the single-error responses portal returns:
+    it treats ``FORBIDDEN`` and ``UNAUTHORIZED`` as permission denied alongside
+    ``PERMISSION_DENIED``, and it reads the first error only (see
+    ``test_portal_permission_mapping_only_inspects_the_first_error``).
     """
     problem = classify_exception(exc)
     if problem is not None and problem.kind is GraphQLProblemKind.PERMISSION_DENIED:

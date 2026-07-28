@@ -6,6 +6,9 @@ import pytest
 from _shared.mock_clients import mock_executor
 
 from pipefy_sdk.graphql_executor import GraphQLResult
+from pipefy_sdk.queries.knowledge_base_queries import (
+    CREATE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION,
+)
 from pipefy_sdk.services import knowledge_base_service as kb_module
 from pipefy_sdk.services.knowledge_base_service import (
     MAX_KB_DESCRIPTION_LENGTH,
@@ -59,6 +62,15 @@ def _create_flow_executor():
             {"createAiKnowledgeBaseDocument": {"knowledgeBaseDocument": DOCUMENT_FULL}},
         ]
     )
+
+
+def _create_document_calls(executor):
+    """The document-create mutation calls: the consumer of a successful PUT."""
+    return [
+        call
+        for call in executor.execute_query.await_args_list
+        if call.args[0] is CREATE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION
+    ]
 
 
 PLAIN_TEXT_NODE = {
@@ -633,8 +645,7 @@ class TestCreateDocument:
         assert exc_info.value.step == "s3_upload"
         assert exc_info.value.status_code == 403
         assert exc_info.value.body_snippet == "AccessDenied"
-        # the create mutation (third call) never ran
-        assert executor.execute_query.await_count == 2
+        assert _create_document_calls(executor) == []
 
     @pytest.mark.anyio
     async def test_s3_put_exception_tagged_s3_upload(self, tmp_path):
@@ -663,6 +674,58 @@ class TestCreateDocument:
         assert "connection reset by peer" in str(exc_info.value)
         # the create mutation (third call) never ran
         assert executor.execute_query.await_count == 2
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("status", [301, 302, 303, 307, 308, 404, 500])
+    async def test_non_2xx_put_never_reaches_the_create_mutation(
+        self, tmp_path, status
+    ):
+        """A redirect never stored the PDF, so it must fail like a 4xx/5xx does.
+
+        Registering the document would point the knowledge base at an object
+        that was never written.
+        """
+        executor = mock_executor(
+            side_effect=[
+                {"pipe": {"organization": {"id": "300514213"}}},
+                {
+                    "createPresignedUrl": {
+                        "url": _UPLOAD_URL,
+                        "downloadUrl": _DOWNLOAD_URL,
+                    }
+                },
+            ]
+        )
+        uploader = _FakeUploader(result={"status_code": status})
+        service = KnowledgeBaseService(executor=executor, s3_uploader=uploader)
+        pdf = _write_pdf(tmp_path)
+
+        with pytest.raises(KnowledgeBaseDocumentUploadError) as exc_info:
+            await service.create_ai_knowledge_base_document(
+                "p", name="n", description="d", file_path=pdf
+            )
+
+        assert exc_info.value.step == "s3_upload"
+        assert exc_info.value.status_code == status
+        assert exc_info.value.body_snippet is None
+        assert _create_document_calls(executor) == []
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("status", [200, 201, 204])
+    async def test_2xx_put_proceeds_to_the_create_mutation(self, tmp_path, status):
+        """Every 2xx means the bytes landed, so the document is registered."""
+        executor = _create_flow_executor()
+        service = KnowledgeBaseService(
+            executor=executor, s3_uploader=_FakeUploader(result={"status_code": status})
+        )
+        pdf = _write_pdf(tmp_path)
+
+        result = await service.create_ai_knowledge_base_document(
+            "p", name="n", description="d", file_path=pdf
+        )
+
+        assert result == DOCUMENT_FULL
+        assert len(_create_document_calls(executor)) == 1
 
     @pytest.mark.anyio
     async def test_create_mutation_failure_tagged_kb_create(self, tmp_path):

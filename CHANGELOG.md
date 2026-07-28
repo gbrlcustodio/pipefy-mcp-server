@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Installer**: Claude Code next-steps print `/pipefy:pipefy-login` (and the full plugin slash sequence) instead of the stale `/pipefy-login` label.
+- **MCP**: the service-account tools no longer report success for a GraphQL payload that says the operation did not happen. `delete_service_account` gates on `deleteServiceAccount.success` (a missing node or `success: false` is now a failure, matching every peer delete), and `create_service_account` requires a non-null `serviceAccount` carrying a non-empty `client.secret` before it claims the one-shot credentials were returned — when the account UUID arrives without a usable secret the failure surfaces that UUID (in the message and in `error.details.service_account_uuid`) so the caller can delete the unreachable account, and no payload value is echoed into the error. Closes #510.
 
 ## [0.3.0-beta.1] - 2026-07-20
 

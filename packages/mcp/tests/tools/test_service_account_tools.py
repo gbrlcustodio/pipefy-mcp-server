@@ -1,5 +1,6 @@
 """Tests for service-account MCP tools (mocked PipefyClient)."""
 
+import json
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -89,7 +90,7 @@ async def test_create_service_account_passes_expiration(
     sa_session, mock_sa_client, extract_payload
 ):
     mock_sa_client.create_service_account.return_value = {
-        "createServiceAccount": {"serviceAccount": {}}
+        "createServiceAccount": {"serviceAccount": {"client": {"secret": "csecret"}}}
     }
     async with sa_session as session:
         await session.call_tool(
@@ -119,7 +120,13 @@ async def test_create_service_account_with_pipe_ids_chains_and_verifies(
     sa_session, mock_sa_client, extract_payload
 ):
     mock_sa_client.create_service_account.return_value = {
-        "createServiceAccount": {"serviceAccount": {"email": "sa@x.com", "uuid": "u"}},
+        "createServiceAccount": {
+            "serviceAccount": {
+                "email": "sa@x.com",
+                "uuid": "u",
+                "client": {"secret": "csecret"},
+            }
+        },
         "pipe_memberships": [{"pipe_id": "100", "invited": True}],
     }
     mock_sa_client.get_pipe_members.return_value = {
@@ -285,6 +292,86 @@ async def test_create_service_account_graphql_error(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("sa_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param({"createServiceAccount": None}, id="null-mutation-node"),
+        pytest.param(
+            {"createServiceAccount": {"serviceAccount": None}}, id="null-account"
+        ),
+        pytest.param(
+            {"createServiceAccount": {"serviceAccount": {"client": None}}},
+            id="null-client",
+        ),
+        pytest.param(
+            {"createServiceAccount": {"serviceAccount": {"client": {"secret": None}}}},
+            id="null-secret",
+        ),
+    ],
+)
+async def test_create_service_account_without_secret_fails_closed(
+    sa_session, mock_sa_client, extract_payload, raw
+):
+    """No usable one-shot secret means no success and no 'shown only once' claim."""
+    mock_sa_client.create_service_account.return_value = raw
+    async with sa_session as session:
+        result = await session.call_tool(
+            "create_service_account",
+            {"organization_uuid": ORG, "name": "sa", "role": "normal"},
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "once" not in json.dumps(payload)
+    assert "client secret" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sa_session", [None], indirect=True)
+async def test_create_service_account_without_secret_surfaces_uuid_for_cleanup(
+    sa_session, mock_sa_client, extract_payload
+):
+    """The account may exist unreachable, so the caller needs its UUID to delete it."""
+    mock_sa_client.create_service_account.return_value = {
+        "createServiceAccount": {
+            "serviceAccount": {"uuid": "u1", "email": "sa@x.com", "client": None}
+        }
+    }
+    async with sa_session as session:
+        result = await session.call_tool(
+            "create_service_account",
+            {"organization_uuid": ORG, "name": "sa", "role": "normal"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "u1" in tool_error_message(payload)
+    assert payload["error"]["details"]["service_account_uuid"] == "u1"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sa_session", [None], indirect=True)
+async def test_create_service_account_failure_never_echoes_secret(
+    sa_session, mock_sa_client, extract_payload
+):
+    """A secret arriving under an unexpected shape must not leak into the error."""
+    mock_sa_client.create_service_account.return_value = {
+        "createServiceAccount": {
+            "serviceAccount": None,
+            "client": {"secret": "csecret"},
+        }
+    }
+    async with sa_session as session:
+        result = await session.call_tool(
+            "create_service_account",
+            {"organization_uuid": ORG, "name": "sa", "role": "normal"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "csecret" not in json.dumps(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_delete_service_account_preview_does_not_call_mutation(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -323,6 +410,35 @@ async def test_delete_service_account_confirmed(
     )
     payload = extract_payload(result)
     assert payload["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sa_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param({"deleteServiceAccount": {"success": False}}, id="success-false"),
+        pytest.param({"deleteServiceAccount": None}, id="null-node"),
+        pytest.param({}, id="missing-node"),
+    ],
+)
+async def test_delete_service_account_soft_failure_is_not_reported_as_deleted(
+    sa_session, mock_sa_client, extract_payload, raw
+):
+    mock_sa_client.delete_service_account.return_value = raw
+    async with sa_session as session:
+        result = await session.call_tool(
+            "delete_service_account",
+            {
+                "organization_uuid": ORG,
+                "service_account_uuid": "sa-uuid-1",
+                "confirm": True,
+            },
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "did not succeed" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio

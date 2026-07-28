@@ -17,6 +17,7 @@ from pipefy_mcp.tools.ipaas_tools import IpaasTools
 from pipefy_mcp.tools.knowledge_base_tools import KnowledgeBaseTools
 from pipefy_mcp.tools.llm_provider_tools import LlmProviderTools
 from pipefy_mcp.tools.member_tools import MemberTools
+from pipefy_mcp.tools.meta_tools import register_meta_tools
 from pipefy_mcp.tools.observability_tools import ObservabilityTools
 from pipefy_mcp.tools.organization_tools import OrganizationTools
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
@@ -27,7 +28,7 @@ from pipefy_mcp.tools.remote_profile import is_remote_tool
 from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.service_account_tools import ServiceAccountTools
 from pipefy_mcp.tools.table_tools import TableTools
-from pipefy_mcp.tools.toolsets import resolve_selection
+from pipefy_mcp.tools.toolsets import POWER_GRAPHQL_TOOLS, resolve_selection
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 
 if TYPE_CHECKING:
@@ -356,3 +357,33 @@ class ToolRegistry:
             len(withheld),
         )
         return withheld
+
+    def apply_power_profile(self) -> set[str]:
+        """Hide the curated tools behind the catalog meta-tools (the ``power`` profile).
+
+        Snapshots the live curated tools (post-floor, minus the raw-GraphQL tools
+        that stay visible by name), removes them from ``tools/list``, and registers
+        the four meta-tools over that snapshot. Because the snapshot is taken after
+        :meth:`apply_remote_profile`, ``execute_tool`` can reach only tools the floor
+        already allowed. Returns the set of hidden (snapshotted) tool names.
+        """
+        catalog = {
+            tool.name: tool
+            for tool in self.mcp._tool_manager.list_tools()
+            if tool.name in self.pipefy_tool_names
+            and tool.name not in POWER_GRAPHQL_TOOLS
+        }
+        hidden = self.retain_only(lambda tool: tool.name in POWER_GRAPHQL_TOOLS)
+        register_meta_tools(self.mcp, catalog)
+        visible = sum(
+            1
+            for tool in self.mcp._tool_manager.list_tools()
+            if tool.name in self.pipefy_tool_names
+        )
+        logger.info(
+            "Power profile: hid %d curated tools behind meta-tools; "
+            "%d raw-GraphQL tools stay visible.",
+            len(hidden),
+            visible,
+        )
+        return hidden

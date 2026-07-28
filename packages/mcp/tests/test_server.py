@@ -26,7 +26,7 @@ from pipefy_mcp.server import (
 )
 from pipefy_mcp.settings import McpSettings, Settings, resolve_mcp_settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
-from pipefy_mcp.tools.toolsets import DOMAINS
+from pipefy_mcp.tools.toolsets import DOMAINS, POWER_GRAPHQL_TOOLS
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(base_url="https://api.pipefy.com"),
@@ -177,6 +177,42 @@ def test_build_server_applies_toolset_selection(mocked_runtime):
     app = build_pipefy_mcp_server(settings)
     exposed = {t.name for t in app._tool_manager.list_tools()} & PIPEFY_TOOL_NAMES
     assert exposed == set(DOMAINS["database"])
+
+
+@pytest.mark.unit
+def test_build_server_power_profile_hides_curated_tools_behind_meta_tools(
+    mocked_runtime,
+):
+    """The power profile exposes the meta-tools + raw GraphQL and hides the rest."""
+    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+        update={"mcp": McpSettings(toolsets="power")}
+    )
+    app = build_pipefy_mcp_server(settings)
+    names = {t.name for t in app._tool_manager.list_tools()}
+    assert {
+        "search_tools",
+        "describe_tool",
+        "execute_tool",
+        "get_tool_categories",
+    } <= names
+    # Of the curated surface, only the raw-GraphQL tools remain visible by name.
+    assert names & PIPEFY_TOOL_NAMES == set(POWER_GRAPHQL_TOOLS)
+    assert "get_pipe" not in names
+
+
+@pytest.mark.unit
+def test_build_server_power_with_unknown_token_fails_closed(mocked_runtime):
+    """An unknown token alongside `power` fails at build, matching the domain path.
+
+    ``wants_power`` short-circuits to ``apply_power_profile``, which does not call
+    ``resolve_selection``; without the explicit validation a value like
+    ``power,typo`` (e.g. via ``PIPEFY_MCP_TOOLSETS``) would silently start the server.
+    """
+    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+        update={"mcp": McpSettings(toolsets="power,typo")}
+    )
+    with pytest.raises(ValueError, match="unknown toolset"):
+        build_pipefy_mcp_server(settings)
 
 
 @pytest.mark.unit

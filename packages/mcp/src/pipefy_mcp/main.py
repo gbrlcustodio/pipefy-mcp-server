@@ -67,7 +67,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Comma-separated subject domains to expose (e.g. 'workflow,database'), "
             "narrowing the surface after the remote floor. 'all'/'default' or unset "
-            "keep every tool. Also env PIPEFY_MCP_TOOLSETS."
+            "keep every tool; 'power' (alias 'architect') exposes the catalog "
+            "meta-tools instead. Also env PIPEFY_MCP_TOOLSETS."
         ),
     )
     return parser

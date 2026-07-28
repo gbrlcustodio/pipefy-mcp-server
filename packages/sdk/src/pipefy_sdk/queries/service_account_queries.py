@@ -7,6 +7,9 @@ DeleteServiceAccountInput: organizationUuid, serviceAccountUuid.
 The create payload returns the OAuth2 client credentials (``client { id secret }``)
 and the token endpoint once, at creation time — there is no query to read them
 back later.
+
+Both payloads carry a non-null ``success`` flag; select it on both so a soft
+failure is distinguishable from a completed mutation.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ CREATE_SERVICE_ACCOUNT_MUTATION = gql(
     """
     mutation CreateServiceAccount($input: CreateServiceAccountInput!) {
         createServiceAccount(input: $input) {
+            success
             serviceAccount {
                 id
                 uuid

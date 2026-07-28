@@ -137,10 +137,17 @@ class ServiceAccountTools:
                     debug=debug,
                 )
             account = (raw or {}).get("createServiceAccount") or {}
+            service_account = account.get("serviceAccount") or {}
+            if not account.get("success"):
+                return tool_error("Create service account did not succeed.")
+            # The payload promises a one-shot secret; without it there is nothing
+            # to hand back even though the API reported success.
+            if not (service_account.get("client") or {}).get("secret"):
+                return _missing_secret_error(service_account.get("uuid"))
             data: dict[str, Any] = dict(account)
             memberships = raw.get("pipe_memberships")
             if memberships is not None:
-                email = (account.get("serviceAccount") or {}).get("email")
+                email = service_account.get("email")
                 for entry in memberships:
                     entry["member"] = (
                         await service_account_is_member(client, entry["pipe_id"], email)
@@ -224,10 +231,36 @@ class ServiceAccountTools:
                     "Delete service account failed.",
                     debug=debug,
                 )
-            return tool_success(
-                data=(raw or {}).get("deleteServiceAccount") or {},
-                message="Service account deleted.",
-            )
+            node = (raw or {}).get("deleteServiceAccount") or {}
+            if not node.get("success"):
+                return tool_error("Delete service account did not succeed.")
+            return tool_success(data=node, message="Service account deleted.")
+
+
+def _missing_secret_error(account_uuid: Any) -> dict[str, Any]:
+    """Fail closed when the create payload carries no client secret.
+
+    The account may still exist while its one-shot credentials reached nobody, so
+    the uuid is surfaced for cleanup. Nothing else from the payload is echoed.
+    """
+    uuid_text = (
+        account_uuid.strip()
+        if isinstance(account_uuid, str) and account_uuid.strip()
+        else None
+    )
+    if uuid_text is None:
+        return tool_error(
+            "Create service account returned no client secret and no account UUID. "
+            "The secret cannot be read back, and there is no API or tool to list "
+            "organization service accounts. Do not retry create until a human "
+            "confirms in org settings whether a stray account was created."
+        )
+    return tool_error(
+        "Create service account returned no client secret. The secret cannot be "
+        f"read back, so the account (UUID: {uuid_text}) is unusable - delete it "
+        "with delete_service_account, then retry.",
+        details={"service_account_uuid": uuid_text},
+    )
 
 
 def _build_expiration(

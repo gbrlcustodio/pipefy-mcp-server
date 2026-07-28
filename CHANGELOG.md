@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Installer**: Claude Code next-steps print `/pipefy:pipefy-login` (and the full plugin slash sequence) instead of the stale `/pipefy-login` label.
-- **SDK**: the attachment upload's S3 PUT now requires a 2xx status instead of merely "not 4xx/5xx", so a 3xx no longer reads as a completed upload. The PUT does not follow redirects (re-sending the body to the `Location` host would ship file bytes to an unvalidated destination), so a wrong-region 301/307 used to pass the check and the card or table-record field was then updated with a storage path the bytes never reached. It now fails as `step=s3_upload` with the status attached, leaving the field untouched. Closes #511.
+- **SDK**: both S3 upload legs — the attachment pipeline and the knowledge-base document upload — now require a 2xx PUT status instead of merely "not 4xx/5xx", so a 3xx no longer reads as a completed upload. Neither PUT follows redirects (re-sending the body to the `Location` host would ship file bytes to an unvalidated destination), so a wrong-region 301/307 used to pass the check: the card or table-record field was then updated with a storage path the bytes never reached, and the knowledge base registered a document URL for an object that was never written. Both now fail at `step=s3_upload` with the status attached, before the field update or the create mutation runs. Closes #511.
 
 ## [0.3.0-beta.1] - 2026-07-20
 

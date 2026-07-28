@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0-beta.1] - 2026-07-28
+
 ### Added
 
 - **MCP**: startup tool-surface selection — `--toolsets` / `PIPEFY_MCP_TOOLSETS` narrows the exposed tools to named **subject domains** (`workflow`, `database`, `interfaces`, `automation`, `intelligence`, `analytics`, `governance`, `integration`) and/or overlapping **persona profiles** (`requester`, `operator`, `manager`, `builder`, `admin`, `auditor`), unioned and applied after the remote floor so selection only ever narrows (never widens past the floor). The `power` profile (alias `architect`) instead hides the curated tools behind four catalog meta-tools (`search_tools`, `describe_tool`, `execute_tool`, `get_tool_categories`) alongside the raw-GraphQL tools, keeping the model-facing set at nine regardless of catalog size — `execute_tool` dispatches to each hidden tool through its own argument validation and error envelope, and cannot reach a tool the floor withholds. `all` / `default` or unset keep the full surface (backward-compatible). A build-time drift-guard enforces the disjoint domain partition: every registered tool has exactly one domain, or the build fails. Closes #308.

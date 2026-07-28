@@ -200,6 +200,31 @@ async def test_httpx_s3_uploader_forbidden_includes_body_snippet():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [301, 307])
+async def test_httpx_s3_uploader_does_not_follow_redirects(status):
+    """A 3xx surfaces as-is (httpx does not follow it) and carries no snippet.
+
+    Re-sending the body to the ``Location`` host would ship file bytes to an
+    unvalidated destination, so the status reaches the service to be rejected.
+    """
+    url = "https://bucket.s3.amazonaws.com/orgs/o1/uploads/u1/report.pdf?sig=1"
+    with respx.mock:
+        route = respx.put(url).mock(
+            return_value=httpx.Response(
+                status,
+                headers={"location": "https://bucket.s3.eu-west-1.amazonaws.com/x"},
+                text="<?xml version='1.0'?><Error><Code>PermanentRedirect</Code></Error>",
+            )
+        )
+        uploader = HttpxS3Uploader(allowed_host_pattern=_ALLOWED_UPLOAD_HOST_RE)
+        result = await uploader.put(url=url, bytes_=b"%PDF", content_type=None)
+
+    assert route.call_count == 1
+    assert result == {"status_code": status}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_httpx_s3_uploader_sets_content_type_header():
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -435,6 +460,60 @@ async def test_upload_attachment_s3_http_error_carries_snippet_and_status(tmp_pa
     assert ctx.value.step == "s3_upload"
     assert ctx.value.body_snippet == "<Error/>"
     assert ctx.value.status_code == 403
+    service._card_service.update_card_field.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [200, 201, 204])
+async def test_upload_attachment_accepts_2xx_and_updates_field(tmp_path, status):
+    """Every 2xx means the bytes landed, so the field update proceeds."""
+    service, _ = _make_service(s3_status=status)
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    await service.upload_attachment(
+        attachment,
+        organization_id="org-1",
+        target=CardTarget(card_id="c1", field_id="f"),
+    )
+
+    service._card_service.update_card_field.assert_awaited_once_with(
+        "c1", "f", ["bucket/key"]
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308, 404, 500])
+@pytest.mark.parametrize(
+    "target",
+    [
+        CardTarget(card_id="c1", field_id="f"),
+        TableRecordTarget(table_record_id="tr-9", field_id="f"),
+    ],
+    ids=["card", "table_record"],
+)
+async def test_upload_attachment_non_2xx_rejects_and_leaves_field_untouched(
+    tmp_path, status, target
+):
+    """A redirect never stored the bytes, so it must fail like a 4xx/5xx does.
+
+    The field must keep its previous value rather than gain a storage path
+    pointing at an object that was never written.
+    """
+    service, _ = _make_service(s3_status=status)
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment, organization_id="org-1", target=target
+        )
+
+    assert ctx.value.step == "s3_upload"
+    assert ctx.value.status_code == status
+    assert ctx.value.body_snippet is None
+    service._card_service.update_card_field.assert_not_called()
+    service._table_service.set_table_record_field_value.assert_not_called()
 
 
 @pytest.mark.unit

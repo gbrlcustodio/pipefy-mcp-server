@@ -19,6 +19,24 @@ GET_ORGANIZATION_QUERY = gql(
     """
 )
 
+LIST_ORGANIZATIONS_QUERY = gql(
+    """
+    query ListOrganizations {
+        organizations {
+            id
+            uuid
+            name
+            planName
+            role
+            membersCount
+            pipesCount
+            createdAt
+        }
+    }
+    """
+)
+
 __all__ = [
     "GET_ORGANIZATION_QUERY",
+    "LIST_ORGANIZATIONS_QUERY",
 ]

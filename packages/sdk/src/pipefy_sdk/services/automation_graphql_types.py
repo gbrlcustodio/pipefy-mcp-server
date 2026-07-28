@@ -125,6 +125,24 @@ class AutomationActionParamsRecord(TypedDict, total=False):
     url: str | None
 
 
+class AutomationConditionExpressionRecord(TypedDict, total=False):
+    """One expression under ``Automation.condition``."""
+
+    id: str
+    structure_id: str | None
+    field_address: str | None
+    operation: str | None
+    value: str | None
+
+
+class AutomationConditionRecord(TypedDict, total=False):
+    """``condition`` on ``Automation`` (query-selected fields; no ``related_cards``)."""
+
+    id: str
+    expressions: list[AutomationConditionExpressionRecord] | None
+    expressions_structure: list[Any] | None
+
+
 class AutomationRuleRecord(TypedDict, total=False):
     """Single automation from ``GET_AUTOMATION_QUERY``."""
 
@@ -139,6 +157,7 @@ class AutomationRuleRecord(TypedDict, total=False):
     event_repo: AutomationEventRepoRef | None
     event_params: AutomationEventParamsRecord | None
     action_params: AutomationActionParamsRecord | None
+    condition: AutomationConditionRecord | None
 
 
 class AutomationRuleSummary(TypedDict, total=False):

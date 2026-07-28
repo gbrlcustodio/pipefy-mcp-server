@@ -32,6 +32,7 @@ from pipefy_cli.commands.record import record_app
 from pipefy_cli.commands.relation import relation_app
 from pipefy_cli.commands.report_org import report_org_app
 from pipefy_cli.commands.report_pipe import report_pipe_app
+from pipefy_cli.commands.service_account import service_account_app
 from pipefy_cli.commands.table import table_app
 from pipefy_cli.commands.usage import usage_app
 from pipefy_cli.commands.webhook import webhook_app
@@ -126,6 +127,7 @@ app.add_typer(label_app, name="label")
 app.add_typer(webhook_app, name="webhook")
 app.add_typer(relation_app, name="relation")
 app.add_typer(member_app, name="member")
+app.add_typer(service_account_app, name="service-account")
 app.add_typer(graphql_app, name="graphql")
 app.add_typer(introspect_app, name="introspect")
 app.add_typer(kb_app, name="kb")

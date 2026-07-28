@@ -27,6 +27,7 @@ from pipefy_sdk.models.ai_agent import (
     UpdateAiAgentInput,
 )
 from pipefy_sdk.models.ai_automation import (
+    AutomationConditionInput,
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
@@ -34,6 +35,7 @@ from pipefy_sdk.models.attachment import (
     Attachment,
     AttachmentTarget,
     AttachmentUploadResult,
+    PresignedUploadTarget,
 )
 from pipefy_sdk.models.knowledge_base import DataLookupCondition
 from pipefy_sdk.services.advanced_automations_service import AdvancedAutomationsService
@@ -74,11 +76,13 @@ from pipefy_sdk.services.report_service import ReportService
 from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
 )
+from pipefy_sdk.services.service_account_service import ServiceAccountService
 from pipefy_sdk.services.table_service import (
     SEARCH_TABLES_FIRST_DEFAULT,
     TableService,
 )
 from pipefy_sdk.services.types import (
+    ActiveLlmProviderPayload,
     AgentServiceResult,
     AiAgentGraphPayload,
     AutomationServiceResult,
@@ -89,8 +93,10 @@ from pipefy_sdk.services.types import (
     KnowledgeBaseDocumentPayload,
     KnowledgeBasePayload,
     KnowledgeBasePlainTextPayload,
+    LlmProviderMutationResult,
     LlmProviderPayload,
     LlmProvidersResult,
+    LlmProviderWritePayload,
     MePayload,
     ProviderAccessProbeResult,
     ProviderDependenciesResult,
@@ -278,6 +284,7 @@ class PipefyClient:
             executor=ex.public,
             pipe_service=self._pipe_service,
         )
+        self._service_account_service = ServiceAccountService(executor=ex.public)
         self._webhook_service = WebhookService(
             executor=ex.public,
             settings=settings,
@@ -295,6 +302,7 @@ class PipefyClient:
             executor=ex.public,
             card_service=self._card_service,
             table_service=self._table_service,
+            settings=settings,
         )
         self._introspection_service = SchemaIntrospectionService(executor=ex.public)
         self._advanced_automations_service = AdvancedAutomationsService(
@@ -608,6 +616,113 @@ class PipefyClient:
         """
         return await self._member_service.invite_members(pipe_id, members)
 
+    async def add_service_account_to_pipe(
+        self, pipe_id: str, email: str, role_name: str
+    ) -> dict[str, Any]:
+        """Grant a service account membership on a pipe, by email.
+
+        For the iPaaS (Advanced Automations) setup path: a service account must
+        be a pipe member before pipe-scoped calls under its identity succeed.
+
+        Args:
+            pipe_id: ID of the pipe.
+            email: The service account's email address.
+            role_name: Pipe role to grant (e.g. 'admin', 'member').
+        """
+        return await self._member_service.add_service_account_to_pipe(
+            pipe_id, email, role_name
+        )
+
+    async def create_service_account(
+        self,
+        *,
+        organization_uuid: str,
+        name: str,
+        role: str,
+        description: str | None = None,
+        expiration: dict[str, Any] | None = None,
+        pipe_ids: list[str] | None = None,
+        pipe_role: str = "admin",
+    ) -> dict[str, Any]:
+        """Create an organization service account, optionally adding it to pipes.
+
+        Returns the service account including its OAuth2 client credentials and
+        token endpoint — available only once, at creation. Never log the result.
+
+        When ``pipe_ids`` is given, the new account is added to each pipe (by
+        email) with ``pipe_role`` right after creation, and the returned payload
+        gains a ``pipe_memberships`` list — one entry per pipe with its invite
+        outcome. A per-pipe failure is recorded there, not raised: the account is
+        already created, so partial results must surface.
+
+        Args:
+            organization_uuid: The organization UUID.
+            name: Service account name (backend caps at 20 characters).
+            role: Organization role (e.g. 'normal', 'admin').
+            description: Optional description.
+            expiration: Optional token expiration ``{"unit": ..., "value": ...}``.
+            pipe_ids: Optional pipes to add the new account to immediately.
+            pipe_role: Pipe role to grant on those pipes (default 'admin').
+        """
+        result = await self._service_account_service.create_service_account(
+            organization_uuid=organization_uuid,
+            name=name,
+            role=role,
+            description=description,
+            expiration=expiration,
+        )
+        if not pipe_ids:
+            return result
+
+        account = (result.get("createServiceAccount") or {}).get("serviceAccount") or {}
+        email = account.get("email")
+        memberships: list[dict[str, Any]] = []
+        for pipe_id in pipe_ids:
+            entry: dict[str, Any] = {"pipe_id": str(pipe_id)}
+            if not email:
+                entry["invited"] = False
+                entry["error"] = "Service account email missing from create payload."
+                memberships.append(entry)
+                continue
+            try:
+                invite = await self.add_service_account_to_pipe(
+                    str(pipe_id), email, pipe_role
+                )
+            except Exception as exc:  # noqa: BLE001
+                entry["invited"] = False
+                entry["error"] = str(exc)
+                memberships.append(entry)
+                continue
+            payload = (invite or {}).get("inviteMembers") or {}
+            errors = [
+                str(e["message"])
+                for e in (payload.get("errors") or [])
+                if isinstance(e, dict) and e.get("message")
+            ]
+            entry["invited"] = bool(payload.get("users")) and not errors
+            if errors:
+                entry["errors"] = errors
+            memberships.append(entry)
+        result["pipe_memberships"] = memberships
+        return result
+
+    async def delete_service_account(
+        self,
+        *,
+        organization_uuid: str,
+        service_account_uuid: str,
+    ) -> dict[str, Any]:
+        """Delete an organization service account.
+
+        Args:
+            organization_uuid: The organization UUID.
+            service_account_uuid: The service account UUID.
+        """
+        return await self._service_account_service.delete_service_account(
+            organization_uuid=organization_uuid,
+            service_account_uuid=service_account_uuid,
+        )
+
     async def remove_members_from_pipe(
         self, pipe_id: str, user_ids: list[str]
     ) -> dict[str, Any]:
@@ -796,6 +911,7 @@ class PipefyClient:
         *,
         active: bool = True,
         action_repo_id: str | None = None,
+        condition: AutomationConditionInput | None = None,
         extra_input: dict[str, Any] | None = None,
     ) -> CreateAutomationMutationResult:
         """Create a traditional automation rule (optional ``extra_input`` uses CreateAutomationInput field names).
@@ -819,6 +935,8 @@ class PipefyClient:
             action_repo_id: Pipe ID where the action executes. Defaults to ``pipe_id``.
                 For cross-pipe actions (``create_connected_card``, ``move_card_to_pipe``),
                 pass the **destination** pipe ID.
+            condition: Typed trigger condition. When set, it is serialized and sent as the
+                mutation's ``condition``; it wins over any ``condition`` in ``extra_input``.
             extra_input: Extra ``CreateAutomationInput`` keys. Top-level keys are snake_case
                 (``action_params``, ``event_params``, ...) and are normalized to the exact API
                 field names before sending. ``active`` here overrides the ``active`` argument.
@@ -828,6 +946,11 @@ class PipefyClient:
                 destination ``fieldId`` is invalid.
         """
         extra_input = normalize_automation_input_keys(extra_input)
+        if condition is not None:
+            extra_input = {
+                **(extra_input or {}),
+                "condition": condition.to_api_payload(),
+            }
         await validate_traditional_automation_move_transition(
             self, trigger_id, action_id, extra_input
         )
@@ -871,16 +994,24 @@ class PipefyClient:
     async def update_automation(
         self,
         automation_id: str,
+        *,
+        condition: AutomationConditionInput | None = None,
         extra_input: dict[str, Any] | None = None,
     ) -> UpdateAutomationMutationResult:
         """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names).
 
         Top-level ``extra_input`` keys are snake_case and are normalized to the exact API field
-        names before sending, as in :meth:`create_automation`.
+        names before sending, as in :meth:`create_automation`. A typed ``condition`` is serialized
+        and wins over any ``condition`` in ``extra_input``.
 
         Does not run ``field_map`` or move-transition preflight (those run on ``create_automation`` only).
         """
         extra_input = normalize_automation_input_keys(extra_input)
+        if condition is not None:
+            extra_input = {
+                **(extra_input or {}),
+                "condition": condition.to_api_payload(),
+            }
         return await self._automation_service.update_automation(
             automation_id, **(extra_input or {})
         )
@@ -973,6 +1104,74 @@ class PipefyClient:
         """Probe LLM provider read access; classifies errors instead of raising."""
         return await self._llm_provider_service.validate_llm_provider_access(
             organization_uuid
+        )
+
+    async def create_llm_provider(
+        self,
+        organization_uuid: str,
+        *,
+        name: str,
+        configuration_file_path: str | Path,
+    ) -> LlmProviderWritePayload:
+        """Create a custom (BYOM) LLM provider (configuration from a local JSON file)."""
+        return await self._llm_provider_service.create_llm_provider(
+            organization_uuid,
+            name=name,
+            configuration_file_path=configuration_file_path,
+        )
+
+    async def update_llm_provider(
+        self,
+        provider_id: str,
+        organization_uuid: str,
+        *,
+        configuration_file_path: str | Path,
+        name: str | None = None,
+    ) -> LlmProviderWritePayload:
+        """Update a custom (BYOM) LLM provider (full configuration replacement)."""
+        return await self._llm_provider_service.update_llm_provider(
+            provider_id,
+            organization_uuid,
+            configuration_file_path=configuration_file_path,
+            name=name,
+        )
+
+    async def delete_llm_provider(
+        self, provider_id: str, organization_uuid: str
+    ) -> LlmProviderMutationResult:
+        """Delete a custom (BYOM) LLM provider (permanent)."""
+        return await self._llm_provider_service.delete_llm_provider(
+            provider_id, organization_uuid
+        )
+
+    async def set_llm_provider_active_status(
+        self, provider_id: str, *, active: bool
+    ) -> LlmProviderMutationResult:
+        """Activate or deactivate a custom (BYOM) LLM provider."""
+        return await self._llm_provider_service.set_llm_provider_active_status(
+            provider_id, active=active
+        )
+
+    async def set_default_llm_provider(
+        self,
+        organization_id: str,
+        *,
+        provider_id: str | None = None,
+        system_provider_id: str | None = None,
+    ) -> ActiveLlmProviderPayload:
+        """Set the organization default provider (exactly one of provider/system id)."""
+        return await self._llm_provider_service.set_default_llm_provider(
+            organization_id,
+            provider_id=provider_id,
+            system_provider_id=system_provider_id,
+        )
+
+    async def reset_default_llm_provider(
+        self, organization_id: str
+    ) -> LlmProviderMutationResult:
+        """Reset (clear) the organization's default LLM provider assignment."""
+        return await self._llm_provider_service.reset_default_llm_provider(
+            organization_id
         )
 
     async def get_ai_knowledge_bases(
@@ -1588,6 +1787,10 @@ class PipefyClient:
         """
         return await self._organization_service.get_organization(organization_id)
 
+    async def list_organizations(self) -> list[dict[str, Any]]:
+        """List the organizations the caller can access (no id required)."""
+        return await self._organization_service.list_organizations()
+
     async def get_advanced_automations_token(self, pipe_id: str | int) -> str:
         """Mint a short-lived advanced-automations (iPaaS) access token for a pipe.
 
@@ -1961,6 +2164,27 @@ class PipefyClient:
         """
         return await self._attachment_service.upload_attachment(
             attachment, organization_id=organization_id, target=target
+        )
+
+    async def create_attachment_presigned_url(
+        self,
+        *,
+        organization_id: str,
+        file_name: str,
+        content_type: str | None = None,
+        content_length: int | None = None,
+    ) -> PresignedUploadTarget:
+        """Mint a presigned upload target (no bytes transferred).
+
+        The caller PUTs the file bytes to the returned ``upload_url`` and then
+        stores ``storage_path`` on the attachment field. See
+        :meth:`AttachmentService.create_presigned_url`.
+        """
+        return await self._attachment_service.create_presigned_url(
+            organization_id=organization_id,
+            file_name=file_name,
+            content_type=content_type,
+            content_length=content_length,
         )
 
     async def introspect_type(

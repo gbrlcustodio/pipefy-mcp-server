@@ -121,6 +121,24 @@ def test_status_stored_session_text_output(
     assert "Expires:" in result.stdout
 
 
+def test_status_non_expiring_refresh_token_not_reported_expired(
+    clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
+):
+    """Keycloak advertises a non-expiring refresh token as ``refresh_expires_in: 0``.
+    That must not be read as a 0-second TTL and rendered as already ``expired``."""
+    _set_auth_env(monkeypatch)
+    _seed_session(monkeypatch, refresh_expires_in=0)
+    session = storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID)
+    client = _mock_client_with_me()
+    with _patch_fresh_session(session), _patch_command_client(client):
+        json_result = _invoke_status(runner, ["--json"])
+        text_result = _invoke_status(runner)
+
+    assert json_result.exit_code == 0, json_result.stdout
+    assert json.loads(json_result.stdout)["refresh_expires_at"] is None
+    assert "Refresh token: expired" not in text_result.stdout
+
+
 # --------------------------------------------------------------------------- #
 # Scenario 2: stored-session, eager refresh runs (we mock the result as fresh) #
 # --------------------------------------------------------------------------- #

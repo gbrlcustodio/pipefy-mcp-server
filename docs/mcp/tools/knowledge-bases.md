@@ -25,6 +25,8 @@ Knowledge bases are the data sources an AI agent draws on. Each item's `id` is w
 
 ## Identifiers: pipe UUID, not numeric ID
 
+> Full cross-tool map: [identifiers.md](identifiers.md#ai-agents-and-knowledge-bases).
+
 Every knowledge base operation is scoped by the pipe **UUID** (`pipe_uuid`), not the numeric pipe ID — this follows the Pipefy GraphQL API. `get_pipe` returns the `uuid` field; `get_ai_knowledge_bases` returns each item's `id` (a data-source UUID) for the by-id operations and for `dataSourceIds`. The one deliberate exception is a data lookup's `source_repo_id`, which is the **numeric** ID of the source pipe (see below).
 
 ## Plain-text limits (enforced client-side)
@@ -77,6 +79,7 @@ The toolkit validates the definition client-side because the API accepts shapes 
 - A green `validate_knowledge_base_access` proves **read access only** (`read_ai_agents` on the pipe) — never the `manage_ai_agents` entitlement that every knowledge base create / update / delete (plain text, document, data lookup) requires.
 - An **empty knowledge base list** is a valid green result (`knowledge_base_count: 0`), not a failure.
 - The **CLI gates writes** on the probe: `pipefy kb plain-text create` / `update`, `pipefy kb document create` / `update`, and `pipefy kb data-lookup create` / `update` run the read-access probe first and fail with the classified problem if it is denied, before attempting the mutation.
+- **Clean-gate contract.** The probe can return a success that still carries a `problem` — when the API returns partial data alongside GraphQL errors, it surfaces the classified error rather than discarding it, and deliberately does not flip `ok`. The CLI write gate therefore treats the gate as clean only when it is **`ok` and carries no `problem`**; a present `problem` is partial denial and is never read as full access.
 - The **MCP tools stay explicit-validate-first**: create / update do not auto-probe. Call `validate_knowledge_base_access` yourself before writing.
 - **Deletes require confirmation**: the MCP tool needs `confirm=true`; the CLI needs `--yes` (or an interactive prompt).
 

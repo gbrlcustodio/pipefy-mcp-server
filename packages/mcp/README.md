@@ -1,6 +1,6 @@
 # pipefy-mcp-server
 
-MCP server for Pipefy — **157 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy`](../sdk/README.md) for all GraphQL and API logic.
+MCP server for Pipefy — **186 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy`](../sdk/README.md) for all GraphQL and API logic.
 
 ## Install
 
@@ -36,14 +36,18 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 ### Claude Code: `claude mcp add` (per-project terminal flow)
 
-Useful when you want to wire the server without editing `~/.claude.json` by hand:
+Useful when you want to wire the server without editing `~/.claude.json` by hand.
+
+**Hosted MCP (HTTP)** — zero local Python; OAuth in Claude Code. Prefer this when you do not need the full local tool surface. Do not also install the Claude Code plugin’s local `pipefy` server under the same name. Canonical snippet: [root README — Hosted MCP](../../README.md#hosted-mcp-claude-code).
+
+**Local stdio** — runs `uvx pipefy-mcp-server` on the machine:
 
 ```bash
 claude mcp add --scope project pipefy \
   -- uvx pipefy-mcp-server
 ```
 
-Then (repeat for each key you need):
+Then (repeat for each key you need; service-account path):
 
 ```bash
 claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_ID <YOUR_CLIENT_ID>
@@ -104,7 +108,7 @@ This form also works as a per-project `.mcp.json` if your team shares a clone. C
 
 ## Tools
 
-**157 tools** across eleven domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
+**186 tools** across fourteen domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
 
 ## Development
 

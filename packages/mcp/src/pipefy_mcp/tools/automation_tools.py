@@ -7,7 +7,11 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import CreateSendTaskAutomationInput, PipefyId
+from pipefy_sdk import (
+    AutomationConditionInput,
+    CreateSendTaskAutomationInput,
+    PipefyId,
+)
 from pipefy_sdk.automation_preflight import AutomationPreflightError
 from pydantic import ValidationError
 
@@ -21,6 +25,7 @@ from pipefy_mcp.tools.automation_tool_helpers import (
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
@@ -39,6 +44,31 @@ def _normalize_simulation_action_id(value: str | int) -> str | None:
     return None
 
 
+def _parse_condition_arg(
+    condition: dict[str, Any] | None,
+) -> tuple[AutomationConditionInput | None, dict[str, Any] | None]:
+    """Parse a raw ``condition`` dict into the typed model at the tool boundary.
+
+    Returns ``(model, None)`` on success (``(None, None)`` when omitted) or
+    ``(None, error_payload)`` when the shape is invalid.
+    """
+    if condition is None:
+        return None, None
+    try:
+        parsed = AutomationConditionInput.model_validate(condition)
+    except ValidationError as exc:
+        return None, build_automation_error_payload(f"Invalid 'condition': {exc}")
+    if not parsed.expressions:
+        # An expressionless condition serializes to an empty payload that would
+        # still win over extra_input.condition — almost always a mistake. Omit
+        # condition to leave the rule unconditional.
+        return None, build_automation_error_payload(
+            "Invalid 'condition': provide at least one expression, or omit "
+            "condition to leave the rule unconditional."
+        )
+    return parsed, None
+
+
 class AutomationTools:
     """MCP tools for traditional (non-AI) pipe automations."""
 
@@ -46,6 +76,7 @@ class AutomationTools:
     def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation(
             ctx: Context, automation_id: PipefyId
@@ -53,9 +84,11 @@ class AutomationTools:
             """Load one automation rule by ID, including trigger and action payloads.
 
             Use this to inspect or debug a specific rule, or before ``update_automation`` /
-            ``delete_automation``. Returned ``event_params`` and ``action_params`` (e.g.
-            ``aiParams`` with ``value`` / ``fieldIds`` / ``skillsIds``) align with
-            ``simulate_automation`` and ``create_automation`` inputs. For new rules, discover
+            ``delete_automation``. Returned ``event_params``, ``action_params`` (e.g.
+            ``aiParams`` with ``value`` / ``fieldIds`` / ``skillsIds``), and ``condition``
+            align with ``simulate_automation`` and ``create_automation`` inputs. A
+            ``condition`` with empty ``field_address`` / ``operation`` / ``value`` is the
+            API placeholder (no real filter), not a missing field. For new rules, discover
             ``event_id`` / ``action_id`` via ``get_automation_events`` and ``get_automation_actions``
             on the target pipe, then call ``create_automation``.
 
@@ -90,6 +123,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automations(
             ctx: Context,
@@ -145,6 +179,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_actions(
             ctx: Context,
@@ -189,6 +224,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_events(
             ctx: Context, pipe_id: PipefyId
@@ -223,6 +259,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_event_attributes(ctx: Context) -> dict[str, Any]:
             """List the official **event-scoped** ``field_map.value`` token catalog.
@@ -253,6 +290,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def simulate_automation(
             ctx: Context,
@@ -357,6 +395,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_automation(
             ctx: Context,
@@ -366,6 +405,7 @@ class AutomationTools:
             action_id: PipefyId,
             active: bool = True,
             action_repo_id: PipefyId | None = None,
+            condition: dict[str, Any] | None = None,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -379,8 +419,8 @@ class AutomationTools:
             ``active: false`` to disable a rule after creation.
 
             For ``card_moved`` rules with action ``move_single_card``, when ``extra_input`` includes
-            ``event_params.to_phase_id`` (or ``toPhaseId``) and ``action_params.to_phase_id`` (or
-            ``phase.id``), the tool rejects impossible transitions before calling the API, using the
+            ``event_params.to_phase_id`` and ``action_params.to_phase_id``, the tool rejects
+            impossible transitions before calling the API, using the
             same read-only transition data as ``move_card_to_phase``.
 
             **Cross-pipe actions** (e.g. ``create_connected_card``, ``move_card_to_pipe``):
@@ -412,6 +452,23 @@ class AutomationTools:
             - ``%{automation_event_execution_datetime}`` — automation run timestamp
             - ``%{<internal_id>}`` — copy from another field (digits only, e.g. ``%{429659034}``)
 
+            **Condition** (``condition``) — gate the rule on field tests. It is a
+            ``ConditionInput``: ``{"expressions": [...], "expressions_structure": [[...]]}``.
+            Each expression is ``{"field_address": "<internal_id>", "operation": "<op>",
+            "value": "<value>", "structure_id": <int>}``. ``field_address`` is the field
+            **internal_id** (numeric; the last dotted segment when addressing a connected
+            card's field), **not** a slug. ``expressions_structure`` groups expressions by
+            ``structure_id`` as AND-of-ORs: each inner array is OR'd, the inner arrays are
+            AND'd — e.g. ``[[0, 1], [2]]`` is ``(expr0 OR expr1) AND expr2``. ``operation``
+            is one of: ``equals``, ``not_equals``, ``present``, ``blank``,
+            ``string_contains``, ``string_not_contains``, ``number_greater_than``,
+            ``number_less_than``, ``date_is_today``, ``date_is_yesterday``,
+            ``date_in_current_week``, ``date_in_last_week``, ``date_in_current_month``,
+            ``date_in_last_month``, ``date_in_current_year``, ``date_in_last_year``,
+            ``date_is``, ``date_is_after``, ``date_is_before`` (the API validates the value).
+            Omit ``value`` for ``present``/``blank``. Passing ``condition`` wins over any
+            ``condition`` nested in ``extra_input``.
+
             Discover via: ``get_start_form_fields(pipe_id)``, ``get_phase_fields(phase_id)`` →
             ``internal_id``; ``get_automation_events(pipe_id)`` and ``get_automation_actions(pipe_id)``
             for trigger/action ids; ``get_automation_event_attributes`` for official ``field_map``
@@ -424,6 +481,7 @@ class AutomationTools:
                 action_id: Action type ID from ``get_automation_actions``.
                 active: When True (default), the rule is created **enabled**. Set False to start disabled. If ``extra_input`` includes ``active``, that value wins.
                 action_repo_id: Pipe ID where the action executes (destination pipe). Defaults to ``pipe_id``. Required for cross-pipe actions.
+                condition: Optional typed trigger condition (see **Condition** above). Wins over ``extra_input.condition``.
                 extra_input: Optional extra fields for the mutation input; top-level keys are snake_case (mirror ``get_automation`` output).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -451,6 +509,9 @@ class AutomationTools:
             )
             if bad is not None:
                 return bad
+            parsed_condition, cond_err = _parse_condition_arg(condition)
+            if cond_err is not None:
+                return cond_err
             try:
                 raw = await client.create_automation(
                     pid,
@@ -459,6 +520,7 @@ class AutomationTools:
                     aid,
                     active=active,
                     action_repo_id=arid,
+                    condition=parsed_condition,
                     extra_input=extra_input,
                 )
             except AutomationPreflightError as preflight_exc:
@@ -498,6 +560,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            meta=REMOTE,
         )
         async def create_send_task_automation(
             ctx: Context,
@@ -578,10 +641,12 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_automation(
             ctx: Context,
             automation_id: PipefyId,
+            condition: dict[str, Any] | None = None,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -594,11 +659,20 @@ class AutomationTools:
             ``update_card_field`` rules (same shape as ``create_automation``: numeric ``fieldId``,
             ``inputMode``, ``value``, ``card_id``, ``fields_map_order``).
 
+            Pass ``condition`` to replace the rule's trigger condition; its shape, the
+            ``field_address`` = internal_id rule, the ``expressions_structure`` AND-of-ORs
+            grouping, and the ``operation`` values are documented on ``create_automation``.
+            A ``condition`` argument wins over any ``condition`` in ``extra_input``.
+
             ``field_map`` and move-transition preflight run on ``create_automation`` only, not on
             this tool. Invalid ``fieldId`` or impossible phase transitions may still fail at the API.
 
+            Provide ``condition`` and/or ``extra_input`` — an update with neither
+            changes nothing and is rejected.
+
             Args:
                 automation_id: Automation rule ID.
+                condition: Optional typed trigger condition to replace (see ``create_automation``).
                 extra_input: Optional fields to patch on the rule.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -611,9 +685,17 @@ class AutomationTools:
             )
             if bad is not None:
                 return bad
+            parsed_condition, cond_err = _parse_condition_arg(condition)
+            if cond_err is not None:
+                return cond_err
+            if parsed_condition is None and not extra_input:
+                return build_automation_error_payload(
+                    "Nothing to update: provide 'condition' and/or 'extra_input'."
+                )
             try:
                 raw = await client.update_automation(
                     rid,
+                    condition=parsed_condition,
                     extra_input=extra_input,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -632,6 +714,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_automation(
             ctx: Context[ServerSession, None],

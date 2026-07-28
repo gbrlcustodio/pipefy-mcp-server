@@ -11,6 +11,7 @@ from pipefy_sdk import KnowledgeBaseDocumentUploadError, PipefyClient
 from pipefy_cli.commands._common import (
     confirm_destructive,
     parse_json_value,
+    probe_gate,
     run_cli_command,
 )
 
@@ -145,7 +146,7 @@ def kb_plain_text_create(
     """
 
     async def factory(client: PipefyClient):
-        gate = await _probe_gate(client, pipe_uuid)
+        gate = probe_gate(await client.validate_knowledge_base_access(pipe_uuid))
         if gate is not None:
             return gate
         plain_text = await client.create_ai_knowledge_base_plain_text(
@@ -181,7 +182,7 @@ def kb_plain_text_update(
     """
 
     async def factory(client: PipefyClient):
-        gate = await _probe_gate(client, pipe_uuid)
+        gate = probe_gate(await client.validate_knowledge_base_access(pipe_uuid))
         if gate is not None:
             return gate
         plain_text = await client.update_ai_knowledge_base_plain_text(
@@ -278,7 +279,7 @@ def kb_document_create(
     """
 
     async def factory(client: PipefyClient):
-        gate = await _probe_gate(client, pipe_uuid)
+        gate = probe_gate(await client.validate_knowledge_base_access(pipe_uuid))
         if gate is not None:
             return gate
         try:
@@ -324,7 +325,7 @@ def kb_document_update(
     """
 
     async def factory(client: PipefyClient):
-        gate = await _probe_gate(client, pipe_uuid)
+        gate = probe_gate(await client.validate_knowledge_base_access(pipe_uuid))
         if gate is not None:
             return gate
         document = await client.update_ai_knowledge_base_document(
@@ -452,7 +453,7 @@ def kb_data_lookup_create(
     fields, condition_list = _parse_data_lookup_options(output_fields, conditions)
 
     async def factory(client: PipefyClient):
-        gate = await _probe_gate(client, pipe_uuid)
+        gate = probe_gate(await client.validate_knowledge_base_access(pipe_uuid))
         if gate is not None:
             return gate
         data_lookup = await client.create_ai_knowledge_base_data_lookup(
@@ -504,7 +505,7 @@ def kb_data_lookup_update(
     fields, condition_list = _parse_data_lookup_options(output_fields, conditions)
 
     async def factory(client: PipefyClient):
-        gate = await _probe_gate(client, pipe_uuid)
+        gate = probe_gate(await client.validate_knowledge_base_access(pipe_uuid))
         if gate is not None:
             return gate
         data_lookup = await client.update_ai_knowledge_base_data_lookup(
@@ -548,15 +549,3 @@ def kb_data_lookup_delete(
         )
 
     run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
-
-
-async def _probe_gate(client: PipefyClient, pipe_uuid: str) -> dict | None:
-    """Gate a write on the read-access probe; return a failure dict or None.
-
-    A failed probe returns the classified problem so the write never runs and
-    the CLI exits 1 (via ``exit_1_on_unsuccessful``) with the problem rendered.
-    """
-    probe = await client.validate_knowledge_base_access(pipe_uuid)
-    if probe.get("ok"):
-        return None
-    return {"success": False, **probe}

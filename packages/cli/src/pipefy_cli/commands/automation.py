@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import typer
-from pipefy_sdk import CreateSendTaskAutomationInput, PipefyClient
+from pipefy_sdk import (
+    AutomationConditionInput,
+    CreateSendTaskAutomationInput,
+    PipefyClient,
+)
 from pydantic import ValidationError
 
 from pipefy_cli.commands._common import (
@@ -77,6 +81,32 @@ def automation_get(
     run_cli_command(ctx, json_out, factory)
 
 
+def _parse_condition_option(raw: str | None) -> AutomationConditionInput | None:
+    """Parse the ``--condition`` JSON object into the typed model, or None."""
+    obj = parse_json_object(raw, "--condition")
+    if obj is None:
+        return None
+    try:
+        parsed = AutomationConditionInput.model_validate(obj)
+    except ValidationError as exc:
+        raise typer.BadParameter(f"--condition: {exc}") from exc
+    if not parsed.expressions:
+        raise typer.BadParameter(
+            "--condition: provide at least one expression, or omit it to leave "
+            "the rule unconditional."
+        )
+    return parsed
+
+
+_CONDITION_HELP = (
+    "Optional JSON ConditionInput: "
+    '{"expressions": [{"field_address": "<internal_id>", "operation": "equals", '
+    '"value": "x", "structure_id": 0}], "expressions_structure": [[0]]}. '
+    "field_address is a field internal_id (not a slug); operations include equals, "
+    "not_equals, present, blank, string_contains, number_greater_than, date_is_after."
+)
+
+
 @automation_app.command("create")
 def automation_create(
     ctx: typer.Context,
@@ -101,6 +131,7 @@ def automation_create(
         "--action-repo",
         help="Destination pipe id for cross-pipe actions (defaults to --pipe).",
     ),
+    condition: str | None = typer.Option(None, "--condition", help=_CONDITION_HELP),
     extra: str | None = typer.Option(
         None,
         "--extra",
@@ -118,6 +149,7 @@ def automation_create(
 ) -> None:
     """Create an automation rule (``create_automation``)."""
     extra_obj = parse_json_object(extra, "--extra")
+    cond = _parse_condition_option(condition)
 
     async def factory(client: PipefyClient):
         return await client.create_automation(
@@ -127,6 +159,7 @@ def automation_create(
             action_id,
             active=active,
             action_repo_id=action_repo,
+            condition=cond,
             extra_input=extra_obj,
         )
 
@@ -137,8 +170,9 @@ def automation_create(
 def automation_update(
     ctx: typer.Context,
     automation_id: str = resource_id_argument(help="Automation rule id."),
-    extra: str = typer.Option(
-        ...,
+    condition: str | None = typer.Option(None, "--condition", help=_CONDITION_HELP),
+    extra: str | None = typer.Option(
+        None,
         "--extra",
         help=(
             "JSON object: UpdateAutomationInput fields to patch. Top-level keys are "
@@ -153,12 +187,20 @@ def automation_update(
     ),
 ) -> None:
     """Update an automation (``update_automation``)."""
-    extra_obj = parse_json_value(extra, "--extra")
-    if not isinstance(extra_obj, dict):
-        raise typer.BadParameter("--extra must be a JSON object")
+    cond = _parse_condition_option(condition)
+    extra_obj: dict | None = None
+    if extra is not None:
+        parsed = parse_json_value(extra, "--extra")
+        if not isinstance(parsed, dict):
+            raise typer.BadParameter("--extra must be a JSON object")
+        extra_obj = parsed
+    if cond is None and extra_obj is None:
+        raise typer.BadParameter("provide --extra and/or --condition")
 
     async def factory(client: PipefyClient):
-        return await client.update_automation(automation_id, extra_input=extra_obj)
+        return await client.update_automation(
+            automation_id, condition=cond, extra_input=extra_obj
+        )
 
     run_cli_command(ctx, json_out, factory)
 

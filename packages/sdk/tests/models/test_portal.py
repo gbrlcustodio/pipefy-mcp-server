@@ -17,7 +17,7 @@ _PAGE_ID = "page-uuid-1"
 _ELEMENT_ID = "el-uuid-1"
 
 _VALID_FORMS_METADATA = {"name": "Request form", "defaultValues": {}}
-_VALID_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
+_VALID_FORMS_DATA_SOURCES = [{"repoId": EXAMPLE_PIPE_REPO_ID}]
 _VALID_LINK_METADATA = {
     "linkName": "Open Pipefy",
     "linkUrl": "https://example.com/pipefy",

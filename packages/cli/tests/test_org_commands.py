@@ -60,4 +60,27 @@ def test_org_get_missing_id_and_env_exits_2(
     result = runner.invoke(app, ["org", "get", "--json"])
     assert result.exit_code == 2
     assert "PIPEFY_ORG_ID" in (result.stderr or "")
-    assert "pipe list" in (result.stderr or "")
+    assert "org list" in (result.stderr or "")
+
+
+def test_org_list_returns_accessible_orgs(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
+
+    payload = [
+        {"id": "111", "name": "Org One", "role": "admin"},
+        {"id": "222", "name": "Org Two", "role": "member"},
+    ]
+    mock_client = MagicMock()
+    mock_client.list_organizations = AsyncMock(return_value=payload)
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(app, ["org", "list", "--json"])
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == payload
+    mock_client.list_organizations.assert_awaited_once_with()

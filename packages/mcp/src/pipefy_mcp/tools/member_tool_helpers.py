@@ -4,12 +4,43 @@ from __future__ import annotations
 
 from typing import Any, Literal, cast
 
+from pipefy_sdk import PipefyClient
 from typing_extensions import TypedDict
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
+
+
+async def service_account_is_member(
+    client: PipefyClient,
+    pipe_id: str,
+    email: str,
+) -> bool | None:
+    """Whether ``email`` is present among the pipe's members after an invite.
+
+    Returns ``True``/``False`` when membership could be checked, or ``None``
+    when it could not (non-numeric ``pipe_id``, which ``get_pipe_members``
+    cannot resolve, or a failing verification query). ``None`` means "unknown",
+    so the caller does not treat an unverifiable invite as a failure.
+    """
+    pipe_id_str = str(pipe_id).strip()
+    if not pipe_id_str.isdigit():
+        return None
+
+    try:
+        members_data = await client.get_pipe_members(pipe_id_str)
+    except Exception:  # noqa: BLE001
+        return None
+
+    members = (members_data.get("pipe") or {}).get("members") or []
+    target = email.strip().lower()
+    for m in members:
+        user = m.get("user") if isinstance(m.get("user"), dict) else {}
+        if str(user.get("email", "")).lower() == target:
+            return True
+    return False
 
 
 class MemberMutationSuccessPayload(TypedDict):
@@ -83,4 +114,5 @@ __all__ = [
     "build_member_error_payload",
     "build_member_success_payload",
     "handle_member_tool_graphql_error",
+    "service_account_is_member",
 ]

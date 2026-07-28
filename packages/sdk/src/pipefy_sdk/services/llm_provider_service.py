@@ -1,7 +1,20 @@
-"""Service for LLM provider discovery reads and the read-access probe."""
+"""Service for LLM provider discovery reads, custom-provider writes, and the probe.
+
+Custom (BYOM) provider configuration is secret-bearing (API keys, cloud
+credentials). It is read from a local JSON file rather than passed inline so it
+never becomes a logged tool argument, and it is never echoed back: the create
+and update mutations do not select ``configuration``, and file-read/parse errors
+report only the path and a structural reason, never file contents. Value-level
+validation (vendor/model membership, live credential test calls) happens
+server-side; this layer treats the configuration as an opaque, non-empty JSON
+object and does not couple to the vendor schema.
+"""
 
 from __future__ import annotations
 
+import asyncio
+import json
+from pathlib import Path
 from typing import Any
 
 from pipefy_sdk.graphql_executor import GraphQLExecutor
@@ -11,20 +24,41 @@ from pipefy_sdk.graphql_problem import (
     classify_graphql_error_dicts,
 )
 from pipefy_sdk.queries.llm_provider_queries import (
+    CREATE_LLM_PROVIDER_MUTATION,
+    DELETE_LLM_PROVIDER_MUTATION,
     GET_AVAILABLE_AI_MODELS_QUERY,
     GET_DEFAULT_LLM_PROVIDER_QUERY,
     GET_LLM_PROVIDERS_QUERY,
     GET_PROVIDER_DEPENDENCIES_QUERY,
+    RESET_LLM_PROVIDER_OWNER_MUTATION,
+    SET_ACTIVE_LLM_PROVIDER_MUTATION,
+    SET_LLM_PROVIDER_ACTIVE_STATUS_MUTATION,
+    UPDATE_LLM_PROVIDER_MUTATION,
 )
 from pipefy_sdk.services.types import (
+    ActiveLlmProviderPayload,
+    LlmProviderMutationResult,
     LlmProviderPayload,
     LlmProvidersResult,
+    LlmProviderWritePayload,
     ProviderAccessProbeResult,
     ProviderDependenciesResult,
 )
 from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 DEFAULT_PROVIDER_PAGE_SIZE = 50
+
+# Default assignment (set/reset) is organization-scoped in this toolkit: the
+# owner is always the organization (ownerId = numeric organization id, which the
+# setActiveLlmProvider / resetLlmProviderOwner inputs require). set-active-status
+# takes no owner/org argument by contrast because its mutation resolves the org
+# server-side from the credential. The assistant/behavior owner scopes the API
+# also supports are out of scope here.
+_ORGANIZATION_OWNER_TYPE = "organization"
+
+# A generous sanity cap on the configuration file; real provider configs are a
+# few hundred bytes. Guards against accidentally reading a huge file.
+MAX_CONFIGURATION_FILE_BYTES = 256 * 1024
 
 _PROBE_FEATURE_NOTE = (
     "No system providers returned: the organization may not have Pipefy-managed "
@@ -53,8 +87,100 @@ def _problem_dict(problem: GraphQLProblem) -> dict[str, Any]:
     }
 
 
+def _read_configuration_object(configuration_file_path: str | Path) -> dict[str, Any]:
+    """Read and parse the provider configuration JSON file.
+
+    Returns the parsed top-level object. Every error reports only the file path
+    and a structural reason (missing file, too large, invalid JSON, non-object)
+    — never the file contents — so a secret in the file is never echoed in an
+    error message, log, or traceback surfaced to the caller.
+
+    Raises:
+        ValueError: On an unreadable/oversized file, invalid JSON/encoding, or a
+            top-level value that is not a non-empty JSON object.
+    """
+    display = str(configuration_file_path)
+    path = Path(configuration_file_path).expanduser()
+    try:
+        # Check the size before reading so an oversized file is rejected up front
+        # rather than pulled fully into memory.
+        if path.stat().st_size > MAX_CONFIGURATION_FILE_BYTES:
+            raise ValueError(
+                f"Configuration file {display!r} exceeds "
+                f"{MAX_CONFIGURATION_FILE_BYTES} bytes."
+            )
+        raw = path.read_bytes()
+    except OSError as exc:
+        reason = exc.strerror or exc.__class__.__name__
+        raise ValueError(
+            f"Could not read configuration file {display!r}: {reason}."
+        ) from exc
+    try:
+        parsed = json.loads(raw)
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"Configuration file {display!r} is not valid UTF-8 text."
+        ) from exc
+    except json.JSONDecodeError as exc:
+        # exc carries only a position (line/column), never the offending value.
+        raise ValueError(
+            f"Configuration file {display!r} is not valid JSON "
+            f"(line {exc.lineno}, column {exc.colno})."
+        ) from exc
+    if not isinstance(parsed, dict) or not parsed:
+        raise ValueError("Provider configuration must be a non-empty JSON object.")
+    return parsed
+
+
+def _unwrap_llm_provider(
+    response: dict[str, Any], mutation_key: str
+) -> LlmProviderWritePayload:
+    """Unwrap a create/update mutation's provider; a missing payload is failure.
+
+    A write that returns no GraphQL errors but a null ``llmProvider`` must not
+    read as success — the caller cannot know whether it persisted.
+    """
+    payload = response.get(mutation_key)
+    if isinstance(payload, dict):
+        provider = payload.get("llmProvider")
+        if isinstance(provider, dict) and provider:
+            return provider
+    raise ValueError(
+        f"{mutation_key} returned no provider payload; "
+        "the write may not have persisted."
+    )
+
+
+def _unwrap_active_provider(
+    response: dict[str, Any], mutation_key: str
+) -> ActiveLlmProviderPayload:
+    """Unwrap ``setActiveLlmProvider``'s assignment; a missing payload is failure."""
+    payload = response.get(mutation_key)
+    if isinstance(payload, dict):
+        active = payload.get("activeLlmProvider")
+        if isinstance(active, dict) and active:
+            return active
+    raise ValueError(
+        f"{mutation_key} returned no active-provider payload; "
+        "the assignment may not have persisted."
+    )
+
+
+def _mutation_success(
+    response: dict[str, Any], mutation_key: str
+) -> LlmProviderMutationResult:
+    """Project a ``success``-boolean mutation payload onto the shared result.
+
+    A null/absent ``success`` (with no GraphQL errors raised upstream) is read as
+    failure, so an ambiguous response never presents as a confirmed success.
+    """
+    payload = response.get(mutation_key)
+    payload = payload if isinstance(payload, dict) else {}
+    return {"success": bool(payload.get("success"))}
+
+
 class LlmProviderService:
-    """Read-only LLM provider discovery via GraphQL."""
+    """LLM provider discovery reads, custom-provider writes, and the access probe."""
 
     def __init__(self, *, executor: GraphQLExecutor) -> None:
         self._executor = executor
@@ -245,3 +371,213 @@ class LlmProviderService:
             )
             probe["problem"] = _problem_dict(partial)
         return probe
+
+    async def create_llm_provider(
+        self,
+        organization_uuid: str,
+        *,
+        name: str,
+        configuration_file_path: str | Path,
+    ) -> LlmProviderWritePayload:
+        """Create a custom (BYOM) LLM provider for an organization.
+
+        Configuration is read from a local JSON file (never inline) and sent as
+        the ``configuration`` object. The returned provider never includes
+        configuration (secrets are never echoed). Vendor/model membership and
+        credential validity are enforced server-side (the backend runs live
+        credential test calls), so an invalid key or model surfaces as a backend
+        rejection, not a client-side error.
+
+        Args:
+            organization_uuid: Organization UUID (not the numeric id).
+            name: Display name (required, non-blank).
+            configuration_file_path: Local path to a JSON file holding the
+                provider configuration object (``~`` is expanded). Must contain
+                a non-empty JSON object; the ``provider`` key selects the vendor.
+
+        Returns:
+            The created provider (``id``, ``name``, ``type``, ``active``,
+            ``organizationDefault``).
+        """
+        # Validate the cheap args before the file I/O so a blank name/org fails
+        # fast without reading and parsing the configuration.
+        organization_uuid = _require_non_blank(organization_uuid, "organization_uuid")
+        name = _require_non_blank(name, "name")
+        configuration = await asyncio.to_thread(
+            _read_configuration_object, configuration_file_path
+        )
+        input_obj = {
+            "organizationUuid": organization_uuid,
+            "name": name,
+            "configuration": configuration,
+        }
+        response = await self._executor.execute_query(
+            CREATE_LLM_PROVIDER_MUTATION, {"input": input_obj}
+        )
+        return _unwrap_llm_provider(response, "createLlmProvider")
+
+    async def update_llm_provider(
+        self,
+        provider_id: str,
+        organization_uuid: str,
+        *,
+        configuration_file_path: str | Path,
+        name: str | None = None,
+    ) -> LlmProviderWritePayload:
+        """Update a custom (BYOM) LLM provider (full configuration replacement).
+
+        ``configuration`` is required on every call (the API contract): read the
+        complete configuration object from a local JSON file and send it. To keep
+        an existing secret without re-supplying it, leave the redacted
+        placeholder (as returned by ``get_llm_providers``) in place — the backend
+        preserves the stored secret for any value left as the placeholder. To
+        rotate a secret, put its new real value in the file.
+
+        Args:
+            provider_id: Provider id to update (custom/BYOM only).
+            organization_uuid: Organization UUID (not the numeric id).
+            configuration_file_path: Local path to a JSON file holding the
+                complete provider configuration object (``~`` is expanded).
+            name: New display name (optional; non-blank when given).
+
+        Returns:
+            The updated provider (never includes configuration).
+        """
+        # Validate the cheap args before the file I/O (see create_llm_provider).
+        input_obj: dict[str, Any] = {
+            "id": _require_non_blank(provider_id, "provider_id"),
+            "organizationUuid": _require_non_blank(
+                organization_uuid, "organization_uuid"
+            ),
+        }
+        if name is not None:
+            input_obj["name"] = _require_non_blank(name, "name")
+        input_obj["configuration"] = await asyncio.to_thread(
+            _read_configuration_object, configuration_file_path
+        )
+        response = await self._executor.execute_query(
+            UPDATE_LLM_PROVIDER_MUTATION, {"input": input_obj}
+        )
+        return _unwrap_llm_provider(response, "updateLlmProvider")
+
+    async def delete_llm_provider(
+        self, provider_id: str, organization_uuid: str
+    ) -> LlmProviderMutationResult:
+        """Delete a custom (BYOM) LLM provider (permanent).
+
+        Args:
+            provider_id: Provider id to delete.
+            organization_uuid: Organization UUID (not the numeric id).
+
+        Returns:
+            ``success`` (True when the backend confirmed the delete).
+        """
+        input_obj = {
+            "id": _require_non_blank(provider_id, "provider_id"),
+            "organizationUuid": _require_non_blank(
+                organization_uuid, "organization_uuid"
+            ),
+        }
+        response = await self._executor.execute_query(
+            DELETE_LLM_PROVIDER_MUTATION, {"input": input_obj}
+        )
+        return _mutation_success(response, "deleteLlmProvider")
+
+    async def set_llm_provider_active_status(
+        self, provider_id: str, *, active: bool
+    ) -> LlmProviderMutationResult:
+        """Activate or deactivate a custom (BYOM) LLM provider.
+
+        The provider's organization is resolved from the credential's own
+        organization context, so no organization argument is needed — this
+        therefore requires a service-account credential bound to that organization
+        (a bare personal token is denied).
+
+        Args:
+            provider_id: Provider id whose active status to set.
+            active: ``True`` to activate, ``False`` to deactivate.
+
+        Returns:
+            ``success`` (True when the backend confirmed the change).
+        """
+        input_obj = {
+            "providerId": _require_non_blank(provider_id, "provider_id"),
+            "active": bool(active),
+        }
+        response = await self._executor.execute_query(
+            SET_LLM_PROVIDER_ACTIVE_STATUS_MUTATION, {"input": input_obj}
+        )
+        return _mutation_success(response, "setLlmProviderActiveStatus")
+
+    async def set_default_llm_provider(
+        self,
+        organization_id: str,
+        *,
+        provider_id: str | None = None,
+        system_provider_id: str | None = None,
+    ) -> ActiveLlmProviderPayload:
+        """Set the organization's default LLM provider.
+
+        Organization-scoped: the owner is always the organization. Provide
+        exactly one of ``provider_id`` (a custom/BYOM provider) or
+        ``system_provider_id`` (a Pipefy-managed system provider). Authorizes
+        against the credential's own organization context, so it requires a
+        service-account credential bound to that organization (a bare personal
+        token is denied), and ``organization_id`` must be that organization's id.
+
+        Args:
+            organization_id: Numeric organization id (not the UUID) — the owner
+                id, matching the ``get_default_llm_provider`` read convention.
+            provider_id: Custom provider id to make default.
+            system_provider_id: System provider id to make default.
+
+        Returns:
+            The owner→provider assignment (exactly one of ``llmProviderId`` /
+            ``systemLlmProviderId`` is populated).
+
+        Raises:
+            ValueError: When not exactly one of ``provider_id`` /
+                ``system_provider_id`` is given.
+        """
+        pid = (provider_id or "").strip()
+        sid = (system_provider_id or "").strip()
+        if bool(pid) == bool(sid):
+            raise ValueError(
+                "Provide exactly one of provider_id or system_provider_id."
+            )
+        input_obj: dict[str, Any] = {
+            "ownerId": _require_non_blank(organization_id, "organization_id"),
+            "ownerType": _ORGANIZATION_OWNER_TYPE,
+        }
+        if pid:
+            input_obj["providerId"] = pid
+        else:
+            input_obj["systemProviderId"] = sid
+        response = await self._executor.execute_query(
+            SET_ACTIVE_LLM_PROVIDER_MUTATION, {"input": input_obj}
+        )
+        return _unwrap_active_provider(response, "setActiveLlmProvider")
+
+    async def reset_default_llm_provider(
+        self, organization_id: str
+    ) -> LlmProviderMutationResult:
+        """Reset (clear) the organization's default LLM provider assignment.
+
+        Authorizes against the credential's own organization context (like
+        ``set_default_llm_provider``), so it requires a service-account credential
+        bound to that organization; a bare personal token is denied.
+
+        Args:
+            organization_id: Numeric organization id (not the UUID).
+
+        Returns:
+            ``success`` (True when the backend confirmed the reset).
+        """
+        input_obj = {
+            "ownerId": _require_non_blank(organization_id, "organization_id"),
+            "ownerType": _ORGANIZATION_OWNER_TYPE,
+        }
+        response = await self._executor.execute_query(
+            RESET_LLM_PROVIDER_OWNER_MUTATION, {"input": input_obj}
+        )
+        return _mutation_success(response, "resetLlmProviderOwner")

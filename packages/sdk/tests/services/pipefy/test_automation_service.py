@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
+from graphql import print_ast
 
 from pipefy_sdk.queries.automation_queries import (
     AUTOMATION_SIMULATION_QUERY,
@@ -136,6 +137,19 @@ async def test_get_automation_success():
             "email_template_id": "tmpl-1",
             "to_phase_id": "ph2",
         },
+        "condition": {
+            "id": "cond-1",
+            "expressions": [
+                {
+                    "id": "expr-1",
+                    "structure_id": "0",
+                    "field_address": "900000101",
+                    "operation": "equals",
+                    "value": "approved",
+                }
+            ],
+            "expressions_structure": [[0]],
+        },
     }
     service, executor = _make_service({"automation": automation})
     result = await service.get_automation("101")
@@ -143,6 +157,7 @@ async def test_get_automation_success():
     executor.execute_query.assert_awaited_once()
     query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_QUERY
+    assert "condition" in print_ast(GET_AUTOMATION_QUERY.document)
     assert variables == {"id": "101"}
     assert result["id"] == "a1"
     assert result["name"] == "Notify assignee"
@@ -150,6 +165,9 @@ async def test_get_automation_success():
     assert result["event_params"]["triggerFieldIds"] == ["f1", "f2"]
     assert result["action_params"]["aiParams"]["value"] == "Summarize card"
     assert result["action_params"]["aiParams"]["fieldIds"] == ["10"]
+    assert result["condition"]["id"] == "cond-1"
+    assert result["condition"]["expressions"][0]["operation"] == "equals"
+    assert result["condition"]["expressions_structure"] == [[0]]
 
 
 @pytest.mark.unit

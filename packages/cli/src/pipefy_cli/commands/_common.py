@@ -145,7 +145,7 @@ async def poll_export_until_done(
         if state in ("failed", "error"):
             raise ValueError(f"Export failed (state={state!r}).")
         if state == "done":
-            url = node.get("fileURL") or node.get("fileUrl")
+            url = node.get("fileURL")
             if isinstance(url, str) and url.strip():
                 return url.strip()
             raise ValueError("Export is done but fileURL is missing.")
@@ -318,6 +318,20 @@ def merge_extra_attrs(
         if value is not None:
             merged[key] = value
     return merged
+
+
+def probe_gate(probe: dict[str, Any]) -> dict[str, Any] | None:
+    """Gate a write on an access-probe result; return a failure dict or None.
+
+    Clean only when the probe is ``ok`` **and** carries no ``problem``: a probe
+    can return ``ok: true`` with a non-null ``problem`` when the API returns
+    partial data alongside GraphQL errors, and that partial denial must never be
+    read as full access. A non-clean gate returns the classified problem so the
+    write never runs (the CLI then exits 1 via ``exit_1_on_unsuccessful``).
+    """
+    if probe.get("ok") and "problem" not in probe:
+        return None
+    return {"success": False, **probe}
 
 
 def confirm_destructive(*, yes: bool, description: str, verb: str = "delete") -> None:

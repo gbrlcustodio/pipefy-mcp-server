@@ -226,9 +226,9 @@ class TestGetAiAutomations:
             },
             {
                 "id": "3",
-                "name": "Legacy",
+                "name": "AI 2",
                 "active": True,
-                "actionParams": {"aiParams": {"value": "x"}},
+                "action_id": "generate_with_ai",
             },
         ]
         async with client_session as session:
@@ -248,12 +248,14 @@ class TestGetAiAutomations:
         ids = {row["id"] for row in data}
         assert ids == {"1", "3"}
 
-    async def test_filter_accepts_camel_case_action_id(
+    async def test_filter_ignores_camel_case_action_id(
         self,
         client_session,
         mock_pipefy_client,
         extract_payload,
     ):
+        """The list query emits snake ``action_id``; a camel ``actionId`` never occurs
+        and is not treated as an AI automation."""
         mock_pipefy_client.get_automations.return_value = [
             {"id": "9", "name": "AI", "active": True, "actionId": "generate_with_ai"},
         ]
@@ -263,7 +265,7 @@ class TestGetAiAutomations:
                 {"pipe_id": "1"},
             )
         data = extract_payload(result)["data"]
-        assert len(data) == 1 and data[0]["id"] == "9"
+        assert data == []
 
     async def test_empty_when_none_match(
         self,
@@ -676,7 +678,7 @@ class TestCreateAiAutomation:
             )
         assert result.isError is False
         validated_input = mock_pipefy_client.create_ai_automation.call_args[0][0]
-        assert validated_input.condition.model_dump(mode="python") == DEFAULT_CONDITION
+        assert validated_input.condition.to_api_payload() == DEFAULT_CONDITION
 
     async def test_explicit_condition_overrides_default(
         self,

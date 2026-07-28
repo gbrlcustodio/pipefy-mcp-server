@@ -134,6 +134,38 @@ async def test_invite_members_lowercases_email():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_add_service_account_to_pipe_sends_single_invite_row():
+    payload = {
+        "inviteMembers": {
+            "users": [{"id": "sa1", "email": "svc@x.com"}],
+            "errors": [],
+        }
+    }
+    service, executor = _make_service(payload)
+    result = await service.add_service_account_to_pipe("601", "svc@x.com", "member")
+
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
+    assert query is INVITE_MEMBERS_MUTATION
+    inp = variables["input"]
+    assert inp["pipe_id"] == "601"
+    assert inp["emails"] == [{"email": "svc@x.com", "role_name": "member"}]
+    assert result == payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_add_service_account_to_pipe_rejects_invalid_email():
+    executor = mock_executor()
+    service = MemberService(executor=executor, pipe_service=AsyncMock())
+    with pytest.raises(ValueError) as excinfo:
+        await service.add_service_account_to_pipe("601", "not-an-email", "member")
+    assert "members[0].email" in str(excinfo.value)
+    executor.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_remove_members_from_pipe_success():
     payload = {"removeMembersFromPipe": {"success": True}}
     pipe_service = AsyncMock(spec=PipeService)

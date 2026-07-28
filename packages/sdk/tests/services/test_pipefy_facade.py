@@ -931,3 +931,66 @@ async def test_automation_extra_input_camel_aliases_reach_service_as_api_names()
     automation_service.update_automation.assert_awaited_once_with(
         "a1", action_params={"card_id": "%{id}"}
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_service_account_chains_pipe_memberships(mock_settings):
+    client = PipefyClient(mock_settings, auth=StaticBearerAuth("t"))
+    client._service_account_service.create_service_account = AsyncMock(
+        return_value={
+            "createServiceAccount": {
+                "serviceAccount": {"email": "sa@x.com", "uuid": "u"}
+            }
+        }
+    )
+    client._member_service.add_service_account_to_pipe = AsyncMock(
+        return_value={"inviteMembers": {"users": [{"id": "1"}], "errors": []}}
+    )
+    result = await client.create_service_account(
+        organization_uuid="org",
+        name="sa",
+        role="normal",
+        pipe_ids=["10", "20"],
+        pipe_role="admin",
+    )
+    assert client._member_service.add_service_account_to_pipe.await_count == 2
+    client._member_service.add_service_account_to_pipe.assert_any_await(
+        "10", "sa@x.com", "admin"
+    )
+    memberships = result["pipe_memberships"]
+    assert [m["pipe_id"] for m in memberships] == ["10", "20"]
+    assert all(m["invited"] for m in memberships)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_service_account_without_pipe_ids_does_not_chain(mock_settings):
+    client = PipefyClient(mock_settings, auth=StaticBearerAuth("t"))
+    client._service_account_service.create_service_account = AsyncMock(
+        return_value={"createServiceAccount": {"serviceAccount": {"email": "sa@x.com"}}}
+    )
+    client._member_service.add_service_account_to_pipe = AsyncMock()
+    result = await client.create_service_account(
+        organization_uuid="org", name="sa", role="normal"
+    )
+    client._member_service.add_service_account_to_pipe.assert_not_awaited()
+    assert "pipe_memberships" not in result
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_service_account_records_per_pipe_failure(mock_settings):
+    client = PipefyClient(mock_settings, auth=StaticBearerAuth("t"))
+    client._service_account_service.create_service_account = AsyncMock(
+        return_value={"createServiceAccount": {"serviceAccount": {"email": "sa@x.com"}}}
+    )
+    client._member_service.add_service_account_to_pipe = AsyncMock(
+        side_effect=ValueError("bad pipe")
+    )
+    result = await client.create_service_account(
+        organization_uuid="org", name="sa", role="normal", pipe_ids=["10"]
+    )
+    entry = result["pipe_memberships"][0]
+    assert entry["invited"] is False
+    assert "bad pipe" in entry["error"]

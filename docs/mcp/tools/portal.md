@@ -35,6 +35,8 @@ Integration tests (`pytest -m integration -k portal`) need **`PIPEFY_PORTAL_ORG_
 
 ## Identifiers
 
+> Full cross-tool map: [identifiers.md](identifiers.md#organization-portal-relations-reports).
+
 | Concept | Tool parameter | Notes |
 |--------|----------------|-------|
 | **Organization for list/create** | `organization_uuid` on `list_portals`, `create_portal` | Organization **UUID** or **numeric org id** (string or unquoted integer via MCP). Numeric ids resolve to UUID via public GraphQL before the Interfaces call. |
@@ -47,7 +49,7 @@ See [Pipefy IDs in pipes & cards](pipes-and-cards.md#pipefy-ids-type-safety) for
 
 | Layer | Convention | Examples |
 |-------|------------|----------|
-| Interfaces mutations | snake_case input fields | `interface_uuid`, `page_id`, `element_id`, `page_ids`, `data_sources`, `repo_uuid` |
+| Interfaces mutations | snake_case input fields; `data_sources` entries nest camelCase `repoId` / `fieldKeys` | `interface_uuid`, `page_id`, `element_id`, `page_ids`, `data_sources` |
 | Interfaces exceptions | camelCase | `duplicateElement`: `elementUuid`, `interfaceUuid`, `pageUuid`; `createSubPortal`: `mainPortalUuid` |
 | internal_api | camelCase variables | `portalUuid`, `elementId`, `subPortalUuid` |
 
@@ -83,7 +85,7 @@ Fifteen values accepted by `create_portal_element` / `update_portal_element` (SD
 | `button` | Opaque JSON | Action button |
 | `divider` | Opaque JSON | Visual separator |
 | `link` | **`linkName`** required; optional **`linkUrl`** | Not `url` / `label` |
-| `forms` | **`name`** required (non-empty) | Pipe linkage via `data_sources` (`repo_uuid` / `repoId`); **sub-portal publish targets `forms` elements** |
+| `forms` | **`name`** required (non-empty) | Pipe linkage via `data_sources` (`repoId`); **sub-portal publish targets `forms` elements** |
 | `pages` | Opaque JSON | Page navigation widget |
 | `subPortal` | Optional **`subPortalUuid`** | Prefer internal_api attach/publish; do not rely on `createElement` alone |
 | `automationButton` | Opaque JSON | Automation trigger |
@@ -92,7 +94,7 @@ Fifteen values accepted by `create_portal_element` / `update_portal_element` (SD
 
 **`update_portal_element`:** `metadata` is **replace-all** on the wire (`updateElement.metadata` required every time). Send the full blob, not a patch.
 
-**`data_sources`:** Each entry needs a pipe repo id as `repoId`, `repo_uuid`, or `repoUuid` (plus optional `fieldKeys` / `field_keys`). Unknown keys are skipped with an SDK warning.
+**`data_sources`:** Each entry needs a pipe repo id as `repoId` (the declared Interfaces field, plus optional `fieldKeys` / `field_keys`). Unknown keys are skipped with an SDK warning.
 
 ---
 

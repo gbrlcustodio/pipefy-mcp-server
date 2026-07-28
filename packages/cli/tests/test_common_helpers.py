@@ -34,18 +34,18 @@ async def test_poll_export_until_done_returns_fileurl_when_done():
 
 
 @pytest.mark.asyncio
-async def test_poll_export_until_done_accepts_filename_case_variant():
+async def test_poll_export_until_done_reads_only_declared_fileurl():
+    """Report export types declare ``fileURL``; a ``fileUrl``-only node has no url."""
     fetch = AsyncMock(return_value={"node": {"state": "done", "fileUrl": "https://y"}})
 
-    url = await poll_export_until_done(
-        fetch,
-        "exp-2",
-        lambda raw: raw.get("node") or {},
-        max_rounds=3,
-        delay_seconds=0.0,
-    )
-
-    assert url == "https://y"
+    with pytest.raises(ValueError, match="fileURL is missing"):
+        await poll_export_until_done(
+            fetch,
+            "exp-2",
+            lambda raw: raw.get("node") or {},
+            max_rounds=3,
+            delay_seconds=0.0,
+        )
 
 
 @pytest.mark.asyncio

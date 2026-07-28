@@ -36,7 +36,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ agent             AI Agents (repo-scoped).                                   │
 │ ai-automation     AI Automations (generate_with_ai).                         │
-│ ai-provider       LLM providers (discovery reads; organization-scoped).      │
+│ ai-provider       LLM providers (organization-scoped: discovery reads and    │
+│                   provider writes).                                          │
 │ attachment        Attachment uploads (presigned URL + field update).         │
 │ audit             Pipe audit log exports.                                    │
 │ auth              Authenticate the CLI as your Pipefy user (browser-based    │
@@ -55,6 +56,7 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ webhook           Pipe webhook operations.                                   │
 │ relation          Pipe and card relations.                                   │
 │ member            Pipe member operations.                                    │
+│ service-account   Organization service account operations.                   │
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
@@ -406,34 +408,74 @@ Usage: pipefy ai-automation validate-prompt [OPTIONS]
 ### HELP ai-provider
 Usage: pipefy ai-provider [OPTIONS] COMMAND [ARGS]...
 
- LLM providers (discovery reads; organization-scoped).
+ LLM providers (organization-scoped: discovery reads and provider writes).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list              List custom (BYOM) and Pipefy-managed system LLM providers │
-│                   (``get_llm_providers``).                                   │
-│ models            List the model names a provider vendor exposes             │
-│                   (``get_available_ai_models``).                             │
-│ dependencies      List owners that depend on a provider                      │
-│                   (``get_llm_provider_dependencies``).                       │
-│ validate-access   Probe LLM provider read access                             │
-│                   (``validate_llm_provider_access``).                        │
-│ default           Default LLM provider.                                      │
+│ list                List custom (BYOM) and Pipefy-managed system LLM         │
+│                     providers (``get_llm_providers``).                       │
+│ models              List the model names a provider vendor exposes           │
+│                     (``get_available_ai_models``).                           │
+│ dependencies        List owners that depend on a provider                    │
+│                     (``get_llm_provider_dependencies``).                     │
+│ validate-access     Probe LLM provider read access                           │
+│                     (``validate_llm_provider_access``).                      │
+│ create              Create a custom (BYOM) LLM provider                      │
+│                     (``create_llm_provider``).                               │
+│ update              Update a custom (BYOM) LLM provider                      │
+│                     (``update_llm_provider``).                               │
+│ delete              Delete a custom (BYOM) LLM provider permanently          │
+│                     (``delete_llm_provider``).                               │
+│ set-active-status   Activate or deactivate a custom (BYOM) LLM provider      │
+│                     (``set_llm_provider_active_status``).                    │
+│ default             Organization default LLM provider (get / set / reset).   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/create
+Usage: pipefy ai-provider create [OPTIONS]
+
+ Create a custom (BYOM) LLM provider (``create_llm_provider``).
+
+ Configuration is read from the local JSON file, never inline; the created
+ provider is returned without its configuration. The ``provider`` key in the
+ file selects the vendor. Gated on the read-access probe. Requires the
+ ``manage_ai_providers`` organization permission and an eligible plan.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-uuid             TEXT  Organization UUID (not the numeric ID;       │
+│                                 `pipefy org get` shows both).                │
+│                                 [required]                                   │
+│ *  --name                 TEXT  Display name (required). [required]          │
+│ *  --config-file  -f      PATH  Local JSON file with the provider            │
+│                                 configuration object (secrets stay in the    │
+│                                 file; never passed inline). Supports ~       │
+│                                 expansion. Its `provider` key uses           │
+│                                 hyphenated vendor strings (amazon-bedrock,   │
+│                                 oracle-oci) — not the snake_case form        │
+│                                 `ai-provider models --provider-name` takes;  │
+│                                 the two are not interchangeable.             │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-provider/default
 Usage: pipefy ai-provider default [OPTIONS] COMMAND [ARGS]...
 
- Default LLM provider.
+ Organization default LLM provider (get / set / reset).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get   Resolve the default LLM provider for an owner                          │
-│       (``get_default_llm_provider``).                                        │
+│ get     Resolve the default LLM provider for an owner                        │
+│         (``get_default_llm_provider``).                                      │
+│ set     Set the organization's default LLM provider                          │
+│         (``set_default_llm_provider``).                                      │
+│ reset   Reset (clear) the organization's default LLM provider                │
+│         (``reset_default_llm_provider``).                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-provider/default/get
@@ -451,6 +493,66 @@ Usage: pipefy ai-provider default get [OPTIONS]
 │                                [default: organization]                       │
 │    --json        -j            Print machine-readable JSON to stdout.        │
 │    --help                      Show this message and exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/default/reset
+Usage: pipefy ai-provider default reset [OPTIONS]
+
+ Reset (clear) the organization's default LLM provider
+ (``reset_default_llm_provider``).
+
+ Reversible via `pipefy ai-provider default set`. Like that command, it
+ authorizes against the credential's own organization, so it needs a
+ service-account credential bound to that organization (a bare personal token
+ is denied).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-id          TEXT  Numeric organization ID (not the UUID; `pipefy    │
+│                            org get` shows both).                             │
+│                            [required]                                        │
+│    --json    -j            Print machine-readable JSON to stdout.            │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/default/set
+Usage: pipefy ai-provider default set [OPTIONS]
+
+ Set the organization's default LLM provider (``set_default_llm_provider``).
+
+ Provide exactly one of --provider-id or --system-provider-id. Authorizes
+ against the credential's own organization, so it needs a service-account
+ credential bound to that organization (a bare personal token is denied); pass
+ that same organization's numeric id as --org-id.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org-id                      TEXT  Numeric organization ID (not the      │
+│                                        UUID; `pipefy org get` shows both).   │
+│                                        [required]                            │
+│    --provider-id                 TEXT  Custom (BYOM) provider ID to make the │
+│                                        default.                              │
+│    --system-provider-id          TEXT  System provider ID to make the        │
+│                                        default.                              │
+│    --json                -j            Print machine-readable JSON to        │
+│                                        stdout.                               │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/delete
+Usage: pipefy ai-provider delete [OPTIONS]
+
+ Delete a custom (BYOM) LLM provider permanently (``delete_llm_provider``).
+
+ Check `pipefy ai-provider dependencies` first — owners that still reference
+ the provider are blockers.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                TEXT  Provider ID to delete. [required]               │
+│ *  --org-uuid          TEXT  Organization UUID (not the numeric ID; `pipefy  │
+│                              org get` shows both).                           │
+│                              [required]                                      │
+│    --yes       -y            Skip the confirmation prompt.                   │
+│    --json      -j            Print machine-readable JSON to stdout.          │
+│    --help                    Show this message and exit.                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-provider/dependencies
@@ -503,10 +605,68 @@ Usage: pipefy ai-provider models [OPTIONS]
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --provider-name          TEXT  Provider vendor: openai, azure_openai,     │
 │                                   amazon_bedrock, custom, google_vertex_ai,  │
-│                                   oracle_oci, or anthropic.                  │
+│                                   oracle_oci, or anthropic. Snake_case here; │
+│                                   the `provider` key in the create/update    │
+│                                   --config-file uses the hyphenated form     │
+│                                   (amazon-bedrock) — not interchangeable.    │
 │                                   [required]                                 │
 │    --json           -j            Print machine-readable JSON to stdout.     │
 │    --help                         Show this message and exit.                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/set-active-status
+Usage: pipefy ai-provider set-active-status [OPTIONS]
+
+ Activate or deactivate a custom (BYOM) LLM provider
+ (``set_llm_provider_active_status``).
+
+ The provider's organization is resolved from the credential's own organization
+ context, so no organization argument is needed — which means this needs a
+ service-account credential bound to that organization (a bare personal token
+ is denied). Deactivating a provider owners depend on can break them — check
+ `pipefy ai-provider dependencies` first.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                        TEXT  Provider ID whose active status to set. │
+│                                      [required]                              │
+│ *  --active      --inactive          Activate (--active) or deactivate       │
+│                                      (--inactive) the provider.              │
+│                                      [required]                              │
+│    --json    -j                      Print machine-readable JSON to stdout.  │
+│    --help                            Show this message and exit.             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-provider/update
+Usage: pipefy ai-provider update [OPTIONS]
+
+ Update a custom (BYOM) LLM provider (``update_llm_provider``).
+
+ Full configuration replacement: the file must hold the complete configuration
+ object. To keep an existing secret without re-supplying it, leave the
+ redaction placeholder that ``pipefy ai-provider list`` returned in place — the
+ backend preserves the stored secret for any value left as the placeholder. To
+ rotate a secret, put its new real value in the file. Gated on the read-access
+ probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                   TEXT  Provider ID to update (from `pipefy          │
+│                                 ai-provider list`).                          │
+│                                 [required]                                   │
+│ *  --org-uuid             TEXT  Organization UUID (not the numeric ID;       │
+│                                 `pipefy org get` shows both).                │
+│                                 [required]                                   │
+│ *  --config-file  -f      PATH  Local JSON file with the provider            │
+│                                 configuration object (secrets stay in the    │
+│                                 file; never passed inline). Supports ~       │
+│                                 expansion. Its `provider` key uses           │
+│                                 hyphenated vendor strings (amazon-bedrock,   │
+│                                 oracle-oci) — not the snake_case form        │
+│                                 `ai-provider models --provider-name` takes;  │
+│                                 the two are not interchangeable.             │
+│                                 [required]                                   │
+│    --name                 TEXT  New name (non-blank).                        │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-provider/validate-access
@@ -535,7 +695,32 @@ Usage: pipefy attachment [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ upload   Upload a local file to a card or table record attachment field.     │
+│ upload    Upload a local file to a card or table record attachment field.    │
+│ presign   Mint a presigned S3 upload target without transferring any bytes.  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP attachment/presign
+Usage: pipefy attachment presign [OPTIONS]
+
+ Mint a presigned S3 upload target without transferring any bytes.
+
+ Returns the PUT ``upload_url`` and the ``storage_path`` (object key). Upload
+ the file to ``upload_url`` yourself within ``expires_in_seconds``, then set
+ the attachment field to ``storage_path`` (never the url).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --file-name                   TEXT     File name including extension;     │
+│                                           names the stored object.           │
+│                                           [required]                         │
+│ *  --organization,--org          TEXT     Organization id (numeric or uuid). │
+│                                           [required]                         │
+│    --content-type                TEXT     Optional MIME type to sign into    │
+│                                           the upload.                        │
+│    --content-length              INTEGER  Optional exact byte length to sign │
+│                                           into the upload.                   │
+│    --json                -j               Print machine-readable JSON to     │
+│                                           stdout.                            │
+│    --help                                 Show this message and exit.        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP attachment/upload
@@ -728,6 +913,24 @@ Usage: pipefy automation create [OPTIONS]
 │    --action-repo                               TEXT  Destination pipe id for │
 │                                                      cross-pipe actions      │
 │                                                      (defaults to --pipe).   │
+│    --condition                                 TEXT  Optional JSON           │
+│                                                      ConditionInput:         │
+│                                                      {"expressions":         │
+│                                                      [{"field_address":      │
+│                                                      "<internal_id>",        │
+│                                                      "operation": "equals",  │
+│                                                      "value": "x",           │
+│                                                      "structure_id": 0}],    │
+│                                                      "expressions_structure… │
+│                                                      [[0]]}. field_address   │
+│                                                      is a field internal_id  │
+│                                                      (not a slug);           │
+│                                                      operations include      │
+│                                                      equals, not_equals,     │
+│                                                      present, blank,         │
+│                                                      string_contains,        │
+│                                                      number_greater_than,    │
+│                                                      date_is_after.          │
 │    --extra                                     TEXT  Optional JSON object:   │
 │                                                      extra                   │
 │                                                      CreateAutomationInput   │
@@ -955,13 +1158,20 @@ Usage: pipefy automation update [OPTIONS] AUTOMATION_ID
 │ *    automation_id      TEXT  Automation rule id. [required]                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --extra          TEXT  JSON object: UpdateAutomationInput fields to       │
-│                           patch. Top-level keys are snake_case (e.g.         │
-│                           action_params, event_params); camelCase is also    │
-│                           accepted.                                          │
-│                           [required]                                         │
-│    --json   -j            Print machine-readable JSON to stdout.             │
-│    --help                 Show this message and exit.                        │
+│ --condition          TEXT  Optional JSON ConditionInput: {"expressions":     │
+│                            [{"field_address": "<internal_id>", "operation":  │
+│                            "equals", "value": "x", "structure_id": 0}],      │
+│                            "expressions_structure": [[0]]}. field_address is │
+│                            a field internal_id (not a slug); operations      │
+│                            include equals, not_equals, present, blank,       │
+│                            string_contains, number_greater_than,             │
+│                            date_is_after.                                    │
+│ --extra              TEXT  JSON object: UpdateAutomationInput fields to      │
+│                            patch. Top-level keys are snake_case (e.g.        │
+│                            action_params, event_params); camelCase is also   │
+│                            accepted.                                         │
+│ --json       -j            Print machine-readable JSON to stdout.            │
+│ --help                     Show this message and exit.                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP automation/usage
@@ -2122,10 +2332,26 @@ Usage: pipefy member [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list       List members of a pipe.                                           │
-│ invite     Invite users to a pipe.                                           │
-│ remove     Remove users from a pipe.                                         │
-│ set-role   Set a member's role on a pipe.                                    │
+│ list                  List members of a pipe.                                │
+│ invite                Invite users to a pipe.                                │
+│ add-service-account   Grant a service account membership on a pipe (iPaaS    │
+│                       setup).                                                │
+│ remove                Remove users from a pipe.                              │
+│ set-role              Set a member's role on a pipe.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP member/add-service-account
+Usage: pipefy member add-service-account [OPTIONS]
+
+ Grant a service account membership on a pipe (iPaaS setup).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe           TEXT  Pipe id. [required]                                │
+│ *  --email          TEXT  Service account email. [required]                  │
+│    --role           TEXT  Pipe role to grant (default admin).                │
+│                           [default: admin]                                   │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP member/invite
@@ -2190,7 +2416,8 @@ Usage: pipefy org [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get   Fetch organization details (``get_organization``).                     │
+│ list   List the organizations you can access (``list_organizations``).       │
+│ get    Fetch organization details (``get_organization``).                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP org/get
@@ -2203,6 +2430,16 @@ Usage: pipefy org get [OPTIONS] [ORGANIZATION_ID]
 │                                           PIPEFY_ORG_ID is set (see          │
 │                                           docs/config.md).                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP org/list
+Usage: pipefy org list [OPTIONS]
+
+ List the organizations you can access (``list_organizations``).
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json  -j                                                                   │
 │ --help            Show this message and exit.                                │
@@ -2272,7 +2509,9 @@ Usage: pipefy phase create [OPTIONS]
 │                                  [required]                                  │
 │ *  --name         -n      TEXT   Phase display name. [required]              │
 │    --done                        Mark as a final/done phase.                 │
-│    --index                FLOAT  Optional position index within the pipe.    │
+│    --index                FLOAT  1-based insert among workflow phases; omit  │
+│                                  to append. Does not set Connections         │
+│                                  (UI-only).                                  │
 │    --description  -d      TEXT                                               │
 │    --json         -j                                                         │
 │    --help                        Show this message and exit.                 │
@@ -3390,6 +3629,59 @@ Usage: pipefy report-pipe update [OPTIONS] REPORT_ID
 │ --featured-field          TEXT                                               │
 │ --json            -j            Print machine-readable JSON to stdout.       │
 │ --help                          Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account
+Usage: pipefy service-account [OPTIONS] COMMAND [ARGS]...
+
+ Organization service account operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create   Create an org service account. Prints the client secret once —      │
+│          store it now.                                                       │
+│ delete   Permanently delete an org service account (revokes its              │
+│          credentials).                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account/create
+Usage: pipefy service-account create [OPTIONS]
+
+ Create an org service account. Prints the client secret once — store it now.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org                       TEXT     Organization UUID. [required]        │
+│ *  --name                      TEXT     Service account name (<=20 chars).   │
+│                                         [required]                           │
+│    --role                      TEXT     Org role (admin, normal,             │
+│                                         company_guest, external_guest).      │
+│                                         [default: normal]                    │
+│    --description               TEXT     Optional description.                │
+│    --expiration-unit           TEXT     Token lifetime unit                  │
+│                                         (seconds/minutes/hours/days).        │
+│    --expiration-value          INTEGER  Token lifetime value (positive int). │
+│    --pipe-ids                  TEXT     Comma-separated pipe IDs to add the  │
+│                                         new account to immediately.          │
+│    --pipe-role                 TEXT     Pipe role for --pipe-ids (default    │
+│                                         admin).                              │
+│                                         [default: admin]                     │
+│    --json              -j                                                    │
+│    --help                               Show this message and exit.          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account/delete
+Usage: pipefy service-account delete [OPTIONS]
+
+ Permanently delete an org service account (revokes its credentials).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org           TEXT  Organization UUID. [required]                       │
+│ *  --id            TEXT  Service account UUID. [required]                    │
+│    --yes   -y            Skip confirmation prompt.                           │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table

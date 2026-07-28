@@ -16,6 +16,7 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_read_success_payload,
     handle_relation_tool_graphql_error,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
@@ -30,6 +31,7 @@ class RelationTools:
     def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_relations(pipe_id: PipefyId, ctx: Context) -> dict[str, Any]:
             """List pipe relations for a pipe (parent and child links, config, and repo refs).
@@ -61,6 +63,7 @@ class RelationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_table_relations(
             relation_ids: list[PipefyId], ctx: Context
@@ -102,6 +105,7 @@ class RelationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_pipe_relation(
             parent_id: PipefyId,
@@ -163,6 +167,7 @@ class RelationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_pipe_relation(
             relation_id: PipefyId,
@@ -219,6 +224,7 @@ class RelationTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_pipe_relation(
             ctx: Context[ServerSession, None],
@@ -268,6 +274,7 @@ class RelationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_card_relation(
             parent_id: PipefyId,

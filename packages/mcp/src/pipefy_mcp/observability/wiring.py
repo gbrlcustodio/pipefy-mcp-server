@@ -6,10 +6,9 @@ from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 
 from pipefy_mcp.observability.request_log_middleware import RequestLogMiddleware
-from pipefy_mcp.settings import Settings
 
 
-def wire_hosted_observability(app: FastMCP, _settings: Settings) -> Starlette:
+def wire_hosted_observability(app: FastMCP) -> Starlette:
     """Build the HTTP app once and attach hosted observability.
 
     ``streamable_http_app()`` must run exactly once: each call builds a new

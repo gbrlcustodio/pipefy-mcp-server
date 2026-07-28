@@ -18,6 +18,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     field_condition_actions_error_message,
     handle_pipe_config_tool_graphql_error,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     validate_tool_id,
@@ -48,6 +49,7 @@ class FieldConditionTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_field_conditions(
             ctx: Context[ServerSession, None],
@@ -104,6 +106,7 @@ class FieldConditionTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_field_condition(
             ctx: Context[ServerSession, None],
@@ -153,6 +156,7 @@ class FieldConditionTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_field_condition(
             ctx: Context,
@@ -315,6 +319,7 @@ class FieldConditionTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_field_condition(
             ctx: Context,
@@ -433,6 +438,7 @@ class FieldConditionTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_field_condition(
             ctx: Context[ServerSession, None],

@@ -75,6 +75,85 @@ def test_member_invite_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     )
 
 
+def test_member_add_service_account_json(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("mem-sa")
+    mock_client = MagicMock()
+    mock_client.add_service_account_to_pipe = AsyncMock(
+        return_value={"inviteMembers": {}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "member",
+                "add-service-account",
+                "--pipe",
+                "1",
+                "--email",
+                "svc@x.com",
+                "--role",
+                "admin",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0
+    mock_client.add_service_account_to_pipe.assert_awaited_once_with(
+        "1", "svc@x.com", "admin"
+    )
+
+
+def test_member_add_service_account_defaults_to_admin_role(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("mem-sa-def")
+    mock_client = MagicMock()
+    mock_client.add_service_account_to_pipe = AsyncMock(
+        return_value={"inviteMembers": {}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["member", "add-service-account", "--pipe", "1", "--email", "svc@x.com"],
+        )
+    assert result.exit_code == 0
+    mock_client.add_service_account_to_pipe.assert_awaited_once_with(
+        "1", "svc@x.com", "admin"
+    )
+
+
+def test_member_add_service_account_blank_email_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("mem-sa-bad")
+    mock_client = MagicMock()
+    mock_client.add_service_account_to_pipe = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "member",
+                "add-service-account",
+                "--pipe",
+                "1",
+                "--email",
+                "   ",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.add_service_account_to_pipe.assert_not_called()
+
+
 def test_member_remove_happy_path_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("mem-rm-ok")
     mock_client = MagicMock()

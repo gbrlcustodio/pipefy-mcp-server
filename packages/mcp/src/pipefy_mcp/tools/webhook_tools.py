@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
@@ -29,6 +30,7 @@ class WebhookTools:
     def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_email_templates(
             repo_id: PipefyId,
@@ -73,6 +75,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_card_inbox_emails(
             card_id: PipefyId,
@@ -122,6 +125,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def send_inbox_email(
             card_id: PipefyId,
@@ -199,6 +203,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def send_email_with_template(
             card_id: PipefyId,
@@ -268,6 +273,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_webhooks(
             ctx: Context[ServerSession, None],
@@ -305,6 +311,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_webhook(
             pipe_id: PipefyId,
@@ -372,6 +379,7 @@ class WebhookTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_webhook(
             webhook_id: PipefyId,
@@ -462,6 +470,7 @@ class WebhookTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_webhook(
             ctx: Context[ServerSession, None],

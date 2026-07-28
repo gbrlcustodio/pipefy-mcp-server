@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Documentation map
-- **`README.md`** — Project pitch, one-page install (MCP client JSON for Claude Code / Cursor / Claude Desktop / Codex, CLI, skills), repo layout, MCP tools table, contributing.
+- **`README.md`** — Project pitch, one-page install front door (`README.md#installation`: hosted MCP, Quick install, Claude Code plugin, CLI, skills), repo layout, MCP tools table, contributing.
 - **`CONTRIBUTING.md`** — Skills contribution guide (frontmatter, CI, style); entry point for GitHub contributors.
 - **`docs/README.md`** — Index of docs by surface (MCP, CLI, SDK) and shared guides.
 - **`docs/config.md`** — `PIPEFY_*` environment variables, `config.toml` schema, precedence chain.
@@ -9,10 +9,11 @@
 - **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
 - **`docs/dependencies.md`** — Rationale for runtime dependencies.
 - **`docs/architecture.md`**: Intra-package layering (domain, adapter, composition root), type ownership at boundaries, ports, and the alternative-constructor guide.
-- **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior).
+- **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior). Includes `identifiers.md`, the canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id.
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
 - **`docs/sdk/README.md`** — Using `pipefy` as a library.
 - **`skills/AGENTS.md`** — Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.
+- **`skills/onboarding/pipefy-toolkit-setup/`** — First-time setup checklist for agents (links to README snippets; does not own commands).
 
 ## Project structure
 
@@ -129,7 +130,7 @@ A capability means an SDK method + MCP tool + CLI command, all in parity:
 1. Add the GraphQL query in `packages/sdk/src/pipefy_sdk/queries/`.
 2. Add the service method in `packages/sdk/src/pipefy_sdk/services/`.
 3. Expose via `PipefyClient` in `packages/sdk/src/pipefy_sdk/client.py`.
-4. Register the MCP tool in `packages/mcp/src/pipefy_mcp/tools/` and add its name to `PIPEFY_TOOL_NAMES` in `registry.py`.
+4. Register the MCP tool in `packages/mcp/src/pipefy_mcp/tools/`, add its name to `PIPEFY_TOOL_NAMES` in `registry.py`, and assign it a subject domain in `tools/toolsets.py` (the drift-guard in `tests/tools/test_toolsets.py` fails the build for an unassigned tool).
 5. Add the CLI command in `packages/cli/src/pipefy_cli/commands/` and register it in `main.py`.
 6. Update `docs/parity.md` — mark as shipped.
 7. Update affected skills in `skills/` in the same PR (or a paired PR in the same review window).

@@ -82,8 +82,8 @@ def _normalize_portal_data_sources(
 ) -> list[dict[str, Any]]:
     """Map agent-friendly keys to Interfaces ``DataSourceInput`` (``repoId``, ``fieldKeys``).
 
-    Accepts ``repoId``, ``repo_uuid``, or ``repoUuid`` per entry. Invalid entries are
-    skipped and logged at warning level.
+    ``repoId`` is the declared Interfaces input field (a pipe repo UUID). Invalid
+    entries are skipped and logged at warning level.
     """
     normalized: list[dict[str, Any]] = []
     for index, source in enumerate(sources):
@@ -94,13 +94,11 @@ def _normalize_portal_data_sources(
                 type(source).__name__,
             )
             continue
-        repo_id = (
-            source.get("repoId") or source.get("repo_uuid") or source.get("repoUuid")
-        )
+        repo_id = source.get("repoId")
         if not isinstance(repo_id, str) or not repo_id.strip():
             logger.warning(
                 "Skipping portal data_sources[%s]: missing repo id "
-                "(use repoId, repo_uuid, or repoUuid); keys=%s",
+                "(use repoId); keys=%s",
                 index,
                 sorted(source.keys()),
             )

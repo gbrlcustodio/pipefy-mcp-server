@@ -36,7 +36,7 @@ Open-source toolkit for **Pipefy** developers: a Model Context Protocol (MCP) se
 
 | Component | Package / path | Purpose |
 |-----------|----------------|---------|
-| **MCP server** | `pipefy-mcp-server` | Exposes **176** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others). |
+| **MCP server** | `pipefy-mcp-server` | Exposes **187** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others). |
 | **CLI** | `pipefy-cli` | Terminal commands aligned with MCP capabilities; see [`docs/parity.md`](docs/parity.md). |
 | **SDK** | `pipefy` | Vendor GraphQL client, services, and models shared by MCP and CLI. |
 | **Skills** | [`skills/`](skills/) | Markdown playbooks (Anthropic Skills format) for common Pipefy workflows. |
@@ -47,9 +47,9 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 ## Installation
 
-> Pre-1.0 ships pre-release builds to PyPI on every tag; `uvx` and `uv tool install` resolve them. A stable PyPI release becomes the default at **v1.0**. The current pre-release line is **`v0.3.0-alpha.*`** (first tag: [`v0.3.0-alpha.1`](https://github.com/pipefy/ai-toolkit/releases/tag/v0.3.0-alpha.1)). Two install paths: the **Quick install** script below (resolves the latest GitHub Release at runtime and runs `uv tool install` for you), or **Claude Code** via the plugin marketplace.
+> Pre-1.0 ships pre-release builds to PyPI on every tag; `uvx` and `uv tool install` resolve them. A stable PyPI release becomes the default at **v1.0**. The current pre-release line is **`v0.3.0-beta.*`** (latest tag: [`v0.3.0-beta.1`](https://github.com/pipefy/ai-toolkit/releases/tag/v0.3.0-beta.1)). Two install paths: the **Quick install** script below (resolves the latest GitHub Release at runtime and runs `uv tool install` for you), or **Claude Code** via the plugin marketplace (or hosted MCP).
 >
-> The CLI snippets below install `pipefy-cli` from PyPI, which resolves `pipefy` and `pipefy-auth` transitively (no explicit `--with` needed). While the toolkit ships only pre-release versions (the 0.x line), `uv` resolves the latest pre-release automatically; to pin a specific one, use `pipefy-cli==X.Y.Z` (PEP 440 form, e.g. `pipefy-cli==0.3.0a1`). Do not pass a global `--prerelease allow`: it also lets transitive dependencies jump to their own pre-releases, which can pull a broken build.
+> The CLI snippets below install `pipefy-cli` from PyPI, which resolves `pipefy` and `pipefy-auth` transitively (no explicit `--with` needed). While the toolkit ships only pre-release versions (the 0.x line), `uv` resolves the latest pre-release automatically; to pin a specific one, use `pipefy-cli==X.Y.Z` (PEP 440 form, e.g. `pipefy-cli==0.3.0b1`). Do not pass a global `--prerelease allow`: it also lets transitive dependencies jump to their own pre-releases, which can pull a broken build.
 
 Two auth paths:
 
@@ -57,6 +57,22 @@ Two auth paths:
 - **Service account (unattended / CI)**: provision a Service Account in [Pipefy Admin](https://app.pipefy.com/) (Admin → Service Accounts) and add that account to every pipe the tools should touch. Wire `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` into the client config below.
 
 Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
+
+**First-time / ask your agent:** paste a setup request into Claude or Cursor and point them at this section — the checklist is [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](skills/onboarding/pipefy-toolkit-setup/SKILL.md). Pick **one** MCP registration named `pipefy` (do not mix hosted HTTP and local stdio/plugin under the same name).
+
+### Hosted MCP (Claude Code)
+
+Zero local Python: Claude Code connects over HTTPS. Auth is the client OAuth flow (`--client-id pipefy-mcp`). Hosted exposes the **remote-safe** tool surface only.
+
+Do **not** run this if you already have a local/plugin MCP named `pipefy` (or another Pipefy stdio entry you intend to keep). Remove the conflicting registration first: `claude mcp remove pipefy -s user` (adjust name/scope), or use the [Claude Code plugin](#claude-code) path instead of hosted.
+
+```bash
+claude mcp add --transport http --scope user \
+  --client-id pipefy-mcp \
+  pipefy https://mcp.pipefy.com/mcp
+```
+
+Complete the browser login when prompted (`claude mcp login pipefy` if the client reports Needs authentication). For CLI/slash commands without a second MCP server, use [Claude Code](#claude-code) **instead**, or install the CLI only ([CLI](#cli)). Hand-wired local stdio: [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ### Quick install (recommended)
 
@@ -86,7 +102,7 @@ After install, run `pipefy auth login` to authenticate (`--device` on headless s
 /pipefy:pipefy-login
 ```
 
-`/plugin install pipefy` registers the MCP server and the `/pipefy:install` + `/pipefy:pipefy-login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:pipefy-login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecInvalidOwnerEdit` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).
+Type the slash commands **in order** (the model cannot invoke `/plugin …` for you). `/plugin install pipefy` registers the local MCP server and the `/pipefy:install` + `/pipefy:pipefy-login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:pipefy-login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecInvalidOwnerEdit` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ### CLI
 
@@ -141,7 +157,7 @@ Deprecation and semver (post-1.0): [`docs/DEPRECATION.md`](docs/DEPRECATION.md).
 
 ## MCP server
 
-The server registers **176 tools** across thirteen domains. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py).
+The server registers **187 tools** across fourteen domains. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py).
 
 Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clients show to models). Per-area reference docs cover parameters, edge cases, and cross-cutting behavior.
 
@@ -149,17 +165,18 @@ Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clien
 
 | Domain | Tools | Summary | Reference |
 |--------|:-----:|---------|-----------|
-| **Pipes & cards** | 40 | Pipes, phases, fields, labels, cards, field conditions, attachments. Phase inventory (`get_phase_cards`, `get_phase_cards_count`), move discovery (`get_phase_allowed_move_targets`), and `create_card(phase_id=…)` reduce raw GraphQL for agent seeding. | [docs](docs/mcp/tools/pipes-and-cards.md) |
+| **Pipes & cards** | 41 | Pipes, phases, fields, labels, cards, field conditions, attachments. Phase inventory (`get_phase_cards`, `get_phase_cards_count`), move discovery (`get_phase_allowed_move_targets`), and `create_card(phase_id=…)` reduce raw GraphQL for agent seeding. | [docs](docs/mcp/tools/pipes-and-cards.md) |
 | **Database tables** | 17 | Tables, records, schema, table-record attachments. | [docs](docs/mcp/tools/database-tables.md) |
 | **Relations** | 8 | Pipe and card relations. | [docs](docs/mcp/tools/relations.md) |
 | **Reports** | 17 | Pipe and organization reports, async exports. | [docs](docs/mcp/tools/reports.md) |
 | **Automations & AI** | 23 | Automations, AI automations, AI agents, validators. | [docs](docs/mcp/tools/automations-and-ai.md) |
-| **LLM providers** | 5 | Discovery reads for the organization's LLM providers (custom + Pipefy-managed), vendor model lists, owner defaults, dependencies, and a read-access probe. | [docs](docs/mcp/tools/llm-providers.md) |
+| **LLM providers** | 11 | Discovery reads (custom + Pipefy-managed providers, vendor model lists, owner defaults, dependencies, read-access probe) plus custom-provider writes: create/update/delete, active-status toggle, and organization default set/reset. | [docs](docs/mcp/tools/llm-providers.md) |
 | **Knowledge bases** | 14 | Pipe-scoped AI knowledge bases: list all items, plain text / document (one-shot PDF upload) / data lookup CRUD, and a read-access probe. Attach sources to agents/behaviors via `dataSourceIds`. | [docs](docs/mcp/tools/knowledge-bases.md) |
 | **iPaaS** | 4 | Lazy discovery, invocation, and app-connection setup for a pipe's iPaaS (Advanced Automations) workspace (`get_ipaas_tools`, `call_ipaas_tool`, plus the connection meta-tools). | [docs](docs/mcp/tools/ipaas.md) |
 | **Observability** | 11 | Logs, usage, credits, execution metrics, job exports. | [docs](docs/mcp/tools/observability.md) |
-| **Members, email & webhooks** | 11 | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |
-| **Organization** | 1 | Organization metadata. | [docs](docs/mcp/tools/organization.md) |
+| **Members, email & webhooks** | 12 | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |
+| **Service accounts** | 2 | Create and delete organization service accounts (OAuth2 machine identities); attach them to pipes with `add_service_account_to_pipe`. | [docs](docs/mcp/tools/service-accounts.md) |
+| **Organization** | 2 | Organization metadata and discovery. | [docs](docs/mcp/tools/organization.md) |
 | **Portals** | 20 | Portal read/CRUD, pages, elements, sub-portals (publish/unpublish). | [docs](docs/mcp/tools/portal.md) |
 | **Introspection** | 5 | Schema discovery and raw GraphQL. | [docs](docs/mcp/tools/introspection.md) |
 

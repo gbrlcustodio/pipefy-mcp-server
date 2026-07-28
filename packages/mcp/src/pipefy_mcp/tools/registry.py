@@ -17,6 +17,7 @@ from pipefy_mcp.tools.ipaas_tools import IpaasTools
 from pipefy_mcp.tools.knowledge_base_tools import KnowledgeBaseTools
 from pipefy_mcp.tools.llm_provider_tools import LlmProviderTools
 from pipefy_mcp.tools.member_tools import MemberTools
+from pipefy_mcp.tools.meta_tools import register_meta_tools
 from pipefy_mcp.tools.observability_tools import ObservabilityTools
 from pipefy_mcp.tools.organization_tools import OrganizationTools
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
@@ -25,7 +26,9 @@ from pipefy_mcp.tools.portal_tools import PortalTools
 from pipefy_mcp.tools.relation_tools import RelationTools
 from pipefy_mcp.tools.remote_profile import is_remote_tool
 from pipefy_mcp.tools.report_tools import ReportTools
+from pipefy_mcp.tools.service_account_tools import ServiceAccountTools
 from pipefy_mcp.tools.table_tools import TableTools
+from pipefy_mcp.tools.toolsets import POWER_GRAPHQL_TOOLS, resolve_selection
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 
 if TYPE_CHECKING:
@@ -37,10 +40,12 @@ logger = logging.getLogger(__name__)
 PIPEFY_TOOL_NAMES = frozenset(
     {
         "add_card_comment",
+        "add_service_account_to_pipe",
         "call_ipaas_tool",
         "clone_pipe",
         "create_ai_agent",
         "create_ai_automation",
+        "create_attachment_presigned_url",
         "create_automation",
         "create_card",
         "create_card_relation",
@@ -50,6 +55,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "create_field_condition",
         "create_ipaas_connection",
         "create_label",
+        "create_llm_provider",
         "create_organization_report",
         "create_phase",
         "create_phase_field",
@@ -61,6 +67,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "create_portal_page",
         "create_sub_portal",
         "create_send_task_automation",
+        "create_service_account",
         "create_table",
         "create_table_field",
         "create_table_record",
@@ -76,6 +83,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "delete_comment",
         "delete_field_condition",
         "delete_label",
+        "delete_llm_provider",
         "delete_organization_report",
         "delete_phase",
         "delete_phase_field",
@@ -85,6 +93,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "delete_portal",
         "delete_portal_element",
         "delete_portal_page",
+        "delete_service_account",
         "delete_sub_portal",
         "delete_sub_portal_element",
         "delete_table",
@@ -165,10 +174,12 @@ PIPEFY_TOOL_NAMES = frozenset(
         "introspect_query",
         "introspect_type",
         "invite_members",
+        "list_organizations",
         "list_portals",
         "move_card_to_phase",
         "publish_sub_portal",
         "remove_member_from_pipe",
+        "reset_default_llm_provider",
         "search_pipes",
         "search_schema",
         "search_tables",
@@ -176,6 +187,8 @@ PIPEFY_TOOL_NAMES = frozenset(
         "send_inbox_email",
         "simulate_automation",
         "sort_portal_pages",
+        "set_default_llm_provider",
+        "set_llm_provider_active_status",
         "set_role",
         "set_table_record_field_value",
         "toggle_ai_agent_status",
@@ -191,6 +204,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "update_comment",
         "update_field_condition",
         "update_label",
+        "update_llm_provider",
         "update_organization_report",
         "update_phase",
         "update_phase_field",
@@ -227,6 +241,7 @@ _TOOLSETS = (
     ReportTools,
     AttachmentTools,
     MemberTools,
+    ServiceAccountTools,
     WebhookTools,
     AutomationTools,
     IntrospectionTools,
@@ -312,3 +327,63 @@ class ToolRegistry:
             len(withheld),
         )
         return withheld
+
+    def apply_toolset_selection(self, spec: str | None) -> set[str]:
+        """Narrow the exposed surface to the toolsets named in ``spec``.
+
+        Runs after :meth:`apply_remote_profile` (floor then selection), so on the
+        remote profile the survivors are the intersection of the remote-safe floor
+        and the selection — selection only ever removes, never widens past the
+        floor. ``spec`` is a comma-separated list of subject domains; an empty spec
+        or the ``all`` / ``default`` keyword is no curation (a no-op returning an
+        empty set), keeping the default surface backward-compatible.
+
+        Raises:
+            ValueError: on an unknown toolset name (surfaced by ``resolve_selection``).
+        """
+        selection = resolve_selection(spec)
+        if selection is None:
+            return set()
+        withheld = self.retain_only(lambda tool: tool.name in selection)
+        exposed = sum(
+            1
+            for tool in self.mcp._tool_manager.list_tools()
+            if tool.name in self.pipefy_tool_names
+        )
+        logger.info(
+            "Toolset selection %r: exposed %d, withheld %d Pipefy tools.",
+            spec,
+            exposed,
+            len(withheld),
+        )
+        return withheld
+
+    def apply_power_profile(self) -> set[str]:
+        """Hide the curated tools behind the catalog meta-tools (the ``power`` profile).
+
+        Snapshots the live curated tools (post-floor, minus the raw-GraphQL tools
+        that stay visible by name), removes them from ``tools/list``, and registers
+        the four meta-tools over that snapshot. Because the snapshot is taken after
+        :meth:`apply_remote_profile`, ``execute_tool`` can reach only tools the floor
+        already allowed. Returns the set of hidden (snapshotted) tool names.
+        """
+        catalog = {
+            tool.name: tool
+            for tool in self.mcp._tool_manager.list_tools()
+            if tool.name in self.pipefy_tool_names
+            and tool.name not in POWER_GRAPHQL_TOOLS
+        }
+        hidden = self.retain_only(lambda tool: tool.name in POWER_GRAPHQL_TOOLS)
+        register_meta_tools(self.mcp, catalog)
+        visible = sum(
+            1
+            for tool in self.mcp._tool_manager.list_tools()
+            if tool.name in self.pipefy_tool_names
+        )
+        logger.info(
+            "Power profile: hid %d curated tools behind meta-tools; "
+            "%d raw-GraphQL tools stay visible.",
+            len(hidden),
+            visible,
+        )
+        return hidden

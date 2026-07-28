@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **176** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **187** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -26,6 +26,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | MCP tool name | CLI command (or target) | Status | Notes |
 | --- | --- | --- | --- |
 | `add_card_comment` | `pipefy card comment add` | shipped | — |
+| `add_service_account_to_pipe` | `pipefy member add-service-account` | shipped | Attaches an existing org service account to a pipe by email (iPaaS setup); role defaults to `admin`; wraps `inviteMembers`. The MCP tool verifies membership afterwards (errors if absent); the CLI returns the raw invite result (inspect `inviteMembers.errors`). |
 | `call_ipaas_tool` | — | deferred | iPaaS (Advanced Automations) tool invocation; MCP-first surface, CLI twin considered once agent usage settles. |
 | `clone_pipe` | `pipefy pipe clone` | shipped | optional `--org`. |
 | `create_ai_agent` | `pipefy agent create` | shipped | AI Agents domain; post-v0.1 CLI unless explicitly rescoped. |
@@ -33,12 +34,14 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup create` | shipped | Knowledge bases; pipe-scoped (`--pipe-uuid`, `--name`, `--description` <=900, `--source-repo-id` numeric pipe ID, `--output-fields` JSON array 1-30, `--conditions` JSON array, optional `--search-query`). Conditions are typed client-side (static needs a string value; AI-filled needs the input trio). CLI gates on the read-access probe. |
 | `create_ai_knowledge_base_document` | `pipefy kb document create` | shipped | Knowledge bases; one-shot PDF upload (presigned URL, S3 PUT, create mutation). Pipe-scoped (`--pipe-uuid`, `--file`, `--name`, `--description` <=900, all required). `.pdf` and 20 MiB cap enforced client-side; step-tagged errors (`file_read`/`presigned_url`/`s3_upload`/`kb_create`). CLI gates on the read-access probe. Indexing is asynchronous. |
 | `create_ai_knowledge_base_plain_text` | `pipefy kb plain-text create` | shipped | Knowledge bases; pipe-scoped (`--pipe-uuid`, `--name`, `--content` <=3500, `--description` <=900, all required). CLI gates on the read-access probe; limits fail fast client-side. |
-| `create_automation` | `pipefy automation create` | shipped | (`--pipe`, `--name`, `--trigger-id`, `--action-id`, optional `--extra` JSON). |
+| `create_attachment_presigned_url` | `pipefy attachment presign` | shipped | Mints an S3 upload target (`upload_url` + `storage_path` object key + `expires_in_seconds`) without transferring bytes — the client PUTs the file to `upload_url`, then stores `storage_path` on the attachment field. Remote-safe (no filesystem, no bytes through the server). For attaching a file the server cannot read (a local file on the hosted profile, or large bytes). |
+| `create_automation` | `pipefy automation create` | shipped | (`--pipe`, `--name`, `--trigger-id`, `--action-id`, optional `--condition` / `--extra` JSON). First-class typed `condition` (expressions + AND-of-ORs `expressions_structure`; `field_address` = internal_id). |
 | `create_card` | `pipefy card create` | shipped | (`--fields` JSON, optional `--title`, optional `--phase-id` for `CreateCardInput.phase_id`). |
 | `create_card_relation` | `pipefy relation card create` | shipped | — |
 | `create_field_condition` | `pipefy field-condition create` | shipped | (`--phase`, `--name`, `--condition`, `--actions` JSON). |
 | `create_ipaas_connection` | — | deferred | iPaaS (Advanced Automations) connection creation; MCP-first surface, CLI twin considered with the other iPaaS tools. |
 | `create_label` | `pipefy label create` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
+| `create_llm_provider` | `pipefy ai-provider create` | shipped | Custom (BYOM) provider; configuration via local JSON file only (`--config-file`), never returned; probe-gated. |
 | `create_organization_report` | `pipefy report-org create` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `create_phase` | `pipefy phase create` | shipped | — |
 | `create_phase_field` | `pipefy field create` | shipped | (phase fields). |
@@ -50,6 +53,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_portal_element` | `pipefy portal element create` | shipped | `--page-id`, `--type`, `--metadata` JSON; optional `--data-sources` JSON array. SDK validates metadata before GraphQL. |
 | `create_sub_portal` | `pipefy portal sub-portal create` | shipped | `--main-portal-uuid`; optional `--name`. Interfaces `createSubPortal`. |
 | `create_send_task_automation` | `pipefy automation send-task create` | shipped | (task title + recipients; optional `--event-params` / `--condition` JSON). |
+| `create_service_account` | `pipefy service-account create` | shipped | Org service account (`--org` uuid, `--name` <=20, `--role`, optional `--description` / `--expiration-unit` + `--expiration-value`; optional `--pipe-ids` + `--pipe-role` default admin to add it to pipes immediately). Returns the OAuth2 client secret + token endpoint once (never logged); remote-safe. |
 | `create_table` | `pipefy table create` | shipped | — |
 | `create_table_field` | `pipefy table field create` | shipped | — |
 | `create_table_record` | `pipefy record create` | shipped | — |
@@ -65,6 +69,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `delete_comment` | `pipefy card comment delete` | shipped | destructive: `--yes` or confirm. |
 | `delete_field_condition` | `pipefy field-condition delete` | shipped | destructive: `--yes` or confirm. |
 | `delete_label` | `pipefy label delete` | shipped | destructive: `--yes`. |
+| `delete_llm_provider` | `pipefy ai-provider delete` | shipped | Custom (BYOM) provider; destructive (`confirm` / `--yes`). |
 | `delete_organization_report` | `pipefy report-org delete` | shipped | Organization reports. |
 | `delete_phase` | `pipefy phase delete` | shipped | destructive: `--yes`. |
 | `delete_phase_field` | `pipefy field delete` | shipped | destructive: `--yes`. |
@@ -74,6 +79,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `delete_portal` | `pipefy portal delete` | shipped | destructive: `--yes` or confirm. |
 | `delete_portal_page` | `pipefy portal page delete` | shipped | destructive: `--yes` or confirm; positional portal + page UUIDs. |
 | `delete_portal_element` | `pipefy portal element delete` | shipped | destructive: `--yes` or confirm; positional element + page UUIDs. |
+| `delete_service_account` | `pipefy service-account delete` | shipped | destructive: `--yes` or MCP `confirm`; org + service account UUIDs; revokes the account's credentials. |
 | `delete_sub_portal` | `pipefy portal sub-portal delete` | shipped | destructive: `--yes` or MCP `confirm`; internal_api `deleteSubPortalInterface` (irreversible). |
 | `delete_sub_portal_element` | `pipefy portal sub-portal detach` | shipped | destructive: `--yes` or MCP `confirm`; internal_api `deleteSubPortalElement` (removes element wiring). |
 | `delete_table` | `pipefy table delete` | shipped | destructive: `--yes`. |
@@ -154,15 +160,19 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `introspect_query` | `pipefy introspect query` | shipped | — |
 | `introspect_type` | `pipefy introspect type` | shipped | — |
 | `invite_members` | `pipefy member invite` | shipped | — |
+| `list_organizations` | `pipefy org list` | shipped | Lists organizations the caller can access; no id required. |
 | `list_portals` | `pipefy portal list` | shipped | `--organization-uuid`; at most one main portal per org. |
 | `move_card_to_phase` | `pipefy card move` | shipped | (`--phase`). |
 | `publish_sub_portal` | `pipefy portal sub-portal publish` | shipped | internal_api `updateSubPortalElement` on a templated `forms` element; check `subPortals[].published` via `get_portal`. |
 | `remove_member_from_pipe` | `pipefy member remove` | shipped | — |
+| `reset_default_llm_provider` | `pipefy ai-provider default reset` | shipped | Organization-scoped; clears the org default (`--org-id`). |
 | `search_pipes` | `pipefy pipe list` | shipped | (`--name`, `--max-per-org`). |
 | `search_schema` | `pipefy introspect schema search` | shipped | (optional `--kind`). |
 | `search_tables` | `pipefy table list` | shipped | (without ``--ids``). |
 | `send_email_with_template` | `pipefy email template send` | shipped | (`--card`, `--template`). |
 | `send_inbox_email` | `pipefy email inbox send` | shipped | (`--from-email`, `--to`, `--subject`, `--body`). |
+| `set_default_llm_provider` | `pipefy ai-provider default set` | shipped | Organization-scoped; exactly one of `--provider-id` / `--system-provider-id`. |
+| `set_llm_provider_active_status` | `pipefy ai-provider set-active-status` | shipped | Custom (BYOM) provider; `--active/--inactive`; org from session. |
 | `set_role` | `pipefy member set-role` | shipped | — |
 | `set_table_record_field_value` | `pipefy record update` | shipped | (``--field-id`` + ``--value``). |
 | `simulate_automation` | `pipefy automation simulate` | shipped | (`--pipe`, `--action-id`, `--sample-card`, optional JSON fragments). |
@@ -174,12 +184,13 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup update` | shipped | Knowledge bases; full-replacement update (`--id`, `--pipe-uuid`, required `--source-repo-id`/`--output-fields`/`--conditions` every call; omitted `--search-query` clears it; only `--name`/`--description` are partial). CLI gates on the read-access probe. |
 | `update_ai_knowledge_base_document` | `pipefy kb document update` | shipped | Knowledge bases; metadata-only partial update (`--id`, `--pipe-uuid`, optional `--name`/`--description`, at least one); no file replacement. CLI gates on the read-access probe. |
 | `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | shipped | Knowledge bases; partial update (`--id`, `--pipe-uuid`, optional `--name`/`--content`/`--description`, at least one). CLI gates on the read-access probe; limits fail fast client-side. |
-| `update_automation` | `pipefy automation update` | shipped | (`--extra` JSON). |
+| `update_automation` | `pipefy automation update` | shipped | (`--condition` and/or `--extra` JSON; at least one required). First-class typed `condition` replaces the rule's condition. |
 | `update_card` | `pipefy card update` | shipped | (`--field-updates` JSON, optional title/labels/assignees/due-date). |
 | `update_card_field` | `pipefy card update` | shipped | Use `--field-updates` JSON array (). |
 | `update_comment` | `pipefy card comment update` | shipped | — |
 | `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). |
 | `update_label` | `pipefy label update` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
+| `update_llm_provider` | `pipefy ai-provider update` | shipped | Custom (BYOM) provider; full configuration replacement via local JSON file; redacted placeholders preserve stored secrets; probe-gated. |
 | `update_organization_report` | `pipefy report-org update` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `update_phase` | `pipefy phase update` | shipped | — |
 | `update_phase_field` | `pipefy field update` | shipped | (``--extra`` JSON). Optional ``phase_id`` / ``pipe_id`` in ``--extra`` resolve slug ``field_id`` to ``internal_id`` when ``uuid`` is omitted. |
@@ -195,7 +206,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_table_field` | `pipefy table field update` | shipped | `--table` recommended; `--label`/`--description`/`--required`/`--options` or `--extra`. |
 | `update_table_record` | `pipefy record update` | shipped | (``--fields`` JSON). |
 | `update_webhook` | `pipefy webhook update` | shipped | — |
-| `upload_attachment_to_card` | `pipefy attachment upload --card` | shipped | (also needs `--organization`, `--field`, `--file`). |
+| `upload_attachment_to_card` | `pipefy attachment upload --card` | shipped | (also needs `--organization`, `--field`, `--file`). MCP accepts `file_path` (local) or `file_url` (downloaded, SSRF-guarded); remote-safe via `file_url`, `file_path` rejected on the hosted profile. CLI is local `--file` only. |
 | `upload_attachment_to_table_record` | `pipefy attachment upload --record` | shipped | (same supporting flags as card). |
 | `validate_ai_agent_behaviors` | `pipefy agent validate-behaviors` | shipped | AI Agents validation tooling. |
 | `validate_ai_automation_prompt` | `pipefy ai-automation validate-prompt` | shipped | AI Automations validation tooling. |
@@ -213,6 +224,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **176** tool names in `PIPEFY_TOOL_NAMES` and **176** data rows in the parity table (excluding the header rows).
+Expect **187** tool names in `PIPEFY_TOOL_NAMES` and **187** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.3.0-alpha.1"
+__version__ = "0.3.0-beta.1"
 
 from pipefy_sdk.client import PipefyClient, PipefyEngine
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
@@ -18,6 +18,7 @@ from pipefy_sdk.graphql_problem import (
     classify_graphql_error_dicts,
 )
 from pipefy_sdk.models import (
+    CONDITION_OPERATIONS,
     Attachment,
     AttachmentTarget,
     AttachmentUploadError,
@@ -29,6 +30,7 @@ from pipefy_sdk.models import (
     BehaviorPayload,
     CardTarget,
     CommentInput,
+    ConditionExpressionInput,
     CreateAiAgentInput,
     CreateAiAutomationInput,
     CreatePortalElementInput,
@@ -38,6 +40,7 @@ from pipefy_sdk.models import (
     MemberInvite,
     NonBlankStr,
     PipefyId,
+    PresignedUploadTarget,
     TableRecordTarget,
     UpdateAiAgentInput,
     UpdateAiAutomationInput,
@@ -69,6 +72,7 @@ from pipefy_sdk.services.table_service import (
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
 )
 from pipefy_sdk.services.types import (
+    ActiveLlmProviderPayload,
     AiAgentGraphPayload,
     CardSearch,
     KnowledgeBaseAccessProbeResult,
@@ -78,8 +82,10 @@ from pipefy_sdk.services.types import (
     KnowledgeBaseDocumentUploadError,
     KnowledgeBasePayload,
     KnowledgeBasePlainTextPayload,
+    LlmProviderMutationResult,
     LlmProviderPayload,
     LlmProvidersResult,
+    LlmProviderWritePayload,
     MePayload,
     ProviderAccessProbeResult,
     ProviderDependenciesResult,
@@ -100,6 +106,7 @@ __all__ = [
     "AttachmentUploadError",
     "AttachmentUploadResult",
     "AttachmentUploadStep",
+    "PresignedUploadTarget",
     "UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS",
     "UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE",
     "AutomationActionRow",
@@ -113,6 +120,8 @@ __all__ = [
     "CardSearch",
     "CardTarget",
     "CommentInput",
+    "CONDITION_OPERATIONS",
+    "ConditionExpressionInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
     "CreatePortalElementInput",
@@ -128,8 +137,11 @@ __all__ = [
     "KnowledgeBaseDocumentUploadError",
     "KnowledgeBasePayload",
     "KnowledgeBasePlainTextPayload",
+    "ActiveLlmProviderPayload",
+    "LlmProviderMutationResult",
     "LlmProviderPayload",
     "LlmProvidersResult",
+    "LlmProviderWritePayload",
     "ProviderAccessProbeResult",
     "ProviderDependenciesResult",
     "classify_exception",

@@ -151,8 +151,8 @@ def test_workspace_dep_pin_re_captures_pin(
         '{\n  "version" :  "0.2.0-beta.1",\n  "name": "pipefy"\n}\n',
     ],
 )
-def test_plugin_manifest_version_re_replaces_version(manifest: str) -> None:
-    new_text, count = _bump.PLUGIN_MANIFEST_VERSION_RE.subn(
+def test_json_version_re_replaces_version(manifest: str) -> None:
+    new_text, count = _bump.JSON_VERSION_RE.subn(
         r"\g<prefix>9.9.9\g<suffix>", manifest, count=1
     )
     assert count == 1
@@ -161,11 +161,61 @@ def test_plugin_manifest_version_re_replaces_version(manifest: str) -> None:
     assert '"pipefy"' in new_text
 
 
-def test_plugin_manifest_version_matches_real_manifest() -> None:
-    text = _bump.PLUGIN_MANIFEST.read_text(encoding="utf-8")
-    m = _bump.PLUGIN_MANIFEST_VERSION_RE.search(text)
+@pytest.mark.parametrize(
+    "manifest", [_bump.PLUGIN_MANIFEST, _bump.MARKETPLACE_MANIFEST]
+)
+def test_json_manifest_version_matches_real_manifest(manifest: Path) -> None:
+    # Both Claude manifests carry the lockstep version; a lone "version" key must
+    # resolve and equal the SDK source of truth.
+    text = manifest.read_text(encoding="utf-8")
+    m = _bump._sole_match(_bump.JSON_VERSION_RE, text)
     assert m is not None
     assert m.group("value") == _bump.read_sdk_version()
+
+
+def test_json_manifests_cover_every_versioned_plugin_manifest() -> None:
+    # A .claude-plugin JSON that carries a "version" but is absent from
+    # JSON_MANIFESTS is exactly the drift this fix targets: it exists yet is
+    # bumped and verified by nothing. Deriving the expected set from the tree
+    # (not a hand-list) means neither dropping a manifest nor adding a future one
+    # can silently unwire it.
+    versioned = {
+        path
+        for path in (_bump.REPO_ROOT / ".claude-plugin").glob("*.json")
+        if _bump.JSON_VERSION_RE.search(path.read_text(encoding="utf-8"))
+    }
+    assert versioned == set(_bump.JSON_MANIFESTS)
+
+
+def test_write_json_manifest_version_rewrites_marketplace_entry(tmp_path: Path) -> None:
+    # The marketplace manifest holds the version on a nested plugin entry; the
+    # writer must rewrite it and leave the surrounding keys untouched.
+    manifest = tmp_path / "marketplace.json"
+    manifest.write_text(
+        '{\n  "name": "pipefy",\n  "plugins": [\n    {\n'
+        '      "name": "pipefy",\n      "version": "0.2.0-beta.1"\n    }\n  ]\n}\n',
+        encoding="utf-8",
+    )
+
+    _bump._write_json_manifest_version(manifest, "9.9.9")
+
+    text = manifest.read_text(encoding="utf-8")
+    assert '"version": "9.9.9"' in text
+    assert '"name": "pipefy"' in text
+
+
+def test_write_json_manifest_version_rejects_ambiguous_version(tmp_path: Path) -> None:
+    # A second "version" key (e.g. a further catalog entry) must fail loudly
+    # rather than have only the first rewritten.
+    manifest = tmp_path / "marketplace.json"
+    manifest.write_text(
+        '{\n  "plugins": [\n'
+        '    { "version": "0.1.0" },\n    { "version": "0.1.0" }\n  ]\n}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match='Expected one "version" key'):
+        _bump._write_json_manifest_version(manifest, "9.9.9")
 
 
 def _write_pkg(path: Path, name: str, deps: tuple[str, ...]) -> None:

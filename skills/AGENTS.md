@@ -22,7 +22,7 @@ skills/
 ```
 
 **Domain folders** match the MCP tool surface:
-`pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ai-agents`, `observability`, `members-email-webhooks`, `portal-setup`, `attachments`, `introspection`, `process-design`, `process-intelligence`, `api-troubleshoot`
+`pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ipaas`, `ai-agents`, `observability`, `members-email-webhooks`, `portal-setup`, `attachments`, `introspection`, `process-design`, `process-intelligence`, `api-troubleshoot`, `onboarding`
 
 ---
 
@@ -123,7 +123,7 @@ When a skill needs stable URLs into this repo’s Markdown:
 - **MCP tool semantics** — `docs/mcp/tools/<domain>.md` (cross-cutting rules: `docs/mcp/tools/cross-cutting.md`).
 - **CLI-only flows** — `docs/cli/` (e.g. `docs/cli/self-healing.md`).
 - **SDK usage** — `docs/sdk/README.md`.
-- **Install** — always root `README.md#installation`; **`PIPEFY_*` env vars and `config.toml`** — `docs/config.md`; **MCP ↔ CLI matrix** — `docs/parity.md`.
+- **Install** — always root `README.md#installation` (canonical snippets); first-time agent checklist — `skills/onboarding/pipefy-toolkit-setup/SKILL.md`; **`PIPEFY_*` env vars and `config.toml`** — `docs/config.md`; **MCP ↔ CLI matrix** — `docs/parity.md`.
 
 ---
 

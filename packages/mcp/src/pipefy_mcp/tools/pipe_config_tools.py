@@ -129,6 +129,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_pipe(
             name: str,
@@ -173,6 +174,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_pipe(
             pipe_id: PipefyId,
@@ -233,6 +235,7 @@ class PipeConfigTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_pipe(
             ctx: Context[ServerSession, None],
@@ -318,6 +321,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def clone_pipe(
             pipe_template_id: PipefyId,
@@ -370,6 +374,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_phase_allowed_move_targets(
             phase_id: PipefyId,
@@ -423,6 +428,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_phase_cards_count(
             phase_id: PipefyId,
@@ -551,6 +557,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_phase(
             pipe_id: PipefyId,
@@ -567,7 +574,13 @@ class PipeConfigTools:
                 pipe_id: Pipe that will contain the phase.
                 name: Phase name.
                 done: When True, marks a final/done phase.
-                index: Optional position index within the pipe.
+                index: Optional 1-based insert position among workflow phases
+                    returned by ``get_pipe``. Omit to append after existing
+                    phases. Prefer ``1`` or higher for normal layout; ``0``
+                    creates a phase that does not appear in ``get_pipe``'s
+                    ``phases`` list. Index only sets order - it does not
+                    configure Phase Connections / ``allowed_phases`` (UI-only);
+                    call ``get_phase_allowed_move_targets`` before moves.
                 description: Optional phase description.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -605,6 +618,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_phase(
             phase_id: PipefyId,
@@ -706,6 +720,7 @@ class PipeConfigTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_phase(
             ctx: Context[ServerSession, None],
@@ -774,6 +789,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_phase_field(
             phase_id: PipefyId,
@@ -854,6 +870,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_phase_field(
             field_id: PipefyId,
@@ -970,6 +987,7 @@ class PipeConfigTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_phase_field(
             ctx: Context[ServerSession, None],
@@ -1089,6 +1107,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_label(
             pipe_id: PipefyId,
@@ -1148,6 +1167,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_label(
             label_id: PipefyId,
@@ -1218,6 +1238,7 @@ class PipeConfigTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_label(
             ctx: Context[ServerSession, None],

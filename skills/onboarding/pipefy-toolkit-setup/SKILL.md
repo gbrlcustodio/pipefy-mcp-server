@@ -58,10 +58,10 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 
    | Path | README section | Outcome |
    |------|----------------|---------|
-   | Hosted MCP | [Hosted MCP](../../../README.md#hosted-mcp-claude-code) | HTTPS `mcp.pipefy.com` (remote-safe tools) |
-   | Local toolkit | [Quick install](../../../README.md#quick-install-recommended) | `install.sh` → local server + CLI |
-   | Claude Code plugin | [Claude Code](../../../README.md#claude-code) | Marketplace + slash install/login |
-   | CLI only | [CLI](../../../README.md#cli) | `pipefy` on PATH; no MCP |
+   | Hosted MCP | [Hosted MCP](../../../README.md#1-hosted-mcp-claude-code) | HTTPS `mcp.pipefy.com` (remote-safe tools) |
+   | Local toolkit | [Quick install](../../../README.md#3-quick-install-script) | `install.sh` → local server + CLI |
+   | Claude Code plugin | [Claude Code plugin](../../../README.md#2-claude-code-plugin) | Marketplace + slash install/login |
+   | CLI only | [CLI](../../../README.md#4-cli-only) | `pipefy` on PATH; no MCP |
 
    **Never** register both hosted HTTP and local stdio/plugin under the MCP server name `pipefy`.
 
@@ -85,10 +85,10 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
-| Slash commands missing | Plugin not installed | README [Claude Code](../../../README.md#claude-code) — marketplace + install first |
+| Slash commands missing | Plugin not installed | README [Claude Code plugin](../../../README.md#2-claude-code-plugin) — marketplace + install first |
 | Two `pipefy` MCP entries | Hosted + plugin both registered | `claude mcp remove <name> -s user` (or client settings) |
 | `Needs authentication` after hosted add | OAuth not finished | `claude mcp login <name>` + browser |
-| `pipefy: command not found` | CLI not on PATH | `/pipefy:install` or README [CLI](../../../README.md#cli); check `$HOME/.local/bin` |
+| `pipefy: command not found` | CLI not on PATH | `/pipefy:install` or README [CLI](../../../README.md#4-cli-only); check `$HOME/.local/bin` |
 | MCP tools empty / auth errors | Login not done | Re-run login; service accounts → `docs/config.md` |
 | macOS `errSecParam` | Keychain write | [`packages/mcp/README.md`](../../../packages/mcp/README.md) |
 

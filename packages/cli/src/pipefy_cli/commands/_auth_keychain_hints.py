@@ -8,26 +8,31 @@ from pipefy_infra.config import config_dir
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 
+_ESCAPE_HATCH = (
+    f"Alternatively set PIPEFY_KEYCHAIN_BACKEND=file or use a static "
+    f"PIPEFY_TOKEN. See {DOCS_CLI_AUTH_REF}."
+)
+
 _LINUX_HINT = (
     "On headless Linux, ensure a Secret Service daemon "
-    "(gnome-keyring, kwallet) is running, set "
-    "PIPEFY_KEYCHAIN_BACKEND=file to use a plaintext file backend, "
-    "or use a static PIPEFY_TOKEN."
+    "(gnome-keyring, kwallet) is running. "
+    f"{_ESCAPE_HATCH}"
 )
 
 _MACOS_HINT = (
-    "This is usually macOS denying the calling subprocess access to the "
-    "keychain ACL prompt (errSecParam, -25244). Run `pipefy auth login` once "
-    "from a regular Terminal.app session and click Always Allow when macOS "
-    "prompts; subsequent runs (including agent / IDE integrations) will write "
-    "without prompting."
+    "macOS Keychain rejected the write (often errSecInvalidOwnerEdit, -25244: "
+    "invalid attempt to change the owner of this item). Clear any stale entry "
+    "with `pipefy auth logout`, then run `pipefy auth login` again from "
+    "Terminal.app and click Always Allow if prompted. If logout cannot delete "
+    "the item, run `security delete-generic-password -s pipefy` and retry. "
+    f"{_ESCAPE_HATCH}"
 )
 
 _WINDOWS_HINT = (
-    "On Windows, Credential Manager may block writes from non-interactive "
-    "callers. Run `pipefy auth login` once from an interactive Command Prompt "
-    "or PowerShell window, or set PIPEFY_KEYCHAIN_BACKEND=file, or use a "
-    "static PIPEFY_TOKEN."
+    "On Windows, Credential Manager may reject the write. Run "
+    "`pipefy auth login` once from an interactive Command Prompt or "
+    "PowerShell window. "
+    f"{_ESCAPE_HATCH}"
 )
 
 _GENERIC_HINT = (
@@ -41,7 +46,7 @@ def keychain_store_failure_hint(*, backend: str) -> str:
     if backend == "PlaintextKeyring":
         return (
             f"Ensure the config directory is writable ({config_dir()}), "
-            "or use a static PIPEFY_TOKEN."
+            f"or use a static PIPEFY_TOKEN. See {DOCS_CLI_AUTH_REF}."
         )
     return _keychain_hint_for_platform()
 

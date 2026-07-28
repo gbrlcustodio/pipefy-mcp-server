@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import http.client
+import platform
 import threading
 import time
 
@@ -751,11 +752,11 @@ class TestAuthLoginCommand:
         assert "invalid_grant" in result.stderr
 
     @pytest.mark.parametrize(
-        ("system", "expected_fragment", "forbidden_fragment"),
+        ("system", "expected_fragment", "forbidden_fragment", "require_file_backend"),
         [
-            ("Linux", "Secret Service", "Terminal.app"),
-            ("Darwin", "errSecParam", "Secret Service"),
-            ("Windows", "Credential Manager", "Secret Service"),
+            ("Linux", "Secret Service", "Terminal.app", True),
+            ("Darwin", "errSecInvalidOwnerEdit", "Secret Service", True),
+            ("Windows", "Credential Manager", "Secret Service", True),
         ],
     )
     def test_store_failure_default_backend_hint_matches_platform(
@@ -768,11 +769,10 @@ class TestAuthLoginCommand:
         system: str,
         expected_fragment: str,
         forbidden_fragment: str,
+        require_file_backend: bool,
     ) -> None:
         """A keychain write failure on the default OS backend surfaces a
         platform-appropriate remediation hint."""
-        import platform
-
         monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
         monkeypatch.setattr(platform, "system", lambda: system)
 
@@ -799,8 +799,9 @@ class TestAuthLoginCommand:
         assert "could not be stored in your keychain" in result.stderr
         assert expected_fragment in result.stderr
         assert forbidden_fragment not in result.stderr
-        if system == "Linux":
+        if require_file_backend:
             assert "PIPEFY_KEYCHAIN_BACKEND=file" in result.stderr
+            assert "docs/cli/auth.md" in result.stderr
 
     def test_store_failure_file_backend_hints_at_config_dir(
         self,

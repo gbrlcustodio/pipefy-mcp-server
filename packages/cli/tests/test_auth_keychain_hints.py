@@ -10,10 +10,40 @@ from pipefy_cli.commands import _auth_keychain_hints as hints
 @pytest.mark.parametrize(
     ("system", "required", "forbidden"),
     [
-        ("Darwin", ["errSecParam", "Terminal.app", "Always Allow"], ["Secret Service"]),
-        ("Linux", ["Secret Service"], ["Terminal.app", "Credential Manager"]),
-        ("Windows", ["Credential Manager"], ["Secret Service", "Terminal.app"]),
-        ("FreeBSD", ["pipefy auth status"], []),
+        (
+            "Darwin",
+            [
+                "errSecInvalidOwnerEdit",
+                "pipefy auth logout",
+                "Terminal.app",
+                "Always Allow",
+                "PIPEFY_KEYCHAIN_BACKEND=file",
+                "PIPEFY_TOKEN",
+                "docs/cli/auth.md",
+            ],
+            ["Secret Service", "errSecParam"],
+        ),
+        (
+            "Linux",
+            [
+                "Secret Service",
+                "PIPEFY_KEYCHAIN_BACKEND=file",
+                "PIPEFY_TOKEN",
+                "docs/cli/auth.md",
+            ],
+            ["Terminal.app", "Credential Manager"],
+        ),
+        (
+            "Windows",
+            [
+                "Credential Manager",
+                "PIPEFY_KEYCHAIN_BACKEND=file",
+                "PIPEFY_TOKEN",
+                "docs/cli/auth.md",
+            ],
+            ["Secret Service", "Terminal.app"],
+        ),
+        ("FreeBSD", ["pipefy auth status", "docs/cli/auth.md"], []),
     ],
 )
 def test_keychain_hint_for_platform(
@@ -36,4 +66,5 @@ def test_plaintext_backend_hint_ignores_platform(
     monkeypatch.setattr(platform, "system", lambda: "Darwin")
     hint = hints.keychain_store_failure_hint(backend="PlaintextKeyring")
     assert "config directory is writable" in hint
-    assert "errSecParam" not in hint
+    assert "errSecInvalidOwnerEdit" not in hint
+    assert "docs/cli/auth.md" in hint

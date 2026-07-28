@@ -218,15 +218,18 @@ Every `PIPEFY_*` env var is validated against a semantically meaningful regex at
 
 The login worked but `keyring` couldn't write the entry.
 
-**macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecParam` from Security.framework — common when the calling process cannot surface the new-item ACL dialog (IDE slash commands, agent hosts, and other non-TTY subprocesses that do not share an interactive Aqua session). The remediation procedure is the same regardless of install method. macOS binds the keychain ACL to the calling Python binary's path, so `uv tool install` and a wheel install give you a stable grant; with `uvx`, the cached environment's binary path can change (for example after `uvx --refresh` or a uv version bump), and macOS will prompt again from Terminal.app.
+**macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecInvalidOwnerEdit` from Security.framework ("Invalid attempt to change the owner of this item") — not `errSecParam` (`-50`). The `keyring` macOS backend deletes any existing item and re-adds it on every write, so a stale entry created by another Python binary (for example a previous `uvx` cache path, or a login from Terminal.app followed by a write from an IDE/agent host) can surface this error. The root cause is not fully pinned; treat the steps below as remediation, not a proven mechanism.
 
-1. Run `pipefy auth login` **once** from a regular **Terminal.app** session (not from inside the IDE).
-2. When macOS prompts for keychain access for the Python binary running `pipefy`, click **Always Allow**.
-3. Retry login from the IDE or agent integration — refresh writes should succeed without another prompt.
+1. Run `pipefy auth logout` to clear the keychain entry (`delete_session`), then `pipefy auth login` again.
+2. If logout cannot delete the item, remove it manually: `security delete-generic-password -s pipefy`, then retry login.
+3. Prefer running that login from a regular **Terminal.app** session; if macOS prompts for keychain access, click **Always Allow**.
+4. If the OS keychain remains unusable, set `PIPEFY_KEYCHAIN_BACKEND=file` (plaintext under the Pipefy config directory) or use a static `PIPEFY_TOKEN`.
+
+Stable installs (`uv tool install` / wheel) keep a stable Python binary path across runs; with `uvx`, a path change after `uvx --refresh` or a uv version bump can recreate a cross-binary ownership mismatch and require clearing the entry again.
 
 **Linux (headless / CI).** Usually no Secret Service daemon — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` for a plaintext file backend under the Pipefy config directory, or use a static `PIPEFY_TOKEN`.
 
-**Windows.** Credential Manager may block non-interactive callers; run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`.
+**Windows.** Credential Manager may reject the write (including from non-interactive callers). Run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`. A dedicated encrypted Windows backend for oversized sessions is tracked separately.
 
 When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the CLI hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
 

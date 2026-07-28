@@ -130,7 +130,7 @@ A capability means an SDK method + MCP tool + CLI command, all in parity:
 1. Add the GraphQL query in `packages/sdk/src/pipefy_sdk/queries/`.
 2. Add the service method in `packages/sdk/src/pipefy_sdk/services/`.
 3. Expose via `PipefyClient` in `packages/sdk/src/pipefy_sdk/client.py`.
-4. Register the MCP tool in `packages/mcp/src/pipefy_mcp/tools/` and add its name to `PIPEFY_TOOL_NAMES` in `registry.py`.
+4. Register the MCP tool in `packages/mcp/src/pipefy_mcp/tools/`, add its name to `PIPEFY_TOOL_NAMES` in `registry.py`, and assign it a subject domain in `tools/toolsets.py` (the drift-guard in `tests/tools/test_toolsets.py` fails the build for an unassigned tool).
 5. Add the CLI command in `packages/cli/src/pipefy_cli/commands/` and register it in `main.py`.
 6. Update `docs/parity.md` — mark as shipped.
 7. Update affected skills in `skills/` in the same PR (or a paired PR in the same review window).

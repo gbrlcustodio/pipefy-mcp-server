@@ -40,6 +40,11 @@ REMOTE_SEED = frozenset(
         "introspect_query",
         "introspect_mutation",
         "introspect_type",
+        # Raw-GraphQL escape hatch (#308): arbitrary queries and mutations as the
+        # request-scoped bearer, governed entirely by API permissions like its
+        # introspection siblings. No filesystem or process-global reads; its
+        # write reach is bounded by the caller's own API authorization.
+        "execute_graphql",
         # AI agent & automation reads (#437): read/validate tools that reach the
         # API with the request-scoped bearer and are governed by API permissions;
         # no filesystem or per-user process-global settings reads.

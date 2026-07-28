@@ -128,6 +128,7 @@ These variables load into `pipefy_mcp.McpSettings` (`settings.mcp`). TOML keys u
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `PIPEFY_MCP_PROFILE` | `local` | Launch profile: `local` registers every tool; `remote` exposes only remote-safe tools and validates an inbound bearer per request. |
+| `PIPEFY_MCP_TOOLSETS` | unset | Comma-separated subject domains to expose — `workflow`, `database`, `interfaces`, `automation`, `intelligence`, `analytics`, `governance`, `integration` — applied after the remote floor to narrow the surface (selection only ever narrows, never widens past the floor). `all` / `default` or unset keep every tool — and mixing either keyword with a domain (e.g. `default,workflow`) still keeps every tool, since the no-curation keyword wins. An unknown name is a startup error. Also settable with `--toolsets` / `--tools`. |
 | `PIPEFY_MCP_TRANSPORT` | derived from profile | `stdio` or `http`. Unset: `local` → `stdio`, `remote` → `http`. |
 | `PIPEFY_MCP_HOST` | `127.0.0.1` | HTTP bind host. The unauthenticated `local` profile refuses a non-loopback bind unless `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` is set; the authenticated `remote` profile binds any host. |
 | `PIPEFY_MCP_PORT` | `8000` | HTTP bind port. |

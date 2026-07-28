@@ -26,6 +26,7 @@ from pipefy_mcp.server import (
 )
 from pipefy_mcp.settings import McpSettings, Settings, resolve_mcp_settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
+from pipefy_mcp.tools.toolsets import DOMAINS
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(base_url="https://api.pipefy.com"),
@@ -168,6 +169,17 @@ def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_runti
 
 
 @pytest.mark.unit
+def test_build_server_applies_toolset_selection(mocked_runtime):
+    """A ``toolsets`` selection narrows the registered surface to the named domains."""
+    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+        update={"mcp": McpSettings(toolsets="database")}
+    )
+    app = build_pipefy_mcp_server(settings)
+    exposed = {t.name for t in app._tool_manager.list_tools()} & PIPEFY_TOOL_NAMES
+    assert exposed == set(DOMAINS["database"])
+
+
+@pytest.mark.unit
 def test_default_tool_middlewares_seeds_the_logger_under_remote():
     """The composition root seeds structured tool-call logging for the hosted profile."""
     assert default_tool_middlewares(_REMOTE_PROFILE_SETTINGS) == [tool_log_middleware]
@@ -223,7 +235,7 @@ def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_runt
     """
     app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     with pytest.raises(RuntimeError, match="already exist"):
-        _register_pipefy_tools(app, remote_mode=False)
+        _register_pipefy_tools(app, remote_mode=False, toolsets=None)
 
 
 # --- The lifespan owns resources only ----------------------------------------

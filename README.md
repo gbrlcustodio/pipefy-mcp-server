@@ -67,7 +67,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 > **Register exactly one MCP server named `pipefy`** — do not mix the hosted HTTP server and a local stdio/plugin server under the same name. First-time setup checklist to hand your agent: [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](skills/onboarding/pipefy-toolkit-setup/SKILL.md).
 
-> **Too many tools for your client?** The local paths can narrow what the server exposes with `--toolsets` / `PIPEFY_MCP_TOOLSETS`: by subject domain (`workflow`, `database`, `automation`, …), by persona profile (`operator`, `builder`, `admin`, …), or `power` to replace the curated tools with four catalog meta-tools the agent searches on demand. Names and precedence: [`docs/config.md`](docs/config.md).
+> **Too many tools for your client?** The local paths can expose a subset instead of the whole catalog — by subject domain, by persona profile, or as four catalog meta-tools the agent searches on demand. See [Choosing a tool surface](#choosing-a-tool-surface).
 
 **Authentication** (for the local paths; the hosted server uses its own in-client OAuth):
 
@@ -187,6 +187,20 @@ Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clien
 | **Organization** | 2 | Organization metadata and discovery. | [docs](docs/mcp/tools/organization.md) |
 | **Portals** | 20 | Portal read/CRUD, pages, elements, sub-portals (publish/unpublish). | [docs](docs/mcp/tools/portal.md) |
 | **Introspection** | 5 | Schema discovery and raw GraphQL. | [docs](docs/mcp/tools/introspection.md) |
+
+### Choosing a tool surface
+
+Not every client wants every tool. Three independent controls decide what `tools/list` returns:
+
+| Control | Set with | Effect |
+|---|---|---|
+| **Launch profile** | `--profile local` / `remote` | The security floor. `local` registers every tool; `remote` serves only the remote-safe surface and validates an inbound bearer per request. |
+| **Toolset selection** | `--toolsets` / `PIPEFY_MCP_TOOLSETS` | Narrows within that floor — by **subject domain** (`workflow`, `database`, `interfaces`, `automation`, `intelligence`, `analytics`, `governance`, `integration`) or by **persona profile** (`requester`, `operator`, `manager`, `builder`, `admin`, `auditor`), unioned. Selection never widens past the floor. |
+| **Power discovery** | `--toolsets power` | Replaces the curated tools with four catalog meta-tools (`get_tool_categories`, `search_tools`, `describe_tool`, `execute_tool`) plus the raw-GraphQL tools, so the working set stays small no matter how large the catalog grows. |
+
+The toolset names are a **different grouping from the table above**: that table is organized by documentation area (the reference docs you read), while subject domains partition tools by the job they serve — card relations land in `workflow`, table relations in `database`. Passing an unrecognized name is a startup error that prints the full list of valid ones.
+
+Per-name definitions and precedence: [`docs/config.md`](docs/config.md). Taxonomy rationale (why subject domains, why personas overlap): [`packages/mcp/AGENTS.md`](packages/mcp/AGENTS.md).
 
 ---
 

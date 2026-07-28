@@ -30,9 +30,9 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 ## Edge cases and alternative wiring
 
-### macOS keychain `errSecParam (-25244)`
+### macOS keychain `errSecInvalidOwnerEdit (-25244)`
 
-`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command (Claude Code) or `pipefy auth login` (terminal) first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. [Issue #235](https://github.com/pipefy/ai-toolkit/issues/235) tracks platform-aware error messaging.
+`pipefy auth login` may exit with `errSecInvalidOwnerEdit (-25244)` ("Invalid attempt to change the owner of this item") at the final keychain-write step even though OAuth itself succeeded. Clear the entry with `pipefy auth logout`; if it reports `Not signed in. Nothing to do.` (or fails), remove it with `security delete-generic-password -s pipefy`. Then run `pipefy auth login` again from Terminal.app and click **Always Allow** if prompted. If the OS keychain remains unusable, set `PIPEFY_KEYCHAIN_BACKEND=file` or use a static `PIPEFY_TOKEN`. See [`docs/cli/auth.md`](../../docs/cli/auth.md) for the full platform-specific troubleshooting.
 
 ### Claude Code: `claude mcp add` (per-project terminal flow)
 

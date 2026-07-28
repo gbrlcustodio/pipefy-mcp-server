@@ -90,7 +90,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 | `Needs authentication` after hosted add | OAuth not finished | `claude mcp login <name>` + browser |
 | `pipefy: command not found` | CLI not on PATH | `/pipefy:install` or README [CLI](../../../README.md#4-cli-only); check `$HOME/.local/bin` |
 | MCP tools empty / auth errors | Login not done | Re-run login; service accounts → `docs/config.md` |
-| macOS `errSecParam` | Keychain write | [`packages/mcp/README.md`](../../../packages/mcp/README.md) |
+| macOS `errSecInvalidOwnerEdit` | Keychain write | [`packages/mcp/README.md`](../../../packages/mcp/README.md) |
 
 ## See also
 

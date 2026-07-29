@@ -1091,7 +1091,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.25.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.25.0,<2" },
     { name = "pipefy", editable = "packages/sdk" },
     { name = "pipefy-auth", editable = "packages/auth" },
     { name = "pipefy-infra", editable = "packages/infra" },

@@ -8,8 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _shared.live_settings import live_pipefy_settings, require_live_creds
-from gql.transport.exceptions import TransportQueryError
-from pipefy_sdk import PipefySettings
+from pipefy_sdk import PipefyGraphQLError, PipefySettings
 from pipefy_sdk.exceptions import PipefyAPIError
 
 from pipefy_cli.main import app
@@ -80,9 +79,8 @@ def test_card_get_permission_denied_hint_on_stderr(
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
-    exc = TransportQueryError(
-        "unused",
-        errors=[{"message": "Forbidden", "extensions": {"code": "PERMISSION_DENIED"}}],
+    exc = PipefyGraphQLError(
+        [{"message": "Forbidden", "extensions": {"code": "PERMISSION_DENIED"}}]
     )
     mock_client = MagicMock()
     mock_client.get_card = AsyncMock(side_effect=exc)

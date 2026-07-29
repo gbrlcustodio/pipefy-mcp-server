@@ -56,6 +56,7 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ webhook           Pipe webhook operations.                                   │
 │ relation          Pipe and card relations.                                   │
 │ member            Pipe member operations.                                    │
+│ service-account   Organization service account operations.                   │
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
@@ -694,7 +695,32 @@ Usage: pipefy attachment [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ upload   Upload a local file to a card or table record attachment field.     │
+│ upload    Upload a local file to a card or table record attachment field.    │
+│ presign   Mint a presigned S3 upload target without transferring any bytes.  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP attachment/presign
+Usage: pipefy attachment presign [OPTIONS]
+
+ Mint a presigned S3 upload target without transferring any bytes.
+
+ Returns the PUT ``upload_url`` and the ``storage_path`` (object key). Upload
+ the file to ``upload_url`` yourself within ``expires_in_seconds``, then set
+ the attachment field to ``storage_path`` (never the url).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --file-name                   TEXT     File name including extension;     │
+│                                           names the stored object.           │
+│                                           [required]                         │
+│ *  --organization,--org          TEXT     Organization id (numeric or uuid). │
+│                                           [required]                         │
+│    --content-type                TEXT     Optional MIME type to sign into    │
+│                                           the upload.                        │
+│    --content-length              INTEGER  Optional exact byte length to sign │
+│                                           into the upload.                   │
+│    --json                -j               Print machine-readable JSON to     │
+│                                           stdout.                            │
+│    --help                                 Show this message and exit.        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP attachment/upload
@@ -887,6 +913,24 @@ Usage: pipefy automation create [OPTIONS]
 │    --action-repo                               TEXT  Destination pipe id for │
 │                                                      cross-pipe actions      │
 │                                                      (defaults to --pipe).   │
+│    --condition                                 TEXT  Optional JSON           │
+│                                                      ConditionInput:         │
+│                                                      {"expressions":         │
+│                                                      [{"field_address":      │
+│                                                      "<internal_id>",        │
+│                                                      "operation": "equals",  │
+│                                                      "value": "x",           │
+│                                                      "structure_id": 0}],    │
+│                                                      "expressions_structure… │
+│                                                      [[0]]}. field_address   │
+│                                                      is a field internal_id  │
+│                                                      (not a slug);           │
+│                                                      operations include      │
+│                                                      equals, not_equals,     │
+│                                                      present, blank,         │
+│                                                      string_contains,        │
+│                                                      number_greater_than,    │
+│                                                      date_is_after.          │
 │    --extra                                     TEXT  Optional JSON object:   │
 │                                                      extra                   │
 │                                                      CreateAutomationInput   │
@@ -1114,13 +1158,20 @@ Usage: pipefy automation update [OPTIONS] AUTOMATION_ID
 │ *    automation_id      TEXT  Automation rule id. [required]                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --extra          TEXT  JSON object: UpdateAutomationInput fields to       │
-│                           patch. Top-level keys are snake_case (e.g.         │
-│                           action_params, event_params); camelCase is also    │
-│                           accepted.                                          │
-│                           [required]                                         │
-│    --json   -j            Print machine-readable JSON to stdout.             │
-│    --help                 Show this message and exit.                        │
+│ --condition          TEXT  Optional JSON ConditionInput: {"expressions":     │
+│                            [{"field_address": "<internal_id>", "operation":  │
+│                            "equals", "value": "x", "structure_id": 0}],      │
+│                            "expressions_structure": [[0]]}. field_address is │
+│                            a field internal_id (not a slug); operations      │
+│                            include equals, not_equals, present, blank,       │
+│                            string_contains, number_greater_than,             │
+│                            date_is_after.                                    │
+│ --extra              TEXT  JSON object: UpdateAutomationInput fields to      │
+│                            patch. Top-level keys are snake_case (e.g.        │
+│                            action_params, event_params); camelCase is also   │
+│                            accepted.                                         │
+│ --json       -j            Print machine-readable JSON to stdout.            │
+│ --help                     Show this message and exit.                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP automation/usage
@@ -2281,10 +2332,26 @@ Usage: pipefy member [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list       List members of a pipe.                                           │
-│ invite     Invite users to a pipe.                                           │
-│ remove     Remove users from a pipe.                                         │
-│ set-role   Set a member's role on a pipe.                                    │
+│ list                  List members of a pipe.                                │
+│ invite                Invite users to a pipe.                                │
+│ add-service-account   Grant a service account membership on a pipe (iPaaS    │
+│                       setup).                                                │
+│ remove                Remove users from a pipe.                              │
+│ set-role              Set a member's role on a pipe.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP member/add-service-account
+Usage: pipefy member add-service-account [OPTIONS]
+
+ Grant a service account membership on a pipe (iPaaS setup).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe           TEXT  Pipe id. [required]                                │
+│ *  --email          TEXT  Service account email. [required]                  │
+│    --role           TEXT  Pipe role to grant (default admin).                │
+│                           [default: admin]                                   │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP member/invite
@@ -2349,7 +2416,8 @@ Usage: pipefy org [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get   Fetch organization details (``get_organization``).                     │
+│ list   List the organizations you can access (``list_organizations``).       │
+│ get    Fetch organization details (``get_organization``).                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP org/get
@@ -2362,6 +2430,16 @@ Usage: pipefy org get [OPTIONS] [ORGANIZATION_ID]
 │                                           PIPEFY_ORG_ID is set (see          │
 │                                           docs/config.md).                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP org/list
+Usage: pipefy org list [OPTIONS]
+
+ List the organizations you can access (``list_organizations``).
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json  -j                                                                   │
 │ --help            Show this message and exit.                                │
@@ -3551,6 +3629,59 @@ Usage: pipefy report-pipe update [OPTIONS] REPORT_ID
 │ --featured-field          TEXT                                               │
 │ --json            -j            Print machine-readable JSON to stdout.       │
 │ --help                          Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account
+Usage: pipefy service-account [OPTIONS] COMMAND [ARGS]...
+
+ Organization service account operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create   Create an org service account. Prints the client secret once —      │
+│          store it now.                                                       │
+│ delete   Permanently delete an org service account (revokes its              │
+│          credentials).                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account/create
+Usage: pipefy service-account create [OPTIONS]
+
+ Create an org service account. Prints the client secret once — store it now.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org                       TEXT     Organization UUID. [required]        │
+│ *  --name                      TEXT     Service account name (<=20 chars).   │
+│                                         [required]                           │
+│    --role                      TEXT     Org role (admin, normal,             │
+│                                         company_guest, external_guest).      │
+│                                         [default: normal]                    │
+│    --description               TEXT     Optional description.                │
+│    --expiration-unit           TEXT     Token lifetime unit                  │
+│                                         (seconds/minutes/hours/days).        │
+│    --expiration-value          INTEGER  Token lifetime value (positive int). │
+│    --pipe-ids                  TEXT     Comma-separated pipe IDs to add the  │
+│                                         new account to immediately.          │
+│    --pipe-role                 TEXT     Pipe role for --pipe-ids (default    │
+│                                         admin).                              │
+│                                         [default: admin]                     │
+│    --json              -j                                                    │
+│    --help                               Show this message and exit.          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP service-account/delete
+Usage: pipefy service-account delete [OPTIONS]
+
+ Permanently delete an org service account (revokes its credentials).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org           TEXT  Organization UUID. [required]                       │
+│ *  --id            TEXT  Service account UUID. [required]                    │
+│    --yes   -y            Skip confirmation prompt.                           │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table

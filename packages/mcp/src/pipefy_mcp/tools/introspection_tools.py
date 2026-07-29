@@ -150,6 +150,7 @@ class IntrospectionTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def execute_graphql(
             query: str,

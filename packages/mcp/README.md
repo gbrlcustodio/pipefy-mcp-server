@@ -1,6 +1,6 @@
 # pipefy-mcp-server
 
-MCP server for Pipefy — **182 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy`](../sdk/README.md) for all GraphQL and API logic.
+MCP server for Pipefy — **187 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy`](../sdk/README.md) for all GraphQL and API logic.
 
 ## Install
 
@@ -30,15 +30,15 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 ## Edge cases and alternative wiring
 
-### macOS keychain `errSecParam (-25244)`
+### macOS keychain `errSecInvalidOwnerEdit (-25244)`
 
-`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command (Claude Code) or `pipefy auth login` (terminal) first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. [Issue #235](https://github.com/pipefy/ai-toolkit/issues/235) tracks platform-aware error messaging.
+`pipefy auth login` may exit with `errSecInvalidOwnerEdit (-25244)` ("Invalid attempt to change the owner of this item") at the final keychain-write step even though OAuth itself succeeded. Clear the entry with `pipefy auth logout`; if it reports `Not signed in. Nothing to do.` (or fails), remove it with `security delete-generic-password -s pipefy`. Then run `pipefy auth login` again from Terminal.app and click **Always Allow** if prompted. If the OS keychain remains unusable, set `PIPEFY_KEYCHAIN_BACKEND=file` or use a static `PIPEFY_TOKEN`. See [`docs/cli/auth.md`](../../docs/cli/auth.md) for the full platform-specific troubleshooting.
 
 ### Claude Code: `claude mcp add` (per-project terminal flow)
 
 Useful when you want to wire the server without editing `~/.claude.json` by hand.
 
-**Hosted MCP (HTTP)** — zero local Python; OAuth in Claude Code. Prefer this when you do not need the full local tool surface. Do not also install the Claude Code plugin’s local `pipefy` server under the same name. Canonical snippet: [root README — Hosted MCP](../../README.md#hosted-mcp-claude-code).
+**Hosted MCP (HTTP)** — zero local Python; OAuth in Claude Code. Prefer this when you do not need the full local tool surface. Do not also install the Claude Code plugin’s local `pipefy` server under the same name. Canonical snippet: [root README — Hosted MCP](../../README.md#1-hosted-mcp-claude-code).
 
 **Local stdio** — runs `uvx pipefy-mcp-server` on the machine:
 
@@ -108,7 +108,7 @@ This form also works as a per-project `.mcp.json` if your team shares a clone. C
 
 ## Tools
 
-**182 tools** across thirteen domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
+**187 tools** across fourteen domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
 
 ## Development
 

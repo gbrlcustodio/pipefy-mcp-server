@@ -67,7 +67,7 @@ def test_profile_remote_passes_through(mocker):
     # Only the flags actually passed reach resolve_mcp_settings; the rest stay
     # None so it applies the profile-derived transport and PIPEFY_MCP_* defaults.
     resolve_mock.assert_called_once_with(
-        profile="remote", transport=None, host=None, port=None
+        profile="remote", transport=None, host=None, port=None, toolsets=None
     )
     server_mock.assert_called_once_with(resolve_mock.return_value)
 
@@ -81,7 +81,7 @@ def test_explicit_transport_passes_through(mocker):
     main(["--profile", "local", "--transport", "http"])
 
     resolve_mock.assert_called_once_with(
-        profile="local", transport="http", host=None, port=None
+        profile="local", transport="http", host=None, port=None, toolsets=None
     )
     server_mock.assert_called_once_with(resolve_mock.return_value)
 
@@ -95,7 +95,7 @@ def test_host_and_port_overrides(mocker):
     main(["--profile", "remote", "--host", "0.0.0.0", "--port", "9001"])
 
     resolve_mock.assert_called_once_with(
-        profile="remote", transport=None, host="0.0.0.0", port=9001
+        profile="remote", transport=None, host="0.0.0.0", port=9001, toolsets=None
     )
     server_mock.assert_called_once_with(resolve_mock.return_value)
 
@@ -109,9 +109,70 @@ def test_host_and_port_equals_form(mocker):
     main(["--profile", "remote", "--host=127.0.0.2", "--port=9002"])
 
     resolve_mock.assert_called_once_with(
-        profile="remote", transport=None, host="127.0.0.2", port=9002
+        profile="remote", transport=None, host="127.0.0.2", port=9002, toolsets=None
     )
     server_mock.assert_called_once_with(resolve_mock.return_value)
+
+
+@pytest.mark.unit
+def test_toolsets_passes_through(mocker):
+    """``--toolsets`` reaches resolve_mcp_settings as an override."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    main(["--toolsets", "workflow,database"])
+
+    resolve_mock.assert_called_once_with(
+        profile=None,
+        transport=None,
+        host=None,
+        port=None,
+        toolsets="workflow,database",
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
+
+
+@pytest.mark.unit
+def test_tools_is_an_alias_for_toolsets(mocker):
+    """``--tools`` sets the same value as ``--toolsets``."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
+    mocker.patch("pipefy_mcp.main.run_server")
+
+    main(["--tools", "workflow"])
+
+    assert resolve_mock.call_args.kwargs["toolsets"] == "workflow"
+
+
+@pytest.mark.unit
+def test_unknown_toolset_is_a_usage_error(mocker, capsys):
+    """An unknown ``--toolsets`` name exits 2 and never builds the server."""
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--toolsets", "bogus"])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()
+    assert "unknown toolset" in capsys.readouterr().err.lower()
+
+
+@pytest.mark.unit
+def test_unknown_toolset_from_env_is_a_usage_error(monkeypatch, mocker, capsys):
+    """An unknown ``PIPEFY_MCP_TOOLSETS`` (no flag) gets the same exit-2 usage error.
+
+    The resolved value (flag merged with env) is validated in ``main``, so an
+    env-only bad name fails the same way as ``--toolsets`` rather than as a build
+    traceback.
+    """
+    monkeypatch.setenv("PIPEFY_MCP_TOOLSETS", "bogus")
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main([])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()
+    assert "unknown toolset" in capsys.readouterr().err.lower()
 
 
 @pytest.mark.unit

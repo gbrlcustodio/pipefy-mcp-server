@@ -78,8 +78,8 @@ def _extract_pipe_id_from_behaviors(behaviors: list[dict]) -> str | None:
         if abp is None:
             continue
         for a in abp.actions_attributes or []:
-            metadata = a.metadata if isinstance(a.metadata, dict) else {}
-            pid = metadata.get("pipeId")
+            metadata = a.metadata
+            pid = metadata.pipe_id if metadata else None
             if pid:
                 return str(pid)
     return None
@@ -155,6 +155,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def create_ai_agent(
             ctx: Context,
@@ -182,21 +183,43 @@ class AiAgentTools:
             Behavior dict example::
 
               {
-                "name": "When card is created: move to Doing",
+                "name": "When card is created: classify request",
                 "event_id": "card_created",
                 "actionParams": {
                   "aiBehaviorParams": {
-                    "instruction": "Analyze the card and summarize key points.",
+                    "instruction": "Read %{field:<input_internal_id>} and fill the category.",
                     "actionsAttributes": [
                       {
-                        "name": "Move to Doing",
-                        "actionType": "move_card",
-                        "metadata": {"destinationPhaseId": "<phase_id from get_pipe>"}
+                        "name": "Update category",
+                        "actionType": "update_card",
+                        "metadata": {
+                          "pipeId": "<pipe_id>",
+                          "fieldsAttributes": [
+                            {"fieldId": "<output_field_id>", "inputMode": "fill_with_ai", "value": ""}
+                          ]
+                        }
                       }
                     ]
                   }
                 }
               }
+
+            Input vs output fields:
+              - ``inputMode: "fill_with_ai"`` marks **output** fields the model writes.
+              - **Input** field references (``%{field:<internal_id>}`` in
+                ``aiBehaviorParams.instruction``, auto-populated into ``referencedFieldIds`` on
+                create/update) are needed **only when** the model must read card field values.
+                They are not required for every ``fill_with_ai`` (e.g. instruction-only fills,
+                OCR/attachment, or knowledge-base context). When card inputs are needed and
+                omitted, ``card.fields`` arrives empty at trigger time and the model may
+                hallucinate. A wrong **numeric** input id is accepted silently (validate and
+                create/update) and becomes a dead ``referencedFieldId``; a wrong **slug**
+                never resolves and is dropped by the digits-only extractor (unresolved
+                token). Either way ``card.fields`` stays empty (same hallucination);
+                confirm the id with ``get_start_form_fields`` / ``get_phase_fields``.
+                Dotted connected-pipe refs
+                (``%{field:<parent>.<child>}``) are not forwarded at runtime; to read a
+                connected card field, use a field on the current pipe.
 
             Known ``actionType`` values and their required ``metadata``:
               - ``move_card`` → ``{"destinationPhaseId": "<phase_id>"}``
@@ -340,6 +363,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def update_ai_agent(
             ctx: Context,
@@ -376,6 +400,16 @@ class AiAgentTools:
                 (``pipeId`` not required; field IDs belong to the table.)
               - ``send_email_template`` → ``{"emailTemplateId": "<template_id>"}``;
                 optional ``allowTemplateModifications`` (boolean).
+
+            ``fill_with_ai`` marks output fields; declare input ``%{field:<internal_id>}`` tokens
+            in the behavior ``instruction`` only when the model must read card fields (see
+            ``create_ai_agent`` for the full input vs output note). A wrong **numeric** input
+            id is accepted silently and becomes a dead ``referencedFieldId``; a wrong
+            **slug** never resolves and is dropped by the digits-only extractor
+            (unresolved token). Either way ``card.fields`` stays empty (same
+            hallucination); confirm ids with ``get_start_form_fields`` /
+            ``get_phase_fields``. Dotted connected-pipe refs (``%{field:<parent>.<child>}``)
+            are not forwarded at runtime; use a field on the current pipe instead.
 
             Optional ``capabilitiesAttributes`` / ``providerId`` / ``systemProviderId`` inside
             ``actionParams.aiBehaviorParams`` — same rules as ``create_ai_agent``; see its
@@ -450,6 +484,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def toggle_ai_agent_status(
             ctx: Context,
@@ -536,6 +571,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+            meta=REMOTE,
         )
         async def delete_ai_agent(
             ctx: Context, uuid: str, confirm: bool = False
@@ -595,7 +631,7 @@ class AiAgentTools:
             Known ``actionType`` values for pipe-context checks are:
             ``move_card``, ``update_card``, ``create_card``, ``create_connected_card``,
             ``create_table_record``, and ``send_email_template``.
-            For ``move_card`` with trigger ``card_moved`` and ``eventParams.to_phase_id``/``toPhaseId``,
+            For ``move_card`` with trigger ``card_moved`` and ``eventParams.to_phase_id``,
             the tool also checks that ``destinationPhaseId`` is allowed from that phase
             (``cards_can_be_moved_to_phases``).
             For ``create_table_record``, ``fieldsAttributes`` hold **table** field IDs — they are not

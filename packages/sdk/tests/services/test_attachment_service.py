@@ -5,10 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
+import respx
 from _shared.mock_clients import mock_executor
 from graphql import print_ast
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.models.attachment import (
     Attachment,
     AttachmentUploadError,
@@ -22,7 +25,9 @@ from pipefy_sdk.services.attachment_service import (
     _ALLOWED_UPLOAD_HOST_RE,
     AttachmentService,
     HttpxS3Uploader,
+    HttpxUrlDownloader,
 )
+from pipefy_sdk.settings import PipefySettings
 
 
 def _make_service(
@@ -32,6 +37,8 @@ def _make_service(
     s3_body_snippet: str | None = None,
     card_service: MagicMock | None = None,
     table_service: MagicMock | None = None,
+    url_downloader: MagicMock | None = None,
+    allow_insecure_urls: bool = False,
 ) -> tuple[AttachmentService, MagicMock]:
     """Build an AttachmentService with mocked collaborators.
 
@@ -67,7 +74,9 @@ def _make_service(
         executor=executor,
         card_service=card,
         table_service=table,
+        settings=PipefySettings(allow_insecure_urls=allow_insecure_urls),
         s3_uploader=fake_uploader,
+        url_downloader=url_downloader,
     )
     return service, executor
 
@@ -188,6 +197,31 @@ async def test_httpx_s3_uploader_forbidden_includes_body_snippet():
     assert "AccessDenied" in result["body_snippet"]
     assert "presigned" not in result["body_snippet"].lower()
     assert "https://" not in result["body_snippet"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [301, 307])
+async def test_httpx_s3_uploader_does_not_follow_redirects(status):
+    """A 3xx surfaces as-is (httpx does not follow it) and carries no snippet.
+
+    Re-sending the body to the ``Location`` host would ship file bytes to an
+    unvalidated destination, so the status reaches the service to be rejected.
+    """
+    url = "https://bucket.s3.amazonaws.com/orgs/o1/uploads/u1/report.pdf?sig=1"
+    with respx.mock:
+        route = respx.put(url).mock(
+            return_value=httpx.Response(
+                status,
+                headers={"location": "https://bucket.s3.eu-west-1.amazonaws.com/x"},
+                text="<?xml version='1.0'?><Error><Code>PermanentRedirect</Code></Error>",
+            )
+        )
+        uploader = HttpxS3Uploader(allowed_host_pattern=_ALLOWED_UPLOAD_HOST_RE)
+        result = await uploader.put(url=url, bytes_=b"%PDF", content_type=None)
+
+    assert route.call_count == 1
+    assert result == {"status_code": status}
 
 
 @pytest.mark.unit
@@ -373,11 +407,9 @@ async def test_upload_attachment_oversize_file_yields_file_read_step(
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_upload_attachment_presigned_failure_maps_to_presigned_step(tmp_path):
-    from gql.transport.exceptions import TransportQueryError
-
     service, executor = _make_service()
     executor.execute_query = AsyncMock(
-        side_effect=TransportQueryError("x", errors=[{"message": "denied"}])
+        side_effect=PipefyGraphQLError([{"message": "denied"}])
     )
     attachment = _build_attachment(tmp_path, name="a.txt")
 
@@ -427,6 +459,60 @@ async def test_upload_attachment_s3_http_error_carries_snippet_and_status(tmp_pa
     assert ctx.value.step == "s3_upload"
     assert ctx.value.body_snippet == "<Error/>"
     assert ctx.value.status_code == 403
+    service._card_service.update_card_field.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [200, 201, 204])
+async def test_upload_attachment_accepts_2xx_and_updates_field(tmp_path, status):
+    """Every 2xx means the bytes landed, so the field update proceeds."""
+    service, _ = _make_service(s3_status=status)
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    await service.upload_attachment(
+        attachment,
+        organization_id="org-1",
+        target=CardTarget(card_id="c1", field_id="f"),
+    )
+
+    service._card_service.update_card_field.assert_awaited_once_with(
+        "c1", "f", ["bucket/key"]
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308, 404, 500])
+@pytest.mark.parametrize(
+    "target",
+    [
+        CardTarget(card_id="c1", field_id="f"),
+        TableRecordTarget(table_record_id="tr-9", field_id="f"),
+    ],
+    ids=["card", "table_record"],
+)
+async def test_upload_attachment_non_2xx_rejects_and_leaves_field_untouched(
+    tmp_path, status, target
+):
+    """A redirect never stored the bytes, so it must fail like a 4xx/5xx does.
+
+    The field must keep its previous value rather than gain a storage path
+    pointing at an object that was never written.
+    """
+    service, _ = _make_service(s3_status=status)
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment, organization_id="org-1", target=target
+        )
+
+    assert ctx.value.step == "s3_upload"
+    assert ctx.value.status_code == status
+    assert ctx.value.body_snippet is None
+    service._card_service.update_card_field.assert_not_called()
+    service._table_service.set_table_record_field_value.assert_not_called()
 
 
 @pytest.mark.unit
@@ -495,11 +581,278 @@ async def test_upload_attachment_field_update_failure_maps_to_field_update_step(
 
 
 @pytest.mark.unit
-def test_attachment_service_default_s3_uploader_is_httpx():
-    """When no s3_uploader is passed, HttpxS3Uploader is used as the default."""
+def test_attachment_service_default_uploaders_are_httpx():
+    """When no uploader/downloader is passed, the httpx defaults are used."""
     service = AttachmentService(
         executor=mock_executor(),
         card_service=MagicMock(),
         table_service=MagicMock(),
+        settings=PipefySettings(),
     )
     assert isinstance(service._s3_uploader, HttpxS3Uploader)
+    assert isinstance(service._url_downloader, HttpxUrlDownloader)
+
+
+# HttpxUrlDownloader
+
+_GUARD = (
+    "pipefy_sdk.services.attachment_service.security.validate_and_assert_public_url"
+)
+# The connect-time transport re-validates via the DNS gate directly; patch it
+# too on any test that lets a (respx-mocked) connection through.
+_DNS_GUARD = "pipefy_sdk.services.attachment_service.security.assert_hostname_resolves_to_public_ips"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_url_downloader_rejects_non_https():
+    """The SSRF gate runs before any fetch: http:// is rejected (allow_insecure=False)."""
+    downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)
+    with pytest.raises(ValueError, match="HTTPS"):
+        await downloader.download("http://files.example/report.pdf")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_url_downloader_rejects_private_ip():
+    """A literal private/internal IP is rejected before any fetch."""
+    downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)
+    with pytest.raises(ValueError, match="blocked range"):
+        await downloader.download("https://10.0.0.1/report.pdf")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_url_downloader_downloads_bytes():
+    url = "https://files.example/report.pdf"
+    with (
+        patch(_GUARD, new=AsyncMock()),
+        patch(_DNS_GUARD, new=AsyncMock()),
+        respx.mock,
+    ):
+        respx.get(url).mock(return_value=httpx.Response(200, content=b"PDFBYTES"))
+        downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)
+        out = await downloader.download(url)
+    assert out == b"PDFBYTES"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [300, 304, 204, 206, 404, 500])
+async def test_url_downloader_requires_200_before_reading_body(status):
+    """Only a plain 200 is read as file bytes; a non-followed 3xx (300/304), a
+    bodyless 2xx (204/206), or a 4xx/5xx fails status-only with no URL echoed."""
+    url = "https://files.example/report.pdf?sig=secret"
+    with (
+        patch(_GUARD, new=AsyncMock()),
+        patch(_DNS_GUARD, new=AsyncMock()),
+        respx.mock,
+    ):
+        respx.get(url).mock(return_value=httpx.Response(status, content=b"NOPE"))
+        downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)
+        with pytest.raises(
+            ValueError, match=rf"^URL download failed: HTTP {status}\.$"
+        ):
+            await downloader.download(url)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_url_downloader_rejects_disallowed_port():
+    """A non-standard port is rejected before any network call."""
+    downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)
+    with pytest.raises(ValueError, match="port 8080 is not allowed"):
+        await downloader.download("https://files.example:8080/report.pdf")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_url_downloader_rejects_oversize_content_length():
+    url = "https://files.example/big.bin"
+    with (
+        patch(_GUARD, new=AsyncMock()),
+        patch(_DNS_GUARD, new=AsyncMock()),
+        respx.mock,
+    ):
+        respx.get(url).mock(return_value=httpx.Response(200, content=b"12345"))
+        downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=4)
+        with pytest.raises(ValueError, match="Content-Length"):
+            await downloader.download(url)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_url_downloader_enforces_streamed_cap():
+    """The streamed byte count is capped even when no Content-Length is declared."""
+
+    class _FakeStream:
+        headers: dict[str, str] = {}
+
+        async def aiter_bytes(self):
+            yield b"12"
+            yield b"345"
+
+    downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=4)
+    with pytest.raises(ValueError, match="download exceeded"):
+        await downloader._read_capped(_FakeStream())
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_url_downloader_revalidates_each_redirect_hop():
+    """Every redirect target is re-validated by the SSRF gate before it is followed."""
+    start = "https://files.example/start"
+    guard = AsyncMock(side_effect=[None, ValueError("redirect to blocked host")])
+    with (
+        patch(_GUARD, new=guard),
+        patch(_DNS_GUARD, new=AsyncMock()),
+        respx.mock,
+    ):
+        respx.get(start).mock(
+            return_value=httpx.Response(302, headers={"location": "https://evil/x"})
+        )
+        downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)
+        with pytest.raises(ValueError, match="redirect to blocked host"):
+            await downloader.download(start)
+    assert guard.await_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_url_downloader_rejects_redirect_loop():
+    loop = "https://files.example/loop"
+    with (
+        patch(_GUARD, new=AsyncMock()),
+        patch(_DNS_GUARD, new=AsyncMock()),
+        respx.mock,
+    ):
+        respx.get(loop).mock(
+            return_value=httpx.Response(302, headers={"location": loop})
+        )
+        downloader = HttpxUrlDownloader(allow_insecure=False, max_size_bytes=1024)
+        with pytest.raises(ValueError, match="Too many redirects"):
+            await downloader.download(loop)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ssrf_safe_transport_blocks_internal_host_at_connect():
+    """The transport re-validates the resolved host (DNS-rebinding defense)."""
+    from pipefy_sdk.services.attachment_service import _SSRFSafeAsyncTransport
+
+    transport = _SSRFSafeAsyncTransport()
+    request = httpx.Request("GET", "http://127.0.0.1/x")
+    with pytest.raises(ValueError, match="blocked"):
+        await transport.handle_async_request(request)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ssrf_safe_transport_rejects_disallowed_port():
+    """The transport rejects a non-standard port before connecting."""
+    from pipefy_sdk.services.attachment_service import _SSRFSafeAsyncTransport
+
+    transport = _SSRFSafeAsyncTransport()
+    request = httpx.Request("GET", "https://example.com:8080/x")
+    with pytest.raises(ValueError, match="port 8080 is not allowed"):
+        await transport.handle_async_request(request)
+
+
+# Service via the file_url source
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_via_url_uses_downloader():
+    fake_downloader = MagicMock()
+    fake_downloader.download = AsyncMock(return_value=b"PDFBYTES")
+    service, _ = _make_service(url_downloader=fake_downloader)
+
+    result = await service.upload_attachment(
+        Attachment(url="https://files.example/report.pdf"),
+        organization_id="org-1",
+        target=CardTarget(card_id="c1", field_id="f"),
+    )
+
+    fake_downloader.download.assert_awaited_once_with(
+        "https://files.example/report.pdf"
+    )
+    assert result["file_name"] == "report.pdf"
+    assert result["file_size"] == len(b"PDFBYTES")
+    assert result["storage_path"] == "bucket/key"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_url_download_failure_maps_to_download_step():
+    fake_downloader = MagicMock()
+    fake_downloader.download = AsyncMock(side_effect=ValueError("blocked host"))
+    service, _ = _make_service(url_downloader=fake_downloader)
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            Attachment(url="https://files.example/report.pdf"),
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "download"
+    assert isinstance(ctx.value.__cause__, ValueError)
+
+
+# create_presigned_url (handshake)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_presigned_url_returns_target():
+    service, _ = _make_service(
+        presigned_payload={
+            "createPresignedUrl": {
+                "url": (
+                    "https://pipefy-uploads.s3.amazonaws.com/orgs/o1/uploads/u2/"
+                    "report.pdf?X-Amz-Expires=300&X-Amz-Algorithm=AWS4-HMAC-SHA256"
+                ),
+                "downloadUrl": "https://app.pipefy.com/dl/9",
+            }
+        }
+    )
+    target = await service.create_presigned_url(
+        organization_id="o1", file_name="report.pdf"
+    )
+    assert target["upload_url"].startswith("https://pipefy-uploads.s3.amazonaws.com/")
+    assert target["storage_path"] == "orgs/o1/uploads/u2/report.pdf"
+    assert "download_url" not in target
+    assert target["expires_in_seconds"] == 300
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_presigned_url_missing_url_maps_to_presigned_step():
+    service, _ = _make_service(
+        presigned_payload={"createPresignedUrl": {"url": None, "downloadUrl": None}}
+    )
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.create_presigned_url(organization_id="o", file_name="f.pdf")
+    assert ctx.value.step == "presigned_url"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_presigned_url_pathless_url_maps_to_presigned_step():
+    service, _ = _make_service(
+        presigned_payload={
+            "createPresignedUrl": {"url": "https://host", "downloadUrl": None}
+        }
+    )
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.create_presigned_url(organization_id="o", file_name="f.pdf")
+    assert ctx.value.step == "presigned_url"
+
+
+@pytest.mark.unit
+def test_parse_expires_in():
+    from pipefy_sdk.services.attachment_service import _parse_expires_in
+
+    assert _parse_expires_in("https://x/k?X-Amz-Expires=300&a=b") == 300
+    assert _parse_expires_in("https://x/k") is None
+    assert _parse_expires_in("https://x/k?X-Amz-Expires=abc") is None

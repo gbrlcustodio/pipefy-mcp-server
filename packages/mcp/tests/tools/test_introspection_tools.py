@@ -4,11 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
@@ -106,7 +105,7 @@ async def test_introspect_type_transport_error_returns_structured_error(
     introspection_session, mock_introspection_client, extract_payload
 ):
     mock_introspection_client.introspect_type = AsyncMock(
-        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+        side_effect=PipefyGraphQLError([{"message": "timeout"}])
     )
     async with introspection_session as session:
         result = await session.call_tool("introspect_type", {"type_name": "Card"})

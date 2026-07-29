@@ -53,8 +53,8 @@ def _rewrite_ai_agent_log_not_found(exc: BaseException, log_uuid: str) -> str | 
     The ``aiAgentLogDetails`` resolver looks up by ``AutomationAction`` under
     the hood; when the UUID isn't found, the upstream error string exposes
     that internal type (``"Couldn't find AutomationAction with 'id'=..."``).
-    ``TransportQueryError`` hides per-error messages behind ``.errors``, so we
-    check both ``str(exc)`` and the structured error list.
+    ``PipefyGraphQLError`` keeps per-error messages in ``.errors``, so we check
+    both ``str(exc)`` and the structured error list.
     """
     candidates = [str(exc), *extract_error_strings(exc)]
     for msg in candidates:
@@ -527,6 +527,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            meta=REMOTE,
         )
         async def export_automation_jobs(
             organization_id: PipefyId,

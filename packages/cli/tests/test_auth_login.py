@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import http.client
+import platform
 import threading
 import time
 
@@ -750,17 +751,30 @@ class TestAuthLoginCommand:
         assert "Login failed" in result.stderr
         assert "invalid_grant" in result.stderr
 
-    def test_store_failure_default_backend_hints_at_secret_service(
+    @pytest.mark.parametrize(
+        ("system", "expected_fragment", "forbidden_fragment", "require_file_backend"),
+        [
+            ("Linux", "Secret Service", "Terminal.app", True),
+            ("Darwin", "errSecInvalidOwnerEdit", "Secret Service", True),
+            ("Windows", "Credential Manager", "Secret Service", True),
+        ],
+    )
+    def test_store_failure_default_backend_hint_matches_platform(
         self,
         cli_runner,
         monkeypatch: pytest.MonkeyPatch,
         fake_keyring: InMemoryKeyring,
         clean_pipefy_env,
         saved_cwd,
+        system: str,
+        expected_fragment: str,
+        forbidden_fragment: str,
+        require_file_backend: bool,
     ) -> None:
-        """A keychain write failure on the default OS backend surfaces the
-        Secret Service hint and the file-backend escape hatch."""
+        """A keychain write failure on the default OS backend surfaces a
+        platform-appropriate remediation hint."""
         monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setattr(platform, "system", lambda: system)
 
         from keyring.errors import KeyringError
 
@@ -783,8 +797,11 @@ class TestAuthLoginCommand:
         result = cli_runner.invoke(cli_app, ["auth", "login"])
         assert result.exit_code == 1
         assert "could not be stored in your keychain" in result.stderr
-        assert "Secret Service" in result.stderr
-        assert "PIPEFY_KEYCHAIN_BACKEND=file" in result.stderr
+        assert expected_fragment in result.stderr
+        assert forbidden_fragment not in result.stderr
+        if require_file_backend:
+            assert "PIPEFY_KEYCHAIN_BACKEND=file" in result.stderr
+            assert "docs/cli/auth.md" in result.stderr
 
     def test_store_failure_file_backend_hints_at_config_dir(
         self,

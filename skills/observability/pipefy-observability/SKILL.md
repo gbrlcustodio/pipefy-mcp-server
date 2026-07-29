@@ -15,11 +15,13 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 
 ## Identifiers reference
 
+Full cross-tool map: `docs/mcp/tools/identifiers.md#observability`.
+
 | Concept | What tools expect | How to obtain |
 |---------|-------------------|---------------|
 | **Pipe for AI agent logs** | `repo_uuid` — the pipe **UUID** | `get_pipe` with numeric `pipe_id`; use `pipe.uuid`. |
 | **Automation for logs** | `automation_id` — numeric | `get_automations pipe_id=...` |
-| **Org for usage stats** | `organization_id` — numeric | Known from account setup or `get_organization`. |
+| **Org for usage stats** | `organization_uuid` — UUID **or** numeric org id | `get_organization` returns the `uuid`; a numeric id also works (resolved server-side). Execution-metrics / export take numeric `organization_id`. |
 
 ---
 

@@ -77,6 +77,33 @@ def member_invite(
     run_cli_command(ctx, json_out, factory)
 
 
+@member_app.command("add-service-account")
+def member_add_service_account(
+    ctx: typer.Context,
+    pipe_id: str = typer.Option(..., "--pipe", help="Pipe id."),
+    email: str = typer.Option(..., "--email", help="Service account email."),
+    role_name: str = typer.Option(
+        "admin", "--role", help="Pipe role to grant (default admin)."
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """Grant a service account membership on a pipe (iPaaS setup)."""
+
+    rn = role_name.strip()
+    if not rn:
+        typer.echo("--role must be non-empty.", err=True)
+        raise typer.Exit(2)
+    addr = email.strip()
+    if not addr:
+        typer.echo("--email must be non-empty.", err=True)
+        raise typer.Exit(2)
+
+    async def factory(client: PipefyClient):
+        return await client.add_service_account_to_pipe(pipe_id, addr, rn)
+
+    run_cli_command(ctx, json_out, factory)
+
+
 @member_app.command("remove")
 def member_remove(
     ctx: typer.Context,

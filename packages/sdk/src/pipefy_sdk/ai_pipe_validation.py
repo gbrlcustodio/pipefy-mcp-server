@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import copy
 import logging
 import re
 from typing import TYPE_CHECKING, Any, Literal
@@ -11,7 +10,11 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import ValidationError
 
 from pipefy_sdk.behavior_placeholders import populate_referenced_field_ids
-from pipefy_sdk.models import AiBehaviorParams, BehaviorPayload
+from pipefy_sdk.models import (
+    AiBehaviorMetadataInput,
+    AiBehaviorParams,
+    BehaviorPayload,
+)
 
 if TYPE_CHECKING:
     from pipefy_sdk.client import PipefyClient
@@ -103,17 +106,17 @@ def validate_behaviors_against_pipe(
         abp = _ai_behavior_params(b)
         attrs = (abp.actions_attributes if abp else None) or []
 
-        ep = (payload.event_params if payload else None) or {}
-        to_phase = ep.get("to_phase_id") or ep.get("toPhaseId")
+        ep = payload.event_params if payload else None
+        to_phase = ep.to_phase_id if ep else None
         if to_phase and str(to_phase) not in pipe_phase_ids:
             problems.append(
-                f'{prefix}: eventParams.to_phase_id / toPhaseId "{to_phase}" '
+                f'{prefix}: eventParams.to_phase_id "{to_phase}" '
                 f"not found in pipe phases."
             )
 
         for j, action in enumerate(attrs):
             action_type = action.action_type or ""
-            metadata = action.metadata if isinstance(action.metadata, dict) else {}
+            metadata = action.metadata or AiBehaviorMetadataInput()
 
             if action_type and action_type not in KNOWN_AI_ACTION_TYPES:
                 msg = (
@@ -126,7 +129,7 @@ def validate_behaviors_against_pipe(
                     warnings.append(msg)
 
             if action_type == "move_card":
-                dest = metadata.get("destinationPhaseId", "")
+                dest = metadata.destination_phase_id or ""
                 if dest and str(dest) not in pipe_phase_ids:
                     problems.append(
                         f"{prefix}, action [{j}] (move_card): "
@@ -134,7 +137,7 @@ def validate_behaviors_against_pipe(
                     )
 
             if action_type not in ("create_table_record", "send_email_template"):
-                action_pipe = str(metadata.get("pipeId", ""))
+                action_pipe = str(metadata.pipe_id or "")
                 targets_source = not action_pipe or action_pipe == pipe_id
                 if targets_source:
                     check_fields = pipe_field_ids
@@ -147,11 +150,9 @@ def validate_behaviors_against_pipe(
                     check_fields = None
 
                 if check_fields is not None:
-                    fields_attrs = metadata.get("fieldsAttributes") or []
+                    fields_attrs = metadata.fields_attributes or []
                     for k, fa in enumerate(fields_attrs):
-                        if not isinstance(fa, dict):
-                            continue
-                        fid = fa.get("fieldId", "")
+                        fid = fa.field_id or ""
                         if fid and fid not in check_fields:
                             pipe_label = (
                                 "pipe fields"
@@ -172,7 +173,7 @@ def validate_behaviors_against_pipe(
                 )
 
             if action_type == "create_connected_card" and related_pipe_ids is not None:
-                target_pipe = metadata.get("pipeId", "")
+                target_pipe = metadata.pipe_id or ""
                 if target_pipe and str(target_pipe) not in related_pipe_ids:
                     problems.append(
                         f"{prefix}, action [{j}] (create_connected_card): "
@@ -202,14 +203,14 @@ def _extract_slug_field_ids_by_pipe(
         if abp is None:
             continue
         for a in abp.actions_attributes or []:
-            metadata = a.metadata if isinstance(a.metadata, dict) else {}
-            pipe_id = str(metadata.get("pipeId", ""))
+            metadata = a.metadata
+            if metadata is None:
+                continue
+            pipe_id = str(metadata.pipe_id or "")
             if not pipe_id:
                 continue
-            for fa in metadata.get("fieldsAttributes") or []:
-                if not isinstance(fa, dict):
-                    continue
-                fid = str(fa.get("fieldId", ""))
+            for fa in metadata.fields_attributes or []:
+                fid = str(fa.field_id or "")
                 if fid and not fid.isdigit():
                     slugs_by_pipe.setdefault(pipe_id, set()).add(fid)
     return slugs_by_pipe
@@ -239,8 +240,8 @@ def pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
     if abp is None:
         return pids
     for a in abp.actions_attributes or []:
-        metadata = a.metadata if isinstance(a.metadata, dict) else {}
-        pid = str(metadata.get("pipeId", ""))
+        metadata = a.metadata
+        pid = str(metadata.pipe_id or "") if metadata else ""
         if pid:
             pids.add(pid)
     return pids
@@ -397,29 +398,26 @@ async def resolve_field_slugs_to_numeric(
 
     resolved: list[dict[str, Any]] = []
     for b in behaviors:
-        # Deep-copy before parsing: pydantic keeps a reference to the input
-        # ``metadata`` dict, so mutating it in place would corrupt the caller's
-        # behavior. Parsing a copy keeps the original untouched.
-        b_copy = copy.deepcopy(b)
-        payload = _behavior_payload(b_copy)
+        # Parsing yields fresh typed models (fieldsAttributes become new FieldMapInput
+        # objects), so mutating fa.field_id cannot reach the caller's input dict; the
+        # result is rebuilt from the dumped payload. No defensive copy needed.
+        payload = _behavior_payload(b)
         abp = (
             payload.action_params.ai_behavior_params
             if payload and payload.action_params
             else None
         )
         if abp is None:
-            resolved.append(b_copy)
+            resolved.append(b)
             continue
         for a in abp.actions_attributes or []:
-            metadata = a.metadata if isinstance(a.metadata, dict) else None
+            metadata = a.metadata
             if metadata is None:
                 continue
-            for fa in metadata.get("fieldsAttributes") or []:
-                if not isinstance(fa, dict):
-                    continue
-                fid = str(fa.get("fieldId", ""))
+            for fa in metadata.fields_attributes or []:
+                fid = str(fa.field_id or "")
                 if fid in slug_to_numeric:
-                    fa["fieldId"] = slug_to_numeric[fid]
+                    fa.field_id = slug_to_numeric[fid]
         if isinstance(abp.instruction, str):
             abp.instruction = _rewrite_instruction_field_tokens(
                 abp.instruction, slug_to_numeric

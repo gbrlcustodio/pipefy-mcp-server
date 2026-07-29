@@ -5,11 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _shared.pagination_test_defaults import DEFAULT_FIRST
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.table_tools import TableTools
@@ -78,8 +77,8 @@ async def test_get_table_success(table_session, mock_table_client, extract_paylo
 async def test_get_table_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.get_table.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "not found"}]
+    mock_table_client.get_table.side_effect = PipefyGraphQLError(
+        [{"message": "not found"}]
     )
 
     async with table_session as session:
@@ -109,9 +108,7 @@ async def test_get_tables_success(table_session, mock_table_client, extract_payl
 async def test_get_tables_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.get_tables.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "boom"}]
-    )
+    mock_table_client.get_tables.side_effect = PipefyGraphQLError([{"message": "boom"}])
 
     async with table_session as session:
         result = await session.call_tool("get_tables", {"table_ids": ["a"]})
@@ -181,8 +178,8 @@ async def test_get_table_records_unified_envelope_pagination(
 async def test_get_table_records_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.get_table_records.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "bad"}]
+    mock_table_client.get_table_records.side_effect = PipefyGraphQLError(
+        [{"message": "bad"}]
     )
 
     async with table_session as session:
@@ -215,8 +212,8 @@ async def test_get_table_record_success(
 async def test_get_table_record_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.get_table_record.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "missing"}]
+    mock_table_client.get_table_record.side_effect = PipefyGraphQLError(
+        [{"message": "missing"}]
     )
 
     async with table_session as session:
@@ -286,8 +283,8 @@ async def test_find_records_unified_pagination_with_first(
 async def test_find_records_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.find_records.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "search failed"}]
+    mock_table_client.find_records.side_effect = PipefyGraphQLError(
+        [{"message": "search failed"}]
     )
 
     async with table_session as session:
@@ -509,8 +506,8 @@ async def test_create_table_success(table_session, mock_table_client, extract_pa
 async def test_create_table_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.create_table.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "reject"}]
+    mock_table_client.create_table.side_effect = PipefyGraphQLError(
+        [{"message": "reject"}]
     )
 
     async with table_session as session:
@@ -542,8 +539,8 @@ async def test_update_table_success(table_session, mock_table_client, extract_pa
 async def test_update_table_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.update_table.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "fail"}]
+    mock_table_client.update_table.side_effect = PipefyGraphQLError(
+        [{"message": "fail"}]
     )
 
     async with table_session as session:
@@ -599,8 +596,8 @@ async def test_delete_table_graphql_error_on_confirm(
     table_session, mock_table_client, extract_payload
 ):
     mock_table_client.get_table.return_value = {"table": {"id": "1", "name": "X"}}
-    mock_table_client.delete_table.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "cannot"}]
+    mock_table_client.delete_table.side_effect = PipefyGraphQLError(
+        [{"message": "cannot"}]
     )
 
     async with table_session as session:
@@ -639,8 +636,8 @@ async def test_create_table_record_success(
 async def test_create_table_record_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.create_table_record.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "bad"}]
+    mock_table_client.create_table_record.side_effect = PipefyGraphQLError(
+        [{"message": "bad"}]
     )
 
     async with table_session as session:
@@ -676,8 +673,8 @@ async def test_update_table_record_success(
 async def test_update_table_record_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.update_table_record.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "e"}]
+    mock_table_client.update_table_record.side_effect = PipefyGraphQLError(
+        [{"message": "e"}]
     )
 
     async with table_session as session:
@@ -713,8 +710,8 @@ async def test_delete_table_record_success(
 async def test_delete_table_record_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.delete_table_record.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "no"}]
+    mock_table_client.delete_table_record.side_effect = PipefyGraphQLError(
+        [{"message": "no"}]
     )
 
     async with table_session as session:
@@ -751,8 +748,8 @@ async def test_set_table_record_field_value_success(
 async def test_set_table_record_field_value_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.set_table_record_field_value.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "err"}]
+    mock_table_client.set_table_record_field_value.side_effect = PipefyGraphQLError(
+        [{"message": "err"}]
     )
 
     async with table_session as session:
@@ -790,8 +787,8 @@ async def test_create_table_field_success(
 async def test_create_table_field_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.create_table_field.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "bad"}]
+    mock_table_client.create_table_field.side_effect = PipefyGraphQLError(
+        [{"message": "bad"}]
     )
 
     async with table_session as session:
@@ -829,8 +826,8 @@ async def test_update_table_field_success(
 async def test_update_table_field_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.update_table_field.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "e"}]
+    mock_table_client.update_table_field.side_effect = PipefyGraphQLError(
+        [{"message": "e"}]
     )
 
     async with table_session as session:
@@ -865,8 +862,8 @@ async def test_delete_table_field_success(
 async def test_delete_table_field_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.delete_table_field.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "nope"}]
+    mock_table_client.delete_table_field.side_effect = PipefyGraphQLError(
+        [{"message": "nope"}]
     )
 
     async with table_session as session:
@@ -1637,8 +1634,8 @@ async def test_set_table_record_field_value_null_value(
 async def test_delete_table_graphql_error_on_lookup(
     table_session, mock_table_client, extract_payload
 ):
-    mock_table_client.get_table.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "table gone"}]
+    mock_table_client.get_table.side_effect = PipefyGraphQLError(
+        [{"message": "table gone"}]
     )
 
     async with table_session as session:

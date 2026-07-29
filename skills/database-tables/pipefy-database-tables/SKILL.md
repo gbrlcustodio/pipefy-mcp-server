@@ -63,7 +63,7 @@ Tables, records (rows), schema columns (table fields), and attachments for Pipef
 
 | Tool (MCP) | CLI | Purpose |
 |------------|-----|---------|
-| `upload_attachment_to_table_record` | `pipefy attachment upload --record <id> --field <slug> --file <path> --organization <id>` | Attach a file to a table record. |
+| `upload_attachment_to_table_record` | `pipefy attachment upload --record <id> --field <slug> --file <path> --organization <id>` | Attach a file to a table record. Exactly one source: `file_path` (local; local profile only) or `file_url` (downloaded, SSRF-guarded; any profile — required on the hosted server). CLI is `--file` only. See [`pipefy-attachments`](../../attachments/pipefy-attachments/SKILL.md). |
 
 ---
 

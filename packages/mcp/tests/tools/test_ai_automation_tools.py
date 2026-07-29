@@ -4,11 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
@@ -110,8 +109,8 @@ class TestGetAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.get_automation.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "boom"}]
+        mock_pipefy_client.get_automation.side_effect = PipefyGraphQLError(
+            [{"message": "boom"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -173,10 +172,7 @@ class TestGetAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        err = TransportQueryError(
-            "failed",
-            errors=[{"message": "nope", "extensions": {"code": "GONE"}}],
-        )
+        err = PipefyGraphQLError([{"message": "nope", "extensions": {"code": "GONE"}}])
         mock_pipefy_client.get_automation.side_effect = err
         async with client_session as session:
             result = await session.call_tool(
@@ -226,9 +222,9 @@ class TestGetAiAutomations:
             },
             {
                 "id": "3",
-                "name": "Legacy",
+                "name": "AI 2",
                 "active": True,
-                "actionParams": {"aiParams": {"value": "x"}},
+                "action_id": "generate_with_ai",
             },
         ]
         async with client_session as session:
@@ -248,12 +244,14 @@ class TestGetAiAutomations:
         ids = {row["id"] for row in data}
         assert ids == {"1", "3"}
 
-    async def test_filter_accepts_camel_case_action_id(
+    async def test_filter_ignores_camel_case_action_id(
         self,
         client_session,
         mock_pipefy_client,
         extract_payload,
     ):
+        """The list query emits snake ``action_id``; a camel ``actionId`` never occurs
+        and is not treated as an AI automation."""
         mock_pipefy_client.get_automations.return_value = [
             {"id": "9", "name": "AI", "active": True, "actionId": "generate_with_ai"},
         ]
@@ -263,7 +261,7 @@ class TestGetAiAutomations:
                 {"pipe_id": "1"},
             )
         data = extract_payload(result)["data"]
-        assert len(data) == 1 and data[0]["id"] == "9"
+        assert data == []
 
     async def test_empty_when_none_match(
         self,
@@ -313,8 +311,8 @@ class TestGetAiAutomations:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.get_automations.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "no access"}]
+        mock_pipefy_client.get_automations.side_effect = PipefyGraphQLError(
+            [{"message": "no access"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -432,8 +430,8 @@ class TestDeleteAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.delete_automation.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "forbidden"}]
+        mock_pipefy_client.delete_automation.side_effect = PipefyGraphQLError(
+            [{"message": "forbidden"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -596,8 +594,16 @@ class TestCreateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.create_ai_automation.side_effect = ValueError(
-            "Invalid prompt [code=INVALID_PROMPT] [correlation_id=abc-123-def]"
+        mock_pipefy_client.create_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Invalid prompt",
+                    "extensions": {
+                        "code": "INVALID_PROMPT",
+                        "correlation_id": "abc-123-def",
+                    },
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -625,8 +631,16 @@ class TestCreateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.create_ai_automation.side_effect = ValueError(
-            "Invalid prompt [code=INVALID_PROMPT] [correlation_id=abc-123-def]"
+        mock_pipefy_client.create_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Invalid prompt",
+                    "extensions": {
+                        "code": "INVALID_PROMPT",
+                        "correlation_id": "abc-123-def",
+                    },
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -676,7 +690,7 @@ class TestCreateAiAutomation:
             )
         assert result.isError is False
         validated_input = mock_pipefy_client.create_ai_automation.call_args[0][0]
-        assert validated_input.condition.model_dump(mode="python") == DEFAULT_CONDITION
+        assert validated_input.condition.to_api_payload() == DEFAULT_CONDITION
 
     async def test_explicit_condition_overrides_default(
         self,
@@ -788,14 +802,19 @@ class TestUpdateAiAutomation:
         assert payload["success"] is False
         assert "error" in payload
 
-    async def test_internal_api_style_error_strips_code_and_correlation_on_update(
+    async def test_update_structured_error_omits_markers_from_message(
         self,
         client_session,
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
-            "Not found [code=NOT_FOUND] [correlation_id=corr-9]"
+        mock_pipefy_client.update_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Not found",
+                    "extensions": {"code": "NOT_FOUND", "correlation_id": "corr-9"},
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -818,8 +837,16 @@ class TestUpdateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
-            "Not found [code=NOT_FOUND] [correlation_id=corr-9]"
+        mock_pipefy_client.update_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Not found",
+                    "extensions": {
+                        "code": "NOT_FOUND",
+                        "correlation_id": "corr-9",
+                    },
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -869,8 +896,16 @@ class TestUpdateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
-            "Permission denied [code=PERMISSION_DENIED] [correlation_id=c1]"
+        mock_pipefy_client.update_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Permission denied",
+                    "extensions": {
+                        "code": "PERMISSION_DENIED",
+                        "correlation_id": "c1",
+                    },
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(

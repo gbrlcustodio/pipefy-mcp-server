@@ -4,11 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.member_tools import MemberTools
@@ -19,6 +18,7 @@ from tools.conftest import build_tool_test_server
 def mock_member_client():
     client = MagicMock(PipefyClient)
     client.invite_members = AsyncMock()
+    client.add_service_account_to_pipe = AsyncMock()
     client.remove_members_from_pipe = AsyncMock()
     client.get_pipe_members = AsyncMock()
     client.set_role = AsyncMock()
@@ -56,6 +56,244 @@ async def test_invite_members_rejects_empty_members(member_session, extract_payl
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "members" in tool_error_message(payload)
+
+
+def _members_payload(*emails: str) -> dict:
+    return {
+        "pipe": {
+            "members": [
+                {
+                    "user": {
+                        "id": str(i),
+                        "uuid": f"uuid-{i}",
+                        "name": e,
+                        "email": e,
+                    },
+                    "role_name": "member",
+                }
+                for i, e in enumerate(emails)
+            ]
+        }
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_verified_member(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.add_service_account_to_pipe.return_value = {
+        "inviteMembers": {"users": [{"id": "sa1", "email": "svc@x.com"}], "errors": []}
+    }
+    mock_member_client.get_pipe_members.return_value = _members_payload(
+        "other@x.com", "svc@x.com"
+    )
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
+        )
+
+    assert result.isError is False
+    mock_member_client.add_service_account_to_pipe.assert_awaited_once_with(
+        "100", "svc@x.com", "member"
+    )
+    mock_member_client.get_pipe_members.assert_awaited_once_with("100")
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "warning" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_matches_email_case_insensitively(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.add_service_account_to_pipe.return_value = {
+        "inviteMembers": {"users": [], "errors": []}
+    }
+    mock_member_client.get_pipe_members.return_value = _members_payload("svc@x.com")
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "SVC@X.com", "role_name": "member"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "warning" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_errors_when_not_a_member(
+    member_session, mock_member_client, extract_payload
+):
+    """Verification is authoritative: absent afterwards → failure, not silent success."""
+    mock_member_client.add_service_account_to_pipe.return_value = {
+        "inviteMembers": {"users": [], "errors": []}
+    }
+    mock_member_client.get_pipe_members.return_value = _members_payload("other@x.com")
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "svc@x.com" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_surfaces_invite_errors_when_absent(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.add_service_account_to_pipe.return_value = {
+        "inviteMembers": {
+            "users": [],
+            "errors": [{"index": 0, "message": "email is not a service account"}],
+        }
+    }
+    mock_member_client.get_pipe_members.return_value = _members_payload("other@x.com")
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "not a service account" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_ignores_invite_errors_when_member_present(
+    member_session, mock_member_client, extract_payload
+):
+    """'Already a member'-style row error is non-fatal once membership is confirmed."""
+    mock_member_client.add_service_account_to_pipe.return_value = {
+        "inviteMembers": {
+            "users": [],
+            "errors": [{"index": 0, "message": "already invited"}],
+        }
+    }
+    mock_member_client.get_pipe_members.return_value = _members_payload("svc@x.com")
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "warning" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_handles_null_pipe_members(
+    member_session, mock_member_client, extract_payload
+):
+    """A GraphQL `members: null` verification response must not raise TypeError."""
+    mock_member_client.add_service_account_to_pipe.return_value = {
+        "inviteMembers": {"users": [], "errors": []}
+    }
+    mock_member_client.get_pipe_members.return_value = {"pipe": {"members": None}}
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
+        )
+
+    # No crash; verification treats null as absent -> tool reports not-added.
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "svc@x.com" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_skips_verification_for_non_numeric_pipe_id(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.add_service_account_to_pipe.return_value = {
+        "inviteMembers": {"users": [{"id": "sa1", "email": "svc@x.com"}], "errors": []}
+    }
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "pipe-uuid-1", "email": "svc@x.com", "role_name": "member"},
+        )
+
+    mock_member_client.get_pipe_members.assert_not_awaited()
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "warning" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_rejects_blank_email(
+    member_session, mock_member_client, extract_payload
+):
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "   ", "role_name": "member"},
+        )
+    mock_member_client.add_service_account_to_pipe.assert_not_awaited()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "email" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_maps_value_error_to_invalid_arguments(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.add_service_account_to_pipe.side_effect = ValueError(
+        "Invalid members[0].email: value is not a valid email address"
+    )
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "not-an-email", "role_name": "member"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_add_service_account_graphql_error(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.add_service_account_to_pipe.side_effect = PipefyGraphQLError(
+        [{"message": "permission denied"}]
+    )
+    async with member_session as session:
+        result = await session.call_tool(
+            "add_service_account_to_pipe",
+            {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "permission denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -134,8 +372,8 @@ async def test_invite_members_maps_sdk_value_error_to_invalid_arguments(
 async def test_invite_members_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
-    mock_member_client.invite_members.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "invalid email"}]
+    mock_member_client.invite_members.side_effect = PipefyGraphQLError(
+        [{"message": "invalid email"}]
     )
 
     async with member_session as session:
@@ -368,8 +606,8 @@ async def test_remove_member_coerces_int_user_ids_to_str(
 async def test_remove_member_from_pipe_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
-    mock_member_client.remove_members_from_pipe.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "forbidden"}]
+    mock_member_client.remove_members_from_pipe.side_effect = PipefyGraphQLError(
+        [{"message": "forbidden"}]
     )
 
     async with member_session as session:
@@ -482,8 +720,8 @@ async def test_set_role_rejects_blank_role_name(
 async def test_set_role_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
-    mock_member_client.set_role.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "invalid role"}]
+    mock_member_client.set_role.side_effect = PipefyGraphQLError(
+        [{"message": "invalid role"}]
     )
 
     async with member_session as session:

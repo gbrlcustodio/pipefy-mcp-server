@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.3.0-beta.1"
+__version__ = "0.4.0-beta.1"
 
 from pipefy_sdk.client import PipefyClient, PipefyEngine
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
@@ -11,6 +11,7 @@ from pipefy_sdk.field_filters import (
     filter_fields_by_definitions,
     skipped_field_ids,
 )
+from pipefy_sdk.graphql_executor import PipefyGraphQLError
 from pipefy_sdk.graphql_problem import (
     GraphQLProblem,
     GraphQLProblemKind,
@@ -18,6 +19,7 @@ from pipefy_sdk.graphql_problem import (
     classify_graphql_error_dicts,
 )
 from pipefy_sdk.models import (
+    CONDITION_OPERATIONS,
     Attachment,
     AttachmentTarget,
     AttachmentUploadError,
@@ -29,6 +31,7 @@ from pipefy_sdk.models import (
     BehaviorPayload,
     CardTarget,
     CommentInput,
+    ConditionExpressionInput,
     CreateAiAgentInput,
     CreateAiAutomationInput,
     CreatePortalElementInput,
@@ -38,6 +41,7 @@ from pipefy_sdk.models import (
     MemberInvite,
     NonBlankStr,
     PipefyId,
+    PresignedUploadTarget,
     TableRecordTarget,
     UpdateAiAgentInput,
     UpdateAiAutomationInput,
@@ -103,6 +107,7 @@ __all__ = [
     "AttachmentUploadError",
     "AttachmentUploadResult",
     "AttachmentUploadStep",
+    "PresignedUploadTarget",
     "UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS",
     "UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE",
     "AutomationActionRow",
@@ -116,6 +121,8 @@ __all__ = [
     "CardSearch",
     "CardTarget",
     "CommentInput",
+    "CONDITION_OPERATIONS",
+    "ConditionExpressionInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
     "CreatePortalElementInput",
@@ -150,6 +157,7 @@ __all__ = [
     "PipefyClient",
     "PipefyEngine",
     "PipefyError",
+    "PipefyGraphQLError",
     "PipefyId",
     "PipefySettings",
     "TableRecordTarget",

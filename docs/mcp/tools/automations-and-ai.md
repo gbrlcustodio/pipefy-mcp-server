@@ -18,9 +18,9 @@ Ten tools manage Pipefy traditional automations: if/then rules bound to a pipe v
 | `get_automation_events` | Yes | Catalog of trigger event definitions (global list; tool still takes `pipe_id` for context). |
 | `get_automation_event_attributes` | Yes | **Event-scoped only** (today: one token). Full `field_map.value` list: see [Common value tokens](#common-value-tokens-copy_from) below. |
 | `simulate_automation` | Yes | Runs a dry-run simulation for an automation with a payload (see tool docstring). |
-| `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. |
+| `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. Optional first-class typed `condition` (see [Condition contract](#condition-contract-condition)); other fields via `extra_input`. |
 | `create_send_task_automation` | No | Creates a send-a-task automation (`pipe_id`, trigger, task title, recipients). Created active; disable via `update_automation`. |
-| `update_automation` | No | Patches a rule via `extra_input` (`UpdateAutomationInput` fields). |
+| `update_automation` | No | Patches a rule: first-class typed `condition` (see [Condition contract](#condition-contract-condition)) and/or `extra_input` (`UpdateAutomationInput` fields). Requires at least one. |
 | `delete_automation` | No | Permanently deletes a rule (`destructiveHint=True` — confirm with the user first). |
 
 ### Traditional automation: `field_map` and dynamic values
@@ -86,6 +86,8 @@ Official **event-scoped** catalog only: `get_automation_event_attributes` (MCP) 
 
 #### Slug vs `internal_id`
 
+Full cross-tool identifier map: [identifiers.md](identifiers.md#field-references-slug-vs-internal_id).
+
 | Surface | Field identifier |
 | --- | --- |
 | MCP `update_card_field` (`field_id` arg) | **slug** (`id` on field rows from `get_phase_fields`) |
@@ -109,6 +111,28 @@ For `card_moved` + `move_single_card`, when `extra_input` includes source and de
 3. **Verify** — `get_automation(automation_id)` and confirm `action_params.field_map` round-trip.
 4. **Enable** — `update_automation` with `extra_input: { "active": true }`.
 
+### Condition contract (`condition`)
+
+`create_automation` and `update_automation` take a first-class typed `condition` (you no longer have to bury it in `extra_input`). The same `ConditionInput` shape backs `create_send_task_automation`, `simulate_automation`, the AI automations, and phase field conditions.
+
+Shape:
+
+```json
+{
+  "expressions": [
+    {"field_address": "900000101", "operation": "equals", "value": "Done", "structure_id": 0},
+    {"field_address": "900000102", "operation": "present", "structure_id": 1}
+  ],
+  "expressions_structure": [[0, 1]]
+}
+```
+
+- **`field_address`** is the field **`internal_id`** (numeric), **not** the slug. To test a field on a connected card, use the dotted path `<connectorFieldId>.<targetFieldId>`; only the last segment resolves to a field. Discover internal ids via `get_start_form_fields` / `get_phase_fields`.
+- **`operation`** is one of: `equals`, `not_equals`, `present`, `blank`, `string_contains`, `string_not_contains`, `number_greater_than`, `number_less_than`, `date_is_today`, `date_is_yesterday`, `date_in_current_week`, `date_in_last_week`, `date_in_current_month`, `date_in_last_month`, `date_in_current_year`, `date_in_last_year`, `date_is`, `date_is_after`, `date_is_before`. It is a **soft enum**: any string is passed through and the API validates it, so new operations work without an SDK release. Omit `value` for `present` / `blank`.
+- **`structure_id`** labels an expression so `expressions_structure` can reference it.
+- **`expressions_structure`** groups expressions into an AND-of-ORs tree: each inner array is OR'd, and the inner arrays are AND'd together. `[[0, 1], [2]]` means `(expr0 OR expr1) AND expr2`. A single group `[[0, 1]]` is `expr0 OR expr1`; one expression per group `[[0], [1]]` is `expr0 AND expr1`.
+- A `condition` argument **wins** over any `condition` nested in `extra_input`.
+
 ---
 
 ## AI automations
@@ -126,7 +150,9 @@ AI automations are separate from traditional rules above. They are prompt-driven
 
 ### `create_ai_automation`: `condition` (contract)
 
-On **create**, if the caller omits `condition`, the MCP layer supplies `DEFAULT_CONDITION` (see `CreateAiAutomationInput` in `pipefy_mcp.models.ai_automation`) so Pipefy always receives an explicit condition object. Pass a `condition` dict to override. On **`update_ai_automation`**, omit `condition` to leave the existing rule unchanged; pass a dict to replace it.
+The `condition` shape (expressions, `field_address` = internal_id, `operation` values, and the `expressions_structure` AND-of-ORs grouping) is the shared [Condition contract](#condition-contract-condition) documented above.
+
+On **create**, if the caller omits `condition`, the MCP layer supplies `DEFAULT_CONDITION` (see `CreateAiAutomationInput` in `pipefy_sdk.models.ai_automation`) so Pipefy always receives an explicit condition object. Pass a `condition` dict to override. On **`update_ai_automation`**, omit `condition` to leave the existing rule unchanged; pass a dict to replace it. Traditional `create_automation` / `update_automation` do **not** inject a default — omit `condition` to leave the rule unconditional.
 
 ## AI agents
 

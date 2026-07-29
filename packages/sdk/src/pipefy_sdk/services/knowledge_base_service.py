@@ -652,7 +652,9 @@ class KnowledgeBaseService:
                 f"S3 upload failed: {exc}", step="s3_upload"
             ) from exc
         status = put_result.get("status_code", 0)
-        if not isinstance(status, int) or status >= 400:
+        # Only 2xx stored the object. A 3xx is rejected, not followed: re-sending the
+        # body to the Location host would bypass the upload URL allow-list.
+        if not isinstance(status, int) or not 200 <= status < 300:
             body_snippet = put_result.get("body_snippet")
             raise KnowledgeBaseDocumentUploadError(
                 f"S3 upload failed with HTTP {status}.",

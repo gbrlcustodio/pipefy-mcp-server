@@ -15,6 +15,7 @@ from typing import Sequence
 from pipefy_mcp import __version__
 from pipefy_mcp.server import run_server
 from pipefy_mcp.settings import resolve_mcp_settings
+from pipefy_mcp.tools.toolsets import resolve_selection
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -58,6 +59,19 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         help="HTTP bind port (default: env PIPEFY_MCP_PORT, else 8000).",
     )
+    parser.add_argument(
+        "--toolsets",
+        "--tools",
+        dest="toolsets",
+        metavar="NAMES",
+        help=(
+            "Comma-separated subject domains or persona profiles to expose (e.g. "
+            "'workflow,database' or 'operator'), narrowing the surface after the "
+            "remote floor. 'all'/'default' or unset keep every tool; 'power' (alias "
+            "'architect') exposes the catalog meta-tools instead. Also env "
+            "PIPEFY_MCP_TOOLSETS."
+        ),
+    )
     return parser
 
 
@@ -89,7 +103,18 @@ def main(argv: Sequence[str] | None = None) -> None:
             transport=args.transport,
             host=args.host,
             port=args.port,
+            toolsets=args.toolsets,
         )
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    # Validate the resolved toolset names against the domain/profile map. This runs on
+    # the merged value (flag over PIPEFY_MCP_TOOLSETS), so an env-only bad name gets the
+    # same usage error (exit 2) as the flag. The check lives here because the settings
+    # layer sits below the tool layer and cannot import the map; the server still
+    # re-validates at build for embedders that bypass this entry point.
+    try:
+        resolve_selection(resolved.mcp.toolsets)
     except ValueError as exc:
         parser.error(str(exc))
 

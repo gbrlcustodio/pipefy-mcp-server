@@ -20,12 +20,12 @@ from pipefy_mcp.tools.ipaas_tools import IpaasTools
 
 TOOLS = [
     {
-        "name": "ap_create_flow",
+        "name": "demo_create_flow",
         "description": "Create a new flow\n\nLonger guidance the compact list drops.",
         "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}},
     },
     {
-        "name": "ap_list_flows",
+        "name": "demo_list_flows",
         "description": "List flows in the current project",
         "inputSchema": {"type": "object"},
     },
@@ -93,7 +93,7 @@ async def test_compact_catalog_lists_names_and_first_lines(
     mock_client.get_advanced_automations_token.assert_awaited_once_with("303088927")
     mock_gateway.list_tools.assert_awaited_once_with("embed-jwt")
     assert '"count": 2' in payload["result"]
-    assert '"ap_create_flow"' in payload["result"]
+    assert '"demo_create_flow"' in payload["result"]
     # Compact mode keeps the first description line and drops the schema.
     assert "Create a new flow" in payload["result"]
     assert "Longer guidance" not in payload["result"]
@@ -109,14 +109,14 @@ async def test_tool_name_returns_full_schema(
     server = build_ipaas_test_server(mock_client, mock_gateway)
     async with _session(server) as session:
         result = await session.call_tool(
-            "get_ipaas_tools", {"pipe_id": "303088927", "tool_name": "ap_create_flow"}
+            "get_ipaas_tools", {"pipe_id": "303088927", "tool_name": "demo_create_flow"}
         )
 
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "inputSchema" in payload["result"]
     assert "Longer guidance" in payload["result"]
-    assert "ap_list_flows" not in payload["result"]
+    assert "demo_list_flows" not in payload["result"]
 
 
 @pytest.mark.anyio
@@ -126,14 +126,14 @@ async def test_unknown_tool_name_lists_available(
     server = build_ipaas_test_server(mock_client, mock_gateway)
     async with _session(server) as session:
         result = await session.call_tool(
-            "get_ipaas_tools", {"pipe_id": "303088927", "tool_name": "ap_nope"}
+            "get_ipaas_tools", {"pipe_id": "303088927", "tool_name": "demo_nope"}
         )
 
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload)
-    assert "ap_nope" in message
-    assert "ap_create_flow" in message
+    assert "demo_nope" in message
+    assert "demo_create_flow" in message
 
 
 @pytest.mark.anyio
@@ -213,7 +213,7 @@ async def test_call_tool_forwards_arguments_and_relays_output(
             "call_ipaas_tool",
             {
                 "pipe_id": "303088927",
-                "tool_name": "ap_create_flow",
+                "tool_name": "demo_create_flow",
                 "arguments": {"name": "My flow"},
             },
         )
@@ -223,12 +223,12 @@ async def test_call_tool_forwards_arguments_and_relays_output(
     assert payload["success"] is True
     mock_client.get_advanced_automations_token.assert_awaited_once_with("303088927")
     mock_gateway.call_tool.assert_awaited_once_with(
-        "embed-jwt", "ap_create_flow", {"name": "My flow"}
+        "embed-jwt", "demo_create_flow", {"name": "My flow"}
     )
     # Text segments are joined and relayed in full.
     assert "flow created" in payload["result"]
     assert "id: flow-1" in payload["result"]
-    assert '"ap_create_flow"' in payload["result"]
+    assert '"demo_create_flow"' in payload["result"]
 
 
 @pytest.mark.anyio
@@ -242,12 +242,14 @@ async def test_call_tool_arguments_default_to_none(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "ap_list_flows"},
+            {"pipe_id": "303088927", "tool_name": "demo_list_flows"},
         )
 
     payload = extract_payload(result)
     assert payload["success"] is True
-    mock_gateway.call_tool.assert_awaited_once_with("embed-jwt", "ap_list_flows", None)
+    mock_gateway.call_tool.assert_awaited_once_with(
+        "embed-jwt", "demo_list_flows", None
+    )
 
 
 @pytest.mark.anyio
@@ -264,7 +266,7 @@ async def test_call_tool_maps_host_iserror_to_error_payload(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "ap_delete_flow"},
+            {"pipe_id": "303088927", "tool_name": "demo_delete_flow"},
         )
 
     payload = extract_payload(result)
@@ -285,7 +287,7 @@ async def test_call_tool_null_result_becomes_error_payload_not_attribute_error(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "ap_list_flows"},
+            {"pipe_id": "303088927", "tool_name": "demo_list_flows"},
         )
 
     payload = extract_payload(result)
@@ -310,7 +312,7 @@ async def test_call_tool_passes_non_text_content_through(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "ap_get_run"},
+            {"pipe_id": "303088927", "tool_name": "demo_get_run"},
         )
 
     payload = extract_payload(result)
@@ -330,7 +332,7 @@ async def test_call_tool_gateway_error_becomes_error_payload(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "ap_create_flow"},
+            {"pipe_id": "303088927", "tool_name": "demo_create_flow"},
         )
 
     payload = extract_payload(result)
@@ -346,7 +348,7 @@ async def test_call_tool_unconfigured_gateway_reports_clearly(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "ap_create_flow"},
+            {"pipe_id": "303088927", "tool_name": "demo_create_flow"},
         )
 
     payload = extract_payload(result)

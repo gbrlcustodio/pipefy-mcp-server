@@ -1,16 +1,16 @@
 """Standalone GraphQL error classifier shared across the SDK, CLI, and MCP.
 
-Maps a Pipefy GraphQL error payload (or the ``TransportQueryError`` that
-carries it) onto a small closed set of structured problems: permission denied,
-not found, invalid arguments, feature not enabled, or an unclassified runtime
-error. Provider probes and CLI write-gating consume this instead of each
-re-deriving ``except``-mapping locally.
+Maps a Pipefy GraphQL error payload (or the ``PipefyGraphQLError`` that carries
+it) onto a small closed set of structured problems: permission denied, not
+found, invalid arguments, feature not enabled, or an unclassified runtime error.
+Provider probes and CLI write-gating consume this instead of each re-deriving
+``except``-mapping locally.
 
 It lives in the SDK on purpose. The richer MCP enrichment
 (``pipefy_mcp.tools.graphql_error_helpers``) imports MCP settings and the MCP
 response envelope, so neither the SDK nor the CLI can import it. This module
-depends on nothing beyond the standard library and the ``gql`` error shape the
-SDK already surfaces, so all three layers can share one classifier.
+depends on nothing beyond the standard library and the raw GraphQL ``errors``
+shape, so all three layers can share one classifier.
 
 Classification reads ``extensions.code`` first (the authoritative signal the
 Pipefy GraphQL layer attaches) and falls back to substring markers on the
@@ -142,11 +142,13 @@ def classify_graphql_error_dicts(
 def classify_exception(exc: BaseException) -> GraphQLProblem | None:
     """Classify an exception raised by the GraphQL executor.
 
-    Handles the public endpoint's ``TransportQueryError`` (and any exception
-    that duck-types it) by reading its ``errors`` list. Returns ``None`` when
-    the exception carries no GraphQL error dicts, so callers can distinguish a
+    Handles the ``PipefyGraphQLError`` every endpoint raises (and any exception
+    that duck-types it) by reading its ``errors`` list. Returns ``None`` when the
+    exception carries no GraphQL error dicts, so callers can distinguish a
     classified GraphQL problem from a transport/network failure they should
-    re-raise or report as-is.
+    re-raise or report as-is. A non-dict element anywhere in ``errors`` also
+    yields ``None``: the list is then not the payload shape this classifier
+    reads, so it declines rather than guessing.
     """
     errors = getattr(exc, "errors", None)
     if isinstance(errors, list) and errors and all(isinstance(e, dict) for e in errors):

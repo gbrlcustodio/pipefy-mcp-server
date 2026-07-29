@@ -13,10 +13,10 @@ from _shared.fixture_ids import (
     make_field_id,
     make_pipe_id,
 )
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.models.ai_agent import UpdateAiAgentInput
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
@@ -274,8 +274,8 @@ class TestCreateAiAgent:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.create_ai_agent.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "permission denied"}]
+        mock_pipefy_client.create_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "permission denied"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -519,8 +519,8 @@ class TestUpdateAiAgent:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
-            "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
+        mock_pipefy_client.update_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "RECORD_NOT_SAVED"}]
         )
         pipe_id = make_pipe_id()
         field_id = make_field_id()
@@ -555,8 +555,8 @@ class TestUpdateAiAgent:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
-            "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
+        mock_pipefy_client.update_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "RECORD_NOT_SAVED"}]
         )
         mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field(
             field_id="100", phase_id="ph-1"
@@ -606,8 +606,8 @@ class TestUpdateAiAgent:
                             fa["fieldId"] = field_id
             return out
 
-        mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
-            "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
+        mock_pipefy_client.update_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "RECORD_NOT_SAVED"}]
         )
         mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field(
             field_id=field_id, phase_id="ph-1"
@@ -735,8 +735,8 @@ class TestToggleAiAgentStatus:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.toggle_ai_agent_status.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "Agent is locked"}]
+        mock_pipefy_client.toggle_ai_agent_status.side_effect = PipefyGraphQLError(
+            [{"message": "Agent is locked"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -908,8 +908,8 @@ class TestValidateAiAgentBehaviors:
         extract_payload,
     ):
         mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
-        mock_pipefy_client.get_pipe_relations.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "denied"}]
+        mock_pipefy_client.get_pipe_relations.side_effect = PipefyGraphQLError(
+            [{"message": "denied"}]
         )
         behavior = {
             "name": "Child",
@@ -1139,8 +1139,8 @@ class TestGetAiAgent:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.get_ai_agent.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "not found"}]
+        mock_pipefy_client.get_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "not found"}]
         )
         async with client_session as session:
             result = await session.call_tool("get_ai_agent", {"uuid": "missing"})
@@ -1205,8 +1205,8 @@ class TestGetAiAgents:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.get_ai_agents.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "denied"}]
+        mock_pipefy_client.get_ai_agents.side_effect = PipefyGraphQLError(
+            [{"message": "denied"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -1271,8 +1271,8 @@ class TestDeleteAiAgent:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.delete_ai_agent.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "gone"}]
+        mock_pipefy_client.delete_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "gone"}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -2097,8 +2097,8 @@ class TestEnrichWithValidation:
         extract_payload,
     ):
         """When behaviors have no pipeId, enrichment skips validation (line 97)."""
-        mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
-            "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
+        mock_pipefy_client.update_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "RECORD_NOT_SAVED"}]
         )
         behavior_no_pipe = {
             "name": "Move",
@@ -2140,8 +2140,8 @@ class TestEnrichWithValidation:
         extract_payload,
     ):
         """When pipe fetch fails during enrichment, falls back (lines 152-153)."""
-        mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
-            "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
+        mock_pipefy_client.update_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "RECORD_NOT_SAVED"}]
         )
         mock_pipefy_client.get_pipe.side_effect = RuntimeError("unreachable")
         pipe_id = make_pipe_id()
@@ -2172,8 +2172,8 @@ class TestEnrichWithValidation:
         extract_payload,
     ):
         """Enrichment collects start_form_fields and parent relations (lines 114-116, 126-134)."""
-        mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
-            "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
+        mock_pipefy_client.update_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "RECORD_NOT_SAVED"}]
         )
         mock_pipefy_client.get_pipe.return_value = {
             "pipe": {
@@ -2212,8 +2212,8 @@ class TestEnrichWithValidation:
         extract_payload,
     ):
         """When relations fetch fails in enrichment, validation still runs (lines 133-134)."""
-        mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
-            "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
+        mock_pipefy_client.update_ai_agent.side_effect = PipefyGraphQLError(
+            [{"message": "RECORD_NOT_SAVED"}]
         )
         pipe_id = make_pipe_id()
         field_id = make_field_id()
@@ -2379,14 +2379,13 @@ class TestCreateAiAgentPermissionEnrichment:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.create_ai_agent.side_effect = TransportQueryError(
-            "forbidden",
-            errors=[
+        mock_pipefy_client.create_ai_agent.side_effect = PipefyGraphQLError(
+            [
                 {
                     "message": "forbidden",
                     "extensions": {"code": "PERMISSION_DENIED"},
                 }
-            ],
+            ]
         )
         # get_pipe_members fails for the target pipe (no access)
         mock_pipefy_client.get_pipe_members.side_effect = RuntimeError("no access")

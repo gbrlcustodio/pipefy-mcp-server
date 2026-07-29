@@ -73,9 +73,9 @@ async def _diagnose_phase_field_cascade(
     """
     if pipe_id is None:
         return None
-    # gql's ``TransportQueryError`` hides the structured per-error ``message``
-    # and ``extensions.code`` behind attributes, so ``str(exc)`` alone only
-    # returns the outer wrapper ("GraphQL Error"). Combine both signals.
+    # ``PipefyGraphQLError`` keeps the structured per-error ``message`` and
+    # ``extensions.code`` in ``.errors``, so ``str(exc)`` alone only returns the
+    # joined message text. Combine both signals.
     signal_parts: list[str] = [str(exc).lower()]
     signal_parts.extend(m.lower() for m in extract_error_strings(exc))
     signal_parts.extend(c.lower() for c in extract_graphql_error_codes(exc))
@@ -129,6 +129,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_pipe(
             name: str,
@@ -173,6 +174,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_pipe(
             pipe_id: PipefyId,
@@ -233,6 +235,7 @@ class PipeConfigTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_pipe(
             ctx: Context[ServerSession, None],
@@ -318,6 +321,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def clone_pipe(
             pipe_template_id: PipefyId,
@@ -553,6 +557,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_phase(
             pipe_id: PipefyId,
@@ -613,6 +618,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_phase(
             phase_id: PipefyId,
@@ -714,6 +720,7 @@ class PipeConfigTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_phase(
             ctx: Context[ServerSession, None],
@@ -782,6 +789,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_phase_field(
             phase_id: PipefyId,
@@ -862,6 +870,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_phase_field(
             field_id: PipefyId,
@@ -978,6 +987,7 @@ class PipeConfigTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_phase_field(
             ctx: Context[ServerSession, None],
@@ -1097,6 +1107,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def create_label(
             pipe_id: PipefyId,
@@ -1156,6 +1167,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=False,
             ),
+            meta=REMOTE,
         )
         async def update_label(
             label_id: PipefyId,
@@ -1226,6 +1238,7 @@ class PipeConfigTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            meta=REMOTE,
         )
         async def delete_label(
             ctx: Context[ServerSession, None],

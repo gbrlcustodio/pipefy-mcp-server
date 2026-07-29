@@ -31,6 +31,8 @@ These are the counterpart to the `providerId` / `systemProviderId` fields on AI 
 
 ## Identifiers: UUID vs numeric ID
 
+> Full cross-tool map: [identifiers.md](identifiers.md#llm-providers).
+
 The organization identifier is **not uniform** across these tools — this follows the Pipefy GraphQL API, not a toolkit choice:
 
 - `get_llm_providers`, `get_llm_provider_dependencies`, `create_llm_provider`, `update_llm_provider`, and `delete_llm_provider` take the organization **UUID** (`organization_uuid`).

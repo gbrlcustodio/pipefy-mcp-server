@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.queries.member_queries import (
     INVITE_MEMBERS_MUTATION,
     REMOVE_MEMBERS_FROM_PIPE_MUTATION,
@@ -46,11 +46,9 @@ async def test_invite_members_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_invite_members_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = MemberService(executor=executor, pipe_service=AsyncMock())
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.invite_members(
             "602", [{"email": "x@y.com", "role_name": "member"}]
         )
@@ -134,6 +132,38 @@ async def test_invite_members_lowercases_email():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_add_service_account_to_pipe_sends_single_invite_row():
+    payload = {
+        "inviteMembers": {
+            "users": [{"id": "sa1", "email": "svc@x.com"}],
+            "errors": [],
+        }
+    }
+    service, executor = _make_service(payload)
+    result = await service.add_service_account_to_pipe("601", "svc@x.com", "member")
+
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
+    assert query is INVITE_MEMBERS_MUTATION
+    inp = variables["input"]
+    assert inp["pipe_id"] == "601"
+    assert inp["emails"] == [{"email": "svc@x.com", "role_name": "member"}]
+    assert result == payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_add_service_account_to_pipe_rejects_invalid_email():
+    executor = mock_executor()
+    service = MemberService(executor=executor, pipe_service=AsyncMock())
+    with pytest.raises(ValueError) as excinfo:
+        await service.add_service_account_to_pipe("601", "not-an-email", "member")
+    assert "members[0].email" in str(excinfo.value)
+    executor.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_remove_members_from_pipe_success():
     payload = {"removeMembersFromPipe": {"success": True}}
     pipe_service = AsyncMock(spec=PipeService)
@@ -167,11 +197,9 @@ async def test_remove_members_from_pipe_success():
 async def test_remove_members_from_pipe_transport_error():
     pipe_service = AsyncMock(spec=PipeService)
     pipe_service.get_pipe = AsyncMock(return_value={"pipe": {"uuid": "pu", "id": 1}})
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "forbidden"}]))
     service = MemberService(executor=executor, pipe_service=pipe_service)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.remove_members_from_pipe(
             "1", ["550e8400-e29b-41d4-a716-446655440000"]
         )
@@ -240,11 +268,9 @@ async def test_set_role_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_set_role_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "invalid"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "invalid"}]))
     service = MemberService(executor=executor, pipe_service=AsyncMock())
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.set_role("604", "m1", "member")
 
 

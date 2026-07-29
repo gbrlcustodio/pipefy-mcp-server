@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
     CREATE_FIELD_CONDITION_MUTATION,
@@ -816,11 +816,9 @@ async def test_create_field_condition_rejects_reserved_phaseId_attr():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_field_condition_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "invalid"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "invalid"}]))
     service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.create_field_condition(
             "pf-1",
             {"expressions": []},
@@ -888,11 +886,9 @@ async def test_update_field_condition_rejects_reserved_id_attr():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_field_condition_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "not found"}]))
     service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.update_field_condition("missing-id", name=None, phase_id="88")
 
 
@@ -911,11 +907,9 @@ async def test_delete_field_condition_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_field_condition_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "forbidden"}]))
     service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.delete_field_condition("cond-x")
 
 
@@ -977,9 +971,7 @@ async def test_get_field_condition_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_field_condition_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "not found"}]))
     service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_field_condition("missing")

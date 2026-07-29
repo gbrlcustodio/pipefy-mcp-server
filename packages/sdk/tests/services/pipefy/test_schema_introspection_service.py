@@ -2,9 +2,9 @@
 
 import pytest
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 from graphql import GraphQLError
 
+from pipefy_sdk.graphql_executor import PipefyGraphQLError
 from pipefy_sdk.queries.introspection_queries import (
     INTROSPECT_MUTATION_QUERY,
     INTROSPECT_QUERY_QUERY,
@@ -695,17 +695,16 @@ async def test_execute_graphql_valid_mutation_returns_data():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_execute_graphql_surfaces_graphql_errors_from_transport():
-    """TransportQueryError from the GraphQL layer is turned into a clear errors payload."""
+    """A PipefyGraphQLError from the seam is turned into a clear errors payload."""
 
     async def raise_transport_error(*_args, **_kwargs):
-        raise TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        raise PipefyGraphQLError(
+            [
                 {
                     "message": "Cannot query field `broken` on type `Query`.",
                     "extensions": {"code": "GRAPHQL_VALIDATION_FAILED"},
                 }
-            ],
+            ]
         )
 
     executor = mock_executor(side_effect=raise_transport_error)
@@ -744,11 +743,8 @@ async def test_execute_graphql_query_field_not_found_hints_mutation():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise TransportQueryError(
-                "GraphQL Error",
-                errors=[
-                    {"message": "Cannot query field 'createCard' on type 'Query'."}
-                ],
+            raise PipefyGraphQLError(
+                [{"message": "Cannot query field 'createCard' on type 'Query'."}]
             )
         # Hint lookup: return Mutation fields that include createCard
         return {
@@ -780,9 +776,8 @@ async def test_execute_graphql_mutation_field_not_found_hints_query():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise TransportQueryError(
-                "GraphQL Error",
-                errors=[{"message": "Cannot query field 'pipe' on type 'Mutation'."}],
+            raise PipefyGraphQLError(
+                [{"message": "Cannot query field 'pipe' on type 'Mutation'."}]
             )
         return {
             "__type": {
@@ -812,11 +807,8 @@ async def test_execute_graphql_no_hint_when_field_absent_from_both():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise TransportQueryError(
-                "GraphQL Error",
-                errors=[
-                    {"message": "Cannot query field 'nonexistent' on type 'Query'."}
-                ],
+            raise PipefyGraphQLError(
+                [{"message": "Cannot query field 'nonexistent' on type 'Query'."}]
             )
         return {"__type": {"fields": [{"name": "pipe"}]}}
 
@@ -838,11 +830,8 @@ async def test_execute_graphql_hint_works_with_backtick_error_format():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise TransportQueryError(
-                "GraphQL Error",
-                errors=[
-                    {"message": "Cannot query field `createCard` on type `Query`."}
-                ],
+            raise PipefyGraphQLError(
+                [{"message": "Cannot query field `createCard` on type `Query`."}]
             )
         return {
             "__type": {
@@ -866,10 +855,7 @@ async def test_execute_graphql_no_hint_on_unrelated_error():
     """Errors that don't match the field-not-found pattern get no hint."""
 
     async def raise_transport_error(*_args, **_kwargs):
-        raise TransportQueryError(
-            "GraphQL Error",
-            errors=[{"message": "Permission denied"}],
-        )
+        raise PipefyGraphQLError([{"message": "Permission denied"}])
 
     executor = mock_executor(side_effect=raise_transport_error)
     service = SchemaIntrospectionService(executor=executor)
@@ -889,14 +875,11 @@ async def test_execute_graphql_hint_lookup_failure_does_not_mask_error():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise TransportQueryError(
-                "GraphQL Error",
-                errors=[
-                    {"message": "Cannot query field 'createCard' on type 'Query'."}
-                ],
+            raise PipefyGraphQLError(
+                [{"message": "Cannot query field 'createCard' on type 'Query'."}]
             )
         # Hint lookup also fails
-        raise TransportQueryError("hint lookup failed", errors=[])
+        raise PipefyGraphQLError([])
 
     executor = mock_executor(side_effect=mock_execute)
     service = SchemaIntrospectionService(executor=executor)
@@ -920,11 +903,8 @@ async def test_execute_graphql_hint_lookup_unexpected_error_propagates(caplog):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise TransportQueryError(
-                "GraphQL Error",
-                errors=[
-                    {"message": "Cannot query field 'createCard' on type 'Query'."}
-                ],
+            raise PipefyGraphQLError(
+                [{"message": "Cannot query field 'createCard' on type 'Query'."}]
             )
         raise RuntimeError("simulated bug during hint introspection")
 

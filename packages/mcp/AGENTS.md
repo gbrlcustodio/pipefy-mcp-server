@@ -12,10 +12,14 @@ access the user already has.
 Implications for tool design:
 
 - Local filesystem inputs (`file_path`) are first-class. There is no
-  path-traversal threat surface beyond what the user can already access.
-- SSRF guards, redirect loops, and download size caps that defend a hosted
-  server are not appropriate here. They add maintenance cost without buying
-  a security boundary.
+  path-traversal threat surface beyond what the user can already access, and a
+  local `file_path` needs no SSRF guard, redirect cap, or download size limit —
+  the user already has that filesystem and network reach.
+- A **server-side URL fetch is different**: when the server (not the user) makes
+  the request, those defenses apply. The `file_url` attachment source carries
+  them in the SDK (`HttpxUrlDownloader`: HTTPS + public-IP gate, 80/443 ports,
+  connect-time re-validation, redirect cap, size cap), and any future URL
+  ingestion should do the same.
 
 A hosted/remote distribution profile is in progress. It runs the server as a
 multi-user HTTP service. Tool exposure there is **default-deny**: only tools
@@ -86,9 +90,10 @@ validates a per-request bearer, so its bind host is irrelevant and is not checke
 `pipefy_infra.security.is_loopback_host`, which covers all of `127.0.0.0/8` and
 `::1`. This replaced an earlier bind-interface guard (`_assert_safe_http_bind`) that
 false-positived on the entire hosted profile and lived in the run path where the
-ASGI-app path bypassed it. The attachment tools' local `file_path` inputs also
-still assume a loopback peer that shares the client's disk (remote-safe file inputs
-are separate follow-up work).
+ASGI-app path bypassed it. The attachment tools' local `file_path` input assumes a
+loopback peer that shares the client's disk, so it is rejected under the remote
+profile; the hosted-safe path is their `file_url` input, which the SDK downloads
+under an SSRF guard (see "Exposure vs input restriction").
 
 **Transport allowlist.** DNS-rebinding protection is a separate axis from the
 bind-safety interlock: it checks the inbound request's `Host` / `Origin`, not the
@@ -186,6 +191,38 @@ credential resolved at startup (stdio/local), while `RequestScopedIdentity`
 snapshots each caller's validated bearer from the request context, so every session
 acts as its own caller.
 
+## Subject-domain taxonomy
+
+The tool surface is classified along two orthogonal axes. A **domain** is the single subject a tool is *about* — domains form a disjoint partition where every registered tool has exactly one, answering "what subject is this tool fundamentally about?". A **profile** is an overlapping, journey-sized selection where the same tool may appear in many, answering "who reaches for this tool, and when?". Domains back the tool-catalog map and the drift-guard; profiles carry the small-working-set job for named `--toolsets` selection. The two are complementary: a tool like `set_default_llm_provider` is *about* AI (domain `intelligence`) yet an IT/governance persona also reaches for it — so the subject fixes the one domain and the cross-persona pull is expressed as a profile overlap, never by splitting the domain or duplicating the tool.
+
+The eight domains and the subject each owns:
+
+- **workflow** — running a process: pipes, phases, fields, labels, field conditions, cards, comments, card attachments, inbox email, and pipe/card relations.
+- **database** — Pipefy database tables: tables, table fields, table relations, records, and record attachments.
+- **interfaces** — no-code page building: portals, pages, elements, and sub-portals.
+- **automation** — Pipefy-native rule (if/then) and AI automations, plus their execution logs, metrics, usage, and job exports.
+- **intelligence** — AI capability: agents, LLM providers, knowledge bases, available models, and AI usage and credits.
+- **analytics** — reporting: pipe and organization reports and their exports.
+- **governance** — org administration: organization, members, roles, service accounts, and audit-log export.
+- **integration** — connecting to the outside: webhooks, iPaaS, and the raw GraphQL API (introspection and arbitrary execution). iPaaS lives here (external-app connectivity), not in `automation`.
+
+Subject domains are deliberately chosen over the `docs/mcp/tools/*.md` doc-areas: doc-areas group by API object (cards, pipes, tables), which is redundant with tool names — if a caller says "cards", the names (`create_card`) already lead the model there. The value a taxonomy adds is at the job/business-subject layer, which subject domains capture and doc-areas do not.
+
+The partition lives as central data in `tools/toolsets.py` (`DOMAINS`), not co-located in each tool's `meta` dict — a partition's correctness is a whole-set property (complete, disjoint) best reviewed and asserted in one place, unlike a per-tool security marker like remote-safety, which is reviewed tool-by-tool and so stays on the decorator. The drift-guard (`tests/tools/test_toolsets.py`) keys completeness to `PIPEFY_TOOL_NAMES` with no hardcoded count: a newly registered tool with no domain fails the build. Re-homing or renaming a domain later churns the guard, the docs, and the `--toolsets` vocabulary callers type, so the boundary choices above are deliberate.
+
+**Selecting toolsets at startup.** `--toolsets` / `PIPEFY_MCP_TOOLSETS` takes a comma-separated list of domain names (case-insensitive), plus the `all` / `default` keywords that mean no curation. `resolve_selection` (`tools/toolsets.py`) maps the spec to a set of tool names — the union of the named domains, or `None` for no curation — and `ToolRegistry.apply_toolset_selection` applies it via `retain_only`, run **after** `apply_remote_profile` (floor then selection). Because `retain_only` only ever removes from the live surface, selection narrows within the floored set and can never widen past it — on the remote profile the survivors are the remote-safe floor intersected with the selection. The default (unset) is no curation, so the surface is backward-compatible. An unknown name is a usage error, checked in `main.py` for the flag (the composition root can import the domain map; the settings layer, which sits below the tool layer, cannot) and surfaced at build for a bad `PIPEFY_MCP_TOOLSETS`. Overlapping persona *profiles* (`PROFILES` in `tools/toolsets.py`) extend the same selection vocabulary: `--toolsets operator` or `--toolsets database,admin` resolve profile names the same way as domains and union them. Profiles are curated, journey-sized, and — unlike domains — overlapping (a tool may appear in many), so their guard is a subset check (each ⊆ `PIPEFY_TOOL_NAMES`, names disjoint from the domains and keywords), not a partition. Each is grounded in a Pipefy role scope:
+
+- **requester** — an external guest: submit a request and track your own cards.
+- **operator** — a pipe member: run existing cards day to day (reads plus the card lifecycle); no pipe configuration.
+- **manager** — a pipe admin, oversight slant: the operator surface plus reports, execution logs, and audit-log export. A superset of `operator`.
+- **builder** — a pipe admin: configure pipes, phases, fields, conditions, automations, AI agents, and relations.
+- **admin** — an org super admin: members, roles, service accounts, LLM providers, webhooks, and organization reports.
+- **auditor** — read-only: every read tool plus audit-log export, to reconstruct history.
+
+The role boundaries are deliberate: "run a case" (pipe member) and "configure a pipe" (pipe admin) are the real capability split, and org-wide governance (members, roles, LLM providers) is a super-admin concern distinct from pipe building. `power` remains a distinct branch, not a profile.
+
+**The `power` discovery profile.** `--toolsets power` (alias `architect`) is a distinct branch: instead of narrowing by domain, `ToolRegistry.apply_power_profile` snapshots the curated tools that survived the floor, removes them from `tools/list`, and registers four catalog meta-tools (`tools/meta_tools.py`) over that snapshot — `get_tool_categories` (the domain map), `search_tools` (a keyword ranker), `describe_tool` (a hidden tool's schema), and `execute_tool` (invoke one). The raw-GraphQL tools (`POWER_GRAPHQL_TOOLS`: `search_schema`, `introspect_*`, `execute_graphql`) stay visible by name alongside them, so the working set is nine tools regardless of catalog size. `execute_tool` dispatches through the hidden tool's own `PipefyValidationTool.run`, so argument validation and the error envelope apply exactly as a direct call; and because the snapshot is taken after the floor, it can never reach a tool the floor withholds. `wants_power` (checked in `server.py`) routes to this branch before the domain path, so `power` and a domain list are not combined. The meta-tools are registered post-floor and are not in `PIPEFY_TOOL_NAMES`, so the partition drift-guard and the remote seed do not count them; their safety on the remote profile comes from the catalog being post-floor, not from a marker.
+
 ## Remote-profile tool marker
 
 Under the `remote` profile (`--profile remote` / `PIPEFY_MCP_PROFILE=remote`), the
@@ -222,12 +259,29 @@ inputs, enforce that in the tool body at call time via
 `is_remote_profile(ctx)` (`tools/tool_context.py`), not via the marker — and not
 via the module-global settings singleton, which can disagree with the profile the
 runtime was actually built from (embedders and tests construct runtimes from
-explicit settings). The shipped instance is `create_ipaas_connection`, which
-rejects `{"$env": ...}` credential references on the remote profile because they
-resolve from the deployment's own environment; the attachment tools (a `file_url`
-rather than a local `file_path`) would follow the same shape. A tool whose
+explicit settings). Two shipped instances: `create_ipaas_connection` rejects
+`{"$env": ...}` credential references on the remote profile because they resolve
+from the deployment's own environment; and the attachment tools reject their local
+`file_path` input on the remote profile, exposing only the `file_url` source (which
+the SDK downloads under an SSRF guard, so it reads no local disk). A tool whose
 exclusion deserves a reason gets a plain code comment stating why; the exclusion
 itself needs no annotation.
+
+### Write tools on the remote profile
+
+A write — create, update, delete, or an action-style mutation — must pass the same inclusion criteria as a read (above) plus three write-specific ones before it earns `meta=REMOTE`:
+
+- **Authorization is the API's, and only the API's.** A remote-safe write carries no client-side permission check; it relies entirely on the backend rejecting a caller who lacks the permission (org-admin to create or delete a service account, pipe-admin to add a member). Mark a write remote-safe only once its permission is enforced downstream for the request-scoped bearer — never infer authorization from the tool merely being reachable.
+- **A returned secret must never reach a log.** A write that returns a credential (`create_service_account` returns an OAuth2 client secret shown only once) is safe to expose because the hosted logging layers record neither argument values nor response bodies: `tool_log_middleware` logs bounded argument key names only, and `RequestLogMiddleware` logs request metadata without buffering the response body. The secret goes to the authenticated caller and nowhere else. A write that would need its secret logged, echoed in an error, or persisted server-side is not remote-safe.
+- **`confirm` is a UX guard, not an authorization boundary.** The two-step `check_destructive_confirmation` flow (preview on `confirm=False`, execute on `confirm=True`) makes a destructive call deliberate, and deliberately avoids elicitation because some clients auto-accept it. A programmatic caller can still pass `confirm=True` on the first call, so `confirm` protects against accident, not intent — the guard against an *unauthorized* delete is the API permission above. A destructive write is remote-safe when its authorization is downstream and its effect is stated plainly to the caller, not because `confirm` gates it.
+
+Input restriction (via `is_remote_profile(ctx)`, per "Exposure vs input restriction" above) is required for a write only when an input resolves from the deployment's own environment or disk — the `create_ipaas_connection` `$env` case — not merely because the tool mutates. A write whose every input is a per-request value (an id, a name, a role) needs none.
+
+The organization service-account tools (`create_service_account`, `delete_service_account`, `add_service_account_to_pipe`) are the first **public-GraphQL** writes on the remote seed (the iPaaS meta-tools `call_ipaas_tool` / `create_ipaas_connection` are also writes, but reach the iPaaS host rather than the public API) and the worked example of the test above: public-GraphQL mutations, API-permission-governed, per-request inputs only, a returned-once secret kept out of logs, and a `confirm`-gated delete.
+
+**Raw GraphQL on the remote profile.** `execute_graphql` is remote-safe (#308), unlike the dedicated destructive tools it can stand in for. It runs an arbitrary query or mutation as the request-scoped bearer, so its write reach is whatever that caller's API permissions already allow — the same trust boundary as its remote-safe introspection siblings (`search_schema`, `introspect_*`), just write-capable. It qualifies on the same three write criteria: authorization is the API's alone (no client-side permission check), no returned value is logged (hosted logging records neither argument values nor response bodies), and it takes only per-request inputs (a query string and variables — no `file_path`, no `$env` reference, no iPaaS host). Two properties are worth stating plainly: it deliberately has **no `confirm` gate** and bypasses the client-side input restrictions of dedicated tools — acceptable because, per the criteria above, `confirm` and input scrubs are UX guards, not authorization boundaries, and the authorization boundary (the API permission on the bearer) still holds. Its reach is the public GraphQL API only (the SDK runs it on the public executor); it cannot read local disk, reach the iPaaS host, or use the Internal API, so the tools withheld for *those* reasons stay unreachable through it — though public-GraphQL equivalents of tools withheld for other reasons remain callable.
+
+**Governance is deferred, on purpose.** Per-user quotas, rate limiting, and cost weighting for remote writes are not a precondition of exposure: the tool-call middleware seam (`core/tool_middleware.py`) is where they attach, but the only middleware shipped is structured logging, and remote writes rely on API-side rate limits plus per-user identity. Per-user write governance is tracked under the "Scaling and abuse protection" milestone; until it lands, expose new write categories conservatively and prefer ones whose blast radius is bounded by API permissions.
 
 ### Process-global configuration and the single-backend assumption
 
@@ -242,13 +296,13 @@ Everything else that reads shared settings is safe because of one assumption, st
 - `permission_denied_enrichment_timeout_seconds` (`tools/graphql_error_helpers.py`) — a timeout knob. Same for everyone by design.
 - `unified_envelope` (`core/tool_error_envelope.py`) — a flag that changes the shape of tool responses. Applies identically to every caller.
 - The bind host and transport allowlist (`core/transport_security.py`, from `McpSettings`) — DNS-rebinding / bind-safety config resolved once at startup. A property of the deployment's front door, not of any caller.
-- `default_webhook_name` and `allow_insecure_urls` (SDK webhook service, on create/update) — a cosmetic default name and an insecure-URL escape hatch; the webhook tools aren't exposed remotely anyway.
+- `default_webhook_name` and `allow_insecure_urls` (SDK webhook service, on create/update) — a cosmetic default name and an insecure-URL escape hatch. `create_webhook` / `update_webhook` are remote-safe (#478), and both settings are per-deployment, not per-user: every caller shares the one deployment's fallback webhook name and its HTTPS-enforcement posture, exactly as they share `PIPEFY_BASE_URL`. Neither answers a question about the caller, so reading them on the hosted path is safe under the same single-backend assumption.
 
-A related note: tools that call Pipefy's Internal API (like `delete_card_relation`) carry no special credential requirement. The SDK binds the session's one credential to all three API endpoints (public, Interfaces, Internal), so the Internal API simply receives whatever credential the caller already has — nothing in the client is service-account-specific. Those tools stay off the remote seed for the ordinary reason every tool starts off it: they are write mutations that haven't been reviewed for remote exposure yet.
+A related note: tools that call Pipefy's Internal API (like `delete_card_relation`) carry no special credential requirement. The SDK binds the session's one credential to all three API endpoints (public, Interfaces, Internal), so the Internal API simply receives whatever credential the caller already has — nothing in the client is service-account-specific. That is why an Internal-API write is remote-safe on the same terms as a public-API one: `delete_card_relation` is on the seed (#472), governed by the request-scoped bearer and the API's permissions like every other remote write.
 
 **When this breaks (the rework trigger).** If one hosted server ever needs to serve *multiple* backends, or integrators with different config, the assumption is gone: "same for everyone" stops being true, and each of the reads above becomes a per-user question. The fix is the same one identity already went through in #302 — stop reading the value from shared settings and resolve it from the incoming request instead.
 
-**How this is enforced.** An import-linter rule in `pyproject.toml` forbids tool code from *importing* `pipefy_mcp.settings`, even indirectly through a helper (that indirect path is how `unified_envelope` was caught). Every existing import is an explicitly listed, commented exception. If someone adds a new settings import to tool-reachable code, `uv run lint-imports` fails, and it only gets an exception after review confirms it reads a per-deployment value — never a per-user one. Known limit: the rule sees imports, not reads. Code that already holds a settings object — `McpRuntime.settings`, reachable from any tool through its request context — can read a value without adding an import, so that path stays a manual-review item. Per-user values must come from the request.
+**How this is enforced.** An import-linter rule in `pyproject.toml` forbids tool code from *importing* `pipefy_mcp.settings`, even indirectly through a helper (that indirect path is how `unified_envelope` was caught). Every existing import is an explicitly listed, commented exception. If someone adds a new settings import to tool-reachable code, `uv run lint-imports` fails, and it only gets an exception after review confirms it reads a per-deployment value — never a per-user one. The rule sees import edges, not value reads off an object that already holds a `Settings`; that gap is closed by construction rather than review, because the one object a tool can reach through its request context — the `McpRuntime` on the lifespan context — holds no `Settings` tree. It resolves only narrow per-deployment booleans at startup (`is_remote`, `unified_envelope`; see `core/runtime.py`), so there is no settings tree to read off it at call time. Per-user values must come from the request.
 
 ## Tool-call middleware
 

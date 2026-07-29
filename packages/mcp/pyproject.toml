@@ -8,9 +8,9 @@ dependencies = [
     "httpx>=0.27.0",
     "mcp[cli]>=1.25.0",
     # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
-    "pipefy-auth==0.3.0-beta.1",
-    "pipefy-infra==0.3.0-beta.1",
-    "pipefy==0.3.0-beta.1",
+    "pipefy-auth==0.4.0-beta.1",
+    "pipefy-infra==0.4.0-beta.1",
+    "pipefy==0.4.0-beta.1",
     "pydantic>=2.13.4,<3",
     "pydantic-settings>=2.8.1",
 ]
@@ -105,8 +105,12 @@ ignore_imports = [
     # identically to every caller.
     "pipefy_mcp.core.tool_error_envelope -> pipefy_mcp.settings",
     # Reviewed: the composition root builds the runtime from settings at
-    # startup; tool_context only reads the already-built runtime off the
-    # lifespan context, never settings at call time.
+    # startup. The runtime holds no Settings tree — it exposes only the two
+    # curated per-deployment booleans it resolves at construction (is_remote,
+    # unified_envelope), never settings.* — so tool code reaching the runtime
+    # off the lifespan context has no import-free path to the Settings tree
+    # (#405). Reviewed per-deployment reads elsewhere still go through the
+    # import exceptions listed here.
     "pipefy_mcp.core.runtime -> pipefy_mcp.settings",
     # Reviewed: imports the Settings type for startup identity resolution.
     # StartupIdentity receives settings from the composition root and

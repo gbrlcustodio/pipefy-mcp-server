@@ -4,11 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.relation_tools import RelationTools
@@ -73,8 +72,8 @@ async def test_get_pipe_relations_success(
 async def test_get_pipe_relations_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
-    mock_relation_client.get_pipe_relations.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "not allowed"}]
+    mock_relation_client.get_pipe_relations.side_effect = PipefyGraphQLError(
+        [{"message": "not allowed"}]
     )
 
     async with relation_session as session:
@@ -139,8 +138,8 @@ async def test_get_table_relations_success(
 async def test_get_table_relations_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
-    mock_relation_client.get_table_relations.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "boom"}]
+    mock_relation_client.get_table_relations.side_effect = PipefyGraphQLError(
+        [{"message": "boom"}]
     )
 
     async with relation_session as session:
@@ -192,8 +191,8 @@ async def test_create_pipe_relation_success(
 async def test_create_pipe_relation_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
-    mock_relation_client.create_pipe_relation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "reject"}]
+    mock_relation_client.create_pipe_relation.side_effect = PipefyGraphQLError(
+        [{"message": "reject"}]
     )
 
     async with relation_session as session:
@@ -248,8 +247,8 @@ async def test_update_pipe_relation_success(
 async def test_update_pipe_relation_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
-    mock_relation_client.update_pipe_relation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "fail"}]
+    mock_relation_client.update_pipe_relation.side_effect = PipefyGraphQLError(
+        [{"message": "fail"}]
     )
 
     async with relation_session as session:
@@ -286,8 +285,8 @@ async def test_delete_pipe_relation_success(
 async def test_delete_pipe_relation_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
-    mock_relation_client.delete_pipe_relation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "denied"}]
+    mock_relation_client.delete_pipe_relation.side_effect = PipefyGraphQLError(
+        [{"message": "denied"}]
     )
 
     async with relation_session as session:
@@ -340,8 +339,8 @@ async def test_create_card_relation_success(
 async def test_create_card_relation_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
-    mock_relation_client.create_card_relation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "invalid link"}]
+    mock_relation_client.create_card_relation.side_effect = PipefyGraphQLError(
+        [{"message": "invalid link"}]
     )
 
     async with relation_session as session:

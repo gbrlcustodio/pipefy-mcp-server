@@ -6,11 +6,10 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error, tool_error_message
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
@@ -264,14 +263,13 @@ async def test_delete_pipe_invalid_id(
 async def test_delete_pipe_maps_not_found_on_get_pipe(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    error = TransportQueryError(
-        "GraphQL Error",
-        errors=[
+    error = PipefyGraphQLError(
+        [
             {
                 "message": "Pipe not found",
                 "extensions": {"code": "RESOURCE_NOT_FOUND"},
             }
-        ],
+        ]
     )
     mock_pipe_config_client.get_pipe.side_effect = error
 
@@ -540,8 +538,8 @@ async def test_delete_phase_preview_partial_failure_automations_raises(
             ]
         }
     }
-    mock_pipe_config_client.get_automations.side_effect = TransportQueryError(
-        "GraphQL Error", errors=[{"message": "Internal"}]
+    mock_pipe_config_client.get_automations.side_effect = PipefyGraphQLError(
+        [{"message": "Internal"}]
     )
     mock_pipe_config_client.get_phase_cards_count.return_value = 1
     mock_pipe_config_client.get_phase_fields.return_value = {
@@ -569,7 +567,7 @@ async def test_delete_phase_preview_partial_failure_automations_raises(
 async def test_delete_phase_preview_all_sublookups_fail(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    err = TransportQueryError("GraphQL Error", errors=[{"message": "x"}])
+    err = PipefyGraphQLError([{"message": "x"}])
     mock_pipe_config_client.get_field_conditions.side_effect = err
     mock_pipe_config_client.get_automations.side_effect = err
     mock_pipe_config_client.get_phase_cards_count.side_effect = err
@@ -1079,9 +1077,8 @@ async def test_delete_phase_field_enrichment_failure_degrades_gracefully(
             {"id": "f1", "internal_id": "1", "uuid": "u1"},
         ]
     }
-    mock_pipe_config_client.get_field_conditions.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Permission denied"}],
+    mock_pipe_config_client.get_field_conditions.side_effect = PipefyGraphQLError(
+        [{"message": "Permission denied"}]
     )
 
     async with pipe_config_session as session:
@@ -1364,9 +1361,8 @@ async def test_delete_label_preview_unused_label_no_dependents(
 async def test_delete_label_preview_get_cards_fails_degrades(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.get_cards.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Forbidden"}],
+    mock_pipe_config_client.get_cards.side_effect = PipefyGraphQLError(
+        [{"message": "Forbidden"}]
     )
 
     async with pipe_config_session as session:
@@ -1419,9 +1415,8 @@ async def test_delete_label_preview_without_pipe_id_skips_cards_lookup(
 async def test_create_pipe_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.create_pipe.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Organization not found"}],
+    mock_pipe_config_client.create_pipe.side_effect = PipefyGraphQLError(
+        [{"message": "Organization not found"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1438,9 +1433,8 @@ async def test_create_pipe_graphql_error_returns_failure__no_integration(
 async def test_update_pipe_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.update_pipe.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Pipe locked"}],
+    mock_pipe_config_client.update_pipe.side_effect = PipefyGraphQLError(
+        [{"message": "Pipe locked"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1457,9 +1451,8 @@ async def test_update_pipe_graphql_error_returns_failure__no_integration(
 async def test_clone_pipe_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.clone_pipe.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Template missing"}],
+    mock_pipe_config_client.clone_pipe.side_effect = PipefyGraphQLError(
+        [{"message": "Template missing"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1476,9 +1469,8 @@ async def test_clone_pipe_graphql_error_returns_failure__no_integration(
 async def test_create_phase_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.create_phase.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Pipe not found"}],
+    mock_pipe_config_client.create_phase.side_effect = PipefyGraphQLError(
+        [{"message": "Pipe not found"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1495,9 +1487,8 @@ async def test_create_phase_graphql_error_returns_failure__no_integration(
 async def test_update_phase_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.update_phase.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Phase invalid"}],
+    mock_pipe_config_client.update_phase.side_effect = PipefyGraphQLError(
+        [{"message": "Phase invalid"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1514,9 +1505,8 @@ async def test_update_phase_graphql_error_returns_failure__no_integration(
 async def test_update_phase_get_phase_fields_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.get_phase_fields.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Forbidden"}],
+    mock_pipe_config_client.get_phase_fields.side_effect = PipefyGraphQLError(
+        [{"message": "Forbidden"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1533,9 +1523,8 @@ async def test_update_phase_get_phase_fields_error_returns_failure__no_integrati
 async def test_delete_phase_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.delete_phase.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Cannot delete"}],
+    mock_pipe_config_client.delete_phase.side_effect = PipefyGraphQLError(
+        [{"message": "Cannot delete"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1551,9 +1540,8 @@ async def test_delete_phase_graphql_error_returns_failure__no_integration(
 async def test_create_phase_field_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.create_phase_field.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Invalid type"}],
+    mock_pipe_config_client.create_phase_field.side_effect = PipefyGraphQLError(
+        [{"message": "Invalid type"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1570,9 +1558,8 @@ async def test_create_phase_field_graphql_error_returns_failure__no_integration(
 async def test_update_phase_field_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.update_phase_field.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Field gone"}],
+    mock_pipe_config_client.update_phase_field.side_effect = PipefyGraphQLError(
+        [{"message": "Field gone"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1589,9 +1576,8 @@ async def test_update_phase_field_graphql_error_returns_failure__no_integration(
 async def test_delete_phase_field_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.delete_phase_field.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Nope"}],
+    mock_pipe_config_client.delete_phase_field.side_effect = PipefyGraphQLError(
+        [{"message": "Nope"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1612,14 +1598,13 @@ async def test_delete_phase_field_cascade_diagnosis_with_pipe_id(
     a generic ``INTERNAL_SERVER_ERROR``. With ``pipe_id`` supplied, the tool
     verifies the field is really gone and returns an actionable message
     instead of the opaque upstream error."""
-    mock_pipe_config_client.delete_phase_field.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[
+    mock_pipe_config_client.delete_phase_field.side_effect = PipefyGraphQLError(
+        [
             {
                 "message": "Something went wrong",
                 "extensions": {"code": "INTERNAL_SERVER_ERROR"},
             }
-        ],
+        ]
     )
     # After failure, verify path fetches pipe + phases and finds no matching field.
     mock_pipe_config_client.get_pipe.return_value = {
@@ -1654,14 +1639,13 @@ async def test_delete_phase_field_cascade_diagnosis_field_still_exists(
 ):
     """If the field is still present somewhere, the error is NOT a cascade —
     fall back to the generic upstream error instead of misleading the caller."""
-    mock_pipe_config_client.delete_phase_field.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[
+    mock_pipe_config_client.delete_phase_field.side_effect = PipefyGraphQLError(
+        [
             {
                 "message": "Something went wrong",
                 "extensions": {"code": "INTERNAL_SERVER_ERROR"},
             }
-        ],
+        ]
     )
     mock_pipe_config_client.get_pipe.return_value = {
         "pipe": {"id": "77", "phases": [{"id": "700"}]}
@@ -1692,14 +1676,13 @@ async def test_delete_phase_field_cascade_diagnosis_skipped_without_pipe_id(
 ):
     """Without ``pipe_id`` the tool cannot diagnose; it preserves the raw error
     and does NOT perform the extra read-backs."""
-    mock_pipe_config_client.delete_phase_field.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[
+    mock_pipe_config_client.delete_phase_field.side_effect = PipefyGraphQLError(
+        [
             {
                 "message": "Something went wrong",
                 "extensions": {"code": "INTERNAL_SERVER_ERROR"},
             }
-        ],
+        ]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1717,9 +1700,8 @@ async def test_delete_phase_field_cascade_diagnosis_skipped_without_pipe_id(
 async def test_create_label_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.create_label.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Bad color"}],
+    mock_pipe_config_client.create_label.side_effect = PipefyGraphQLError(
+        [{"message": "Bad color"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1736,9 +1718,8 @@ async def test_create_label_graphql_error_returns_failure__no_integration(
 async def test_update_label_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.update_label.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Label missing"}],
+    mock_pipe_config_client.update_label.side_effect = PipefyGraphQLError(
+        [{"message": "Label missing"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1755,9 +1736,8 @@ async def test_update_label_graphql_error_returns_failure__no_integration(
 async def test_delete_label_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.delete_label.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Still in use"}],
+    mock_pipe_config_client.delete_label.side_effect = PipefyGraphQLError(
+        [{"message": "Still in use"}]
     )
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -2272,9 +2252,8 @@ async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
 async def test_create_field_condition_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.create_field_condition.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Invalid condition"}],
+    mock_pipe_config_client.create_field_condition.side_effect = PipefyGraphQLError(
+        [{"message": "Invalid condition"}]
     )
     expr = {
         "expressions": [{"field_address": "a", "operation": "equals", "value": "1"}],
@@ -2411,9 +2390,8 @@ async def test_update_field_condition_rejects_blank_name__no_integration(
 async def test_update_field_condition_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.update_field_condition.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Not found"}],
+    mock_pipe_config_client.update_field_condition.side_effect = PipefyGraphQLError(
+        [{"message": "Not found"}]
     )
 
     async with pipe_config_session as session:
@@ -2457,9 +2435,8 @@ async def test_delete_field_condition_success(
 async def test_delete_field_condition_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.delete_field_condition.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Forbidden"}],
+    mock_pipe_config_client.delete_field_condition.side_effect = PipefyGraphQLError(
+        [{"message": "Forbidden"}]
     )
 
     async with pipe_config_session as session:
@@ -2580,10 +2557,7 @@ async def test_get_phase_allowed_move_targets_graphql_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
     mock_pipe_config_client.get_phase_allowed_move_targets.side_effect = (
-        TransportQueryError(
-            "GraphQL Error",
-            errors=[{"message": "Forbidden"}],
-        )
+        PipefyGraphQLError([{"message": "Forbidden"}])
     )
 
     async with pipe_config_session as session:
@@ -2699,9 +2673,8 @@ async def test_get_phase_cards_count_not_found(
 async def test_get_phase_cards_count_graphql_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.get_phase.side_effect = TransportQueryError(
-        "GraphQL Error",
-        errors=[{"message": "Forbidden"}],
+    mock_pipe_config_client.get_phase.side_effect = PipefyGraphQLError(
+        [{"message": "Forbidden"}]
     )
 
     async with pipe_config_session as session:

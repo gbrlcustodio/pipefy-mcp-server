@@ -50,6 +50,7 @@ RALPH_TASK.md
 # Tracked release tooling only (ignore ad-hoc local scripts and smoke artifacts)
 scripts/*
 !scripts/bump_version.py
+!scripts/release.py
 
 # macOS
 .DS_Store

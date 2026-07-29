@@ -10,9 +10,9 @@ dependencies = [
     # internal, so a major upgrade is a breaking change to code we depend on.
     "mcp[cli]>=1.25.0,<2",
     # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
-    "pipefy-auth==0.4.0-beta.1",
-    "pipefy-infra==0.4.0-beta.1",
-    "pipefy==0.4.0-beta.1",
+    "pipefy-auth==0.4.0-beta.2",
+    "pipefy-infra==0.4.0-beta.2",
+    "pipefy==0.4.0-beta.2",
     "pydantic>=2.13.4,<3",
     "pydantic-settings>=2.8.1",
 ]

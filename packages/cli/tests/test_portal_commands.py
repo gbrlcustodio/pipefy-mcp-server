@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from _shared.fixture_ids import EXAMPLE_PIPE_REPO_ID
 from pipefy_sdk import PipefyGraphQLError
+from pipefy_sdk.exceptions import PortalPermissionError
 
 from pipefy_cli.main import app
 
@@ -1532,8 +1533,54 @@ def test_portal_sub_portal_detach_graphql_error_exits_1(
     exit 2, the usage-error code. It now raises PipefyGraphQLError and exits 1,
     aligned with public-API command failures. Permission errors still exit 2 via
     PortalPermissionError, unchanged.
+
+    The ``errors`` payload here is the shape the Internal API actually returns
+    for a nonexistent PortalInterface, so the assertion pins the real stderr
+    line and not just the exit code. ``correlation_id`` stays out of the
+    message: the CLI renders code and message only.
     """
     oauth_env("portal-sub-detach-error")
+    mock_client = MagicMock()
+    mock_client.delete_sub_portal_element = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {
+                    "message": "Couldn't find PortalInterface with",
+                    "path": ["deleteSubPortalElement"],
+                    "extensions": {
+                        "code": "RECORD_NOT_FOUND",
+                        "correlation_id": "a22c1fbab98ae41d-GRU",
+                    },
+                }
+            ]
+        )
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["portal", "sub-portal", "detach", "portal-uuid-1", "element-1", "--yes"],
+        )
+    assert result.exit_code == 1, result.stdout + (result.stderr or "")
+    assert (
+        result.stderr.strip() == "Couldn't find PortalInterface with (RECORD_NOT_FOUND)"
+    )
+    mock_client.delete_sub_portal_element.assert_awaited_once_with(
+        "portal-uuid-1", "element-1"
+    )
+
+
+def test_portal_sub_portal_detach_graphql_error_without_code_is_message_only(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """An error carrying no ``extensions.code`` renders the message with no suffix.
+
+    Pins the other branch of the CLI formatter, so a future change that always
+    appends a parenthesised code cannot land silently.
+    """
+    oauth_env("portal-sub-detach-error-no-code")
     mock_client = MagicMock()
     mock_client.delete_sub_portal_element = AsyncMock(
         side_effect=PipefyGraphQLError(
@@ -1549,6 +1596,34 @@ def test_portal_sub_portal_detach_graphql_error_exits_1(
             ["portal", "sub-portal", "detach", "portal-uuid-1", "element-1", "--yes"],
         )
     assert result.exit_code == 1, result.stdout + (result.stderr or "")
-    mock_client.delete_sub_portal_element.assert_awaited_once_with(
-        "portal-uuid-1", "element-1"
+    assert result.stderr.strip() == "Something went wrong on the server"
+
+
+def test_portal_sub_portal_detach_permission_error_still_exits_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """A portal permission error keeps exiting 2, the other half of the pair above.
+
+    ``PortalPermissionError`` subclasses ``ValueError``, not ``PipefyError``, so it
+    reaches the runner's ``ValueError`` branch and keeps its exit code while
+    non-permission GraphQL errors moved from 2 to 1. Portal permission mapping now
+    runs through ``classify_exception``, so pin the exit code here rather than
+    inferring it from the SDK-level mapping tests.
+    """
+    oauth_env("portal-sub-detach-permission")
+    mock_client = MagicMock()
+    mock_client.delete_sub_portal_element = AsyncMock(
+        side_effect=PortalPermissionError(
+            "This token lacks manage_portals on the organization."
+        )
     )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["portal", "sub-portal", "detach", "portal-uuid-1", "element-1", "--yes"],
+        )
+    assert result.exit_code == 2, result.stdout + (result.stderr or "")
+    assert "manage_portals" in result.stderr

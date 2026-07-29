@@ -2,8 +2,8 @@
 
 import pytest
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.queries.service_account_queries import (
     CREATE_SERVICE_ACCOUNT_MUTATION,
     DELETE_SERVICE_ACCOUNT_MUTATION,
@@ -56,11 +56,9 @@ async def test_create_service_account_with_description_and_expiration():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_service_account_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = ServiceAccountService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.create_service_account(
             organization_uuid=ORG, name="sa", role="normal"
         )

@@ -12,7 +12,6 @@ from typing import Any, Literal
 import typer
 from gql.transport.exceptions import (
     TransportError,
-    TransportQueryError,
     TransportServerError,
 )
 from pipefy_auth import (
@@ -33,7 +32,7 @@ from pipefy_auth import (
     store_session,
 )
 from pipefy_auth.settings import _LEGACY_ENV_KEYS_TO_NEW
-from pipefy_sdk import MePayload, PipefySettings
+from pipefy_sdk import MePayload, PipefyGraphQLError, PipefySettings
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
@@ -392,7 +391,7 @@ def _fetch_identity(
         raise _StatusExit(
             report=report, exit_code=1, stderr=f"Identity fetch failed: {exc}"
         ) from exc
-    except (TransportQueryError, TransportError) as exc:
+    except (PipefyGraphQLError, TransportError) as exc:
         raise _StatusExit(
             report=report, exit_code=1, stderr=f"Pipefy transport error: {exc}"
         ) from exc

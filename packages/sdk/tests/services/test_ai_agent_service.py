@@ -11,9 +11,9 @@ from _shared.ai_agent_test_payloads import (
     mock_agent_with_behaviors,
 )
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_sdk.queries.ai_agent_queries import (
     DELETE_AI_AGENT_MUTATION,
@@ -554,11 +554,9 @@ async def test_get_agent_returns_empty_when_ai_agent_null():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agent_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = AiAgentService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_agent("agent-1")
 
 
@@ -581,11 +579,9 @@ async def test_get_agents_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agents_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "missing"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "missing"}]))
     service = AiAgentService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_agents("repo-1")
 
 
@@ -606,9 +602,7 @@ async def test_delete_agent_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_agent_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "gone"}]))
     service = AiAgentService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.delete_agent("agent-1")

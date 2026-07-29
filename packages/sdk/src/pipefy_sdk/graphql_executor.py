@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar, NoReturn, Protocol
+from typing import Any, ClassVar, Protocol
 
 from gql import Client
 from gql.graphql_request import GraphQLRequest
@@ -27,21 +26,67 @@ class GraphQLResult:
     errors: list[dict[str, Any]]
 
 
+def _graphql_error_message(errors: list[Any]) -> str:
+    """Join the human-readable messages from raw GraphQL error dicts.
+
+    Tolerates a non-conforming ``errors`` element that is not a dict (a server may
+    return a bare string), matching the sibling extractors in the MCP tool layer.
+    ``list[Any]`` rather than ``list[dict]`` states that tolerance in the
+    signature: this text is built from whatever the wire actually carried.
+    """
+    parts = [
+        (err.get("message") if isinstance(err, dict) else str(err)) or "Unknown error"
+        for err in errors
+    ]
+    return "; ".join(parts) or "Query failed."
+
+
+class PipefyGraphQLError(Exception):
+    """A GraphQL response came back carrying ``errors``.
+
+    Owned by the SDK so callers catch one error type instead of a gql transport
+    exception. ``errors`` is the raw per-node error dict list (each with its own
+    ``message`` and ``extensions``); consumers read codes and correlation ids off
+    that structure rather than parsing the message string.
+
+    Typed ``list[Any]`` because it carries the payload verbatim: a well-behaved
+    server sends dicts, and every consumer already ``isinstance``-guards each
+    element rather than trusting the shape.
+    """
+
+    def __init__(self, errors: list[Any]) -> None:
+        self.errors = errors
+        super().__init__(_graphql_error_message(errors))
+
+
+def data_or_raise(result: GraphQLResult) -> dict:
+    """Return ``result.data``, or raise :class:`PipefyGraphQLError` if it held errors.
+
+    The raise-on-error decision as a pure function: it is what the query and
+    mutation callers want (data or an exception, nothing in between) without the
+    seam itself deciding that a response with errors is a failure. Services that
+    handle partial success skip it and read ``result.errors`` directly.
+    """
+    if result.errors:
+        raise PipefyGraphQLError(result.errors)
+    return result.data
+
+
 class GraphQLExecutor(Protocol):
     """The GraphQL execution seam services depend on.
 
-    Narrow by design: it exposes only what services need. Its return types are
-    owned (:class:`GraphQLResult` and a plain ``dict``); the one gql type it
-    surfaces is the ``TransportQueryError`` a formatter-less :meth:`execute_query`
-    raises. Services receive an implementation through their constructor and call
-    one of two methods; tests inject a fake.
+    Narrow by design: it exposes only what services need and leaks nothing about
+    the httpx/gql transport. :meth:`execute` returns an owned
+    :class:`GraphQLResult`, and :meth:`execute_query` raises an owned
+    :class:`PipefyGraphQLError`. Services receive an implementation through their
+    constructor and call one of two methods; tests inject a fake.
 
     :meth:`execute` is the primitive: it performs the request and returns
     ``data`` and ``errors`` together, deciding nothing about what the errors
-    mean. :meth:`execute_query` is the raise-on-error convenience layered over
-    it, for the callers that want data or an exception and nothing in between. A
-    service that needs partial-success handling calls :meth:`execute` and hands
-    the errors to its own classifier.
+    mean. :meth:`execute_query` is the raise-on-error convenience layered over it
+    (via :func:`data_or_raise`), for the callers that want data or an exception
+    and nothing in between. A service that needs partial-success handling calls
+    :meth:`execute` and hands the errors to its own classifier.
 
     ``query`` is a parsed ``DocumentNode``: callers build one with ``gql()`` (the
     raw ``execute_graphql`` passthrough parses its string before reaching here).
@@ -70,11 +115,11 @@ class GraphQLEndpoint:
     """The shared, auth-less half of a Pipefy GraphQL connection.
 
     Holds everything about one endpoint that does not depend on the caller's
-    identity: its URL, telemetry headers, error formatting, and the introspected
-    schema cache. Built once and shared across identities; the execute methods take
-    the ``auth`` per call so the same endpoint (and its one schema cache) serves
-    every caller. A fresh transport is opened per call so concurrent requests never
-    share mutable transport state (avoids ``TransportAlreadyConnected``).
+    identity: its URL, telemetry headers, and the introspected schema cache. Built
+    once and shared across identities; the execute methods take the ``auth`` per
+    call so the same endpoint (and its one schema cache) serves every caller. A
+    fresh transport is opened per call so concurrent requests never share mutable
+    transport state (avoids ``TransportAlreadyConnected``).
     """
 
     GRAPHQL_REQUEST_TIMEOUT_SECONDS: ClassVar[int] = 30
@@ -85,18 +130,11 @@ class GraphQLEndpoint:
         url: str,
         cache_schema: bool = False,
         headers: dict[str, str] | None = None,
-        on_graphql_error: Callable[[list[dict]], str] | None = None,
     ) -> None:
         # Fully resolved endpoint URL; the endpoint does no settings resolution itself.
         self._graphql_url = url
         self._cache_schema = cache_schema
         self._headers = headers
-        # How execute_query surfaces GraphQL errors. When set, it raises a
-        # ValueError carrying the formatter's output; used by the Internal API
-        # endpoint for its [code=…] [correlation_id=…] envelope. When None it
-        # re-raises the gql TransportQueryError shape (the public endpoint's
-        # behaviour). The primitive execute never applies it.
-        self._on_graphql_error = on_graphql_error
         # Caches the introspected schema so it is fetched once, not per Client.
         self._fetched_gql_schema: GraphQLSchema | None = None
         self._fetched_gql_schema_lock = asyncio.Lock()
@@ -175,22 +213,10 @@ class GraphQLEndpoint:
         """Run :meth:`execute` and return ``data``, raising if the response held errors.
 
         The raise-on-error convenience the query/mutation tools use: they want
-        ``data`` or an exception, not partial success. On GraphQL ``errors`` the
-        error formatter decides the exception (see :meth:`_raise_for_errors`).
+        ``data`` or an exception, not partial success. On GraphQL ``errors`` it
+        raises :class:`PipefyGraphQLError` (see :func:`data_or_raise`).
         """
-        result = await self.execute(query, variables, auth=auth)
-        if result.errors:
-            self._raise_for_errors(result.errors, data=result.data)
-        return result.data
-
-    def _raise_for_errors(
-        self, errors: list[dict[str, Any]], *, data: dict[str, Any]
-    ) -> NoReturn:
-        if self._on_graphql_error is not None:
-            raise ValueError(self._on_graphql_error(errors))
-        # Without a formatter, re-raise gql's error shape so callers that read the
-        # structured ``errors`` list off the exception keep working unchanged.
-        raise TransportQueryError(str(errors[0]), errors=errors, data=data)
+        return data_or_raise(await self.execute(query, variables, auth=auth))
 
 
 @dataclass(frozen=True)

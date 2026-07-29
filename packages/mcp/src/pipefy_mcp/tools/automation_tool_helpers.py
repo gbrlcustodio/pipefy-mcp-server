@@ -18,7 +18,6 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
-    strip_internal_api_diagnostic_markers,
     try_enrich_graphql_error,
     with_debug_suffix,
 )
@@ -173,7 +172,6 @@ async def handle_automation_tool_graphql_error(
 
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else _AUTOMATION_REQUEST_FAILED
-    base = strip_internal_api_diagnostic_markers(base)
     if not base.strip():
         base = _AUTOMATION_REQUEST_FAILED
     base = with_debug_suffix(base, debug=debug, codes=codes, correlation_id=cid)

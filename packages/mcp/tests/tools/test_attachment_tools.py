@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -14,6 +13,7 @@ from pipefy_sdk import (
     AttachmentUploadError,
     CardTarget,
     PipefyClient,
+    PipefyGraphQLError,
     TableRecordTarget,
 )
 from pipefy_sdk.models.attachment import infer_content_type
@@ -395,7 +395,7 @@ async def test_upload_attachment_to_card_presigned_graphql_error(
     f.write_bytes(b"a")
 
     def _raise_upload(*_a, **_k):
-        gql_exc = TransportQueryError("x", errors=[{"message": "org denied"}])
+        gql_exc = PipefyGraphQLError([{"message": "org denied"}])
         raise AttachmentUploadError(
             f"Presigned URL request failed: {gql_exc}",
             step="presigned_url",
@@ -461,9 +461,7 @@ async def test_upload_attachment_to_card_field_update_failure(
     f.write_bytes(b"a")
 
     def _raise_field(*_a, **_k):
-        inner = TransportQueryError(
-            "x", errors=[{"message": "field must be attachment"}]
-        )
+        inner = PipefyGraphQLError([{"message": "field must be attachment"}])
         raise AttachmentUploadError(
             f"Field update failed: {inner}",
             step="field_update",
@@ -556,7 +554,7 @@ async def test_upload_attachment_to_table_record_field_update_failure(
     f.write_bytes(b"x")
 
     def _raise_field(*_a, **_k):
-        inner = TransportQueryError("e", errors=[{"message": "invalid field"}])
+        inner = PipefyGraphQLError([{"message": "invalid field"}])
         raise AttachmentUploadError(
             f"Field update failed: {inner}",
             step="field_update",

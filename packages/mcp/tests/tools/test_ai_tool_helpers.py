@@ -2,7 +2,7 @@
 
 import pytest
 from _shared.fixture_ids import make_pipe_id
-from gql.transport.exceptions import TransportQueryError
+from pipefy_sdk import PipefyGraphQLError
 
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_create_agent_success,
@@ -161,9 +161,7 @@ def test_enrich_includes_behavior_summary():
 @pytest.mark.unit
 def test_enrich_adds_record_not_saved_hint():
     behaviors = _make_behaviors(("B1", "card_created", "update_card"))
-    exc = TransportQueryError(
-        "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
-    )
+    exc = PipefyGraphQLError([{"message": "RECORD_NOT_SAVED"}])
     result = enrich_behavior_error(exc, behaviors)
     assert "RECORD_NOT_SAVED" in result
     assert "metadata is complete" in result
@@ -196,9 +194,19 @@ def test_enrich_with_empty_behaviors():
 
 
 @pytest.mark.unit
-def test_enrich_strips_internal_api_diagnostic_markers():
-    exc = ValueError(
-        "Invalid prompt [code=INVALID_PROMPT] [correlation_id=secret-correlation-uuid]"
+def test_enrich_returns_clean_message_from_structured_error():
+    # A structured GraphQL error surfaces only its clean message; the code and
+    # correlation_id live in extensions and never leak into user-facing text.
+    exc = PipefyGraphQLError(
+        [
+            {
+                "message": "Invalid prompt",
+                "extensions": {
+                    "code": "INVALID_PROMPT",
+                    "correlation_id": "secret-correlation-uuid",
+                },
+            }
+        ]
     )
     behaviors = _make_behaviors(("B1", "card_created", "update_card"))
     result = enrich_behavior_error(exc, behaviors)
@@ -209,8 +217,12 @@ def test_enrich_strips_internal_api_diagnostic_markers():
 
 
 @pytest.mark.unit
-def test_enrich_only_diagnostic_markers_uses_generic_fallback():
-    exc = ValueError(" [code=X] [correlation_id=Y]")
+def test_enrich_blank_message_uses_generic_fallback():
+    # A structured error carrying a code but no human-readable message falls back
+    # to the generic guidance while still summarizing the behaviors that were sent.
+    exc = PipefyGraphQLError(
+        [{"message": "   ", "extensions": {"code": "X", "correlation_id": "Y"}}]
+    )
     behaviors = _make_behaviors(("B1", "card_created", "update_card"))
     result = enrich_behavior_error(exc, behaviors)
     assert "The AI behavior request failed" in result

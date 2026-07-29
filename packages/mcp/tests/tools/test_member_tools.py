@@ -4,11 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.member_tools import MemberTools
@@ -283,8 +282,8 @@ async def test_add_service_account_maps_value_error_to_invalid_arguments(
 async def test_add_service_account_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
-    mock_member_client.add_service_account_to_pipe.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "permission denied"}]
+    mock_member_client.add_service_account_to_pipe.side_effect = PipefyGraphQLError(
+        [{"message": "permission denied"}]
     )
     async with member_session as session:
         result = await session.call_tool(
@@ -373,8 +372,8 @@ async def test_invite_members_maps_sdk_value_error_to_invalid_arguments(
 async def test_invite_members_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
-    mock_member_client.invite_members.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "invalid email"}]
+    mock_member_client.invite_members.side_effect = PipefyGraphQLError(
+        [{"message": "invalid email"}]
     )
 
     async with member_session as session:
@@ -607,8 +606,8 @@ async def test_remove_member_coerces_int_user_ids_to_str(
 async def test_remove_member_from_pipe_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
-    mock_member_client.remove_members_from_pipe.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "forbidden"}]
+    mock_member_client.remove_members_from_pipe.side_effect = PipefyGraphQLError(
+        [{"message": "forbidden"}]
     )
 
     async with member_session as session:
@@ -721,8 +720,8 @@ async def test_set_role_rejects_blank_role_name(
 async def test_set_role_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
-    mock_member_client.set_role.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "invalid role"}]
+    mock_member_client.set_role.side_effect = PipefyGraphQLError(
+        [{"message": "invalid role"}]
     )
 
     async with member_session as session:

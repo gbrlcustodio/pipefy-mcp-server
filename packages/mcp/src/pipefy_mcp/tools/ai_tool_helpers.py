@@ -28,7 +28,6 @@ from pipefy_mcp.core.tool_error_envelope import (
 )
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
-    strip_internal_api_diagnostic_markers,
 )
 
 logger = logging.getLogger(__name__)
@@ -321,9 +320,8 @@ def enrich_behavior_error(
 ) -> str:
     """Build an enriched error message with behavior context and actionable hints.
 
-    Extracts GraphQL messages, strips internal_api-style ``[code=…]`` /
-    ``[correlation_id=…]`` markers from the primary line, appends a behavior
-    summary, and matches known error patterns to actionable advice.
+    Extracts the GraphQL messages, appends a behavior summary, and matches known
+    error patterns to actionable advice.
 
     Args:
         exc: The exception from the service call.
@@ -331,7 +329,7 @@ def enrich_behavior_error(
     """
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else str(exc)
-    base = strip_internal_api_diagnostic_markers(base).strip()
+    base = base.strip()
     if not base:
         base = _BEHAVIOR_ERROR_EMPTY_AFTER_SANITIZE
 

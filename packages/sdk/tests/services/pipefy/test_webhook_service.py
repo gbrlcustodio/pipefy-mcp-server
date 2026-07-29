@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 import pytest
 from _shared.mock_clients import mock_executor
 from _shared.pagination_test_defaults import DEFAULT_FIRST
-from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
@@ -197,13 +197,11 @@ async def test_send_email_with_template_rejects_non_numeric_card_id(mock_setting
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_send_inbox_email_transport_error(mock_settings):
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = WebhookService(
         executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.send_inbox_email(
             "c1", ["x@y.com"], "Subj", "Body", from_="s@x.com"
         )
@@ -264,13 +262,11 @@ async def test_create_webhook_uses_settings_default_name(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_webhook_transport_error(mock_settings):
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "bad"}]))
     service = WebhookService(
         executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.create_webhook("602", "https://x.com/hook", ["card.move"])
 
 
@@ -313,13 +309,11 @@ async def test_delete_webhook_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_webhook_transport_error(mock_settings):
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "gone"}]))
     service = WebhookService(
         executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.delete_webhook("w1")
 
 
@@ -362,13 +356,11 @@ async def test_get_webhooks_empty(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_webhooks_transport_error(mock_settings):
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "nope"}]))
     service = WebhookService(
         executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_webhooks("p1")
 
 
@@ -433,13 +425,11 @@ async def test_update_webhook_rejects_http_url(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_webhook_transport_error(mock_settings):
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "bad"}]))
     service = WebhookService(
         executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.update_webhook("w1", name="only-name")
 
 
@@ -537,11 +527,9 @@ async def test_get_card_inbox_emails_empty_inbox(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_card_inbox_emails_transport_error(mock_settings):
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "not found"}]))
     service = WebhookService(
         executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_card_inbox_emails("12345")

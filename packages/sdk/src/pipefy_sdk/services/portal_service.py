@@ -6,11 +6,11 @@ import json
 import logging
 from typing import Any
 
-from gql.transport.exceptions import TransportQueryError
 from graphql import DocumentNode
 
 from pipefy_sdk.exceptions import PortalPermissionError
-from pipefy_sdk.graphql_executor import GraphQLExecutor
+from pipefy_sdk.graphql_executor import GraphQLExecutor, PipefyGraphQLError
+from pipefy_sdk.graphql_problem import GraphQLProblemKind, classify_exception
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
     CreatePortalInput,
@@ -60,15 +60,21 @@ _PORTAL_PERMISSION_MESSAGE = (
 
 
 def _map_portal_permission_error(
-    exc: TransportQueryError,
+    exc: PipefyGraphQLError,
 ) -> PortalPermissionError | None:
-    """Return ``PortalPermissionError`` only for PERMISSION_DENIED; else ``None``."""
-    for err in exc.errors or []:
-        if not isinstance(err, dict):
-            continue
-        extensions = err.get("extensions") or {}
-        if extensions.get("code") == "PERMISSION_DENIED":
-            return PortalPermissionError(_PORTAL_PERMISSION_MESSAGE)
+    """Return ``PortalPermissionError`` for a permission-denied error; else ``None``.
+
+    Delegates classification to the shared ``classify_exception`` so portal
+    permission mapping reads the same ``extensions.code`` signal the rest of the
+    SDK does, rather than re-deriving it here. Two consequences of sharing the
+    classifier, neither observable on the single-error responses portal returns:
+    it treats ``FORBIDDEN`` and ``UNAUTHORIZED`` as permission denied alongside
+    ``PERMISSION_DENIED``, and it reads the first error only (see
+    ``test_portal_permission_mapping_only_inspects_the_first_error``).
+    """
+    problem = classify_exception(exc)
+    if problem is not None and problem.kind is GraphQLProblemKind.PERMISSION_DENIED:
+        return PortalPermissionError(_PORTAL_PERMISSION_MESSAGE)
     return None
 
 
@@ -112,35 +118,23 @@ def _normalize_portal_data_sources(
     return normalized
 
 
-async def _execute_interfaces_query_with_portal_errors(
+async def _execute_query_with_portal_errors(
     execute: Any,
     query: Any,
     variables: dict[str, Any],
 ) -> dict[str, Any]:
-    """Run an Interfaces operation and map portal permission failures."""
+    """Run a portal operation and map PERMISSION_DENIED to ``PortalPermissionError``.
+
+    Serves both the Interfaces and Internal API endpoints: each raises
+    ``PipefyGraphQLError`` on GraphQL errors, and the PERMISSION_DENIED code lives
+    in the structured ``errors`` regardless of endpoint.
+    """
     try:
         return await execute(query, variables)
-    except TransportQueryError as exc:
+    except PipefyGraphQLError as exc:
         permission_error = _map_portal_permission_error(exc)
         if permission_error is not None:
             raise permission_error from exc
-        raise
-
-
-_INTERNAL_API_PERMISSION_DENIED_MARKER = "[code=PERMISSION_DENIED]"
-
-
-async def _execute_internal_api_query_with_portal_errors(
-    execute: Any,
-    query: str,
-    variables: dict[str, Any],
-) -> dict[str, Any]:
-    """Run an Internal API operation and map portal permission failures."""
-    try:
-        return await execute(query, variables)
-    except ValueError as exc:
-        if _INTERNAL_API_PERMISSION_DENIED_MARKER in str(exc):
-            raise PortalPermissionError(_PORTAL_PERMISSION_MESSAGE) from exc
         raise
 
 
@@ -318,7 +312,7 @@ class PortalService:
             self._public_executor.execute_query,
             portal_input.organization_uuid,
         )
-        data = await _execute_interfaces_query_with_portal_errors(
+        data = await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             FIND_OR_CREATE_PORTAL_MUTATION,
             {"input": {"orgUuid": resolved_org_uuid, "subType": "portal"}},
@@ -364,7 +358,7 @@ class PortalService:
                 by_alias=True,
             )
         }
-        data = await _execute_interfaces_query_with_portal_errors(
+        data = await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             UPDATE_INTERFACE_MUTATION,
             variables,
@@ -381,7 +375,7 @@ class PortalService:
         Args:
             interface_uuid: Portal interface UUID.
         """
-        return await _execute_interfaces_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             DELETE_INTERFACE_MUTATION,
             {"input": {"interface_uuid": interface_uuid}},
@@ -414,7 +408,7 @@ class PortalService:
             page_input["description"] = description
         if index is not None:
             page_input["index"] = index
-        data = await _execute_interfaces_query_with_portal_errors(
+        data = await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             CREATE_PAGE_MUTATION,
             {"input": page_input},
@@ -453,7 +447,7 @@ class PortalService:
             page_input["description"] = description
         if index is not None:
             page_input["index"] = index
-        data = await _execute_interfaces_query_with_portal_errors(
+        data = await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             UPDATE_PAGE_MUTATION,
             {"input": page_input},
@@ -473,7 +467,7 @@ class PortalService:
             interface_uuid: Parent portal interface UUID.
             page_id: Page UUID.
         """
-        return await _execute_interfaces_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             DELETE_PAGE_MUTATION,
             {"input": {"interface_uuid": interface_uuid, "page_id": page_id}},
@@ -488,7 +482,7 @@ class PortalService:
             interface_uuid: Parent portal interface UUID.
             page_ids: Ordered list of page UUIDs.
         """
-        return await _execute_interfaces_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             SORT_PAGES_MUTATION,
             {"input": {"interface_uuid": interface_uuid, "page_ids": page_ids}},
@@ -503,7 +497,7 @@ class PortalService:
             page_id: Page UUID (no parent ``interface_uuid`` on this mutation).
             layout: Layout JSON as required by ``updatePageLayout``.
         """
-        return await _execute_interfaces_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             UPDATE_PAGE_LAYOUT_MUTATION,
             {
@@ -547,7 +541,7 @@ class PortalService:
                 "layout": layout,
             }
         )
-        data = await _execute_interfaces_query_with_portal_errors(
+        data = await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             CREATE_ELEMENT_MUTATION,
             {"input": _graphql_create_element_input(validated)},
@@ -592,7 +586,7 @@ class PortalService:
                 "editable": editable,
             }
         )
-        data = await _execute_interfaces_query_with_portal_errors(
+        data = await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             UPDATE_ELEMENT_MUTATION,
             {"input": _graphql_update_element_input(validated)},
@@ -621,7 +615,7 @@ class PortalService:
             element_id: Element UUID.
             page_id: Parent page UUID.
         """
-        return await _execute_interfaces_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             DELETE_ELEMENT_MUTATION,
             {"input": {"element_id": element_id, "page_id": page_id}},
@@ -644,7 +638,7 @@ class PortalService:
             portal_uuid: Portal interface UUID that owns the page.
             page_id: Page UUID that contains the element.
         """
-        data = await _execute_interfaces_query_with_portal_errors(
+        data = await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             DUPLICATE_ELEMENT_MUTATION,
             {
@@ -675,7 +669,7 @@ class PortalService:
         portal_input: dict[str, Any] = {"mainPortalUuid": main_portal_uuid}
         if name is not None:
             portal_input["name"] = name
-        data = await _execute_interfaces_query_with_portal_errors(
+        data = await _execute_query_with_portal_errors(
             self.execute_interfaces_query,
             CREATE_SUB_PORTAL_MUTATION,
             {"input": portal_input},
@@ -699,7 +693,7 @@ class PortalService:
             element_id: Page element UUID (e.g. templated ``forms`` slot).
             sub_portal_uuid: Sub-portal UUID to wire to the element.
         """
-        return await _execute_internal_api_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_internal_api_query,
             UPDATE_SUB_PORTAL_ELEMENT_MUTATION,
             {
@@ -745,7 +739,7 @@ class PortalService:
             portal_uuid: Main portal interface UUID.
             element_id: Page element UUID.
         """
-        return await _execute_internal_api_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_internal_api_query,
             UPDATE_SUB_PORTAL_ELEMENT_MUTATION,
             {
@@ -768,7 +762,7 @@ class PortalService:
             portal_uuid: Main portal interface UUID.
             element_id: Page element UUID.
         """
-        return await _execute_internal_api_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_internal_api_query,
             DELETE_SUB_PORTAL_ELEMENT_MUTATION,
             {"input": {"portalUuid": portal_uuid, "elementId": element_id}},
@@ -780,7 +774,7 @@ class PortalService:
         Args:
             uuid: Sub-portal UUID.
         """
-        return await _execute_internal_api_query_with_portal_errors(
+        return await _execute_query_with_portal_errors(
             self.execute_internal_api_query,
             DELETE_SUB_PORTAL_INTERFACE_MUTATION,
             {"input": {"uuid": uuid}},

@@ -16,10 +16,10 @@ from _shared.fixture_ids import (
 )
 from _shared.mock_clients import mock_executor
 from gql import gql
-from gql.transport.exceptions import TransportQueryError
 from pydantic import ValidationError
 
 from pipefy_sdk.exceptions import PortalPermissionError
+from pipefy_sdk.graphql_executor import PipefyGraphQLError
 from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_QUERY
 from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
 from pipefy_sdk.services.portal_service import PortalService
@@ -441,9 +441,8 @@ _CREATE_PORTAL_RESPONSE = {
     }
 }
 
-_PERMISSION_DENIED_ERROR = TransportQueryError(
-    "GraphQL request failed",
-    errors=[
+_PERMISSION_DENIED_ERROR = PipefyGraphQLError(
+    [
         {
             "message": "Permission Denied",
             "extensions": {"code": "PERMISSION_DENIED"},
@@ -993,13 +992,72 @@ async def test_create_portal_element_graphql_error_is_not_portal_permission_erro
         _CREATE_ELEMENT_RESPONSE,
     )
     interfaces_executor.execute_query = AsyncMock(
-        side_effect=TransportQueryError(
-            "invalid",
-            errors=[{"message": "Variable $input was provided invalid value"}],
+        side_effect=PipefyGraphQLError(
+            [{"message": "Variable $input was provided invalid value"}],
         )
     )
 
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
+        await service.create_portal_element(
+            _PAGE_ID,
+            type="link",
+            metadata={"linkName": "Test", "linkUrl": "https://example.com"},
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_portal_permission_mapping_only_inspects_the_first_error() -> None:
+    """A PERMISSION_DENIED that is not the first error re-raises PipefyGraphQLError.
+
+    Permission mapping delegates to ``classify_exception``, which classifies the
+    first error only. Portal responses carry a single error in practice, so this
+    narrowing (versus scanning every error) is not observable there. Pinning it
+    keeps a future contributor from reading the first-error behavior as a bug.
+    """
+    service, _public, interfaces_executor = _make_interfaces_service(
+        _CREATE_ELEMENT_RESPONSE,
+    )
+    interfaces_executor.execute_query = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {"message": "Bad input", "extensions": {"code": "BAD_REQUEST"}},
+                {"message": "Denied", "extensions": {"code": "PERMISSION_DENIED"}},
+            ],
+        )
+    )
+
+    with pytest.raises(PipefyGraphQLError):
+        await service.create_portal_element(
+            _PAGE_ID,
+            type="link",
+            metadata={"linkName": "Test", "linkUrl": "https://example.com"},
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", ["FORBIDDEN", "UNAUTHORIZED"])
+async def test_portal_permission_mapping_covers_permission_code_synonyms(
+    code: str,
+) -> None:
+    """FORBIDDEN and UNAUTHORIZED also map to ``PortalPermissionError``.
+
+    The shared ``classify_exception`` groups these with PERMISSION_DENIED, so
+    delegating to it widened portal mapping beyond the one literal code the old
+    hand-rolled scan matched. Portal returns PERMISSION_DENIED today; pinning the
+    synonyms records that the widening is intended, not accidental.
+    """
+    service, _public, interfaces_executor = _make_interfaces_service(
+        _CREATE_ELEMENT_RESPONSE,
+    )
+    interfaces_executor.execute_query = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [{"message": "Denied", "extensions": {"code": code}}],
+        )
+    )
+
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.create_portal_element(
             _PAGE_ID,
             type="link",
@@ -1281,9 +1339,16 @@ async def test_delete_sub_portal_calls_delete_sub_portal_interface() -> None:
     assert result == internal_response
 
 
-_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR = ValueError(
-    "User does not have permission to manage portals "
-    "[code=PERMISSION_DENIED] [correlation_id=abc-123]"
+_INTERNAL_API_PERMISSION_DENIED_ERROR = PipefyGraphQLError(
+    [
+        {
+            "message": "User does not have permission to manage portals",
+            "extensions": {
+                "code": "PERMISSION_DENIED",
+                "correlation_id": "abc-123",
+            },
+        }
+    ],
 )
 
 
@@ -1318,7 +1383,7 @@ async def test_sub_portal_internal_api_permission_denied_surfaces_actionable_mes
     """PERMISSION_DENIED from the Internal API maps to portal permission guidance."""
     service, _interfaces_client, internal_client = _make_portal_service_with_clients()
     internal_client.execute_query = AsyncMock(
-        side_effect=_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR
+        side_effect=_INTERNAL_API_PERMISSION_DENIED_ERROR
     )
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
@@ -1327,13 +1392,15 @@ async def test_sub_portal_internal_api_permission_denied_surfaces_actionable_mes
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_sub_portal_internal_api_non_permission_value_error_propagates() -> None:
-    """Non-permission Internal API ValueError must not become PortalPermissionError."""
+async def test_sub_portal_internal_api_non_permission_error_propagates() -> None:
+    """Non-permission Internal API errors must not become PortalPermissionError."""
     service, _interfaces_client, internal_client = _make_portal_service_with_clients()
-    bad_request = ValueError("Bad request [code=BAD_REQUEST] [correlation_id=abc-123]")
+    bad_request = PipefyGraphQLError(
+        [{"message": "Bad request", "extensions": {"code": "BAD_REQUEST"}}]
+    )
     internal_client.execute_query = AsyncMock(side_effect=bad_request)
 
-    with pytest.raises(ValueError, match="Bad request"):
+    with pytest.raises(PipefyGraphQLError, match="Bad request"):
         await service.update_sub_portal_element(
             _MAIN_PORTAL_UUID,
             _FORMS_ELEMENT_ID,

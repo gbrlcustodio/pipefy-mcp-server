@@ -2,8 +2,8 @@
 
 import pytest
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.queries.report_queries import (
     CREATE_ORGANIZATION_REPORT_MUTATION,
     CREATE_PIPE_REPORT_MUTATION,
@@ -95,11 +95,9 @@ async def test_get_pipe_reports_with_optional_params():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_reports_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = ReportService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_pipe_reports("uuid-123")
 
 
@@ -331,11 +329,9 @@ async def test_create_pipe_report_minimal():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_pipe_report_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = ReportService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.create_pipe_report("123", "Report")
 
 
@@ -458,11 +454,9 @@ async def test_export_pipe_report_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_export_pipe_report_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = ReportService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.export_pipe_report("100", "200")
 
 
@@ -508,22 +502,18 @@ async def test_export_pipe_audit_logs_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_report_columns_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = ReportService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_pipe_report_columns("uuid-456")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_pipe_report_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "gone"}]))
     service = ReportService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.update_pipe_report("10", name="N")
 
 

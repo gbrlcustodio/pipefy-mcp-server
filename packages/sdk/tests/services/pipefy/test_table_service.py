@@ -3,8 +3,8 @@
 import pytest
 from _shared.mock_clients import mock_executor
 from _shared.pagination_test_defaults import DEFAULT_FIRST
-from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.queries.table_queries import (
     CREATE_TABLE_FIELD_MUTATION,
     CREATE_TABLE_MUTATION,
@@ -173,8 +173,8 @@ async def test_create_table_sends_create_table_input():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_table_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "denied"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "denied"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.create_table("A", 1)
 
 
@@ -194,8 +194,8 @@ async def test_update_table_merges_id_and_attrs():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_table_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "bad"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "bad"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.update_table(1, name="Z")
 
 
@@ -214,8 +214,8 @@ async def test_delete_table_sends_delete_input():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_table_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "nope"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "nope"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.delete_table(1)
 
 
@@ -240,8 +240,8 @@ async def test_create_table_record_converts_dict_fields():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_table_record_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "err"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "err"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.create_table_record(1, {"a": "b"})
 
 
@@ -276,8 +276,8 @@ async def test_update_table_record_maps_status_id():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_table_record_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "x"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "x"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.update_table_record(1, {"title": "a"})
 
 
@@ -295,8 +295,8 @@ async def test_delete_table_record_sends_id():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_table_record_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "x"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "x"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.delete_table_record(1)
 
 
@@ -322,8 +322,8 @@ async def test_set_table_record_field_value_wraps_scalar():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_set_table_record_field_value_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "x"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "x"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.set_table_record_field_value(1, 2, "v")
 
 
@@ -360,8 +360,8 @@ async def test_create_table_field_sends_input():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_table_field_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "e"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "e"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.create_table_field(1, "L", "t")
 
 
@@ -381,8 +381,8 @@ async def test_update_table_field_merges_id_and_attrs():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_table_field_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "e"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "e"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.update_table_field(1, label="x")
 
 
@@ -401,6 +401,6 @@ async def test_delete_table_field_sends_id():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_table_field_raises_transport_query_error():
-    service = _service_raising(TransportQueryError("x", errors=[{"message": "e"}]))
-    with pytest.raises(TransportQueryError):
+    service = _service_raising(PipefyGraphQLError([{"message": "e"}]))
+    with pytest.raises(PipefyGraphQLError):
         await service.delete_table_field(1, "tbl_123")

@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.queries.automation_queries import (
     AUTOMATION_SIMULATION_QUERY,
     CREATE_AUTOMATION_MUTATION,
@@ -185,11 +185,9 @@ async def test_get_automation_when_api_returns_null():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "not found"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_automation("998")
 
 
@@ -311,11 +309,9 @@ async def test_get_automations_both_none_returns_empty():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automations_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_automations(organization_id="1")
 
 
@@ -348,11 +344,9 @@ async def test_get_automation_actions_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_actions_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "bad pipe"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "bad pipe"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_automation_actions("999")
 
 
@@ -380,11 +374,9 @@ async def test_get_automation_events_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_events_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "nope"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_automation_events("y")
 
 
@@ -454,11 +446,9 @@ async def test_get_automation_event_attributes_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_event_attributes_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_automation_event_attributes()
 
 
@@ -591,11 +581,9 @@ async def test_create_send_task_automation_includes_event_params_and_condition()
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_automation_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "reject"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "reject"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.create_automation("p1", "N", "e", "a")
 
 
@@ -648,11 +636,9 @@ async def test_update_automation_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_automation_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "gone"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.update_automation("x", name="y")
 
 
@@ -672,11 +658,9 @@ async def test_delete_automation_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_automation_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "no access"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "no access"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.delete_automation("z")
 
 
@@ -775,11 +759,9 @@ async def test_simulate_automation_raises_when_no_simulation_id():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_simulate_automation_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = AutomationService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.simulate_automation(
             pipe_id="p1",
             action_id="generate_with_ai",

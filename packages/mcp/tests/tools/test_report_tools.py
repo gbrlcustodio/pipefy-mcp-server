@@ -4,11 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_sdk.report_filter_preflight import EXAMPLE_PHASE_FILTER
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
@@ -95,8 +94,8 @@ async def test_get_pipe_reports_success(
 async def test_get_pipe_reports_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.get_pipe_reports.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "not allowed"}]
+    mock_report_client.get_pipe_reports.side_effect = PipefyGraphQLError(
+        [{"message": "not allowed"}]
     )
 
     async with report_session as session:
@@ -182,8 +181,8 @@ class TestGetPipeReport:
     async def test_get_pipe_report_graphql_error(
         self, report_session, mock_report_client, extract_payload
     ):
-        mock_report_client.get_pipe_reports.side_effect = TransportQueryError(
-            "failed", errors=[{"message": "pipe reports unavailable"}]
+        mock_report_client.get_pipe_reports.side_effect = PipefyGraphQLError(
+            [{"message": "pipe reports unavailable"}]
         )
 
         async with report_session as session:
@@ -534,8 +533,8 @@ async def test_update_pipe_report_rejects_invalid_report_filter(
 async def test_create_pipe_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.create_pipe_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "invalid pipe"}]
+    mock_report_client.create_pipe_report.side_effect = PipefyGraphQLError(
+        [{"message": "invalid pipe"}]
     )
 
     async with report_session as session:
@@ -554,14 +553,13 @@ async def test_create_pipe_report_graphql_error(
 async def test_create_pipe_report_graphql_error_with_debug(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.create_pipe_report.side_effect = TransportQueryError(
-        '{"code": "PERMISSION_DENIED", "correlation_id": "corr-abc"}',
-        errors=[
+    mock_report_client.create_pipe_report.side_effect = PipefyGraphQLError(
+        [
             {
                 "message": "invalid pipe",
                 "extensions": {"code": "PERMISSION_DENIED"},
             }
-        ],
+        ]
     )
 
     async with report_session as session:
@@ -746,8 +744,8 @@ async def test_export_pipe_report_success(
 async def test_export_pipe_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.export_pipe_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "export denied"}]
+    mock_report_client.export_pipe_report.side_effect = PipefyGraphQLError(
+        [{"message": "export denied"}]
     )
 
     async with report_session as session:
@@ -1521,7 +1519,7 @@ async def test_export_organization_report_organization_id_less_than_one(
 
 
 ## ---------------------------------------------------------------------------
-## GraphQL error paths (TransportQueryError)
+## GraphQL error paths (PipefyGraphQLError)
 ## ---------------------------------------------------------------------------
 
 
@@ -1530,8 +1528,8 @@ async def test_export_organization_report_organization_id_less_than_one(
 async def test_get_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.get_organization_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "org not found"}]
+    mock_report_client.get_organization_report.side_effect = PipefyGraphQLError(
+        [{"message": "org not found"}]
     )
 
     async with report_session as session:
@@ -1549,8 +1547,8 @@ async def test_get_organization_report_graphql_error(
 async def test_get_organization_reports_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.get_organization_reports.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "access denied"}]
+    mock_report_client.get_organization_reports.side_effect = PipefyGraphQLError(
+        [{"message": "access denied"}]
     )
 
     async with report_session as session:
@@ -1568,8 +1566,8 @@ async def test_get_organization_reports_graphql_error(
 async def test_get_pipe_report_export_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.get_pipe_report_export.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "export not found"}]
+    mock_report_client.get_pipe_report_export.side_effect = PipefyGraphQLError(
+        [{"message": "export not found"}]
     )
 
     async with report_session as session:
@@ -1587,8 +1585,8 @@ async def test_get_pipe_report_export_graphql_error(
 async def test_get_organization_report_export_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.get_organization_report_export.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "export error"}]
+    mock_report_client.get_organization_report_export.side_effect = PipefyGraphQLError(
+        [{"message": "export error"}]
     )
 
     async with report_session as session:
@@ -1606,8 +1604,8 @@ async def test_get_organization_report_export_graphql_error(
 async def test_update_pipe_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.update_pipe_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "update denied"}]
+    mock_report_client.update_pipe_report.side_effect = PipefyGraphQLError(
+        [{"message": "update denied"}]
     )
 
     async with report_session as session:
@@ -1625,8 +1623,8 @@ async def test_update_pipe_report_graphql_error(
 async def test_delete_pipe_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.delete_pipe_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "delete denied"}]
+    mock_report_client.delete_pipe_report.side_effect = PipefyGraphQLError(
+        [{"message": "delete denied"}]
     )
 
     async with report_session as session:
@@ -1644,8 +1642,8 @@ async def test_delete_pipe_report_graphql_error(
 async def test_create_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.create_organization_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "org create failed"}]
+    mock_report_client.create_organization_report.side_effect = PipefyGraphQLError(
+        [{"message": "org create failed"}]
     )
 
     async with report_session as session:
@@ -1664,8 +1662,8 @@ async def test_create_organization_report_graphql_error(
 async def test_update_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.update_organization_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "org update failed"}]
+    mock_report_client.update_organization_report.side_effect = PipefyGraphQLError(
+        [{"message": "org update failed"}]
     )
 
     async with report_session as session:
@@ -1683,8 +1681,8 @@ async def test_update_organization_report_graphql_error(
 async def test_delete_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.delete_organization_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "org delete failed"}]
+    mock_report_client.delete_organization_report.side_effect = PipefyGraphQLError(
+        [{"message": "org delete failed"}]
     )
 
     async with report_session as session:
@@ -1702,8 +1700,8 @@ async def test_delete_organization_report_graphql_error(
 async def test_export_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
-    mock_report_client.export_organization_report.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "export org failed"}]
+    mock_report_client.export_organization_report.side_effect = PipefyGraphQLError(
+        [{"message": "export org failed"}]
     )
 
     async with report_session as session:

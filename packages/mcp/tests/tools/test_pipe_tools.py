@@ -15,7 +15,7 @@ from mcp.types import (
     ElicitRequestParams,
     ElicitResult,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.auth import RequestScopedIdentity
 from pipefy_mcp.core.runtime import McpRuntime
@@ -468,19 +468,16 @@ class TestCreateCardTool:
         pipe_id,
         extract_payload,
     ):
-        from gql.transport.exceptions import TransportQueryError
-
         mock_pipefy_client.get_start_form_fields.return_value = {
             "start_form_fields": []
         }
-        mock_pipefy_client.create_card.side_effect = TransportQueryError(
-            "forbidden",
-            errors=[
+        mock_pipefy_client.create_card.side_effect = PipefyGraphQLError(
+            [
                 {
                     "message": "forbidden",
                     "extensions": {"code": "PERMISSION_DENIED"},
                 }
-            ],
+            ]
         )
         mock_pipefy_client.get_pipe_members.side_effect = RuntimeError("no access")
 
@@ -781,13 +778,10 @@ class TestGetLabels:
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        from gql.transport.exceptions import TransportQueryError
-
-        mock_pipefy_client.get_pipe.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        mock_pipefy_client.get_pipe.side_effect = PipefyGraphQLError(
+            [
                 {"message": "Denied", "extensions": {"code": "PERMISSION_DENIED"}},
-            ],
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -1052,13 +1046,9 @@ class TestDirectToolCalls:
         extract_payload,
     ):
         """When update_comment API raises, tool returns error payload with friendly message."""
-        from gql.transport.exceptions import TransportQueryError
 
-        mock_pipefy_client.update_comment.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[
-                {"message": "Comment not found", "extensions": {"code": "NOT_FOUND"}}
-            ],
+        mock_pipefy_client.update_comment.side_effect = PipefyGraphQLError(
+            [{"message": "Comment not found", "extensions": {"code": "NOT_FOUND"}}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -1118,16 +1108,14 @@ class TestDirectToolCalls:
         extract_payload,
     ):
         """When delete_comment API raises, tool returns error payload with friendly message."""
-        from gql.transport.exceptions import TransportQueryError
 
-        mock_pipefy_client.delete_comment.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        mock_pipefy_client.delete_comment.side_effect = PipefyGraphQLError(
+            [
                 {
                     "message": "Permission denied",
                     "extensions": {"code": "PERMISSION_DENIED"},
                 }
-            ],
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -1149,11 +1137,9 @@ class TestDirectToolCalls:
         extract_payload,
     ):
         """When delete_comment API returns not found, tool returns friendly error payload."""
-        from gql.transport.exceptions import TransportQueryError
 
-        mock_pipefy_client.delete_comment.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[{"message": "Record not found", "extensions": {}}],
+        mock_pipefy_client.delete_comment.side_effect = PipefyGraphQLError(
+            [{"message": "Record not found", "extensions": {}}]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -1446,17 +1432,15 @@ class TestFindCardsTool:
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
         """Bad field_id (RESOURCE_NOT_FOUND) returns envelope with get_phase_fields hint."""
-        from gql.transport.exceptions import TransportQueryError
 
         mock_pipefy_client.find_cards = AsyncMock(
-            side_effect=TransportQueryError(
-                "GraphQL Error",
-                errors=[
+            side_effect=PipefyGraphQLError(
+                [
                     {
                         "message": "Field not found with id: title",
                         "extensions": {"code": "RESOURCE_NOT_FOUND"},
                     }
-                ],
+                ]
             )
         )
 
@@ -1483,17 +1467,15 @@ class TestUpdateCardFieldTool:
         self, client_session, mock_pipefy_client, extract_payload
     ):
         """Bad field_id slug returns envelope mentioning get_phase_fields, not raw exception."""
-        from gql.transport.exceptions import TransportQueryError
 
         mock_pipefy_client.update_card_field = AsyncMock(
-            side_effect=TransportQueryError(
-                "GraphQL Error",
-                errors=[
+            side_effect=PipefyGraphQLError(
+                [
                     {
                         "message": "Field not found with id: nonexistent_slug_xyz",
                         "extensions": {"code": "RESOURCE_NOT_FOUND"},
                     }
-                ],
+                ]
             )
         )
 
@@ -1565,16 +1547,14 @@ class TestAddCardCommentTool:
         extract_payload,
     ):
         """When add_card_comment API raises, tool returns error payload with mapped message."""
-        from gql.transport.exceptions import TransportQueryError
 
-        mock_pipefy_client.add_card_comment.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        mock_pipefy_client.add_card_comment.side_effect = PipefyGraphQLError(
+            [
                 {
                     "message": "Record not found",
                     "extensions": {"code": "RESOURCE_NOT_FOUND"},
                 }
-            ],
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -2133,17 +2113,14 @@ class TestDeleteCardTool:
         extract_payload,
     ) -> None:
         """Test delete_card tool maps RESOURCE_NOT_FOUND GraphQL exception to friendly message."""
-        # Simulate GraphQL exception with RESOURCE_NOT_FOUND code
-        from gql.transport.exceptions import TransportQueryError
 
-        error = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        error = PipefyGraphQLError(
+            [
                 {
                     "message": "Card not found",
                     "extensions": {"code": "RESOURCE_NOT_FOUND"},
                 }
-            ],
+            ]
         )
         mock_pipefy_client.get_card.side_effect = error
 
@@ -2174,8 +2151,6 @@ class TestDeleteCardTool:
         extract_payload,
     ) -> None:
         """Test delete_card tool maps PERMISSION_DENIED GraphQL exception to friendly message."""
-        # Simulate GraphQL exception with PERMISSION_DENIED code
-        from gql.transport.exceptions import TransportQueryError
 
         mock_pipefy_client.get_card.return_value = {
             "card": {
@@ -2185,14 +2160,13 @@ class TestDeleteCardTool:
             }
         }
 
-        error = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        error = PipefyGraphQLError(
+            [
                 {
                     "message": "Permission denied",
                     "extensions": {"code": "PERMISSION_DENIED"},
                 }
-            ],
+            ]
         )
         mock_pipefy_client.delete_card.side_effect = error
 
@@ -2340,16 +2314,14 @@ class TestDeleteCardTool:
         extract_payload,
     ) -> None:
         """When debug=True and client raises, error message includes codes and correlation_id."""
-        from gql.transport.exceptions import TransportQueryError
 
-        error = TransportQueryError(
-            '{"code": "PERMISSION_DENIED", "correlation_id": "corr-xyz"}',
-            errors=[
+        error = PipefyGraphQLError(
+            [
                 {
                     "message": "Denied",
                     "extensions": {"code": "PERMISSION_DENIED"},
                 }
-            ],
+            ]
         )
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
@@ -2458,13 +2430,10 @@ class TestGetCardRelations:
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        from gql.transport.exceptions import TransportQueryError
-
-        mock_pipefy_client.get_card_relations.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        mock_pipefy_client.get_card_relations.side_effect = PipefyGraphQLError(
+            [
                 {"message": "Not found", "extensions": {"code": "RESOURCE_NOT_FOUND"}},
-            ],
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -2554,16 +2523,13 @@ class TestDeleteCardRelation:
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        from gql.transport.exceptions import TransportQueryError
-
-        mock_pipefy_client.delete_card_relation.side_effect = TransportQueryError(
-            "GraphQL Error",
-            errors=[
+        mock_pipefy_client.delete_card_relation.side_effect = PipefyGraphQLError(
+            [
                 {
                     "message": "Permission denied",
                     "extensions": {"code": "PERMISSION_DENIED"},
                 }
-            ],
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(

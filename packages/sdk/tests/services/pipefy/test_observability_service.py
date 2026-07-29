@@ -7,9 +7,9 @@ import httpx
 import pytest
 from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_ORG_UUID
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 from openpyxl import Workbook
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.graphql_executor import GraphQLResult
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
@@ -213,11 +213,9 @@ async def test_get_automation_logs_by_repo_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_ai_agent_logs_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = ObservabilityService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_ai_agent_logs("repo-uuid-1")
 
 
@@ -476,23 +474,19 @@ async def test_get_automation_jobs_export_csv_download_error():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agents_usage_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "forbidden"}]))
     service = ObservabilityService(executor=executor)
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_agents_usage(EXAMPLE_ORG_UUID, filter_date)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_logs_transport_error():
-    executor = mock_executor(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
-    )
+    executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "denied"}]))
     service = ObservabilityService(executor=executor)
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_automation_logs("auto-1")
 
 

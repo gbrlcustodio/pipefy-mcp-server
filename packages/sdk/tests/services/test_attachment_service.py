@@ -11,6 +11,7 @@ import respx
 from _shared.mock_clients import mock_executor
 from graphql import print_ast
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.models.attachment import (
     Attachment,
     AttachmentUploadError,
@@ -406,11 +407,9 @@ async def test_upload_attachment_oversize_file_yields_file_read_step(
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_upload_attachment_presigned_failure_maps_to_presigned_step(tmp_path):
-    from gql.transport.exceptions import TransportQueryError
-
     service, executor = _make_service()
     executor.execute_query = AsyncMock(
-        side_effect=TransportQueryError("x", errors=[{"message": "denied"}])
+        side_effect=PipefyGraphQLError([{"message": "denied"}])
     )
     attachment = _build_attachment(tmp_path, name="a.txt")
 

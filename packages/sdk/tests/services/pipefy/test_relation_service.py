@@ -2,8 +2,8 @@
 
 import pytest
 from _shared.mock_clients import mock_executor
-from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.queries.relation_queries import (
     CREATE_CARD_RELATION_MUTATION,
     CREATE_PIPE_RELATION_MUTATION,
@@ -51,9 +51,9 @@ async def test_get_pipe_relations_sends_pipe_id():
 @pytest.mark.asyncio
 async def test_get_pipe_relations_transport_error():
     service, _ = _make_service(
-        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}]),
+        side_effect=PipefyGraphQLError([{"message": "denied"}]),
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_pipe_relations(1)
 
 
@@ -74,9 +74,9 @@ async def test_get_table_relations_sends_ids_list():
 @pytest.mark.asyncio
 async def test_get_table_relations_transport_error():
     service, _ = _make_service(
-        side_effect=TransportQueryError("failed", errors=[{"message": "missing"}]),
+        side_effect=PipefyGraphQLError([{"message": "missing"}]),
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.get_table_relations([99])
 
 
@@ -117,9 +117,9 @@ async def test_create_pipe_relation_merges_attrs():
 @pytest.mark.asyncio
 async def test_create_pipe_relation_transport_error():
     service, _ = _make_service(
-        side_effect=TransportQueryError("failed", errors=[{"message": "bad"}]),
+        side_effect=PipefyGraphQLError([{"message": "bad"}]),
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.create_pipe_relation(1, 2, "x")
 
 
@@ -155,9 +155,9 @@ async def test_update_pipe_relation_merges_attrs():
 @pytest.mark.asyncio
 async def test_update_pipe_relation_transport_error():
     service, _ = _make_service(
-        side_effect=TransportQueryError("failed", errors=[{"message": "nope"}]),
+        side_effect=PipefyGraphQLError([{"message": "nope"}]),
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.update_pipe_relation(5, "X")
 
 
@@ -178,9 +178,9 @@ async def test_delete_pipe_relation_sends_id():
 @pytest.mark.asyncio
 async def test_delete_pipe_relation_transport_error():
     service, _ = _make_service(
-        side_effect=TransportQueryError("failed", errors=[{"message": "gone"}]),
+        side_effect=PipefyGraphQLError([{"message": "gone"}]),
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.delete_pipe_relation(1)
 
 
@@ -216,9 +216,9 @@ async def test_create_card_relation_allows_source_type_override():
 @pytest.mark.asyncio
 async def test_create_card_relation_transport_error():
     service, _ = _make_service(
-        side_effect=TransportQueryError("failed", errors=[{"message": "nope"}]),
+        side_effect=PipefyGraphQLError([{"message": "nope"}]),
     )
-    with pytest.raises(TransportQueryError):
+    with pytest.raises(PipefyGraphQLError):
         await service.create_card_relation(1, 2, 3)
 
 

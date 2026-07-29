@@ -10,8 +10,13 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
 import typer
-from gql.transport.exceptions import TransportError, TransportQueryError
-from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
+from gql.transport.exceptions import TransportError
+from pipefy_sdk import (
+    PipefyClient,
+    PipefyGraphQLError,
+    PipefySettings,
+    stream_bytes,
+)
 from pipefy_sdk.exceptions import PipefyError
 from pipefy_sdk.label_color import normalize_label_color
 from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
@@ -221,7 +226,7 @@ def run_pipefy_client_coroutine(
         raise typer.Exit(value_error_exit_code) from exc
     except BrokenPipeError:
         raise typer.Exit(0) from None
-    except TransportQueryError as exc:
+    except PipefyGraphQLError as exc:
         typer.echo(_format_transport_query_error(exc), err=True)
         raise typer.Exit(1) from exc
     except TransportError as exc:
@@ -229,7 +234,7 @@ def run_pipefy_client_coroutine(
         raise typer.Exit(1) from exc
 
 
-def _format_transport_query_error(exc: TransportQueryError) -> str:
+def _format_transport_query_error(exc: PipefyGraphQLError) -> str:
     """Render a GraphQL transport error as a clean single-line message for the CLI.
 
     Falls back to ``str(exc)`` when the structured ``errors`` payload is missing or empty.
@@ -243,7 +248,7 @@ def _format_transport_query_error(exc: TransportQueryError) -> str:
     return f"{message} ({code})" if code else message
 
 
-def format_card_get_transport_query_error(exc: TransportQueryError) -> str:
+def format_card_get_transport_query_error(exc: PipefyGraphQLError) -> str:
     """Like :func:`_format_transport_query_error` with a hint for missing/deleted cards."""
     base = _format_transport_query_error(exc)
     errors = getattr(exc, "errors", None) or []
@@ -348,7 +353,7 @@ def run_cli_command(
     coro_factory: Callable[[PipefyClient], Awaitable[_R]],
     *,
     exit_code_2_on_value_error: bool = True,
-    format_transport_query_error: Callable[[TransportQueryError], str] | None = None,
+    format_transport_query_error: Callable[[PipefyGraphQLError], str] | None = None,
     exit_1_on_unsuccessful: bool = False,
 ) -> None:
     """Run an async coroutine factory with a configured client and render the result.
@@ -376,7 +381,7 @@ def run_cli_command(
     except PipefyError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
-    except TransportQueryError as exc:
+    except PipefyGraphQLError as exc:
         typer.echo(transport_fmt(exc), err=True)
         raise typer.Exit(1) from exc
     except TransportError as exc:

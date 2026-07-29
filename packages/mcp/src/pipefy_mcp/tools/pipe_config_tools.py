@@ -73,9 +73,9 @@ async def _diagnose_phase_field_cascade(
     """
     if pipe_id is None:
         return None
-    # gql's ``TransportQueryError`` hides the structured per-error ``message``
-    # and ``extensions.code`` behind attributes, so ``str(exc)`` alone only
-    # returns the outer wrapper ("GraphQL Error"). Combine both signals.
+    # ``PipefyGraphQLError`` keeps the structured per-error ``message`` and
+    # ``extensions.code`` in ``.errors``, so ``str(exc)`` alone only returns the
+    # joined message text. Combine both signals.
     signal_parts: list[str] = [str(exc).lower()]
     signal_parts.extend(m.lower() for m in extract_error_strings(exc))
     signal_parts.extend(c.lower() for c in extract_graphql_error_codes(exc))

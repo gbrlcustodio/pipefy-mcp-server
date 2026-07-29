@@ -5,11 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID
-from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.observability_tools import _MAX_PAGE_SIZE, ObservabilityTools
@@ -99,8 +98,8 @@ async def test_get_ai_agent_logs_success(
 async def test_get_ai_agent_logs_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
-    mock_observability_client.get_ai_agent_logs.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "not authorized"}]
+    mock_observability_client.get_ai_agent_logs.side_effect = PipefyGraphQLError(
+        [{"message": "not authorized"}]
     )
 
     async with observability_session as session:
@@ -650,8 +649,8 @@ async def test_get_ai_credit_usage_success(
 async def test_get_ai_credit_usage_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
-    mock_observability_client.get_ai_credit_usage.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "forbidden"}]
+    mock_observability_client.get_ai_credit_usage.side_effect = PipefyGraphQLError(
+        [{"message": "forbidden"}]
     )
 
     async with observability_session as session:
@@ -755,7 +754,7 @@ async def test_get_automation_jobs_export_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
     mock_observability_client.get_automation_jobs_export.side_effect = (
-        TransportQueryError("failed", errors=[{"message": "not found"}])
+        PipefyGraphQLError([{"message": "not found"}])
     )
 
     async with observability_session as session:
@@ -1090,14 +1089,13 @@ async def test_get_ai_agent_logs_rejects_out_of_bounds_first(
 async def test_get_ai_agent_logs_debug_true_appends_codes(
     observability_session, mock_observability_client, extract_payload
 ):
-    error = TransportQueryError(
-        '{"code": "PERMISSION_DENIED", "correlation_id": "corr-abc"}',
-        errors=[
+    error = PipefyGraphQLError(
+        [
             {
                 "message": "not authorized",
                 "extensions": {"code": "PERMISSION_DENIED"},
             }
-        ],
+        ]
     )
     mock_observability_client.get_ai_agent_logs.side_effect = error
 
@@ -1122,14 +1120,13 @@ async def test_get_ai_agent_logs_debug_true_appends_codes(
 async def test_get_ai_credit_usage_debug_true_appends_codes(
     observability_session, mock_observability_client, extract_payload
 ):
-    error = TransportQueryError(
-        '{"code": "FORBIDDEN", "correlation_id": "corr-xyz"}',
-        errors=[
+    error = PipefyGraphQLError(
+        [
             {
                 "message": "forbidden",
                 "extensions": {"code": "FORBIDDEN"},
             }
-        ],
+        ]
     )
     mock_observability_client.get_ai_credit_usage.side_effect = error
 
@@ -1335,8 +1332,8 @@ async def test_get_automation_logs_by_repo_rejects_out_of_bounds_first(
 async def test_get_agents_usage_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
-    mock_observability_client.get_agents_usage.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "unauthorized"}]
+    mock_observability_client.get_agents_usage.side_effect = PipefyGraphQLError(
+        [{"message": "unauthorized"}]
     )
 
     async with observability_session as session:
@@ -1383,8 +1380,8 @@ async def test_get_automations_usage_rejects_empty_org_uuid(
 async def test_get_automations_usage_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
-    mock_observability_client.get_automations_usage.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "service unavailable"}]
+    mock_observability_client.get_automations_usage.side_effect = PipefyGraphQLError(
+        [{"message": "service unavailable"}]
     )
 
     async with observability_session as session:
@@ -1464,8 +1461,8 @@ async def test_export_automation_jobs_rejects_invalid_period(
 async def test_export_automation_jobs_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
-    mock_observability_client.export_automation_jobs.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "rate limited"}]
+    mock_observability_client.export_automation_jobs.side_effect = PipefyGraphQLError(
+        [{"message": "rate limited"}]
     )
 
     async with observability_session as session:
@@ -1489,8 +1486,8 @@ async def test_export_automation_jobs_graphql_error(
 async def test_get_ai_agent_log_details_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
-    mock_observability_client.get_ai_agent_log_details.side_effect = (
-        TransportQueryError("failed", errors=[{"message": "log not found"}])
+    mock_observability_client.get_ai_agent_log_details.side_effect = PipefyGraphQLError(
+        [{"message": "log not found"}]
     )
 
     async with observability_session as session:
@@ -1510,18 +1507,15 @@ async def test_get_ai_agent_log_details_rewrites_automationaction_not_found(
 ):
     """The upstream resolver leaks its internal type (``AutomationAction``) when
     the UUID isn't found; the tool rewrites to tool-level semantics."""
-    mock_observability_client.get_ai_agent_log_details.side_effect = (
-        TransportQueryError(
-            "failed",
-            errors=[
-                {
-                    "message": (
-                        "Couldn't find AutomationAction with 'id'="
-                        "00000000-0000-0000-0000-000000000000"
-                    )
-                }
-            ],
-        )
+    mock_observability_client.get_ai_agent_log_details.side_effect = PipefyGraphQLError(
+        [
+            {
+                "message": (
+                    "Couldn't find AutomationAction with 'id'="
+                    "00000000-0000-0000-0000-000000000000"
+                )
+            }
+        ]
     )
     async with observability_session as session:
         result = await session.call_tool(
@@ -1546,8 +1540,8 @@ async def test_get_ai_agent_log_details_rewrites_automationaction_not_found(
 async def test_get_automation_logs_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
-    mock_observability_client.get_automation_logs.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "internal error"}]
+    mock_observability_client.get_automation_logs.side_effect = PipefyGraphQLError(
+        [{"message": "internal error"}]
     )
 
     async with observability_session as session:
@@ -1571,7 +1565,7 @@ async def test_get_automation_logs_by_repo_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
     mock_observability_client.get_automation_logs_by_repo.side_effect = (
-        TransportQueryError("failed", errors=[{"message": "timeout"}])
+        PipefyGraphQLError([{"message": "timeout"}])
     )
 
     async with observability_session as session:

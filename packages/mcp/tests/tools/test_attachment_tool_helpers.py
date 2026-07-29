@@ -1,7 +1,7 @@
 """Unit tests for attachment_tool_helpers."""
 
 import pytest
-from gql.transport.exceptions import TransportQueryError
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.models.attachment import UploadAttachmentToCardInput
 from pydantic import ValidationError
 
@@ -110,7 +110,7 @@ def test_map_upload_error_validation_error():
 
 @pytest.mark.unit
 def test_map_upload_error_transport_query():
-    exc = TransportQueryError("q", errors=[{"message": "not allowed"}])
+    exc = PipefyGraphQLError([{"message": "not allowed"}])
     text = map_upload_error_to_message(exc)
     assert "not allowed" in text
 

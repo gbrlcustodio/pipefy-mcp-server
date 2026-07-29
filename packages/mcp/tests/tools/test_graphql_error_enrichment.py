@@ -12,7 +12,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
 
 
 class _FakeGraphQLError(Exception):
-    """Mimics ``gql.transport.exceptions.TransportQueryError`` shape."""
+    """Mimics the ``PipefyGraphQLError`` shape (a ``.errors`` list of dicts)."""
 
     def __init__(self, code: str | None, message: str):
         super().__init__(message)

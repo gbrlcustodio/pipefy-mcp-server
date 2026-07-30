@@ -12,7 +12,7 @@ string rendering leaks implementation details (``pydantic.dev`` URLs, internal
 Install once at server startup via :func:`install_pipefy_validation_envelope`.
 The patch is idempotent so repeated startup (e.g. in tests) does not stack.
 
-Tested against ``mcp == 1.25.0`` (``Tool.run`` signature in
+Tested against ``mcp == 1.29.0`` (``Tool.run`` signature in
 ``mcp.server.fastmcp.tools.base``). If the upstream package is upgraded,
 re-verify the ``call_fn_with_arg_validation`` / ``Tool.run`` contract.
 """

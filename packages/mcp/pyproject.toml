@@ -6,9 +6,15 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27.0",
-    # Upper bound is load-bearing: the tool-call middleware wraps a FastMCP
-    # internal, so a major upgrade is a breaking change to code we depend on.
-    "mcp[cli]>=1.25.0,<2",
+    # Upper bound is load-bearing: 2.0 removes the mcp.server.fastmcp module this
+    # server imports at startup, so an uncapped install fails before it serves
+    # anything. Crossing it is the port tracked in #543, not a version bump. Note
+    # the reason is the module removal, not our middleware wrap: 2.x ships a
+    # supported ServerMiddleware seam that would replace that wrap.
+    # The floor tracks the head of the 1.x maintenance line, where all three
+    # internals we patch still exist (FastMCP, request_ctx,
+    # create_connected_server_and_client_session).
+    "mcp[cli]>=1.29.0,<2",
     # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
     "pipefy-auth==0.4.0-beta.1",
     "pipefy-infra==0.4.0-beta.1",

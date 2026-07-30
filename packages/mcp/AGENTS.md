@@ -359,7 +359,7 @@ any deployment (only per-user concerns are hosted-specific), so a local deployme
 can register its own middleware. Tool lines use the same stderr JSON emitter as
 HTTP request lines (`emit_structured_event`), never stdout.
 
-The wrap targets a FastMCP internal and is tested against `mcp==1.25.0`; the
+The wrap targets a FastMCP internal and is tested against `mcp==1.29.0`; the
 install is idempotent per app (the sentinel is per handler, not a global). This is
 a separate seam from the argument-validation envelope
 (`tools/validation_envelope.py`), which patches `Tool.run` to reshape a pydantic

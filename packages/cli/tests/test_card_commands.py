@@ -599,9 +599,8 @@ def test_card_fill_no_fields_when_only_non_editable(
 
 def test_card_comment_update_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("cmt-upd")
-    payload = {"updateComment": {"comment": {"id": "c1"}}}
     mock_client = MagicMock()
-    mock_client.update_comment = AsyncMock(return_value=payload)
+    mock_client.update_comment = AsyncMock(return_value="c1")
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -611,14 +610,14 @@ def test_card_comment_update_json(runner, clean_pipefy_env, saved_cwd, oauth_env
             ["card", "comment", "update", "c1", "New body", "--json"],
         )
     assert result.exit_code == 0
+    assert json.loads(result.stdout) == {"comment_id": "c1"}
     mock_client.update_comment.assert_awaited_once_with("c1", "New body")
 
 
 def test_card_comment_add_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("cmt-add")
-    payload = {"createComment": {"comment": {"id": "c1"}}}
     mock_client = MagicMock()
-    mock_client.add_card_comment = AsyncMock(return_value=payload)
+    mock_client.add_card_comment = AsyncMock(return_value="c1")
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -628,6 +627,7 @@ def test_card_comment_add_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
             ["card", "comment", "add", "501", "Hello from CLI", "--json"],
         )
     assert result.exit_code == 0
+    assert json.loads(result.stdout) == {"comment_id": "c1"}
     mock_client.add_card_comment.assert_awaited_once_with("501", "Hello from CLI")
 
 

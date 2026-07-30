@@ -45,12 +45,8 @@ def mock_pipefy_client():
     client = MagicMock(PipefyClient)
     client.get_start_form_fields = AsyncMock()
     client.create_card = AsyncMock()
-    client.add_card_comment = AsyncMock(
-        return_value={"createComment": {"comment": {"id": "c_987"}}}
-    )
-    client.update_comment = AsyncMock(
-        return_value={"updateComment": {"comment": {"id": "c_999"}}}
-    )
+    client.add_card_comment = AsyncMock(return_value="c_987")
+    client.update_comment = AsyncMock(return_value="c_999")
     client.delete_comment = AsyncMock(return_value={"deleteComment": {"success": True}})
     client.get_card = AsyncMock()
     client.get_card_relations = AsyncMock(

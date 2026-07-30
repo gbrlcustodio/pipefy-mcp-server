@@ -409,8 +409,8 @@ async def test_update_card_field_mode_uses_update_fields_values_shape():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_comment_variable_shape_and_return_passthrough():
-    """Test create_comment sends correct input shape and returns response unchanged."""
+async def test_create_comment_variable_shape_and_returns_comment_id():
+    """Test create_comment sends correct input shape and returns the new comment id."""
     card_id = 12345
     text = "This is a comment"
 
@@ -421,15 +421,13 @@ async def test_create_comment_variable_shape_and_return_passthrough():
     assert variables == {"input": {"card_id": str(card_id), "text": text}}, (
         "Expected correct input shape"
     )
-    assert result == {"createComment": {"comment": {"id": "c_987"}}}, (
-        "Expected createComment response passthrough"
-    )
+    assert result == "c_987", "Expected the comment id, not the raw GraphQL payload"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_comment_variable_shape_and_return_structure():
-    """Test update_comment sends correct input shape and returns response with comment id."""
+async def test_update_comment_variable_shape_and_returns_comment_id():
+    """Test update_comment sends correct input shape and returns the updated comment id."""
     comment_id = 12345
     text = "Updated comment text"
 
@@ -440,9 +438,7 @@ async def test_update_comment_variable_shape_and_return_structure():
     assert variables == {"input": {"id": str(comment_id), "text": text}}, (
         "Expected correct input shape"
     )
-    assert result == {"updateComment": {"comment": {"id": "c_999"}}}, (
-        "Expected updateComment response with comment id"
-    )
+    assert result == "c_999", "Expected the comment id, not the raw GraphQL payload"
 
 
 @pytest.mark.unit

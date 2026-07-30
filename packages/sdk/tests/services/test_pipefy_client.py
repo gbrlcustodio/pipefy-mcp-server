@@ -752,7 +752,7 @@ async def test_add_card_comment_delegates_to_card_service_create_comment():
     """Test add_card_comment delegates unchanged to CardService.create_comment."""
     card_id = 12345
     text = "This is a comment"
-    expected = {"createComment": {"comment": {"id": "c_987"}}}
+    expected = "c_987"
 
     card_service = AsyncMock()
     card_service.create_comment = AsyncMock(return_value=expected)
@@ -772,7 +772,7 @@ async def test_update_comment_delegates_to_card_service_update_comment():
     """Test update_comment delegates unchanged to CardService.update_comment."""
     comment_id = 12345
     text = "Updated comment text"
-    expected = {"updateComment": {"comment": {"id": "c_999"}}}
+    expected = "c_999"
 
     card_service = AsyncMock()
     card_service.update_comment = AsyncMock(return_value=expected)

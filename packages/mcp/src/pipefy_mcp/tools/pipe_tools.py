@@ -415,10 +415,9 @@ class PipeTools:
                 )
 
             try:
-                response = await client.add_card_comment(
+                comment_id = await client.add_card_comment(
                     card_id=comment_input.card_id, text=comment_input.text
                 )
-                comment_id = response["createComment"]["comment"]["id"]
             except Exception as exc:  # noqa: BLE001
                 return build_add_card_comment_error_payload(
                     message=map_add_card_comment_error_to_message(exc)
@@ -451,10 +450,9 @@ class PipeTools:
                 )
 
             try:
-                response = await client.update_comment(
+                comment_id_out = await client.update_comment(
                     update_input.comment_id, update_input.text
                 )
-                comment_id_out = response["updateComment"]["comment"]["id"]
             except Exception as exc:  # noqa: BLE001
                 return build_update_comment_error_payload(
                     message=map_update_comment_error_to_message(exc)

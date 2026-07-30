@@ -1410,12 +1410,12 @@ class PipefyClient:
             pipe_id, fields, phase_id=phase_id, title=title
         )
 
-    async def add_card_comment(self, card_id: str | int, text: str) -> dict:
-        """Add a text comment to a card by its ID."""
+    async def add_card_comment(self, card_id: str | int, text: str) -> str:
+        """Add a text comment to a card by its ID and return the new comment's id."""
         return await self._card_service.create_comment(card_id, text)
 
-    async def update_comment(self, comment_id: str | int, text: str) -> dict:
-        """Update an existing comment by its ID."""
+    async def update_comment(self, comment_id: str | int, text: str) -> str:
+        """Update an existing comment by its ID and return the id it echoed back."""
         return await self._card_service.update_comment(comment_id, text)
 
     async def delete_comment(self, comment_id: str | int) -> dict:

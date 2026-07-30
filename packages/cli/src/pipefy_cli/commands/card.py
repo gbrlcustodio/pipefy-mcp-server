@@ -450,7 +450,8 @@ def card_comment_add(
         raise typer.Exit(2) from exc
 
     async def factory(client: PipefyClient):
-        return await client.add_card_comment(validated.card_id, validated.text)
+        comment_id = await client.add_card_comment(validated.card_id, validated.text)
+        return {"comment_id": comment_id}
 
     run_cli_command(ctx, json_out, factory)
 
@@ -471,7 +472,8 @@ def card_comment_update(
         raise typer.Exit(2) from exc
 
     async def factory(client: PipefyClient):
-        return await client.update_comment(validated.comment_id, validated.text)
+        comment_id = await client.update_comment(validated.comment_id, validated.text)
+        return {"comment_id": comment_id}
 
     run_cli_command(ctx, json_out, factory)
 

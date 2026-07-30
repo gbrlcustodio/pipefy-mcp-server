@@ -52,18 +52,24 @@ class CardService:
             CREATE_CARD_MUTATION, {"input": card_input}
         )
 
-    async def create_comment(self, card_id: str | int, text: str) -> dict:
-        """Create a text comment on the specified card."""
+    async def create_comment(self, card_id: str | int, text: str) -> str:
+        """Create a text comment on the specified card and return its id."""
         variables = {"input": {"card_id": str(card_id), "text": text}}
-        return await self._executor.execute_query(CREATE_COMMENT_MUTATION, variables)
+        response = await self._executor.execute_query(
+            CREATE_COMMENT_MUTATION, variables
+        )
+        return response["createComment"]["comment"]["id"]
 
-    async def update_comment(self, comment_id: str | int, text: str) -> dict:
-        """Update an existing comment by its ID. Returns raw GraphQL response (see issue #23)."""
+    async def update_comment(self, comment_id: str | int, text: str) -> str:
+        """Update an existing comment by its ID and return the id it echoed back."""
         variables = {"input": {"id": str(comment_id), "text": text}}
-        return await self._executor.execute_query(UPDATE_COMMENT_MUTATION, variables)
+        response = await self._executor.execute_query(
+            UPDATE_COMMENT_MUTATION, variables
+        )
+        return response["updateComment"]["comment"]["id"]
 
     async def delete_comment(self, comment_id: str | int) -> dict:
-        """Delete a comment by its ID. Returns raw GraphQL response (see issue #23)."""
+        """Delete a comment by its ID."""
         variables = {"input": {"id": str(comment_id)}}
         return await self._executor.execute_query(DELETE_COMMENT_MUTATION, variables)
 

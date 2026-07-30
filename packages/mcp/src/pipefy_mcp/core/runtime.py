@@ -13,7 +13,7 @@ from pipefy_mcp.auth import (
     build_resource_server_auth,
 )
 from pipefy_mcp.core.ipaas_gateway import IpaasGateway
-from pipefy_mcp.core.transport_security import build_transport_security
+from pipefy_mcp.core.transport_security import transport_security_for
 from pipefy_mcp.settings import Settings
 
 
@@ -95,7 +95,7 @@ class McpRuntime:
         """
         url = settings.rs.resource_server_url
         resource = ResourceServer.from_url(url) if url else None
-        transport_security = build_transport_security(settings.mcp, resource)
+        transport_security = transport_security_for(settings)
         if settings.mcp.profile == "remote":
             identity, inbound_auth = cls._remote_identity(settings, resource)
         else:

@@ -26,12 +26,27 @@ from __future__ import annotations
 from mcp.server.transport_security import TransportSecuritySettings
 
 from pipefy_mcp.auth import ResourceServer
-from pipefy_mcp.settings import McpSettings
+from pipefy_mcp.settings import McpSettings, Settings
 
 # Loopback entries kept in every explicit allowlist so widening for a proxy does
 # not lock out local tooling on the box (a proxy on the same host still reaches the
 # server over loopback). Mirrors FastMCP's own loopback auto-enable set.
 _LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+
+
+def transport_security_for(settings: Settings) -> TransportSecuritySettings | None:
+    """Parse the resource-server URL and build the allowlist from it, in one step.
+
+    The single place the parse and the build are paired. Two callers need the result
+    at different times: :meth:`McpRuntime.for_profile` at construction (where the
+    same parsed resource also feeds the inbound-auth pair, so the two cannot
+    disagree on the host) and the serving path at ``streamable_http_app()`` time,
+    since the SDK takes the allowlist per transport rather than on the constructor.
+    Both go through here so a second caller cannot re-derive it differently.
+    """
+    url = settings.rs.resource_server_url
+    resource = ResourceServer.from_url(url) if url else None
+    return build_transport_security(settings.mcp, resource)
 
 
 def build_transport_security(

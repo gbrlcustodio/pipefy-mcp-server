@@ -5,9 +5,8 @@ short-circuit, exception propagation, the short-circuit envelope shape, the
 pass-through of non-tool methods, and the argument-context build.
 
 The chain is registered the way the composition root registers it, through
-``MCPServer(middleware=[...])``, and driven through a real client rather than by
-calling a handler directly. There is no longer a private handler slot to poke, so
-these tests exercise the same path a caller does.
+``MCPServer(middleware=[...])``, and driven through a real client, so these tests
+exercise the same path a caller does.
 """
 
 from __future__ import annotations
@@ -253,9 +252,9 @@ def test_short_circuit_matches_the_in_tool_error_envelope():
 def test_no_middleware_registers_nothing():
     """An empty list yields no ``ServerMiddleware``, so the default path stays bare.
 
-    Replaces the old "install is a no-op" assertion. The chain is no longer installed
-    over a handler, so the equivalent property is that the composition root has
-    nothing to register and every inbound message skips the adapter entirely.
+    The composition root has nothing to register, and every inbound message skips the
+    adapter entirely rather than paying for a pass-through that builds and discards a
+    context.
     """
     assert build_tool_call_middleware([]) is None
     assert build_tool_call_middleware([_noop]) is not None

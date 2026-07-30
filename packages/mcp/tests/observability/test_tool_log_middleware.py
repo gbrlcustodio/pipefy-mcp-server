@@ -14,7 +14,7 @@ import pytest
 from mcp import UrlElicitationRequiredError, types
 
 from pipefy_mcp.auth.request_identity import CallerIdentity
-from pipefy_mcp.core.tool_middleware import ToolCallContext
+from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
 from pipefy_mcp.observability.json_logging import (
     TOOL_CALL_EVENT_KEYS,
     configure_observability_logging,
@@ -96,13 +96,42 @@ def test_never_logs_argument_values_or_a_bearer(capsys):
 
 
 @pytest.mark.unit
-def test_error_result_logs_outcome_error(capsys):
+def test_error_result_logs_outcome_error_for_the_wire_dict(capsys):
+    """A failing tool call reports ``error``, read off the shape the SDK really returns.
+
+    This is the shape that matters: the SDK's handler serializes the result for the
+    wire INSIDE the middleware chain, so a real tool failure arrives as a dict keyed
+    ``isError`` in camelCase, not as a model. A test that hands the middleware a
+    ``CallToolResult`` instead passes while every production failure logs ``ok``,
+    which is exactly the regression this test exists to catch.
+    """
     _configure_for_capture()
 
     async def terminal(ctx):
-        return types.CallToolResult(
-            content=[types.TextContent(type="text", text="boom")], is_error=True
-        )
+        return {
+            "content": [
+                {"type": "text", "text": "Error executing tool get_card: boom"}
+            ],
+            "isError": True,
+        }
+
+    asyncio.run(tool_log_middleware(_context(card_id="1"), terminal))
+
+    assert _read_log_lines(capsys)[0]["outcome"] == "error"
+
+
+@pytest.mark.unit
+def test_error_result_logs_outcome_error_for_a_short_circuit_model(capsys):
+    """A governance short-circuit reports ``error`` too, from the model shape.
+
+    Both shapes reach the chain, so both have to read correctly:
+    ``short_circuit_error`` builds a ``CallToolResult`` that never passes through
+    the SDK's serialization.
+    """
+    _configure_for_capture()
+
+    async def terminal(ctx):
+        return short_circuit_error("quota exceeded", code="RATE_LIMITED")
 
     asyncio.run(tool_log_middleware(_context(card_id="1"), terminal))
 

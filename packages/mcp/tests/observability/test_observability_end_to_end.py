@@ -165,3 +165,71 @@ async def test_two_calls_in_one_session_correlate_to_their_own_posts(capsys):
 
     # Every line in the same session carries the session id.
     assert {line["session_id"] for line in http_lines} == {session_id}
+
+
+@pytest.mark.anyio
+async def test_a_failing_tool_logs_outcome_error_end_to_end(capsys):
+    """A tool that raises must log ``outcome: "error"`` on the real serving path.
+
+    The unit test can assert the shapes in isolation, but only the full path proves
+    which shape the SDK actually hands the middleware. It serializes the result for
+    the wire inside the chain, so a real failure arrives as a dict keyed ``isError``;
+    reading ``result.is_error`` off that dict silently yields ``ok`` and every hard
+    failure looks like a success to whoever is alerting on these lines.
+    """
+    configure_observability_logging()
+
+    app = MCPServer(
+        "obs-e2e-error",
+        middleware=[build_tool_call_middleware([tool_log_middleware])],
+    )
+
+    @app.tool()
+    def boom(text: str) -> str:
+        raise RuntimeError("tool body failed")
+
+    http_app = wire_hosted_observability(app, json_response=True)
+
+    with anyio.fail_after(15):
+        async with http_app.router.lifespan_context(http_app):
+            transport = httpx.ASGITransport(app=http_app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://127.0.0.1:8000"
+            ) as client:
+                init_response = await client.post(
+                    "/mcp", json=_initialize_body(), headers={"accept": _ACCEPT}
+                )
+                assert init_response.status_code == 200
+                session_headers = {
+                    "accept": _ACCEPT,
+                    "mcp-session-id": init_response.headers["mcp-session-id"],
+                    "mcp-protocol-version": init_response.json()["result"][
+                        "protocolVersion"
+                    ],
+                }
+                await client.post(
+                    "/mcp",
+                    json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+                    headers=session_headers,
+                )
+                failing = await client.post(
+                    "/mcp",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {"name": "boom", "arguments": {"text": "boom-call"}},
+                    },
+                    headers=session_headers,
+                )
+
+    # The client is told it failed, so the log line must agree.
+    assert failing.status_code == 200
+    assert failing.json()["result"]["isError"] is True
+
+    tool_lines = [
+        line for line in _read_log_lines(capsys) if line["event"] == "tool_call"
+    ]
+    assert len(tool_lines) == 1
+    assert tool_lines[0]["tool"] == "boom"
+    assert tool_lines[0]["outcome"] == "error"

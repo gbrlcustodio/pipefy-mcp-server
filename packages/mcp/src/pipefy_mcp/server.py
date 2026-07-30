@@ -124,10 +124,10 @@ def build_pipefy_mcp_server(
     (:func:`run_server`) hands in: the ``remote`` profile selects the default-deny
     remote-safe tool surface.
 
-    The bind host/port and the DNS-rebinding allowlist are NOT set here. The SDK
-    takes them per transport, on ``run()`` / ``streamable_http_app()``, so they
-    travel with the serving call (:func:`_serve_streamable_http`) rather than with
-    the app. Only the HTTP transport has anything to apply them to.
+    This builder sets no bind host/port and no DNS-rebinding allowlist. The SDK takes
+    them per transport, on ``run()`` / ``streamable_http_app()``, so they travel with
+    the serving call (:func:`_serve_streamable_http`) instead. Only the HTTP transport
+    has anything to apply them to.
 
     ``extra_tool_middlewares`` is the public registration seam for a consumer of this
     builder (a hosted serving layer that wants per-tool metrics, say): the chain is

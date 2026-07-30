@@ -267,15 +267,22 @@ class ToolRegistry:
     def _live_tools(mcp: MCPServer) -> list[Tool]:
         """The tools currently registered, as server-tier ``Tool`` objects.
 
-        The one private-API touchpoint left in this class, and deliberate. The
-        public ``MCPServer.list_tools()`` is async and returns wire ``mcp.types.Tool``
-        models, which carry no ``fn`` and no ``run``; the registry needs the
-        server-tier object for its ``meta`` marker (the remote floor) and because
-        ``apply_power_profile`` keeps the objects themselves in the catalog that
-        ``execute_tool`` dispatches through. Registration and filtering also run
+        The one private-API touchpoint left in this class, and deliberate, for two
+        reasons. ``apply_power_profile`` keeps these objects themselves in the catalog
+        that ``execute_tool`` dispatches through, and ``describe_tool`` reads their
+        ``parameters``; the public ``MCPServer.list_tools()`` returns wire
+        ``mcp.types.Tool`` models, which carry neither ``run`` nor ``parameters``. And
+        that public method is async, while registration and filtering run
         synchronously at build time, so awaiting here would push ``async`` up through
-        the composition root into both transports. Removal goes through the public
-        ``MCPServer.remove_tool``.
+        the composition root into both transports.
+
+        Note the ``meta`` marker is NOT among the reasons: it is present on the wire
+        model too, so the remote floor alone could read it either way. Removal goes
+        through the public ``MCPServer.remove_tool``.
+
+        If upstream renames ``_tool_manager`` this raises ``AttributeError`` at
+        startup, which is the failure mode to want: loud, before serving, rather than
+        a floor that silently fails to apply.
         """
         return list(mcp._tool_manager.list_tools())
 

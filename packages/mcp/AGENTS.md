@@ -146,10 +146,10 @@ Tools are registered **once, at construction** (via `_register_pipefy_tools` in
 `server.py`, reached through `build_pipefy_mcp_server`, which both transports use),
 not inside the SDK `lifespan`. The lifespan owns resources only: it yields
 the already-wired app-scoped runtime as the request `lifespan_context`. This
-follows the SDK contract: the lifespan owns resources, not registration. Under 2.0
-Streamable HTTP enters it once at session-manager startup rather than per session,
-which makes the ordering less fragile than it was, but registering at construction is
-still what keeps the tool table off the lifespan entirely.
+follows the SDK contract: the lifespan owns resources, not registration. Streamable
+HTTP enters the lifespan once, at session-manager startup. Registering at
+construction keeps the tool table off the lifespan entirely, so no lifespan entry can
+mutate it.
 
 Tools take no client at registration. Each tool function declares a
 `ctx: Context` parameter (the SDK injects it and keeps it out of the tool's
@@ -357,7 +357,15 @@ async def quota(ctx: ToolCallContext, call_next: CallNext):
 - **Raw arguments**: middleware reads `tool_name` and `arguments` off the inbound
   params before the SDK validates or coerces them, so it sees exactly what the client
   sent. A malformed `tools/call` therefore still reaches middleware, which a
-  governance layer counting calls needs. `ctx.argument_keys` is bounded (count and length caps) and values-free
+  governance layer counting calls needs. `arguments` is the same mapping object the
+  dispatcher holds, so mutating it in place rewrites the call; rewrite deliberately
+  through the SDK's `replace(ctx, params=...)` instead.
+- **Reading the result**: what `call_next` returns is polymorphic, so use
+  `result_is_error(result)` rather than an attribute read. A real tool call comes back
+  as the serialized wire dict keyed `isError` (the SDK shapes the result for the wire
+  inside the chain), while `short_circuit_error` and any middleware building its own
+  result return a `CallToolResult` model with `is_error`. `result.is_error` reads
+  `False` on the dict, so every real failure would look like a success. `ctx.argument_keys` is bounded (count and length caps) and values-free
   for privacy-sensitive consumers; `ctx.arguments` values are passed unbounded to
   any consumer that opts to read them. Never log a bearer or argument values.
 

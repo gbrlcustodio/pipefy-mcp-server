@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from mcp.server.transport_security import TransportSecuritySettings
 from pipefy_sdk import PipefyClient, PipefyEngine
 from starlette.requests import Request
 
@@ -13,7 +12,6 @@ from pipefy_mcp.auth import (
     build_resource_server_auth,
 )
 from pipefy_mcp.core.ipaas_gateway import IpaasGateway
-from pipefy_mcp.core.transport_security import transport_security_for
 from pipefy_mcp.settings import Settings
 
 
@@ -57,11 +55,9 @@ class McpRuntime:
         identity: AuthSource,
         *,
         inbound_auth: ResourceServerAuth | None = None,
-        transport_security: TransportSecuritySettings | None = None,
     ) -> None:
         self._identity = identity
         self.inbound_auth = inbound_auth
-        self.transport_security = transport_security
         # Narrow per-deployment facts resolved at startup. The runtime deliberately
         # holds no Settings tree: tools reach it off the request context, so
         # exposing the tree would let tool code read any process-global value at
@@ -95,7 +91,6 @@ class McpRuntime:
         """
         url = settings.rs.resource_server_url
         resource = ResourceServer.from_url(url) if url else None
-        transport_security = transport_security_for(settings)
         if settings.mcp.profile == "remote":
             identity, inbound_auth = cls._remote_identity(settings, resource)
         else:
@@ -104,7 +99,6 @@ class McpRuntime:
             settings,
             identity,
             inbound_auth=inbound_auth,
-            transport_security=transport_security,
         )
 
     @staticmethod

@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 from mcp import UrlElicitationRequiredError
 
-from pipefy_mcp.core.tool_middleware import CallNext, ToolCallContext
+from pipefy_mcp.core.tool_middleware import CallNext, ToolCallContext, result_is_error
 from pipefy_mcp.observability.json_logging import (
     ToolCallOutcome,
     build_tool_call_event,
@@ -37,11 +37,12 @@ if TYPE_CHECKING:
 def _outcome(result: HandlerResult) -> ToolCallOutcome:
     """Map a terminal result to an outcome.
 
-    Reads ``is_error`` off the result defensively: the handler layer returns any
-    ``BaseModel`` (an ``InputRequiredResult`` has no ``is_error``), and such a
-    result reads as ``ok`` rather than raising.
+    Delegates the flag read to :func:`result_is_error`, which handles both shapes a
+    middleware sees: the wire dict the SDK's handler returns for a real tool call,
+    and the ``CallToolResult`` model a short-circuit builds. Reading the attribute
+    directly would report every real tool failure as ``ok``.
     """
-    return "error" if getattr(result, "is_error", False) else "ok"
+    return "error" if result_is_error(result) else "ok"
 
 
 async def tool_log_middleware(

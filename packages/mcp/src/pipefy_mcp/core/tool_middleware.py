@@ -19,7 +19,7 @@ in-flight request.
 Two reasons this adapter layer exists rather than having consumers write
 ``ServerMiddleware`` directly. The SDK marks its ``middleware`` list provisional,
 so keeping :class:`ToolCallContext` and :data:`ToolCallMiddleware` as the
-registration surface confines a churn there to this module. And a
+registration surface confines any churn there to this module. And a
 ``ServerMiddleware`` sees every method (``initialize``, ``tools/list``,
 notifications), while every consumer here wants tool calls only; the filter
 belongs in one place, not in each middleware.
@@ -28,7 +28,7 @@ belongs in one place, not in each middleware.
 from __future__ import annotations
 
 import json
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -49,6 +49,7 @@ __all__ = [
     "build_tool_call_middleware",
     "compose",
     "context_from_server_request",
+    "result_is_error",
     "short_circuit_error",
 ]
 
@@ -170,6 +171,29 @@ def _bind(middleware: ToolCallMiddleware, call_next: CallNext) -> CallNext:
     return run
 
 
+def result_is_error(result: HandlerResult) -> bool:
+    """Whether a tool-call result reports an error, whichever shape it arrives in.
+
+    ``HandlerResult`` is polymorphic, and a middleware sees BOTH shapes, so read the
+    flag through here rather than off an attribute:
+
+    - the SDK's own handler returns the **serialized wire dict**, keyed ``isError``
+      in camelCase (``ServerRunner._on_request`` shapes the result for the wire
+      inside the middleware chain, so the outermost span records a failing return);
+    - :func:`short_circuit_error` and any middleware that builds its own result
+      return a ``CallToolResult`` **model**, with a snake_case ``is_error``.
+
+    Reading ``result.is_error`` directly is the trap: on the dict it silently
+    returns the default, so every real tool failure reads as a success. Anything
+    without the flag (an ``InputRequiredResult``) is not an error.
+    """
+    if isinstance(result, Mapping):
+        # by_alias serialization gives camelCase; accept the field name too, so a
+        # middleware that dumps a model without by_alias is read correctly.
+        return bool(result.get("isError") or result.get("is_error"))
+    return bool(getattr(result, "is_error", False))
+
+
 def short_circuit_error(
     message: str,
     *,
@@ -220,9 +244,11 @@ def build_tool_call_middleware(
 
         async def terminal(_tool_ctx: ToolCallContext) -> HandlerResult:
             # The SDK context, not the tool-call view: `call_next` resumes the
-            # dispatcher, which reads params off `ctx` itself. A middleware that
-            # wants to rewrite arguments has to go through the SDK's own
-            # `replace(ctx, params=...)`, so the two views cannot drift apart.
+            # dispatcher, which reads params off `ctx` itself. Note `ToolCallContext`
+            # is frozen against rebinding only: its `arguments` is the same mapping
+            # object as `ctx.params["arguments"]`, so a middleware that mutates it in
+            # place does rewrite the call the tool receives. Rewriting deliberately
+            # should go through the SDK's own `replace(ctx, params=...)`.
             return await call_next(ctx)
 
         chain = compose(middlewares, terminal)

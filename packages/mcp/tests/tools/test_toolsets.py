@@ -9,7 +9,7 @@ which is the point — the guard is the repo's tool-surface completeness gate.
 from itertools import combinations
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
 from pipefy_mcp.tools.toolsets import (
@@ -141,14 +141,14 @@ class TestWantsPower:
         assert wants_power(spec) is False
 
 
-def _registry_with_all_tools() -> tuple[ToolRegistry, FastMCP]:
-    mcp = FastMCP("toolset-selection-test")
+def _registry_with_all_tools() -> tuple[ToolRegistry, MCPServer]:
+    mcp = MCPServer("toolset-selection-test")
     registry = ToolRegistry(mcp=mcp)
     registry.register_tools()
     return registry, mcp
 
 
-def _live_pipefy_names(mcp: FastMCP) -> set[str]:
+def _live_pipefy_names(mcp: MCPServer) -> set[str]:
     return {t.name for t in mcp._tool_manager.list_tools()} & set(PIPEFY_TOOL_NAMES)
 
 

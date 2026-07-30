@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
 
@@ -11,7 +11,7 @@ class TestToolRegistry:
 
     def test_init_sets_attributes(self):
         """Test that __init__ sets mcp and pipefy_tool_names attributes"""
-        mock_mcp = Mock(spec=FastMCP)
+        mock_mcp = Mock(spec=MCPServer)
 
         registry = ToolRegistry(mcp=mock_mcp)
 
@@ -46,7 +46,7 @@ class TestToolRegistry:
         mock_observability_tools_register,
     ):
         """Each tool group is registered once, with the app and no client."""
-        mock_mcp = Mock(spec=FastMCP)
+        mock_mcp = Mock(spec=MCPServer)
 
         registry = ToolRegistry(mcp=mock_mcp)
         registry.register_tools()
@@ -78,7 +78,7 @@ class TestToolRegistry:
         initialized services. The absence of a live client only surfaces when a
         tool is actually invoked.
         """
-        mock_mcp = Mock(spec=FastMCP)
+        mock_mcp = Mock(spec=MCPServer)
 
         registry = ToolRegistry(mcp=mock_mcp)
 
@@ -115,7 +115,7 @@ class TestToolRegistry:
         mock_introspection_tools_register,
         mock_observability_tools_register,
     ):
-        mock_mcp = Mock(spec=FastMCP)
+        mock_mcp = Mock(spec=MCPServer)
 
         registry = ToolRegistry(mcp=mock_mcp)
         registry.register_tools()
@@ -140,7 +140,7 @@ class TestToolRegistry:
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
     def test_register_tools_records_pipefy_tool_names_on_real_fastmcp(self):
-        mcp = FastMCP("tool-registry-names")
+        mcp = MCPServer("tool-registry-names")
         registry = ToolRegistry(mcp=mcp)
         registry.register_tools()
 
@@ -149,7 +149,7 @@ class TestToolRegistry:
         assert len(registry.pipefy_tool_names) > 50
 
     def test_check_for_name_collisions_raises_when_pipefy_name_already_registered(self):
-        mock_mcp = Mock(spec=FastMCP)
+        mock_mcp = Mock(spec=MCPServer)
         registry = ToolRegistry(mcp=mock_mcp)
         with patch.object(
             ToolRegistry,
@@ -162,7 +162,7 @@ class TestToolRegistry:
                 registry.check_for_name_collisions()
 
     def test_check_for_name_collisions_ok_when_no_overlap(self):
-        mock_mcp = Mock(spec=FastMCP)
+        mock_mcp = Mock(spec=MCPServer)
         registry = ToolRegistry(mcp=mock_mcp)
         with patch.object(
             ToolRegistry,

@@ -4,7 +4,7 @@ import json
 from contextlib import asynccontextmanager
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.auth import RequestScopedIdentity
 from pipefy_mcp.core.runtime import McpRuntime
@@ -29,7 +29,7 @@ def build_tool_test_server(name, register, client):
         runtime.session_for_request = lambda _req: client
         yield runtime
 
-    mcp = FastMCP(name, lifespan=_lifespan)
+    mcp = MCPServer(name, lifespan=_lifespan)
     register(mcp)
     return mcp
 

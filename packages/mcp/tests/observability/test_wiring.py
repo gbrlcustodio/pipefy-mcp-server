@@ -16,7 +16,7 @@ import httpx
 import pytest
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from starlette.applications import Starlette
 
 from pipefy_mcp.auth.resource_server import PipefyAccessToken
@@ -64,7 +64,7 @@ def _read_log_lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, Any]]:
 
 
 def _build_auth_http_app() -> Starlette:
-    app = FastMCP(
+    app = MCPServer(
         "wiring-identity",
         token_verifier=_StubTokenVerifier(),
         auth=FastMcpAuthSettings(

@@ -15,8 +15,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
-from mcp.server.fastmcp import Context
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context
 from typing_extensions import NotRequired, TypedDict
 
 
@@ -39,7 +38,7 @@ class DestructiveCancelledPayload(TypedDict):
 
 
 async def check_destructive_confirmation(
-    _ctx: Context[ServerSession, None],
+    _ctx: Context,
     *,
     confirm: bool,
     resource_descriptor: str,

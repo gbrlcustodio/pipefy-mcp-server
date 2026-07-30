@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from mcp import ClientSession
-from mcp.shared.context import RequestContext
+from mcp.server import ServerRequestContext
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -98,7 +98,7 @@ def pipe_id() -> int:
 
 def elicitation_callback_for(action, content=None):
     async def callback(
-        context: RequestContext[ClientSession, Any],
+        context: ServerRequestContext[ClientSession, Any],
         params: ElicitRequestParams,
     ) -> ElicitResult:
         return ElicitResult(action=action, content=content)
@@ -111,7 +111,7 @@ def elicitation_callback_raises(exc=None):
     _exc = exc if exc is not None else RuntimeError("elicit failed")
 
     async def callback(
-        context: RequestContext[ClientSession, Any],
+        context: ServerRequestContext[ClientSession, Any],
         params: ElicitRequestParams,
     ) -> ElicitResult:
         raise _exc

@@ -22,9 +22,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp.exceptions import ToolError
-from mcp.server.fastmcp.tools.base import Tool
-from mcp.server.fastmcp.tools.tool_manager import ToolManager
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.tools.base import Tool
+from mcp.server.mcpserver.tools.tool_manager import ToolManager
 from pydantic import ValidationError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
@@ -32,9 +32,8 @@ from pipefy_mcp.core.tool_error_envelope import tool_error
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from mcp.server.fastmcp.server import Context
-    from mcp.server.session import ServerSessionT
-    from mcp.shared.context import LifespanContextT, RequestT
+    from mcp.server.context import LifespanContextT, RequestT
+    from mcp.server.mcpserver.context import Context
     from mcp.types import Icon, ToolAnnotations
 
 __all__ = [
@@ -104,7 +103,7 @@ class PipefyValidationTool(Tool):
     async def run(
         self,
         arguments: dict[str, Any],
-        context: Context[ServerSessionT, LifespanContextT, RequestT] | None = None,
+        context: Context[LifespanContextT, RequestT] | None = None,
         convert_result: bool = False,
     ) -> Any:
         """Run the tool, rewrapping arg-coercion ``ValidationError`` as an envelope."""

@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 import anyio
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.core.tool_middleware import (
@@ -30,7 +30,7 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
 
 def _make_lifespan(
     runtime: McpRuntime,
-) -> Callable[[FastMCP], AbstractAsyncContextManager[McpRuntime]]:
+) -> Callable[[MCPServer], AbstractAsyncContextManager[McpRuntime]]:
     """Build the FastMCP lifespan bound to the one app-scoped ``runtime``.
 
     Following the FastMCP lifespan contract, the lifespan owns resources only: it
@@ -50,7 +50,7 @@ def _make_lifespan(
     """
 
     @asynccontextmanager
-    async def lifespan(_app: FastMCP) -> AsyncIterator[McpRuntime]:
+    async def lifespan(_app: MCPServer) -> AsyncIterator[McpRuntime]:
         logger.info(
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
             "enabled" if runtime.unified_envelope else "disabled",
@@ -61,7 +61,7 @@ def _make_lifespan(
 
 
 def _register_pipefy_tools(
-    app: FastMCP, *, remote_mode: bool, toolsets: str | None
+    app: MCPServer, *, remote_mode: bool, toolsets: str | None
 ) -> None:
     """Register every Pipefy tool on ``app`` exactly once, at construction.
 
@@ -110,7 +110,7 @@ def default_tool_middlewares(settings: Settings) -> list[ToolCallMiddleware]:
 def build_pipefy_mcp_server(
     settings: Settings,
     extra_tool_middlewares: Sequence[ToolCallMiddleware] = (),
-) -> FastMCP:
+) -> MCPServer:
     """Build the FastMCP app with its tools registered once, before serving.
 
     Reads everything from the resolved ``settings`` the composition root
@@ -140,7 +140,7 @@ def build_pipefy_mcp_server(
     """
     runtime = McpRuntime.for_profile(settings)
     verifier, auth = runtime.inbound_auth or (None, None)
-    app = FastMCP(
+    app = MCPServer(
         "pipefy",
         instructions=PIPEFY_INSTRUCTIONS,
         lifespan=_make_lifespan(runtime),
@@ -165,7 +165,7 @@ def build_pipefy_mcp_server(
     return app
 
 
-async def _serve_streamable_http(app: FastMCP, settings: Settings) -> None:
+async def _serve_streamable_http(app: MCPServer, settings: Settings) -> None:
     """Serve Streamable HTTP with hosted observability middleware wired in.
 
     The structured emitter is configured here, not in :func:`run_server`, so the

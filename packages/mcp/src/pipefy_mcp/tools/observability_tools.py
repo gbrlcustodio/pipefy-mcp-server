@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     AUTOMATION_EVENT_IDS,
@@ -70,7 +70,7 @@ class ObservabilityTools:
     """MCP tools for monitoring AI agent and automation execution."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
             meta=REMOTE,

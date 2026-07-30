@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.core.fastmcp_tool_lifecycle import remove_fastmcp_tools_by_name
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
@@ -32,7 +32,7 @@ from pipefy_mcp.tools.toolsets import POWER_GRAPHQL_TOOLS, resolve_selection
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp.tools.base import Tool
+    from mcp.server.mcpserver.tools.base import Tool
 
 logger = logging.getLogger(__name__)
 
@@ -259,12 +259,12 @@ _TOOLSETS = (
 class ToolRegistry:
     """Responsible for registering tools with the MCP server."""
 
-    def __init__(self, mcp: FastMCP):
+    def __init__(self, mcp: MCPServer):
         self.mcp = mcp
         self.pipefy_tool_names: frozenset[str] = PIPEFY_TOOL_NAMES
 
     @staticmethod
-    def _snapshot_tool_names(mcp: FastMCP) -> set[str]:
+    def _snapshot_tool_names(mcp: MCPServer) -> set[str]:
         return {tool.name for tool in mcp._tool_manager.list_tools()}
 
     def check_for_name_collisions(self) -> None:

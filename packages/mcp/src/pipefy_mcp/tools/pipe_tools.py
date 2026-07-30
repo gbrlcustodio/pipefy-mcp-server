@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     CardSearch,
@@ -86,7 +85,7 @@ class PipeTools:
     """Declares tools to be used in the Pipe context."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register the tools in the MCP server"""
 
         @mcp.tool(
@@ -94,7 +93,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def create_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             title: str | None = None,
             fields: dict[str, Any] | None = None,
@@ -286,7 +285,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             include_fields: bool = False,
             debug: bool = False,
@@ -330,7 +329,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_card_relations(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -394,7 +393,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def add_card_comment(
-            card_id: PipefyId, text: str, ctx: Context[ServerSession, None]
+            card_id: PipefyId, text: str, ctx: Context
         ) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
 
@@ -432,7 +431,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def update_comment(
-            comment_id: PipefyId, text: str, ctx: Context[ServerSession, None]
+            comment_id: PipefyId, text: str, ctx: Context
         ) -> UpdateCommentPayload:
             """Update an existing comment by its ID.
 
@@ -471,7 +470,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_comment(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             comment_id: PipefyId,
             confirm: bool = False,
         ) -> DeleteCommentPayload:
@@ -521,7 +520,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_card_relation(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             child_id: PipefyId,
             parent_id: PipefyId,
             source_id: PipefyId,
@@ -602,7 +601,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_cards(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             title: str | None = None,
             search: CardSearch | None = None,
@@ -680,7 +679,7 @@ class PipeTools:
             pipe_id: PipefyId,
             field_id: str,
             field_value: str,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             include_fields: bool = False,
             first: int | None = None,
             after: str | None = None,
@@ -740,7 +739,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_pipe(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -783,7 +782,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_labels(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -837,7 +836,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_pipe_members(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -878,7 +877,7 @@ class PipeTools:
         async def move_card_to_phase(
             card_id: PipefyId,
             destination_phase_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
         ) -> dict:
             """Move a card to a target phase (Kanban column) within the same pipe.
 
@@ -919,7 +918,7 @@ class PipeTools:
             card_id: PipefyId,
             field_id: str,
             new_value: Any,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             debug: bool = False,
         ) -> dict:
             """Update a single field of a card.
@@ -962,7 +961,7 @@ class PipeTools:
         )
         async def update_card(
             card_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             title: str | None = None,
             assignee_ids: list[PipefyId] | None = None,
             label_ids: list[PipefyId] | None = None,
@@ -1024,7 +1023,7 @@ class PipeTools:
         )
         async def get_start_form_fields(
             pipe_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             required_only: bool = False,
         ) -> dict:
             """Get the start form fields of a pipe.
@@ -1060,7 +1059,7 @@ class PipeTools:
         )
         async def get_phase_fields(
             phase_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             required_only: bool = False,
         ) -> dict:
             """Get the fields available in a specific phase.
@@ -1096,7 +1095,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def fill_card_phase_fields(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             phase_id: PipefyId,
             fields: dict[str, Any] | None = None,
@@ -1187,7 +1186,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def search_pipes(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_name: str | None = None,
             max_pipes_per_org: int = 500,
         ) -> dict:
@@ -1238,7 +1237,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
@@ -1333,7 +1332,7 @@ class PipeTools:
         message: str,
         prefilled_fields: dict[str, Any] | None,
         expected_fields: list,
-        ctx: Context[ServerSession, None],
+        ctx: Context,
     ) -> dict:
         """Handle interactive field elicitation."""
         DynamicFormModel = create_form_model(expected_fields, prefilled_fields)

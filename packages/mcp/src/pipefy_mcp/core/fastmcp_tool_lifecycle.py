@@ -9,22 +9,22 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
 logger = logging.getLogger(__name__)
 
 
-def remove_fastmcp_tools_by_name(app: FastMCP, names: set[str]) -> None:
+def remove_fastmcp_tools_by_name(app: MCPServer, names: set[str]) -> None:
     """Remove tools registered on ``app`` by exact name.
 
     Removes only the named tools, leaving third-party or test-registered tools
     intact (used to withhold non-remote-safe tools under the remote profile).
 
     Args:
-        app: FastMCP server instance.
+        app: MCPServer server instance.
         names: Names as returned by the tool manager (must match ``remove_tool``).
 
     """

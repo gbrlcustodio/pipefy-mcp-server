@@ -3,8 +3,8 @@
 from datetime import timedelta
 
 import pytest
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import UrlElicitationRequiredError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -22,7 +22,7 @@ from tools.conftest import assert_invalid_arguments_envelope
 
 @pytest.fixture
 def mcp_server():
-    mcp = FastMCP("envelope-test-server")
+    mcp = MCPServer("envelope-test-server")
 
     @mcp.tool(description="Probe tool for envelope tests.")
     async def probe(pipe_id: int, actions: list[str], confirm: bool = False) -> dict:

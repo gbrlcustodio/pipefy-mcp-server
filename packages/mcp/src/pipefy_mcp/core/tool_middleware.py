@@ -4,7 +4,7 @@ The server needs a seam to run cross-cutting logic around each tool call. Some o
 it spans every deployment (observability, and downstream protection such as
 honoring the API's 429s or circuit-breaking); some is specific to the multi-tenant
 hosted profile (per-user quotas, rate limiting, and cost attribution keyed on the
-validated caller). The MCP SDK offers no such seam: FastMCP dispatches every tool
+validated caller). The MCP SDK offers no such seam: MCPServer dispatches every tool
 call through a single ``CallToolRequest`` entry in the low-level server's
 ``request_handlers`` dict, and the only way to observe or govern a call is to
 overwrite that one private slot, so the next feature that needs it clobbers the
@@ -41,7 +41,7 @@ from pipefy_mcp.auth.request_identity import CallerIdentity, caller_identity
 from pipefy_mcp.core.tool_error_envelope import tool_error
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
 __all__ = [
     "CallNext",
@@ -73,7 +73,7 @@ class ToolCallContext:
 
     ``tool_name`` and ``arguments`` are read-only views over ``req.params``, so the
     context cannot drift from the request it wraps. ``arguments`` is the raw
-    JSON-RPC argument map: FastMCP registers the terminal with
+    JSON-RPC argument map: MCPServer registers the terminal with
     ``validate_input=False`` and does its own coercion/defaulting downstream, so
     middleware observes the un-coerced, client-sent arguments. ``argument_keys`` is
     the bounded, values-free view a privacy-sensitive consumer (logging) should
@@ -219,11 +219,11 @@ def short_circuit_error(
 
 
 def install_tool_call_middleware(
-    app: FastMCP, middlewares: Sequence[ToolCallMiddleware]
+    app: MCPServer, middlewares: Sequence[ToolCallMiddleware]
 ) -> None:
     """Wrap ``app``'s ``CallToolRequest`` handler with the composed chain, once.
 
-    A no-op when ``middlewares`` is empty: FastMCP's handler is left untouched, so
+    A no-op when ``middlewares`` is empty: MCPServer's handler is left untouched, so
     the default (no middleware) path pays nothing per call rather than routing every
     tool call through a pass-through wrapper that builds and discards a context.
 

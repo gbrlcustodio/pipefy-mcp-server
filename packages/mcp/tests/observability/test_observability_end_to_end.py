@@ -24,7 +24,7 @@ from typing import Any
 import anyio
 import httpx
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.core.tool_middleware import install_tool_call_middleware
 from pipefy_mcp.observability.json_logging import (
@@ -78,7 +78,7 @@ def _call_tool_body(request_id: int, text: str) -> dict[str, Any]:
 async def test_two_calls_in_one_session_correlate_to_their_own_posts(capsys):
     configure_observability_logging()
 
-    app = FastMCP("obs-e2e")
+    app = MCPServer("obs-e2e")
     app.settings.json_response = True
 
     @app.tool()

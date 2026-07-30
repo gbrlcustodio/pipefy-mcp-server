@@ -5,7 +5,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -54,7 +54,7 @@ def build_ipaas_test_server(client, gateway, *, remote=False):
         runtime._ipaas_gateway = gateway
         yield runtime
 
-    mcp = FastMCP("Pipefy iPaaS Tools Test", lifespan=_lifespan)
+    mcp = MCPServer("Pipefy iPaaS Tools Test", lifespan=_lifespan)
     IpaasTools.register(mcp)
     return mcp
 

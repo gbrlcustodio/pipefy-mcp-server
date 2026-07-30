@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.tools.introspection_tool_helpers import (
@@ -19,7 +19,7 @@ class IntrospectionTools:
     """Registers MCP tools for schema introspection and ``execute_graphql``."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register introspection-related tools on the MCP server."""
 
         @mcp.tool(

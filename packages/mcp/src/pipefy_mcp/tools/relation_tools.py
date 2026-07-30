@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
@@ -28,7 +27,7 @@ class RelationTools:
     """MCP tools for relations between pipes/tables and linked cards."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
             meta=REMOTE,
@@ -227,7 +226,7 @@ class RelationTools:
             meta=REMOTE,
         )
         async def delete_pipe_relation(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             relation_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,

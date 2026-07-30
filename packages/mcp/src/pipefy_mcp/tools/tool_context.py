@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.core.ipaas_gateway import IpaasGateway

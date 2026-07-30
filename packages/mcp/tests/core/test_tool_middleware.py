@@ -13,9 +13,9 @@ from contextlib import contextmanager
 
 import pytest
 from mcp import types
-from mcp.server.fastmcp import FastMCP
+from mcp.server import ServerRequestContext
 from mcp.server.lowlevel.server import request_ctx
-from mcp.shared.context import RequestContext
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.core.tool_middleware import (
@@ -27,8 +27,8 @@ from pipefy_mcp.core.tool_middleware import (
 )
 
 
-def _app() -> FastMCP:
-    app = FastMCP("test")
+def _app() -> MCPServer:
+    app = MCPServer("test")
 
     @app.tool()
     async def echo(x: int) -> str:
@@ -63,7 +63,7 @@ async def _noop(ctx: ToolCallContext, call_next):
 def _message_scope(request_id: str = "req-1"):
     """Enter a request scope for one JSON-RPC message (stdio-like: no HTTP request)."""
     token = request_ctx.set(
-        RequestContext(
+        ServerRequestContext(
             request_id=request_id,
             meta=None,
             session=None,  # type: ignore[arg-type]
@@ -77,7 +77,7 @@ def _message_scope(request_id: str = "req-1"):
         request_ctx.reset(token)
 
 
-async def _invoke(app: FastMCP, req: types.CallToolRequest) -> types.ServerResult:
+async def _invoke(app: MCPServer, req: types.CallToolRequest) -> types.ServerResult:
     """Run the app's (wrapped) CallToolRequest handler inside a request scope."""
     handler = app._mcp_server.request_handlers[types.CallToolRequest]
     with _message_scope():
@@ -198,7 +198,7 @@ def test_short_circuit_matches_the_in_tool_error_envelope():
 
     A governance stop should carry the same ``tool_error`` payload an agent gets when a
     tool runs and fails, so the client needs no special-casing. The two are compared on
-    the parsed envelope, not the bytes: FastMCP serializes a dict return through its own
+    the parsed envelope, not the bytes: MCPServer serializes a dict return through its own
     encoder (non-ASCII left raw, ``structuredContent`` unset for a schema-less tool),
     while ``short_circuit_error`` uses ``json.dumps`` and fills ``structuredContent``.
     Comparing decoded JSON pins the contract that matters and fails loud if either
@@ -208,7 +208,7 @@ def test_short_circuit_matches_the_in_tool_error_envelope():
     """
     message, code, details = "blocked", "DENIED", {"reason": "quota (café)"}
 
-    app = FastMCP("parity")
+    app = MCPServer("parity")
 
     @app.tool()
     async def failing() -> dict:
@@ -230,7 +230,7 @@ def test_short_circuit_matches_the_in_tool_error_envelope():
 
 @pytest.mark.unit
 def test_install_with_no_middleware_leaves_the_handler_untouched():
-    """An empty chain is a no-op: FastMCP's own handler stays in place."""
+    """An empty chain is a no-op: MCPServer's own handler stays in place."""
     app = _app()
     original = app._mcp_server.request_handlers[types.CallToolRequest]
     install_tool_call_middleware(app, [])

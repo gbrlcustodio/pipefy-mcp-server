@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 from pipefy_sdk.models.portal import (
@@ -41,7 +40,7 @@ class PortalTools:
     """Registers MCP tools for portal read, metadata CRUD, and page operations."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register portal-related tools on the MCP server."""
 
         @mcp.tool(
@@ -49,7 +48,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def list_portals(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             organization_uuid: PipefyId,
             search_term: str | None = None,
         ) -> dict[str, Any]:
@@ -89,7 +88,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def get_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
         ) -> dict[str, Any]:
             """Fetch a portal by UUID with pages, elements, and sub-portals.
@@ -126,7 +125,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def create_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             organization_uuid: PipefyId,
         ) -> dict[str, Any]:
             """Create or fetch the organization's main portal (idempotent).
@@ -156,7 +155,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             name: str | None = None,
             visibility: PortalVisibility | None = None,
@@ -222,7 +221,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             confirm: bool = False,
         ) -> dict[str, Any]:
@@ -267,7 +266,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def create_portal_page(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             title: str,
             description: str | None = None,
@@ -322,7 +321,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_portal_page(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             page_id: str,
             title: str | None = None,
@@ -391,7 +390,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_portal_page(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             page_id: str,
             confirm: bool = False,
@@ -444,7 +443,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def sort_portal_pages(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             page_ids: list[str],
         ) -> dict[str, Any]:
@@ -491,7 +490,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_portal_page_layout(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             page_id: str,
             layout: dict[str, Any],
         ) -> dict[str, Any]:
@@ -525,7 +524,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def create_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             page_id: str,
             type: PortalElementType,
             metadata: dict[str, Any],
@@ -598,7 +597,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             element_id: str,
             page_id: str,
             type: PortalElementType,
@@ -673,7 +672,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             element_id: str,
             page_id: str,
             confirm: bool = False,
@@ -726,7 +725,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def duplicate_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             element_id: str,
             portal_uuid: str,
             page_id: str,
@@ -771,7 +770,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def create_sub_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             main_portal_uuid: str,
             name: str | None = None,
         ) -> dict[str, Any]:
@@ -810,7 +809,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_sub_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             element_id: str,
             sub_portal_uuid: str,
@@ -857,7 +856,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def publish_sub_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             element_id: str,
             sub_portal_uuid: str,
@@ -902,7 +901,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def unpublish_sub_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             element_id: str,
         ) -> dict[str, Any]:
@@ -946,7 +945,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_sub_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             element_id: str,
             confirm: bool = False,
@@ -1008,7 +1007,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_sub_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             sub_portal_uuid: str,
             confirm: bool = False,
         ) -> dict[str, Any]:

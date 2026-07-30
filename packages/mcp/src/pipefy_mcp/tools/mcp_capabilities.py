@@ -6,11 +6,10 @@ MCP transports and SDK versions differ in whether ``client_params`` and nested
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import Context
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context
 
 
-def supports_elicitation(ctx: Context[ServerSession, None]) -> bool:
+def supports_elicitation(ctx: Context) -> bool:
     """Return whether the connected client advertises elicitation support.
 
     Args:

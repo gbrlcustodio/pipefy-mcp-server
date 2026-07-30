@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import classify_exception
 
@@ -95,7 +95,7 @@ class LlmProviderTools:
     """Declares MCP tools for LLM provider discovery, writes, and the access probe."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register LLM provider tools on the MCP server."""
 
         @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)

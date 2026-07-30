@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 from _rs_fixtures import RS_ISSUER, RS_JWKS_URI, RS_RESOURCE, remote_rs_settings
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -282,7 +282,7 @@ async def test_lifespan_yields_the_runtime_without_registering(
     mocked_runtime,
 ):
     """The lifespan yields the app-scoped runtime and adds no tools."""
-    app = FastMCP("lifespan-resources-test")
+    app = MCPServer("lifespan-resources-test")
 
     @app.tool()
     async def foreign_mcp_tool() -> str:
@@ -308,7 +308,7 @@ async def test_repeat_lifespan_yields_the_same_runtime_and_leaves_tools_untouche
     client wired at construction) is shared across entries, and the tool table is
     never mutated.
     """
-    app = FastMCP("lifespan-repeat-test")
+    app = MCPServer("lifespan-repeat-test")
 
     @app.tool()
     async def foreign_mcp_tool() -> str:
@@ -649,7 +649,7 @@ async def test_http_loopback_default_rejects_a_public_host(mocked_runtime):
     """The default (loopback-only) allowlist answers 421 to a public Host header.
 
     This is the behavior a fronted deployment hits before the allowlist is
-    configured: FastMCP auto-enables the loopback allowlist on the 127.0.0.1
+    configured: MCPServer auto-enables the loopback allowlist on the 127.0.0.1
     construction host, so a proxied public Host is a DNS-rebinding rejection.
     """
     app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)

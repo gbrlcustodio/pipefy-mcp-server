@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
@@ -40,7 +39,7 @@ class ReportTools:
     """MCP tools for reading, managing, and exporting pipe and organization reports."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
             meta=REMOTE,
@@ -109,7 +108,7 @@ class ReportTools:
             meta=REMOTE,
         )
         async def get_pipe_report(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_uuid: str,
             report_id: PipefyId,
             debug: bool = False,
@@ -510,7 +509,7 @@ class ReportTools:
             meta=REMOTE,
         )
         async def delete_pipe_report(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             report_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
@@ -676,7 +675,7 @@ class ReportTools:
             meta=REMOTE,
         )
         async def delete_organization_report(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             report_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,

@@ -18,9 +18,13 @@ in list order, may short-circuit (return an error result without invoking the
 tool), and read the validated caller from the per-message request context.
 
 The wrap targets ``app._mcp_server.request_handlers[CallToolRequest]`` and is
-tested against ``mcp==1.25.0``. If that pin moves, re-verify the handler is still
+tested against ``mcp==1.29.0``. If that pin moves, re-verify the handler is still
 a single ``async def handler(req: CallToolRequest) -> ServerResult`` populated by
 ``FastMCP._setup_handlers``.
+
+``mcp`` 2.x removes the ``request_handlers`` dict and offers a supported
+``ServerMiddleware`` seam in its place, so crossing the ``<2`` bound replaces this
+module's mechanism rather than adjusting it (see #543).
 """
 
 from __future__ import annotations

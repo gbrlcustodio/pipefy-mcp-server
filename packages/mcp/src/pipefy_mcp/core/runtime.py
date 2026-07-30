@@ -68,7 +68,16 @@ class McpRuntime:
         # call time (#405; see the "Process-global configuration" section of AGENTS.md).
         self.is_remote = settings.mcp.profile == "remote"
         self.unified_envelope = settings.mcp.unified_envelope
-        self._engine = PipefyEngine.build(settings.pipefy, surface="mcp")
+        # The client telemetry deployment is derived from the resolved profile, not
+        # configured: a hosted remote-profile server and a user's local stdio install
+        # both run the `mcp` surface, so the surface alone cannot tell them apart
+        # (#550). Deriving it here keeps the property #336 established for the
+        # surface — stamped at the composition root, never read from env or TOML.
+        self._engine = PipefyEngine.build(
+            settings.pipefy,
+            surface="mcp",
+            deployment="hosted" if self.is_remote else "local",
+        )
         # Per-deployment iPaaS wiring; None only when the operator blanks the
         # client id, and the iPaaS tools then report the capability disabled.
         self._ipaas_gateway = (

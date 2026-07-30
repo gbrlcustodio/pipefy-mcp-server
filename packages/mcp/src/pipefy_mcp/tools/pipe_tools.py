@@ -22,6 +22,7 @@ from pipefy_sdk import (
 from pipefy_sdk import (
     filter_fields_by_definitions as _filter_fields_by_definitions,
 )
+from pipefy_sdk.exceptions import MalformedPipefyResponseError
 from pipefy_sdk.models.form import MalformedFieldDefinitionError
 from pydantic import ValidationError
 
@@ -418,6 +419,8 @@ class PipeTools:
                 comment_id = await client.add_card_comment(
                     card_id=comment_input.card_id, text=comment_input.text
                 )
+            except MalformedPipefyResponseError as exc:
+                return build_add_card_comment_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return build_add_card_comment_error_payload(
                     message=map_add_card_comment_error_to_message(exc)
@@ -453,6 +456,8 @@ class PipeTools:
                 comment_id_out = await client.update_comment(
                     update_input.comment_id, update_input.text
                 )
+            except MalformedPipefyResponseError as exc:
+                return build_update_comment_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return build_update_comment_error_payload(
                     message=map_update_comment_error_to_message(exc)

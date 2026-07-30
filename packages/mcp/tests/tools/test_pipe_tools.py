@@ -15,7 +15,11 @@ from mcp.types import (
     ElicitRequestParams,
     ElicitResult,
 )
-from pipefy_sdk import PipefyClient, PipefyGraphQLError
+from pipefy_sdk import (
+    MalformedPipefyResponseError,
+    PipefyClient,
+    PipefyGraphQLError,
+)
 
 from pipefy_mcp.auth import RequestScopedIdentity
 from pipefy_mcp.core.runtime import McpRuntime
@@ -1567,6 +1571,33 @@ class TestAddCardCommentTool:
         assert "Card not found" in tool_error_message(
             payload
         ) or "card_id" in tool_error_message(payload)
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_malformed_response_surfaces_the_may_have_landed_warning(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """A payload with no comment id must not be reported as a plain retryable failure."""
+        mock_pipefy_client.add_card_comment.side_effect = MalformedPipefyResponseError(
+            "Pipefy accepted createComment but returned no comment id. "
+            "The change may already be applied, so read the card's comments "
+            "before retrying."
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "add_card_comment",
+                {"card_id": 123, "text": "hello"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        msg = tool_error_message(payload)
+        assert "may already be applied" in msg
+        assert "Please try again" not in msg, (
+            "The generic retry hint would invite a duplicate comment here"
+        )
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_validation_error_text_over_limit_returns_explicit_length_message(

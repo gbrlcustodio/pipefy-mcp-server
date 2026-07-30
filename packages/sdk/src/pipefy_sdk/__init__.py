@@ -5,7 +5,11 @@ from __future__ import annotations
 __version__ = "0.3.0-beta.1"
 
 from pipefy_sdk.client import PipefyClient, PipefyEngine
-from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
+from pipefy_sdk.exceptions import (
+    MalformedPipefyResponseError,
+    PipefyAPIError,
+    PipefyError,
+)
 from pipefy_sdk.field_filters import (
     filter_editable_field_definitions,
     filter_fields_by_definitions,
@@ -150,6 +154,7 @@ __all__ = [
     "download_bytes",
     "filter_editable_field_definitions",
     "filter_fields_by_definitions",
+    "MalformedPipefyResponseError",
     "MePayload",
     "MemberInvite",
     "NonBlankStr",

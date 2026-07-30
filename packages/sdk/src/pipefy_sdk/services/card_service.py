@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from pipefy_sdk.exceptions import MalformedPipefyResponseError
 from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.card_queries import (
     CREATE_CARD_MUTATION,
@@ -23,6 +24,26 @@ from pipefy_sdk.utils.formatters import (
     convert_fields_to_array,
     convert_values_to_camel_case,
 )
+
+
+def _comment_id_from(response: Any, *, mutation: str) -> str:
+    """Return the comment id carried by a comment mutation payload.
+
+    Raises :class:`MalformedPipefyResponseError` rather than ``KeyError`` or
+    ``TypeError`` so callers can distinguish an accepted write whose payload was
+    unreadable from a rejected one, and warn instead of retrying into a
+    duplicate comment.
+    """
+    payload = response.get(mutation) if isinstance(response, dict) else None
+    comment = payload.get("comment") if isinstance(payload, dict) else None
+    comment_id = comment.get("id") if isinstance(comment, dict) else None
+    if comment_id is None or comment_id == "":
+        raise MalformedPipefyResponseError(
+            f"Pipefy accepted {mutation} but returned no comment id. "
+            "The change may already be applied, so read the card's comments "
+            "before retrying."
+        )
+    return str(comment_id)
 
 
 class CardService:
@@ -58,7 +79,7 @@ class CardService:
         response = await self._executor.execute_query(
             CREATE_COMMENT_MUTATION, variables
         )
-        return response["createComment"]["comment"]["id"]
+        return _comment_id_from(response, mutation="createComment")
 
     async def update_comment(self, comment_id: str | int, text: str) -> str:
         """Update an existing comment by its ID and return the id it echoed back."""
@@ -66,7 +87,7 @@ class CardService:
         response = await self._executor.execute_query(
             UPDATE_COMMENT_MUTATION, variables
         )
-        return response["updateComment"]["comment"]["id"]
+        return _comment_id_from(response, mutation="updateComment")
 
     async def delete_comment(self, comment_id: str | int) -> dict:
         """Delete a comment by its ID."""

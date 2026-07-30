@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from pipefy_sdk.exceptions import MalformedPipefyResponseError
+
 from pipefy_cli.main import app
 
 
@@ -629,6 +631,30 @@ def test_card_comment_add_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     assert result.exit_code == 0
     assert json.loads(result.stdout) == {"comment_id": "c1"}
     mock_client.add_card_comment.assert_awaited_once_with("501", "Hello from CLI")
+
+
+def test_card_comment_add_malformed_response_exits_1_with_message(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("cmt-malformed")
+    mock_client = MagicMock()
+    mock_client.add_card_comment = AsyncMock(
+        side_effect=MalformedPipefyResponseError(
+            "Pipefy accepted createComment but returned no comment id. "
+            "The change may already be applied, so read the card's comments "
+            "before retrying."
+        )
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["card", "comment", "add", "501", "Hello from CLI"],
+        )
+    assert result.exit_code == 1
+    assert "may already be applied" in result.stderr
 
 
 def test_card_comment_add_validation_exit_2(

@@ -6,6 +6,7 @@ Tests validate the card-related operations without requiring real API credential
 import pytest
 from _shared.mock_clients import mock_executor
 
+from pipefy_sdk.exceptions import MalformedPipefyResponseError
 from pipefy_sdk.queries.card_queries import (
     CREATE_CARD_MUTATION,
     FIND_CARDS_QUERY,
@@ -426,6 +427,41 @@ async def test_create_comment_variable_shape_and_returns_comment_id():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_comment_coerces_numeric_comment_id_to_string():
+    """Test create_comment returns a string even when the API sends a numeric id."""
+    service, _ = _make_service({"createComment": {"comment": {"id": 987}}})
+
+    assert await service.create_comment(1, "hi") == "987", "Expected coerced id"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"createComment": None},
+        {"createComment": {"comment": None}},
+        {"createComment": {"comment": {"id": None}}},
+        {"createComment": {"comment": {"id": ""}}},
+    ],
+)
+async def test_create_comment_without_id_raises_malformed_response(payload):
+    """Test create_comment raises a typed error instead of KeyError on a short payload."""
+    service, _ = _make_service(payload)
+
+    with pytest.raises(MalformedPipefyResponseError) as exc_info:
+        await service.create_comment(12345, "This is a comment")
+
+    message = str(exc_info.value)
+    assert "createComment" in message, "Expected the mutation named in the message"
+    assert "retrying" in message, (
+        "Expected the message to warn against a blind retry, since the write may have landed"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_update_comment_variable_shape_and_returns_comment_id():
     """Test update_comment sends correct input shape and returns the updated comment id."""
     comment_id = 12345
@@ -439,6 +475,29 @@ async def test_update_comment_variable_shape_and_returns_comment_id():
         "Expected correct input shape"
     )
     assert result == "c_999", "Expected the comment id, not the raw GraphQL payload"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"updateComment": None},
+        {"updateComment": {"comment": None}},
+        {"updateComment": {"comment": {"id": None}}},
+    ],
+)
+async def test_update_comment_without_id_raises_malformed_response(payload):
+    """Test update_comment raises a typed error instead of KeyError on a short payload."""
+    service, _ = _make_service(payload)
+
+    with pytest.raises(MalformedPipefyResponseError) as exc_info:
+        await service.update_comment(12345, "Updated comment text")
+
+    assert "updateComment" in str(exc_info.value), (
+        "Expected the mutation named in the message"
+    )
 
 
 @pytest.mark.unit

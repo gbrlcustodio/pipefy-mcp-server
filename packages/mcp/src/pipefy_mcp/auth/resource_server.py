@@ -2,8 +2,8 @@
 
 The HTTP transport acts as an OAuth resource server (RFC 6749 §1.1): it accepts
 an ``Authorization: Bearer`` on every request and validates the access token
-before any tool runs. :class:`JwtTokenVerifier` implements FastMCP's
-``TokenVerifier`` protocol so the SDK's bearer middleware drives it; FastMCP
+before any tool runs. :class:`JwtTokenVerifier` implements the SDK's
+``TokenVerifier`` protocol so the SDK's bearer middleware drives it; the SDK
 emits the ``401`` + ``WWW-Authenticate`` challenge and serves the RFC 9728
 protected-resource metadata around it.
 
@@ -14,7 +14,7 @@ the SDK's ``AccessToken`` and turns a validation failure into the ``None`` the
 protocol reads as "reject".
 
 :func:`build_resource_server_auth` constructs the verifier over a ``JwtValidator``
-and pairs it with FastMCP's ``AuthSettings`` for the server to wire in. It takes an
+and pairs it with the SDK's ``AuthSettings`` for the server to wire in. It takes an
 already-resolved issuer: the composition root
 (:meth:`pipefy_mcp.core.runtime.McpRuntime.for_profile`) resolves the inbound issuer
 and gates on it, so this builder only wires the resolved values in.
@@ -29,7 +29,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
-from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
+from mcp.server.auth.settings import AuthSettings as SdkAuthSettings
 from pipefy_auth import (
     AudiencePolicy,
     JwtValidationSettings,
@@ -95,7 +95,7 @@ def _parse_scopes(scope: Any) -> list[str]:
 
 
 class JwtTokenVerifier(TokenVerifier):
-    """Adapt :class:`~pipefy_auth.JwtValidator` to FastMCP's ``TokenVerifier``."""
+    """Adapt :class:`~pipefy_auth.JwtValidator` to the SDK's ``TokenVerifier``."""
 
     def __init__(self, validator: JwtValidator, *, resource: str | None = None) -> None:
         self._validator = validator
@@ -105,7 +105,7 @@ class JwtTokenVerifier(TokenVerifier):
         self._resource = resource
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        """Return the validated token, or ``None`` to reject it (FastMCP -> 401).
+        """Return the validated token, or ``None`` to reject it (the SDK -> 401).
 
         The validator is synchronous, so it runs off the event loop. Both a
         failed signature/claim check (``ValueError``, the base of
@@ -162,10 +162,10 @@ class JwtTokenVerifier(TokenVerifier):
         )
 
 
-# The (verifier, auth) pair the server threads into FastMCP for the
-# resource-server profile: the inbound bearer verifier and FastMCP's matching
+# The (verifier, auth) pair the server threads into the SDK for the
+# resource-server profile: the inbound bearer verifier and the SDK's matching
 # AuthSettings (RFC 9728 metadata + the 401 challenge).
-ResourceServerAuth = tuple[JwtTokenVerifier, FastMcpAuthSettings]
+ResourceServerAuth = tuple[JwtTokenVerifier, SdkAuthSettings]
 
 
 def build_resource_server_auth(
@@ -175,13 +175,13 @@ def build_resource_server_auth(
     issuer_url: str,
     required_scopes: list[str] | None = None,
 ) -> ResourceServerAuth:
-    """Build the inbound bearer verifier and FastMCP auth config for ``resource``.
+    """Build the inbound bearer verifier and the SDK auth config for ``resource``.
 
     Called only when the resource-server profile is active: the composition root
     parses the configured ``resource_server_url`` into ``resource`` and resolves the
     inbound ``issuer_url`` (gating on both, so an unresolvable issuer fails fast at
     the root). This receives an already-parsed identity and a resolved issuer and just
-    wires them onto the validator and FastMCP's ``AuthSettings``.
+    wires them onto the validator and the SDK's ``AuthSettings``.
     """
     # Fold the loose audience pair into the AudiencePolicy sum type. A
     # verify-without-audience is already rejected at JwtValidationSettings
@@ -200,7 +200,7 @@ def build_resource_server_auth(
         ),
         resource=resource.url,
     )
-    auth = FastMcpAuthSettings(
+    auth = SdkAuthSettings(
         issuer_url=issuer_url,
         resource_server_url=resource.url,
         required_scopes=required_scopes,

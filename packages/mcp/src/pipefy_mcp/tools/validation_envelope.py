@@ -1,6 +1,6 @@
-"""Rewrap FastMCP argument-validation errors as canonical tool-error envelopes.
+"""Rewrap SDK argument-validation errors as canonical tool-error envelopes.
 
-FastMCP's ``Tool.run`` catches any exception raised by
+The SDK's ``Tool.run`` catches any exception raised by
 ``fn_metadata.call_fn_with_arg_validation`` and wraps it as
 ``ToolError(f"Error executing tool {name}: {e}")``. For argument coercion
 failures the underlying cause is a ``pydantic.ValidationError`` whose default
@@ -12,8 +12,8 @@ string rendering leaks implementation details (``pydantic.dev`` URLs, internal
 Install once at server startup via :func:`install_pipefy_validation_envelope`.
 The patch is idempotent so repeated startup (e.g. in tests) does not stack.
 
-Tested against ``mcp == 1.29.0`` (``Tool.run`` signature in
-``mcp.server.fastmcp.tools.base``). If the upstream package is upgraded,
+Tested against ``mcp == 2.0.0`` (``Tool.run`` signature in
+``mcp.server.mcpserver.tools.base``). If the upstream package is upgraded,
 re-verify the ``call_fn_with_arg_validation`` / ``Tool.run`` contract.
 """
 
@@ -51,7 +51,7 @@ _PATCH_SENTINEL = "_pipefy_validation_envelope_patched"
 def _format_validation_errors(exc: ValidationError, tool_name: str) -> str:
     """Render a ``ValidationError`` as a single agent-friendly line.
 
-    The output never contains ``pydantic.dev`` URLs nor FastMCP-internal
+    The output never contains ``pydantic.dev`` URLs nor SDK-internal
     ``Arguments`` model names. Each error becomes a short clause; clauses are
     joined with ``"; "`` and prefixed with the offending tool name.
     """
@@ -91,7 +91,7 @@ def _serialize_errors(exc: ValidationError) -> list[dict[str, Any]]:
 
 
 class PipefyValidationTool(Tool):
-    """FastMCP ``Tool`` subclass that intercepts argument-validation errors.
+    """SDK ``Tool`` subclass that intercepts argument-validation errors.
 
     ``Tool.run`` wraps any exception as a ``ToolError`` whose ``__cause__`` is
     the underlying exception. We re-inspect that chain: when the cause is a

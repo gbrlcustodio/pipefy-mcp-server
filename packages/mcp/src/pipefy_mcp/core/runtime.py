@@ -35,7 +35,7 @@ class McpRuntime:
     settings into wired resources: the outbound identity (whose :meth:`resolve`
     backs each request's session), the HTTP transport's DNS-rebinding allowlist, and,
     under the ``remote`` profile, the inbound resource-server ``(verifier, auth)`` pair
-    FastMCP uses to validate each caller's bearer. It parses the ``resource_server_url``
+    the SDK uses to validate each caller's bearer. It parses the ``resource_server_url``
     into one :class:`ResourceServer` and feeds it to both the inbound-auth and the
     allowlist builders, so they cannot disagree on the resource host. It owns the
     process-scoped :class:`PipefyEngine` (the shared endpoints and GraphQL schema cache,

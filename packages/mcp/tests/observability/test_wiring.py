@@ -15,7 +15,7 @@ import anyio
 import httpx
 import pytest
 from mcp.server.auth.provider import AccessToken
-from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
+from mcp.server.auth.settings import AuthSettings as SdkAuthSettings
 from mcp.server.mcpserver import MCPServer
 from starlette.applications import Starlette
 
@@ -67,7 +67,7 @@ def _build_auth_http_app() -> Starlette:
     app = MCPServer(
         "wiring-identity",
         token_verifier=_StubTokenVerifier(),
-        auth=FastMcpAuthSettings(
+        auth=SdkAuthSettings(
             issuer_url="https://issuer.example.com",
             resource_server_url="https://mcp.example.com/mcp",
         ),

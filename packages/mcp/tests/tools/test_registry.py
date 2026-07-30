@@ -139,7 +139,7 @@ class TestToolRegistry:
             mock_register.assert_called_once_with(mock_mcp)
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
-    def test_register_tools_records_pipefy_tool_names_on_real_fastmcp(self):
+    def test_register_tools_records_pipefy_tool_names_on_real_server(self):
         mcp = MCPServer("tool-registry-names")
         registry = ToolRegistry(mcp=mcp)
         registry.register_tools()

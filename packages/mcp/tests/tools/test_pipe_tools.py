@@ -2806,7 +2806,7 @@ class TestSkipElicitation:
 # structured_output=False on comment/card mutation tools
 # =============================================================================
 #
-# These four tools used TypedDict return annotations, which FastMCP auto-detects
+# These four tools used TypedDict return annotations, which the SDK auto-detects
 # as structured output. The resulting ``CallToolResult`` carried a
 # ``structuredContent`` field that MCP clients surface wrapped in ``{"result":
 # {...}}`` — visually different from the 13 other ``delete_*`` tools that
@@ -2846,7 +2846,7 @@ async def test_comment_and_card_mutations_emit_unstructured_content(
 ):
     """Tools keep their TypedDict return hints for callers, but
     ``structured_output=False`` prevents the ``{"result": {...}}`` wrap that
-    FastMCP otherwise generates when a tool declares structured output."""
+    The SDK otherwise generates when a tool declares structured output."""
     if prep == "delete_card":
         mock_pipefy_client.get_card.return_value = {
             "card": {

@@ -2,7 +2,7 @@
 
 The adapter tests (claims -> AccessToken, reject -> None) use a stub validator to
 pin :class:`JwtTokenVerifier`'s two jobs: mapping validated claims onto the SDK
-``AccessToken`` and turning a validation failure into ``None`` (which FastMCP
+``AccessToken`` and turning a validation failure into ``None`` (which the SDK
 renders as a 401). The JWT/JWKS validation itself is covered in ``pipefy_auth``'s
 ``test_verification.py``. The builder tests pin that
 :func:`build_resource_server_auth` wires an already-resolved issuer onto the verifier

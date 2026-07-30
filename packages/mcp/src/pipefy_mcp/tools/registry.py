@@ -299,7 +299,7 @@ class ToolRegistry:
     def check_for_name_collisions(self) -> None:
         """Fail fast if any Pipefy tool name is already registered on the app.
 
-        FastMCP keeps the first handler when names collide; preflight avoids
+        The SDK keeps the first handler when names collide; preflight avoids
         silently running a foreign ``create_card`` (or other) handler.
         """
         existing = self._snapshot_tool_names(self.mcp)

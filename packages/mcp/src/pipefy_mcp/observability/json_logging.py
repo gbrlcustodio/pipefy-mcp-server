@@ -13,7 +13,7 @@ ToolCallOutcome = Literal["ok", "error", "cancelled", "elicitation"]
 OBSERVABILITY_LOGGER_NAME = "pipefy_mcp.observability.structured"
 
 # Structured events always emit at INFO on this logger. PIPEFY_MCP_LOG_LEVEL
-# governs the FastMCP root logger (text) only, so quieting noisy text logs does
+# governs the SDK root logger (text) only, so quieting noisy text logs does
 # not silently drop hosted request/tool lines.
 STRUCTURED_LOG_LEVEL = logging.INFO
 
@@ -76,7 +76,7 @@ def normalize_log_level(log_level: str) -> int:
 def configure_observability_logging() -> logging.Logger:
     """Attach a stderr JSON-line handler pinned at INFO (``propagate=False``).
 
-    Does not take ``PIPEFY_MCP_LOG_LEVEL``: that knob configures FastMCP's root
+    Does not take ``PIPEFY_MCP_LOG_LEVEL``: that knob configures the SDK's root
     logger only. Hosted structured lines stay at INFO so an operator can quiet
     text logs without losing request/tool debugging events.
     """

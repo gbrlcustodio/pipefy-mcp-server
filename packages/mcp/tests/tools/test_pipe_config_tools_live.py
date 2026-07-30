@@ -1,4 +1,4 @@
-"""Live MCP calls for pipe-building tools using the production FastMCP app.
+"""Live MCP calls for pipe-building tools using the production MCPServer app.
 
 Uses ``pipefy_mcp.server.mcp`` (same entrypoint as ``uv run pipeclaw``): lifespan,
 ToolRegistry, PipeConfigTools, and real PipefyClient. Skips when PIPEFY_* creds

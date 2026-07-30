@@ -33,7 +33,7 @@ TOOLS = [
 
 
 def build_ipaas_test_server(client, gateway, *, remote=False):
-    """A FastMCP server whose runtime serves ``client`` and ``gateway``.
+    """An MCPServer whose runtime serves ``client`` and ``gateway``.
 
     Mirrors ``build_tool_test_server`` (tools/conftest.py) and additionally
     plants the iPaaS gateway on the runtime (the property reads the instance

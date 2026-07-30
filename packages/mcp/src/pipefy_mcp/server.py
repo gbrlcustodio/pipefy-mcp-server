@@ -37,22 +37,23 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
 def _make_lifespan(
     runtime: McpRuntime,
 ) -> Callable[[MCPServer], AbstractAsyncContextManager[McpRuntime]]:
-    """Build the FastMCP lifespan bound to the one app-scoped ``runtime``.
+    """Build the SDK lifespan bound to the one app-scoped ``runtime``.
 
-    Following the FastMCP lifespan contract, the lifespan owns resources only: it
+    Following the SDK lifespan contract, the lifespan owns resources only: it
     yields the runtime as the request ``lifespan_context``. Tools resolve the live
     client per request from that context (see
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so both transports
     must run a lifespan for tools to find a client.
 
     The one runtime is built once at server construction (which builds its engine)
-    and captured here. Streamable HTTP re-enters this context manager per session;
-    each entry yields the same already-wired runtime, so every session shares one
-    engine and opens its own cheap per-request session. See AGENTS.md for the fuller
-    rationale.
+    and captured here. Under 2.0 Streamable HTTP enters this context manager once, at
+    session-manager startup, rather than per session; either way every entry yields
+    the same already-wired runtime, so all sessions share one engine and each opens
+    its own cheap per-request session. See AGENTS.md for the fuller rationale.
 
     Tools are registered once, up front, by :func:`_register_pipefy_tools`, never
-    here, so re-entry cannot race the tool table.
+    here, so registration cannot race the tool table regardless of how often the
+    lifespan runs.
     """
 
     @asynccontextmanager

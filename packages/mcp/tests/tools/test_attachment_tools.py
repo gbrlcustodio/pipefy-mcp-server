@@ -330,7 +330,7 @@ async def test_upload_attachment_to_card_validation_missing_source(
 
     Both sources are optional args, so arg-coercion succeeds and the DTO's
     exactly-one-of validator fires in the body as a ``step=validation`` error
-    (not the FastMCP arg-coercion INVALID_ARGUMENTS shape).
+    (not the SDK arg-coercion INVALID_ARGUMENTS shape).
     """
     async with attachment_session as session:
         result = await session.call_tool(

@@ -268,7 +268,7 @@ def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_runt
 
     The guard is ``check_for_name_collisions()``: the first pass already
     registered the Pipefy names on this app, so the second pass's preflight sees
-    them and raises. FastMCP's own ``add_tool`` would silently dedup duplicate
+    them and raises. the SDK's own ``add_tool`` would silently dedup duplicate
     names rather than raise, so the preflight is what makes re-registration safe
     to forbid. This is why registration runs once, at construction, and the
     lifespan (which Streamable HTTP re-enters per session) never re-registers.
@@ -574,14 +574,14 @@ def test_run_server_remote_serves_off_loopback_without_a_bind_guard(remote_rs_en
 
 @pytest.mark.unit
 def test_stdio_build_has_no_inbound_auth(mocked_runtime):
-    """The stdio profile builds with no inbound auth wired into FastMCP."""
+    """The stdio profile builds with no inbound auth wired into the SDK."""
     app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     assert app.settings.auth is None
 
 
 @pytest.mark.unit
 def test_build_with_resource_server_wires_inbound_auth():
-    """The remote profile with a configured RS wires FastMCP's auth + token verifier."""
+    """The remote profile with a configured RS wires the SDK's auth + token verifier."""
     app = build_pipefy_mcp_server(_REMOTE_RS_SETTINGS)
     assert app.settings.auth is not None
     assert str(app.settings.auth.resource_server_url).rstrip("/") == RS_RESOURCE
@@ -640,7 +640,7 @@ async def test_http_serves_protected_resource_metadata():
     assert RS_ISSUER in advertised
 
 
-# --- transport allowlist (DNS-rebinding) reaches FastMCP and the transport ----
+# --- transport allowlist (DNS-rebinding) reaches the transport ----
 
 _PUBLIC_HOST_PING = {
     "json": {"jsonrpc": "2.0", "method": "ping", "id": 1},

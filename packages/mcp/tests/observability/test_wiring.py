@@ -72,8 +72,8 @@ def _build_auth_http_app() -> Starlette:
             resource_server_url="https://mcp.example.com/mcp",
         ),
     )
-    app.settings.json_response = True
-    return wire_hosted_observability(app)
+    # 2.0 takes json_response on the transport call, not on server settings.
+    return wire_hosted_observability(app, json_response=True)
 
 
 @pytest.mark.anyio

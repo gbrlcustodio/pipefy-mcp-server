@@ -10,13 +10,13 @@ Run:
 from datetime import timedelta
 
 import pytest
+from _mcp_compat import (
+    create_connected_server_and_client_session as create_client_session,
+)
 from _shared.live_settings import (
     live_pipefy_settings,
     live_resolved_auth,
     require_live_creds,
-)
-from mcp.shared.memory import (
-    create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
@@ -57,7 +57,7 @@ async def test_live_mcp_introspect_type_query(
 ):
     async with live_introspection_session as session:
         result = await session.call_tool("introspect_type", {"type_name": "Query"})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "Query" in payload["result"]
@@ -75,7 +75,7 @@ async def test_live_mcp_introspect_mutation_create_card(
             "introspect_mutation",
             {"mutation_name": "createCard"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "createCard" in payload["result"]
@@ -88,7 +88,7 @@ async def test_live_mcp_introspect_mutation_create_card(
 async def test_live_mcp_search_schema_card(live_introspection_session, extract_payload):
     async with live_introspection_session as session:
         result = await session.call_tool("search_schema", {"keyword": "Card"})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "Card" in payload["result"]
@@ -105,7 +105,7 @@ async def test_live_mcp_execute_graphql_typename(
             "execute_graphql",
             {"query": "query T { __typename }", "variables": None},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "Query" in payload["result"]

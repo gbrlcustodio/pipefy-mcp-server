@@ -98,7 +98,7 @@ def assert_invalid_arguments_envelope(result):
     delivered as a structured success payload (``isError == False``), not as a
     transport-level error.
     """
-    assert result.isError is False, (
+    assert result.is_error is False, (
         "Expected a tool-error envelope (isError=False), got a transport error: "
         f"{result}"
     )

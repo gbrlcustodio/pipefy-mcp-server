@@ -1,3 +1,4 @@
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -5,16 +6,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from _rs_fixtures import RS_ISSUER, RS_JWKS_URI, RS_RESOURCE, remote_rs_settings
-from mcp.server.mcpserver import MCPServer
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _rs_fixtures import RS_ISSUER, RS_JWKS_URI, RS_RESOURCE, remote_rs_settings
+from mcp.server.mcpserver import MCPServer
 from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
-from pipefy_mcp.core.transport_security import build_transport_security
+from pipefy_mcp.core.transport_security import (
+    build_transport_security,
+    transport_security_for,
+)
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.server import (
     _make_lifespan,
@@ -102,13 +106,13 @@ async def test_register_tools(mocked_runtime):
 
 
 @pytest.mark.unit
-def test_build_pipefy_mcp_server_passes_log_level_to_fastmcp(mocked_runtime):
+def test_build_pipefy_mcp_server_passes_log_level_to_the_sdk(mocked_runtime):
     settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
         update={"mcp": McpSettings(log_level="WARNING")}
     )
-    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
+    with patch("pipefy_mcp.server.MCPServer") as mock_server:
         build_pipefy_mcp_server(settings)
-    assert mock_fastmcp.call_args.kwargs["log_level"] == "WARNING"
+    assert mock_server.call_args.kwargs["log_level"] == "WARNING"
 
 
 @pytest.mark.unit
@@ -254,7 +258,7 @@ async def test_extra_tool_middlewares_register_through_the_public_builder(
     async with session as s:
         result = await s.call_tool("get_organization", {})
 
-    assert result.isError is True
+    assert result.is_error is True
     assert json.loads(result.content[0].text)["error"]["code"] == "DENIED"
 
 
@@ -375,7 +379,12 @@ def test_run_server_local_profile_over_http_serves_without_inbound_auth():
     assert built_settings.mcp.profile == "local"
     assert built_settings.mcp.host == "127.0.0.1"
     assert built_settings.mcp.port == 9200
-    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+    mock_anyio_run.assert_called_once_with(
+        _serve_streamable_http,
+        fake_app,
+        settings,
+        transport_security_for(settings),
+    )
 
 
 @pytest.mark.unit
@@ -396,7 +405,12 @@ def test_run_server_remote_profile_defaults_to_http_transport(
         )
         run_server(settings)
 
-    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+    mock_anyio_run.assert_called_once_with(
+        _serve_streamable_http,
+        fake_app,
+        settings,
+        transport_security_for(settings),
+    )
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.profile == "remote"
 
@@ -420,7 +434,12 @@ def test_run_server_http_builds_the_app_and_serves_over_streamable_http(remote_r
     assert built_settings.mcp.profile == "remote"
     assert built_settings.mcp.host == "127.0.0.1"
     assert built_settings.mcp.port == 9123
-    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+    mock_anyio_run.assert_called_once_with(
+        _serve_streamable_http,
+        fake_app,
+        settings,
+        transport_security_for(settings),
+    )
 
 
 @pytest.mark.anyio
@@ -441,10 +460,12 @@ async def test_serve_streamable_http_disables_uvicorn_access_log(remote_rs_env):
         patch("uvicorn.Server") as mock_server_cls,
     ):
         mock_server_cls.return_value.serve = AsyncMock()
-        await _serve_streamable_http(fake_app, settings)
+        await _serve_streamable_http(fake_app, settings, None)
 
     mock_configure.assert_called_once_with()
-    mock_wire.assert_called_once_with(fake_app)
+    mock_wire.assert_called_once_with(
+        fake_app, host="127.0.0.1", transport_security=None
+    )
     mock_config_cls.assert_called_once_with(
         mock_http_app,
         host="127.0.0.1",
@@ -540,7 +561,12 @@ def test_run_server_remote_serves_off_loopback_without_a_bind_guard(remote_rs_en
 
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.host == "0.0.0.0"
-    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+    mock_anyio_run.assert_called_once_with(
+        _serve_streamable_http,
+        fake_app,
+        settings,
+        transport_security_for(settings),
+    )
 
 
 # --- Resource-server role (OAuth 2.0 inbound bearer validation) --------------
@@ -567,7 +593,7 @@ def _asgi_client(app):
 
 
 @asynccontextmanager
-async def _serving_asgi_client(app):
+async def _serving_asgi_client(app, transport_security=None):
     """An ASGI client with the app's lifespan running.
 
     The transport's DNS-rebinding Host check sits behind the streamable-HTTP
@@ -576,7 +602,7 @@ async def _serving_asgi_client(app):
     context explicitly (the 401/metadata tests do not need this because they
     short-circuit before the session manager).
     """
-    asgi = app.streamable_http_app()
+    asgi = app.streamable_http_app(transport_security=transport_security)
     async with asgi.router.lifespan_context(asgi):
         transport = httpx.ASGITransport(app=asgi)
         async with httpx.AsyncClient(
@@ -623,25 +649,37 @@ _PUBLIC_HOST_PING = {
 
 
 @pytest.mark.unit
-def test_build_passes_the_runtimes_none_transport_security_to_fastmcp(mocked_runtime):
-    """When the runtime built no allowlist, FastMCP keeps its own loopback default."""
-    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
-        build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
-    assert mock_fastmcp.call_args.kwargs["transport_security"] is None
+def test_unconfigured_allowlist_resolves_to_none(mocked_runtime):
+    """Nothing configured yields no allowlist, so the SDK keeps its loopback default.
+
+    The allowlist is not a constructor argument: the SDK takes it per transport, on
+    ``streamable_http_app()``. What the build must get right is the resolution, and
+    that a ``None`` reaches the transport unchanged so the SDK's own default applies.
+    """
+    assert transport_security_for(_MINIMAL_PIPEFY_SETTINGS) is None
 
 
 @pytest.mark.unit
-def test_build_passes_the_runtimes_allowlist_to_fastmcp(mocked_runtime):
-    """The allowlist the runtime built reaches the FastMCP constructor verbatim."""
-    mocked_runtime.transport_security = build_transport_security(
-        McpSettings(allowed_hosts=["mcp.pipefy.com"]), None
+def test_configured_allowlist_reaches_the_transport_call(mocked_runtime):
+    """A configured allowlist is resolved once and forwarded to the transport verbatim."""
+    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+        update={"mcp": McpSettings(allowed_hosts=["mcp.pipefy.com"])}
     )
-    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
-        build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
-    assert (
-        mock_fastmcp.call_args.kwargs["transport_security"]
-        is mocked_runtime.transport_security
-    )
+    resolved = transport_security_for(settings)
+    assert resolved is not None
+    assert "mcp.pipefy.com" in resolved.allowed_hosts
+
+    fake_app = MagicMock()
+    with (
+        patch("pipefy_mcp.server.configure_observability_logging"),
+        patch("pipefy_mcp.server.wire_hosted_observability") as mock_wire,
+        patch("uvicorn.Config"),
+        patch("uvicorn.Server") as mock_server_cls,
+    ):
+        mock_server_cls.return_value.serve = AsyncMock()
+        asyncio.run(_serve_streamable_http(fake_app, settings, resolved))
+
+    assert mock_wire.call_args.kwargs["transport_security"] is resolved
 
 
 @pytest.mark.unit
@@ -665,10 +703,10 @@ async def test_http_configured_allowlist_accepts_a_public_host(mocked_runtime):
     It no longer 421s; it reaches the transport handler (which then fails on the
     missing session, not on DNS-rebinding), proving the allowlist widened the gate.
     """
-    mocked_runtime.transport_security = build_transport_security(
+    allowlist = build_transport_security(
         McpSettings(allowed_hosts=["mcp.pipefy.com"]), None
     )
     app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
-    async with _serving_asgi_client(app) as client:
+    async with _serving_asgi_client(app, allowlist) as client:
         resp = await client.post("/mcp", **_PUBLIC_HOST_PING)
     assert resp.status_code != 421

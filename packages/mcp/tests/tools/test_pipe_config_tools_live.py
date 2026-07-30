@@ -20,10 +20,10 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from _shared.live_settings import pipefy_live_configured, require_live_creds
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.live_settings import pipefy_live_configured, require_live_creds
 
 from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
@@ -52,7 +52,7 @@ async def test_live_pipeclaw_mcp_introspect_type_create_pipe_input(extract_paylo
                 "introspect_type",
                 {"type_name": "CreatePipeInput"},
             )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "CreatePipeInput" in payload["result"]
@@ -77,7 +77,7 @@ async def test_live_pipeclaw_mcp_get_pipe(extract_payload):
             raise_exceptions=True,
         ) as session:
             result = await session.call_tool("get_pipe", {"pipe_id": pipe_id})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload.get("pipe") is not None
     assert str(payload["pipe"].get("id")) == str(pipe_id)
@@ -107,7 +107,7 @@ async def test_live_pipeclaw_mcp_create_pipe(extract_payload):
                     "organization_id": org_id,
                 },
             )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "createPipe" in payload["result"]
@@ -136,7 +136,7 @@ async def test_live_pipeclaw_mcp_create_label_hex_color(extract_payload):
                     "color": "#00AA00",
                 },
             )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "createLabel" in payload["result"]

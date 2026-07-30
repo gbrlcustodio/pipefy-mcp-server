@@ -5,10 +5,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.server.mcpserver import MCPServer
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from mcp.server.mcpserver import MCPServer
 from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.auth import RequestScopedIdentity
@@ -87,7 +87,7 @@ async def test_compact_catalog_lists_names_and_first_lines(
     async with _session(server) as session:
         result = await session.call_tool("get_ipaas_tools", {"pipe_id": "303088927"})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     mock_client.get_advanced_automations_token.assert_awaited_once_with("303088927")
@@ -218,7 +218,7 @@ async def test_call_tool_forwards_arguments_and_relays_output(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     mock_client.get_advanced_automations_token.assert_awaited_once_with("303088927")
@@ -795,9 +795,9 @@ async def test_connection_auth_url_is_not_read_only(mock_client, mock_gateway):
     by_name = {t.name: t for t in listed.tools}
     auth_url = by_name["get_ipaas_connection_auth_url"]
     assert auth_url.annotations is not None
-    assert auth_url.annotations.readOnlyHint is False
+    assert auth_url.annotations.read_only_hint is False
     # The discovery meta-tool stays a genuine read.
-    assert by_name["get_ipaas_tools"].annotations.readOnlyHint is True
+    assert by_name["get_ipaas_tools"].annotations.read_only_hint is True
 
 
 @pytest.mark.anyio

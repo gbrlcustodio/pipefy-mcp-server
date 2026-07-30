@@ -6,7 +6,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -133,7 +133,7 @@ async def test_create_pipe_success(
             {"name": "N", "organization_id": 10},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_pipe.assert_awaited_once_with("N", "10")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -170,7 +170,7 @@ async def test_update_pipe_success(
             {"pipe_id": 2, "name": "X"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.update_pipe.assert_awaited_once_with(
         "2", name="X", icon=None, color=None, preferences=None
     )
@@ -208,7 +208,7 @@ async def test_delete_pipe_preview_does_not_delete(
             {"pipe_id": 9},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.get_pipe.assert_awaited_once_with("9")
     mock_pipe_config_client.delete_pipe.assert_not_called()
     payload = extract_payload(result)
@@ -232,7 +232,7 @@ async def test_delete_pipe_confirm_calls_mutation(
             {"pipe_id": 9, "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.delete_pipe.assert_awaited_once_with("9")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -322,7 +322,7 @@ async def test_create_phase_success(
             {"pipe_id": 1, "name": "Todo", "done": False, "index": 1},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_phase.assert_awaited_once_with(
         "1",
         "Todo",
@@ -427,7 +427,7 @@ async def test_delete_phase_preview_does_not_delete(
     async with pipe_config_session as session:
         result = await session.call_tool("delete_phase", {"phase_id": 55})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.delete_phase.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -849,7 +849,7 @@ async def test_delete_phase_field_preview_does_not_delete(
     async with pipe_config_session as session:
         result = await session.call_tool("delete_phase_field", {"field_id": 100})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.delete_phase_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -1258,7 +1258,7 @@ async def test_delete_label_preview_does_not_delete(
     async with pipe_config_session as session:
         result = await session.call_tool("delete_label", {"label_id": 40})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.delete_label.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -1917,7 +1917,7 @@ async def test_create_field_condition_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "pf-99",
         expr_input,
@@ -1958,7 +1958,7 @@ async def test_create_field_condition_slug_like_phase_field_id_carries_invalid_a
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -1988,7 +1988,7 @@ async def test_create_field_condition_top_level_name__no_integration(
                 "name": "Top-level name",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "pf-99",
         expr,
@@ -2021,7 +2021,7 @@ async def test_create_field_condition_top_level_name_wins_over_extra_input__no_i
                 "extra_input": {"name": "Loser", "index": 3},
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "pf-99",
         expr,
@@ -2164,7 +2164,7 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
                 "name": "R",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "1",
         expr,
@@ -2194,7 +2194,7 @@ async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
             "create_field_condition",
             {"phase_id": 1, "condition": expr, "actions": actions_in, "name": "R"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "1",
         expr,
@@ -2236,7 +2236,7 @@ async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
                 "name": "R",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "1",
         expr_with_id,
@@ -2273,7 +2273,7 @@ async def test_create_field_condition_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "Invalid condition" in tool_error_message(payload)
@@ -2298,7 +2298,7 @@ async def test_update_field_condition_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.update_field_condition.assert_awaited_once_with(
         "cond-2",
         name="Patched",
@@ -2336,7 +2336,7 @@ async def test_update_field_condition_success_with_explicit_condition_and_action
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.update_field_condition.assert_awaited_once_with(
         "cond-7",
         name="N7",
@@ -2361,7 +2361,7 @@ async def test_update_field_condition_top_level_name__no_integration(
             {"condition_id": "cond-8", "name": "Top name"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.update_field_condition.assert_awaited_once_with(
         "cond-8",
         name="Top name",
@@ -2404,7 +2404,7 @@ async def test_update_field_condition_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "Field condition not found" in tool_error_message(payload)
@@ -2423,7 +2423,7 @@ async def test_delete_field_condition_success(
             {"condition_id": "cond-9", "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.delete_field_condition.assert_awaited_once_with("cond-9")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -2445,7 +2445,7 @@ async def test_delete_field_condition_error(
             {"condition_id": "cond-x", "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "Forbidden" in tool_error_message(payload)
@@ -2499,7 +2499,7 @@ async def test_get_phase_allowed_move_targets_success(
             {"phase_id": phase_id},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.get_phase_allowed_move_targets.assert_awaited_once_with(
         str(phase_id)
     )
@@ -2580,7 +2580,7 @@ async def test_get_phase_allowed_move_targets_read_only_hint(pipe_config_session
     assert len(matching) == 1
     tool = matching[0]
     assert tool.annotations is not None
-    assert tool.annotations.readOnlyHint is True
+    assert tool.annotations.read_only_hint is True
 
 
 @pytest.mark.unit
@@ -2618,7 +2618,7 @@ async def test_get_phase_cards_count_success(
             {"phase_id": phase_id},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.get_phase.assert_awaited_once_with(str(phase_id))
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -2715,7 +2715,7 @@ async def test_get_phase_cards_success(
             {"phase_id": phase_id, "first": 50, "after": "cursor-1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_pipe_config_client.get_phase_cards.assert_awaited_once_with(
         str(phase_id),
         first=50,
@@ -2773,7 +2773,7 @@ async def test_get_phase_cards_read_only_hint(pipe_config_session):
         assert len(matching) == 1
         tool = matching[0]
         assert tool.annotations is not None
-        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.read_only_hint is True
 
 
 @pytest.mark.anyio
@@ -2785,5 +2785,5 @@ async def test_delete_field_condition_has_destructive_hint(pipe_config_session):
     assert len(matching) == 1
     delete_tool = matching[0]
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is False
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is False

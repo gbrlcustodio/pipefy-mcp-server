@@ -3,12 +3,12 @@
 from datetime import timedelta
 
 import pytest
+from _mcp_compat import (
+    create_connected_server_and_client_session as create_client_session,
+)
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import UrlElicitationRequiredError
-from mcp.shared.memory import (
-    create_connected_server_and_client_session as create_client_session,
-)
 from mcp.types import ElicitRequestURLParams
 from pydantic import BaseModel, ValidationError
 

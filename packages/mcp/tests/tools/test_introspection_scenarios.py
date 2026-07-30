@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
@@ -112,9 +112,9 @@ async def test_scenario_discover_input_shape_then_execute_mutation_path(
             },
         )
 
-    assert m1.isError is False
-    assert t1.isError is False
-    assert ex.isError is False
+    assert m1.is_error is False
+    assert t1.is_error is False
+    assert ex.is_error is False
 
     p1 = extract_payload(m1)
     p2 = extract_payload(t1)

@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -80,7 +80,7 @@ async def test_get_pipe_reports_success(
     async with report_session as session:
         result = await session.call_tool("get_pipe_reports", {"pipe_uuid": "uuid-123"})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_reports.assert_awaited_once_with(
         "uuid-123", first=30, after=None, search=None, report_id=None, order=None
     )
@@ -101,7 +101,7 @@ async def test_get_pipe_reports_graphql_error(
     async with report_session as session:
         result = await session.call_tool("get_pipe_reports", {"pipe_uuid": "uuid-123"})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not allowed" in tool_error_message(payload)
@@ -136,7 +136,7 @@ class TestGetPipeReport:
                 {"pipe_uuid": "uuid-abc", "report_id": "r42"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         mock_report_client.get_pipe_reports.assert_awaited_once_with(
             "uuid-abc",
             first=1,
@@ -165,7 +165,7 @@ class TestGetPipeReport:
                 {"pipe_uuid": "uuid-abc", "report_id": "missing"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         mock_report_client.get_pipe_reports.assert_awaited_once_with(
             "uuid-abc",
             first=1,
@@ -191,7 +191,7 @@ class TestGetPipeReport:
                 {"pipe_uuid": "uuid-abc", "report_id": "r1"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "unavailable" in tool_error_message(payload)
@@ -228,7 +228,7 @@ async def test_get_pipe_report_columns_success(
             "get_pipe_report_columns", {"pipe_uuid": "uuid-456"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_report_columns.assert_awaited_once_with("uuid-456")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -266,7 +266,7 @@ async def test_get_pipe_report_filterable_fields_success(
             "get_pipe_report_filterable_fields", {"pipe_uuid": "uuid-789"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_report_filterable_fields.assert_awaited_once_with(
         "uuid-789"
     )
@@ -294,7 +294,7 @@ async def test_get_organization_report_success(
             "get_organization_report", {"report_id": "or1"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_report.assert_awaited_once_with("or1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -319,7 +319,7 @@ async def test_get_organization_reports_success(
             {"organization_id": "org-1", "first": 10, "after": "c1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_reports.assert_awaited_once_with(
         "org-1", first=10, after="c1"
     )
@@ -346,7 +346,7 @@ async def test_get_pipe_report_export_success(
             "get_pipe_report_export", {"export_id": "exp1"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_report_export.assert_awaited_once_with("exp1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -371,7 +371,7 @@ async def test_get_organization_report_export_success(
             "get_organization_report_export", {"export_id": "exp2"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_report_export.assert_awaited_once_with("exp2")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -398,7 +398,7 @@ async def test_all_read_tools_have_readonly_hint(report_session):
     for name in read_tool_names:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.readOnlyHint is True, (
+        assert tool.annotations.read_only_hint is True, (
             f"{name} should be readOnlyHint=True"
         )
 
@@ -418,7 +418,7 @@ async def test_create_pipe_report_success(
             {"pipe_id": "123", "name": "New Report", "fields": ["title"]},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_pipe_report.assert_awaited_once_with(
         "123", "New Report", fields=["title"], filter=None, formulas=None
     )
@@ -446,7 +446,7 @@ async def test_create_pipe_report_forwards_golden_report_filter(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_pipe_report.assert_awaited_once_with(
         "123",
         "Filtered",
@@ -542,7 +542,7 @@ async def test_create_pipe_report_graphql_error(
             "create_pipe_report", {"pipe_id": "123", "name": "Bad"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid pipe" in tool_error_message(payload)
@@ -567,7 +567,7 @@ async def test_create_pipe_report_graphql_error_with_debug(
             "create_pipe_report", {"pipe_id": "123", "name": "Bad", "debug": True}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     # The ambiguity enricher rewrote the raw "invalid pipe" into a dual-meaning
@@ -593,7 +593,7 @@ async def test_update_pipe_report_success(
             {"report_id": "r10", "name": "Updated", "color": "red"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.update_pipe_report.assert_awaited_once_with(
         "r10",
         name="Updated",
@@ -622,7 +622,7 @@ async def test_delete_pipe_report_success(
             "delete_pipe_report", {"report_id": "r10", "confirm": True}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.delete_pipe_report.assert_awaited_once_with("r10")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -649,7 +649,7 @@ async def test_create_organization_report_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_organization_report.assert_awaited_once_with(
         "org-1", "Cross-Pipe", ["p1", "p2"], fields=None, filter=None
     )
@@ -678,7 +678,7 @@ async def test_update_organization_report_success(
             {"report_id": "or5", "name": "Updated Org"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.update_organization_report.assert_awaited_once_with(
         "or5", name="Updated Org", color=None, fields=None, filter=None, pipe_ids=None
     )
@@ -700,7 +700,7 @@ async def test_delete_organization_report_success(
             "delete_organization_report", {"report_id": "or5", "confirm": True}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.delete_organization_report.assert_awaited_once_with("or5")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -723,7 +723,7 @@ async def test_export_pipe_report_success(
             {"pipe_id": "p1", "pipe_report_id": "r1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.export_pipe_report.assert_awaited_once_with(
         "p1",
         "r1",
@@ -754,7 +754,7 @@ async def test_export_pipe_report_graphql_error(
             {"pipe_id": "p1", "pipe_report_id": "r1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "export denied" in tool_error_message(payload)
@@ -781,7 +781,7 @@ async def test_export_organization_report_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.export_organization_report.assert_awaited_once_with(
         "42",
         organization_report_id="7",
@@ -815,7 +815,7 @@ async def test_export_pipe_audit_logs_success(
             {"pipe_uuid": "uuid-abc", "search_term": "audit"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.export_pipe_audit_logs.assert_awaited_once_with(
         "uuid-abc",
         search_term="audit",
@@ -840,7 +840,7 @@ async def test_export_tools_are_not_readonly(report_session):
     for name in export_tool_names:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.readOnlyHint is False, (
+        assert tool.annotations.read_only_hint is False, (
             f"{name} should be readOnlyHint=False"
         )
 
@@ -860,7 +860,7 @@ async def test_get_organization_report_coerces_int_report_id(
     }
     async with report_session as session:
         result = await session.call_tool("get_organization_report", {"report_id": 500})
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_report.assert_awaited_once_with("500")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -881,7 +881,7 @@ async def test_get_organization_reports_coerces_int_organization_id(
         result = await session.call_tool(
             "get_organization_reports", {"organization_id": 42}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_reports.assert_awaited_once_with(
         "42", first=30, after=None
     )
@@ -897,7 +897,7 @@ async def test_get_pipe_report_export_coerces_int_export_id(
     }
     async with report_session as session:
         result = await session.call_tool("get_pipe_report_export", {"export_id": 99})
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_report_export.assert_awaited_once_with("99")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -915,7 +915,7 @@ async def test_get_organization_report_export_coerces_int_export_id(
         result = await session.call_tool(
             "get_organization_report_export", {"export_id": 88}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_report_export.assert_awaited_once_with("88")
 
 
@@ -931,7 +931,7 @@ async def test_create_pipe_report_coerces_int_pipe_id(
         result = await session.call_tool(
             "create_pipe_report", {"pipe_id": 301, "name": "Report"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_pipe_report.assert_awaited_once_with(
         "301", "Report", fields=None, filter=None, formulas=None
     )
@@ -949,7 +949,7 @@ async def test_update_pipe_report_coerces_int_report_id(
         result = await session.call_tool(
             "update_pipe_report", {"report_id": 200, "name": "Updated"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.update_pipe_report.assert_awaited_once_with(
         "200",
         name="Updated",
@@ -973,7 +973,7 @@ async def test_export_pipe_report_coerces_int_ids(
         result = await session.call_tool(
             "export_pipe_report", {"pipe_id": 301, "pipe_report_id": 777}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.export_pipe_report.assert_awaited_once_with(
         "301",
         "777",
@@ -998,7 +998,7 @@ async def test_create_organization_report_coerces_int_organization_id(
             "create_organization_report",
             {"organization_id": 42, "name": "Org Report", "pipe_ids": ["10"]},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_organization_report.assert_awaited_once_with(
         "42", "Org Report", ["10"], fields=None, filter=None
     )
@@ -1016,7 +1016,7 @@ async def test_update_organization_report_coerces_int_report_id(
         result = await session.call_tool(
             "update_organization_report", {"report_id": 300, "name": "Renamed"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.update_organization_report.assert_awaited_once_with(
         "300", name="Renamed", color=None, fields=None, filter=None, pipe_ids=None
     )
@@ -1037,7 +1037,7 @@ async def test_get_pipe_reports_coerces_int_report_id_filter(
         result = await session.call_tool(
             "get_pipe_reports", {"pipe_uuid": "uuid-x", "report_id": 55}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_reports.assert_awaited_once_with(
         "uuid-x", first=30, after=None, search=None, report_id="55", order=None
     )
@@ -1053,7 +1053,7 @@ async def test_delete_tools_have_destructive_hint(report_session):
     for name in ["delete_pipe_report", "delete_organization_report"]:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.destructiveHint is True, (
+        assert tool.annotations.destructive_hint is True, (
             f"{name} should be destructiveHint=True"
         )
 

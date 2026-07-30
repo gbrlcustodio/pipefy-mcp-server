@@ -4,10 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
@@ -84,7 +84,7 @@ async def test_get_ai_agent_logs_success(
     async with observability_session as session:
         result = await session.call_tool("get_ai_agent_logs", {"repo_uuid": "repo-1"})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_ai_agent_logs.assert_awaited_once_with(
         "repo-1", first=30, after=None, status=None, search_term=None
     )
@@ -105,7 +105,7 @@ async def test_get_ai_agent_logs_graphql_error(
     async with observability_session as session:
         result = await session.call_tool("get_ai_agent_logs", {"repo_uuid": "repo-bad"})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not authorized" in tool_error_message(payload)
@@ -139,7 +139,7 @@ async def test_get_ai_agent_log_details_success(
             "get_ai_agent_log_details", {"log_uuid": "log-1"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_ai_agent_log_details.assert_awaited_once_with("log-1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -174,7 +174,7 @@ async def test_get_automation_logs_success(
             "get_automation_logs", {"automation_id": "auto-1"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_logs.assert_awaited_once_with(
         "auto-1", first=30, after=None, status=None, search_term=None
     )
@@ -211,7 +211,7 @@ async def test_get_automation_logs_by_repo_success(
             "get_automation_logs_by_repo", {"repo_id": "repo-5"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_logs_by_repo.assert_awaited_once_with(
         "repo-5", first=30, after=None, status=None, search_term=None
     )
@@ -235,7 +235,7 @@ async def test_log_tools_have_read_only_hint(observability_session):
     for tool in listed.tools:
         if tool.name in log_tool_names:
             assert tool.annotations is not None, f"{tool.name} missing annotations"
-            assert tool.annotations.readOnlyHint is True, f"{tool.name} not read-only"
+            assert tool.annotations.read_only_hint is True, f"{tool.name} not read-only"
 
 
 @pytest.mark.anyio
@@ -264,7 +264,7 @@ async def test_get_agents_usage_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_agents_usage.assert_awaited_once_with(
         "org-1",
         {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"},
@@ -303,7 +303,7 @@ async def test_get_automations_usage_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["automationsUsageDetails"]["usage"] == 500
@@ -345,7 +345,7 @@ async def test_get_automation_execution_metrics_partial_success(
             {"organization_id": "3", "automation_ids": ["25", "124"], "repo_id": "16"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
         "3",
         ["25", "124"],
@@ -383,7 +383,7 @@ async def test_get_automation_execution_metrics_without_ids_fetches_all(
             {"organization_id": "3"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
         "3",
         None,
@@ -416,7 +416,7 @@ async def test_get_automation_execution_metrics_rejects_invalid_period(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     assert "period" in tool_error_message(p)
@@ -434,7 +434,7 @@ async def test_get_automation_execution_metrics_rejects_empty_ids(
             {"organization_id": "3", "automation_ids": []},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     assert "automation_ids" in tool_error_message(p)
@@ -453,7 +453,7 @@ async def test_get_automation_execution_metrics_rejects_first_over_cap(
             {"organization_id": "3", "first": 51},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     assert "first" in tool_error_message(p)
@@ -478,7 +478,7 @@ async def test_get_automation_execution_metrics_forwards_pagination(
             {"organization_id": "3", "first": 50, "after": "cur-0"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
         "3",
         None,
@@ -522,7 +522,7 @@ async def test_get_automation_execution_metrics_forwards_filters(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
         "3",
         None,
@@ -559,7 +559,7 @@ async def test_get_automation_execution_metrics_rejects_invalid_enum(
             {"organization_id": "3", arg: value},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     assert arg in tool_error_message(p)
@@ -578,7 +578,7 @@ async def test_get_automation_execution_metrics_rejects_empty_action_ids(
             {"organization_id": "3", "action_ids": []},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     assert "action_ids" in tool_error_message(p)
@@ -601,7 +601,7 @@ async def test_get_automation_execution_metrics_value_error_from_client(
             {"organization_id": "999"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "Couldn't find Organization" in tool_error_message(payload)
@@ -635,7 +635,7 @@ async def test_get_ai_credit_usage_success(
             {"organization_uuid": "org-1", "period": "current_month"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_ai_credit_usage.assert_awaited_once_with(
         "org-1", "current_month"
     )
@@ -659,7 +659,7 @@ async def test_get_ai_credit_usage_graphql_error(
             {"organization_uuid": "org-bad", "period": "current_month"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "forbidden" in tool_error_message(payload)
@@ -680,7 +680,7 @@ async def test_get_ai_credit_usage_value_error_from_client(
             {"organization_uuid": "999", "period": "current_month"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "Organization not found" in tool_error_message(payload)
@@ -707,7 +707,7 @@ async def test_export_automation_jobs_success(
             {"organization_id": "org-123", "period": "last_month"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.export_automation_jobs.assert_awaited_once_with(
         "org-123", "last_month"
     )
@@ -738,7 +738,7 @@ async def test_get_automation_jobs_export_success(
             {"export_id": "25820"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_jobs_export.assert_awaited_once_with(
         "25820"
     )
@@ -763,7 +763,7 @@ async def test_get_automation_jobs_export_graphql_error(
             {"export_id": "999"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not found" in tool_error_message(payload)
@@ -804,7 +804,7 @@ async def test_get_automation_jobs_export_coerces_int_export_id(
             {"export_id": 25901},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_jobs_export.assert_awaited_once_with(
         "25901"
     )
@@ -830,7 +830,7 @@ async def test_get_automation_jobs_export_csv_coerces_int_export_id(
             {"export_id": 25901},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_jobs_export_csv.assert_awaited_once_with(
         "25901",
         max_output_chars=400_000,
@@ -858,7 +858,7 @@ async def test_get_automation_logs_coerces_int_automation_id(
             {"automation_id": 42},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_logs.assert_awaited_once_with(
         "42", first=30, after=None, status=None, search_term=None
     )
@@ -878,7 +878,7 @@ async def test_usage_tools_have_read_only_hint(observability_session):
     for tool in listed.tools:
         if tool.name in read_only_names:
             assert tool.annotations is not None, f"{tool.name} missing annotations"
-            assert tool.annotations.readOnlyHint is True, f"{tool.name} not read-only"
+            assert tool.annotations.read_only_hint is True, f"{tool.name} not read-only"
 
 
 @pytest.mark.anyio
@@ -889,7 +889,7 @@ async def test_export_tool_not_read_only(observability_session):
 
     export_tool = next(t for t in listed.tools if t.name == "export_automation_jobs")
     assert export_tool.annotations is not None
-    assert export_tool.annotations.readOnlyHint is False
+    assert export_tool.annotations.read_only_hint is False
 
 
 @pytest.mark.anyio
@@ -900,7 +900,7 @@ async def test_get_automation_jobs_export_read_only_hint(observability_session):
 
     tool = next(t for t in listed.tools if t.name == "get_automation_jobs_export")
     assert tool.annotations is not None
-    assert tool.annotations.readOnlyHint is True
+    assert tool.annotations.read_only_hint is True
 
 
 @pytest.mark.anyio
@@ -924,7 +924,7 @@ async def test_get_automation_jobs_export_csv_success(
             {"export_id": "1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automation_jobs_export_csv.assert_awaited_once_with(
         "1", max_output_chars=400_000, max_download_bytes=50 * 1024 * 1024
     )
@@ -948,7 +948,7 @@ async def test_get_automation_jobs_export_csv_value_error(
             {"export_id": "1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "processing" in tool_error_message(payload)
@@ -979,7 +979,7 @@ async def test_get_automation_jobs_export_csv_read_only_hint(observability_sessi
 
     tool = next(t for t in listed.tools if t.name == "get_automation_jobs_export_csv")
     assert tool.annotations is not None
-    assert tool.annotations.readOnlyHint is True
+    assert tool.annotations.read_only_hint is True
 
 
 @pytest.mark.anyio
@@ -1104,7 +1104,7 @@ async def test_get_ai_agent_logs_debug_true_appends_codes(
             "get_ai_agent_logs", {"repo_uuid": "repo-1", "debug": True}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     # The ambiguity enricher rewrote the raw "not authorized" into a
@@ -1136,7 +1136,7 @@ async def test_get_ai_credit_usage_debug_true_appends_codes(
             {"organization_uuid": "org-1", "period": "current_month", "debug": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     assert "forbidden" in tool_error_message(p)
@@ -1163,7 +1163,7 @@ async def test_export_automation_jobs_coerces_int_organization_id(
             {"organization_id": int(EXAMPLE_NUMERIC_ORG_ID), "period": "last_month"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.export_automation_jobs.assert_awaited_once_with(
         EXAMPLE_NUMERIC_ORG_ID, "last_month"
     )
@@ -1188,7 +1188,7 @@ async def test_get_agents_usage_coerces_int_organization_uuid(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_agents_usage.assert_awaited_once_with(
         EXAMPLE_NUMERIC_ORG_ID,
         {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"},
@@ -1220,7 +1220,7 @@ async def test_get_automations_usage_coerces_int_organization_uuid(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_automations_usage.assert_awaited_once_with(
         EXAMPLE_NUMERIC_ORG_ID,
         {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"},
@@ -1248,7 +1248,7 @@ async def test_get_ai_credit_usage_coerces_int_organization_uuid(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_observability_client.get_ai_credit_usage.assert_awaited_once_with(
         EXAMPLE_NUMERIC_ORG_ID, "current_month"
     )

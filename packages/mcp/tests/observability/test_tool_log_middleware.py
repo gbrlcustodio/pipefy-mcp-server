@@ -24,22 +24,17 @@ from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 
 
 def _context(**arguments: object) -> ToolCallContext:
-    req = types.CallToolRequest(
-        method="tools/call",
-        params=types.CallToolRequestParams(name="get_card", arguments=arguments),
-    )
     return ToolCallContext(
         argument_keys=tuple(sorted(arguments)),
         identity=CallerIdentity(client_id="acting-client", scopes=("read",)),
         request_id="req-42",
-        req=req,
+        tool_name="get_card",
+        arguments=dict(arguments) or None,
     )
 
 
-def _ok_result() -> types.ServerResult:
-    return types.ServerResult(
-        types.CallToolResult(content=[types.TextContent(type="text", text="ok")])
-    )
+def _ok_result() -> types.CallToolResult:
+    return types.CallToolResult(content=[types.TextContent(type="text", text="ok")])
 
 
 def _read_log_lines(capsys: pytest.CaptureFixture[str]) -> list[dict]:
@@ -105,10 +100,8 @@ def test_error_result_logs_outcome_error(capsys):
     _configure_for_capture()
 
     async def terminal(ctx):
-        return types.ServerResult(
-            types.CallToolResult(
-                content=[types.TextContent(type="text", text="boom")], isError=True
-            )
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text="boom")], is_error=True
         )
 
     asyncio.run(tool_log_middleware(_context(card_id="1"), terminal))

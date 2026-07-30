@@ -26,7 +26,7 @@ import httpx
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from pipefy_mcp.core.tool_middleware import install_tool_call_middleware
+from pipefy_mcp.core.tool_middleware import build_tool_call_middleware
 from pipefy_mcp.observability.json_logging import (
     configure_observability_logging,
     reset_observability_logging,
@@ -78,15 +78,18 @@ def _call_tool_body(request_id: int, text: str) -> dict[str, Any]:
 async def test_two_calls_in_one_session_correlate_to_their_own_posts(capsys):
     configure_observability_logging()
 
-    app = MCPServer("obs-e2e")
-    app.settings.json_response = True
+    # json_response moved off the server settings onto streamable_http_app() in 2.0,
+    # so it is passed through the wiring helper; middleware is a constructor argument.
+    app = MCPServer(
+        "obs-e2e",
+        middleware=[build_tool_call_middleware([tool_log_middleware])],
+    )
 
     @app.tool()
     def echo(text: str) -> str:
         return text
 
-    install_tool_call_middleware(app, [tool_log_middleware])
-    http_app = wire_hosted_observability(app)
+    http_app = wire_hosted_observability(app, json_response=True)
 
     with anyio.fail_after(15):
         async with http_app.router.lifespan_context(http_app):

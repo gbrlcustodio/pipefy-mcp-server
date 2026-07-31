@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
 
 import pytest
 from mcp import UrlElicitationRequiredError, types
@@ -17,6 +18,7 @@ from pipefy_mcp.auth.request_identity import CallerIdentity
 from pipefy_mcp.core.tool_middleware import ToolCallContext
 from pipefy_mcp.observability.json_logging import (
     TOOL_CALL_EVENT_KEYS,
+    UNNAMED_TOOL,
     configure_observability_logging,
     reset_observability_logging,
 )
@@ -88,6 +90,26 @@ def test_logs_one_line_with_the_documented_fields(capsys):
     assert event["request_id"] == "req-42"
     assert isinstance(event["duration_ms"], (int, float))
     assert "timestamp" in event
+
+
+@pytest.mark.unit
+def test_a_call_that_named_no_tool_gets_a_distinguishable_label(capsys):
+    """An unnamed ``tools/call`` is still logged, under a label, not an empty string.
+
+    Such a call reaches the chain on purpose: middleware reads raw params, so a
+    governance layer counting calls sees the ones that go on to fail request-layer
+    validation. Logging it as ``tool: ""`` puts it in a dashboard's blank bucket
+    alongside the real tools; ``ctx.tool_name`` stays ``""`` (the raw truth about what
+    the client sent) and only the label is substituted.
+    """
+    _configure_for_capture()
+
+    async def terminal(ctx):
+        return _ok_result()
+
+    asyncio.run(tool_log_middleware(replace(_context(), tool_name=""), terminal))
+
+    assert _read_log_lines(capsys)[0]["tool"] == UNNAMED_TOOL
 
 
 @pytest.mark.unit

@@ -183,13 +183,23 @@ def test_release_branch_for_derives_from_track(version: str, expected: str) -> N
     assert _release.release_branch_for(version) == expected
 
 
-def test_publish_refuses_an_alpha(monkeypatch) -> None:
-    # An alpha must go through `alpha` (which cuts it on dev without stamping the
-    # CHANGELOG); reaching it via `publish` would tag it on main.
+def test_publish_refuses_an_alpha_from_main(monkeypatch) -> None:
+    # publish derives the branch from the version's track, so an alpha checked
+    # out on main is refused rather than tagged there.
     monkeypatch.setattr(
         _release.bump_version, "read_sdk_version", lambda: "0.5.0-alpha.1"
     )
-    with pytest.raises(_release.ReleaseError, match="staging cut off dev"):
+    monkeypatch.setattr(_release, "current_branch", lambda: "main")
+    with pytest.raises(_release.ReleaseError, match="ships from 'dev'"):
+        _release.publish(assume_yes=True)
+
+
+def test_publish_refuses_a_beta_from_dev(monkeypatch) -> None:
+    monkeypatch.setattr(
+        _release.bump_version, "read_sdk_version", lambda: "0.5.0-beta.1"
+    )
+    monkeypatch.setattr(_release, "current_branch", lambda: "dev")
+    with pytest.raises(_release.ReleaseError, match="ships from 'main'"):
         _release.publish(assume_yes=True)
 
 
@@ -263,13 +273,13 @@ def test_release_pr_refuses_an_alpha_target(bump: str, monkeypatch) -> None:
         "_version_at",
         lambda ref: "0.5.0-alpha.1" if "dev" in ref else "0.4.0-beta.2",
     )
-    with pytest.raises(_release.ReleaseError, match="staging cut off dev"):
+    with pytest.raises(_release.ReleaseError, match="ships from 'dev', not 'main'"):
         _release.release_pr(bump, assume_yes=True)
 
 
 def test_release_pr_still_allows_the_beta_promotion(monkeypatch) -> None:
     # The gate must not block the promotion the alpha line exists to reach; this
-    # fails if _refuse_alpha_target is widened to reject any pre-release.
+    # fails if _assert_track_ships_from is widened to reject any pre-release.
     monkeypatch.setattr(_release, "working_tree_clean", lambda: True)
     monkeypatch.setattr(_release, "_dev_unreleased_body", lambda: "- a thing")
     monkeypatch.setattr(
@@ -301,7 +311,7 @@ def test_prepare_refuses_an_alpha_target(bump: str, monkeypatch) -> None:
     monkeypatch.setattr(
         _release.bump_version, "read_sdk_version", lambda: "0.4.0-beta.2"
     )
-    with pytest.raises(_release.ReleaseError, match="staging cut off dev"):
+    with pytest.raises(_release.ReleaseError, match="ships from 'dev', not 'main'"):
         _release.prepare(bump, assume_yes=True)
 
 
@@ -321,3 +331,111 @@ def test_verify_installer_skips_rejects_an_unparseable_tag(monkeypatch) -> None:
     )
     with pytest.raises(_release.ReleaseError, match="not a version tag"):
         _release.verify_installer_skips("v0.5.0-alpha.1")
+
+
+def _stub_release_pr_env(monkeypatch, dev: str, main: str) -> list[list[str]]:
+    """Stub release_pr's surroundings; return the list commands are recorded into."""
+    calls: list[list[str]] = []
+    monkeypatch.setattr(_release, "working_tree_clean", lambda: True)
+    monkeypatch.setattr(_release, "_dev_unreleased_body", lambda: "- a thing")
+    monkeypatch.setattr(
+        _release, "_version_at", lambda ref: dev if "dev" in ref else main
+    )
+    monkeypatch.setattr(_release, "branch_exists", lambda b: False)
+    monkeypatch.setattr(_release, "run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(_release, "capture", lambda cmd: "https://example/pr/1")
+    monkeypatch.setattr(_release, "_apply_prepare", lambda bump, target, **k: target)
+    return calls
+
+
+def test_alpha_pr_targets_dev_and_does_not_stamp(monkeypatch) -> None:
+    # dev requires a pull request, so an alpha reaches it the same way a beta
+    # reaches main -- and it must not stamp the CHANGELOG on the way.
+    calls = _stub_release_pr_env(monkeypatch, "0.4.0-beta.2", "0.4.0-beta.2")
+    stamps: list[bool] = []
+    monkeypatch.setattr(
+        _release,
+        "_apply_prepare",
+        lambda bump, target, *, stamp=True: (stamps.append(stamp), target)[1],
+    )
+    _release.alpha_pr("version=0.5.0-alpha.1", assume_yes=True)
+
+    assert stamps == [False], "an alpha must not stamp the CHANGELOG"
+    assert [
+        "git",
+        "checkout",
+        "-b",
+        "rc-dev/release/v0.5.0-alpha.1",
+        "origin/dev",
+    ] in calls
+    assert ["git", "push", "-u", "origin", "rc-dev/release/v0.5.0-alpha.1"] in calls
+
+
+def test_release_pr_stamps_for_main(monkeypatch) -> None:
+    # The mirror of the above: only a main-bound release finalizes the section.
+    _stub_release_pr_env(monkeypatch, "0.5.0-alpha.3", "0.4.0-beta.2")
+    stamps: list[bool] = []
+    monkeypatch.setattr(
+        _release,
+        "_apply_prepare",
+        lambda bump, target, *, stamp=True: (stamps.append(stamp), target)[1],
+    )
+    _release.release_pr("beta", assume_yes=True)
+    assert stamps == [True]
+
+
+def test_alpha_pr_refuses_a_non_alpha_target(monkeypatch) -> None:
+    _stub_release_pr_env(monkeypatch, "0.5.0-alpha.3", "0.4.0-beta.2")
+    with pytest.raises(_release.ReleaseError, match="ships from 'main', not 'dev'"):
+        _release.alpha_pr("beta", assume_yes=True)
+
+
+def test_tag_and_publish_never_pushes_the_branch(monkeypatch) -> None:
+    # Both release branches reject direct pushes (ruleset requires a PR), so the
+    # bump arrives via a merged PR and only the tag is ever pushed. A `git push
+    # origin <branch>` here would fail the release outright.
+    calls: list[list[str]] = []
+    monkeypatch.setattr(_release, "current_branch", lambda: "dev")
+    monkeypatch.setattr(_release, "run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(_release, "capture", lambda cmd: "samesha")
+    monkeypatch.setattr(_release, "tag_exists", lambda t: False)
+    monkeypatch.setattr(_release, "local_tag_exists", lambda t: False)
+    monkeypatch.setattr(_release, "_release_run_ids", lambda t: [])
+    monkeypatch.setattr(_release, "watch_release_workflow", lambda t, **k: None)
+    monkeypatch.setattr(_release, "verify", lambda t: None)
+    monkeypatch.setattr(_release, "print_release_links", lambda t, v: None)
+
+    _release._tag_and_publish("dev", "0.5.0-alpha.1", assume_yes=True)
+
+    pushes = [c for c in calls if c[:2] == ["git", "push"]]
+    assert pushes == [["git", "push", "origin", "v0.5.0-alpha.1"]]
+
+
+def test_tag_and_publish_refuses_when_branch_is_not_merged(monkeypatch) -> None:
+    # Local ahead of origin means the release PR has not merged, so the commit
+    # about to be tagged is not the one on the branch.
+    monkeypatch.setattr(_release, "current_branch", lambda: "dev")
+    monkeypatch.setattr(_release, "run", lambda cmd, **k: None)
+    shas = iter(["localsha", "remotesha"])
+    monkeypatch.setattr(_release, "capture", lambda cmd: next(shas))
+    with pytest.raises(_release.ReleaseError, match="Merge the release PR"):
+        _release._tag_and_publish("dev", "0.5.0-alpha.1", assume_yes=True)
+
+
+@pytest.mark.parametrize(
+    ("bump", "current"),
+    [
+        # An unpromotable track and an unparseable explicit version both come back
+        # from bump_version as ValueError; the CLI must report them as release
+        # errors, not tracebacks. `release-pr beta` on a beta line is the case
+        # that actually happens.
+        ("beta", "0.4.0-beta.2"),
+        ("prerelease", "0.2.0-dev.1"),
+        ("version=not-a-version", "0.4.0-beta.2"),
+    ],
+)
+def test_target_for_reports_bump_rejections_as_release_errors(
+    bump: str, current: str
+) -> None:
+    with pytest.raises(_release.ReleaseError):
+        _release.target_for(bump, current)

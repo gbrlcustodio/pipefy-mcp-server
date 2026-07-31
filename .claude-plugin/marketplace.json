@@ -9,7 +9,7 @@
       "name": "pipefy",
       "source": "./",
       "description": "Pipefy workflow integration for Claude Code.",
-      "version": "0.4.0-beta.2",
+      "version": "0.5.0-alpha.1",
       "homepage": "https://github.com/pipefy/ai-toolkit",
       "repository": "https://github.com/pipefy/ai-toolkit"
     }

@@ -253,9 +253,9 @@ def _apply_prepare(bump_arg: str, target: str, *, stamp: bool = True) -> str:
     ``alpha_pr`` delegates to); callers own the preflight and confirmation.
     Returns the version bump_version actually wrote.
 
-    ``stamp=False`` leaves ``## [Unreleased]`` intact — what the alpha flow
-    needs, since consecutive alphas share one accumulating section (see
-    ``alpha``).
+    ``stamp=False`` leaves ``## [Unreleased]`` intact — what an alpha needs,
+    since consecutive alphas share one accumulating section that the eventual
+    beta promotion stamps in full.
     """
     # bump_version.py owns the transform; run its CLI so the file set and lock
     # refresh live in exactly one place.

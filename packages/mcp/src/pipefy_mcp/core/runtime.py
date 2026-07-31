@@ -86,9 +86,12 @@ class McpRuntime:
         """Build the runtime for the resolved profile, wiring inbound and outbound auth.
 
         The composition root's one build step: it parses the ``resource_server_url``
-        into one :class:`ResourceServer` and selects the per-profile identity from it
-        (and, for ``remote``, the inbound-auth pair derived from that same resource).
-        The one ``cls(...)`` call then wires the fields common to both profiles.
+        into one :class:`ResourceServer`, then selects the per-profile identity.
+        ``remote`` requires that resource (it fails fast without one) and builds the
+        inbound-auth pair from it, alongside a per-request identity; ``local`` resolves
+        its identity from the configured startup credential and never reads the parsed
+        resource. The one ``cls(...)`` call then wires the fields common to both
+        profiles.
         """
         url = settings.rs.resource_server_url
         resource = ResourceServer.from_url(url) if url else None

@@ -11,7 +11,7 @@ from _mcp_compat import (
 )
 from _rs_fixtures import RS_ISSUER, RS_JWKS_URI, RS_RESOURCE, remote_rs_settings
 from mcp.server.mcpserver import MCPServer
-from pipefy_auth import AuthSettings
+from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
@@ -28,7 +28,12 @@ from pipefy_mcp.server import (
     default_tool_middlewares,
     run_server,
 )
-from pipefy_mcp.settings import McpSettings, Settings, resolve_mcp_settings
+from pipefy_mcp.settings import (
+    McpSettings,
+    ResourceServerSettings,
+    Settings,
+    resolve_mcp_settings,
+)
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 from pipefy_mcp.tools.toolsets import DOMAINS, POWER_GRAPHQL_TOOLS
 
@@ -584,7 +589,7 @@ def test_build_with_resource_server_wires_inbound_auth():
     """The remote profile with a configured RS wires the SDK's auth + token verifier."""
     app = build_pipefy_mcp_server(_REMOTE_RS_SETTINGS)
     assert app.settings.auth is not None
-    assert str(app.settings.auth.resource_server_url).rstrip("/") == RS_RESOURCE
+    assert str(app.settings.auth.resource_server_url) == RS_RESOURCE
 
 
 def _asgi_client(app):
@@ -629,15 +634,55 @@ async def test_http_unauthenticated_request_gets_401_challenge():
 
 @pytest.mark.unit
 async def test_http_serves_protected_resource_metadata():
-    """The RFC 9728 metadata route is served at the resource's well-known path."""
+    """The RFC 9728 metadata route is served at the resource's well-known path.
+
+    Both URLs are matched byte for byte: a client compares an issuer literally,
+    so a slash the SDK added or dropped between config and this document would
+    send it to an authorization server the JWT validator then rejects.
+    """
     app = build_pipefy_mcp_server(_REMOTE_RS_SETTINGS)
     async with _asgi_client(app) as client:
         resp = await client.get("/.well-known/oauth-protected-resource/mcp")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["resource"].rstrip("/") == RS_RESOURCE
-    advertised = [s.rstrip("/") for s in body["authorization_servers"]]
-    assert RS_ISSUER in advertised
+    assert body["resource"] == RS_RESOURCE
+    assert RS_ISSUER in body["authorization_servers"]
+
+
+@pytest.mark.unit
+async def test_metadata_keeps_a_configured_trailing_slash_end_to_end():
+    """A trailing slash in config reaches the metadata document unchanged.
+
+    The builder-level test in ``auth/test_resource_server.py`` pins the same
+    property one layer down. This one runs it through ``ResourceServerSettings``
+    (which strips whitespace but deliberately not slashes) and out through the
+    served document, so a normalizer added anywhere in between fails here.
+    ``RS_RESOURCE`` and ``RS_ISSUER`` carry no slash, so they cannot catch it.
+
+    The slash also moves the well-known route, since the SDK derives that path
+    from the resource URL's own path: the document is served at
+    ``/.well-known/oauth-protected-resource/mcp/`` and the unslashed path answers
+    ``307``. That is the SDK's behavior, not something this package chooses, and it
+    is the reason a deployment should configure the URL exactly as it means to
+    advertise it.
+    """
+    settings = remote_rs_settings().model_copy(
+        update={
+            "rs": ResourceServerSettings(resource_server_url=f"{RS_RESOURCE}/"),
+            "jwt": JwtValidationSettings(
+                issuer_url=f"{RS_ISSUER}/", jwks_uri=RS_JWKS_URI
+            ),
+        }
+    )
+    app = build_pipefy_mcp_server(settings)
+    async with _asgi_client(app) as client:
+        unslashed = await client.get("/.well-known/oauth-protected-resource/mcp")
+        resp = await client.get("/.well-known/oauth-protected-resource/mcp/")
+    assert unslashed.status_code == 307
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["resource"] == f"{RS_RESOURCE}/"
+    assert f"{RS_ISSUER}/" in body["authorization_servers"]
 
 
 # --- transport allowlist (DNS-rebinding) reaches the transport ----

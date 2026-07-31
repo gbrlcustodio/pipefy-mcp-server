@@ -212,7 +212,7 @@ def test_build_advertises_the_parsed_resource_url_in_the_metadata() -> None:
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
         issuer_url=_ISSUER,
     )
-    assert str(auth.resource_server_url).rstrip("/") == _RESOURCE
+    assert str(auth.resource_server_url) == _RESOURCE
 
 
 @pytest.mark.unit
@@ -255,7 +255,28 @@ def test_build_advertises_the_given_issuer() -> None:
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
         issuer_url=_ISSUER,
     )
-    assert str(auth.issuer_url).rstrip("/") == _ISSUER
+    assert str(auth.issuer_url) == _ISSUER
+
+
+@pytest.mark.unit
+def test_build_advertises_urls_byte_for_byte_including_a_trailing_slash() -> None:
+    """A configured trailing slash survives to the advertised metadata unchanged.
+
+    OAuth compares an issuer literally, so a normalizing layer between config and
+    the RFC 9728 document would point clients at a string the JWT validator does
+    not accept (``jwt.decode(issuer=...)`` is an exact match too). Pinning both
+    spellings means an SDK that starts adding or stripping a slash fails here
+    rather than at a client's handshake.
+    """
+    issuer_with_slash = f"{_ISSUER}/"
+    resource_with_slash = f"{_RESOURCE}/"
+    _, auth = build_resource_server_auth(
+        ResourceServer.from_url(resource_with_slash),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        issuer_url=issuer_with_slash,
+    )
+    assert str(auth.issuer_url) == issuer_with_slash
+    assert str(auth.resource_server_url) == resource_with_slash
 
 
 # --- ResourceServer.from_url (host-authority parsing) -------------------------

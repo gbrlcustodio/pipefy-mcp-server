@@ -178,7 +178,7 @@ class TestForProfile:
         assert allowlist is not None
         assert "mcp.example.com" in allowlist.allowed_hosts
         _, auth = runtime.inbound_auth
-        assert str(auth.resource_server_url).rstrip("/") == RS_RESOURCE
+        assert str(auth.resource_server_url) == RS_RESOURCE
 
     @pytest.mark.unit
     def test_local_builds_the_transport_allowlist_from_explicit_hosts(
@@ -264,7 +264,7 @@ class TestForProfile:
         runtime = McpRuntime.for_profile(settings)
 
         _, auth = runtime.inbound_auth
-        assert str(auth.issuer_url).rstrip("/") == login_issuer
+        assert str(auth.issuer_url) == login_issuer
 
     @pytest.mark.unit
     def test_local_static_token_binds_the_static_bearer(self, clear_auth_env):

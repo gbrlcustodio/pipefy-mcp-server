@@ -131,6 +131,22 @@ structured request line replaces uvicorn's text access log.
 independently of `PIPEFY_MCP_LOG_LEVEL` (which only governs SDK/root text
 logs), so quieting noisy text does not drop request/tool lines.
 
+**Mounting the returned app.** The app carries its own lifespan, and that lifespan
+is what enters `session_manager.run()`. Serving it directly (what `run_server`
+does) needs nothing extra, because uvicorn runs it. Mounting it under a host
+Starlette or FastAPI app does: Starlette does not run a mounted app's lifespan, so
+the host's own lifespan has to enter `app.session_manager.run()` (the property is
+only available once `wire_hosted_observability` has built the HTTP app). Without
+it the session manager never starts and every request fails.
+
+**Request body limit.** The SDK caps a Streamable HTTP POST body at 4 MiB and
+answers `413` above it. The wiring does not pass `max_request_body_size`, so that
+default stands. Attachments do not go through the JSON-RPC body (no tool takes
+bytes or base64; uploads use `file_path`, `file_url`, or a presigned URL), so the
+reachable case is a large free-text argument: knowledge-base `content`,
+`send_inbox_email.body`, `execute_graphql`. A hosted deployment that needs more
+raises it on the `streamable_http_app()` call.
+
 The request logger is **pure-ASGI middleware** (`RequestLogMiddleware`), never
 Starlette `BaseHTTPMiddleware`: `BaseHTTPMiddleware` buffers the response body,
 which breaks long-lived Streamable HTTP / SSE streams. The pure-ASGI middleware
@@ -385,3 +401,8 @@ a separate seam from the argument-validation envelope
 exists only there, below this chain, so the two are complementary, not
 interchangeable. The `Tool.run` patch is the one SDK internal this package still
 reaches for, tested against `mcp==2.0.0`.
+
+That patch and the provisional `middleware` list are why the dependency is pinned to
+`mcp[cli]==2.0.*` rather than opened to `<3`. Neither surface is covered by SemVer,
+and no CI job resolves past `uv.lock`, so a minor release could move either one with
+nothing to catch it before a release. Widening to a new minor means re-testing both.

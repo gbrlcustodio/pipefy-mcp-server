@@ -17,9 +17,15 @@ than ``params=PaginatedRequestParams(...)``.
 2026-07-28, where the server cannot call the client, and elicitation tests
 (``pipe_config``, ``service_account``) drive exactly that back channel. Legacy also
 matches what this server negotiates in production today, so the suite exercises the
-protocol revision the deployment actually serves. Adopting 2026-07-28 is a separate
-piece of work from the SDK upgrade (see #543); when it happens, the override below
-is the one place to flip.
+protocol revision the deployment actually serves.
+
+Adopting 2026-07-28 is separate work from the SDK upgrade (#543 records why the two
+are separable). Flipping the ``setdefault`` below is one line, and it comes last:
+under that revision a server-initiated elicitation raises ``NoBackChannelError``, so
+``pipe_config`` and ``service_account`` have to move to ``InputRequiredResult``
+first, and the ``ctx.debug`` / ``ctx.info`` calls across the tool modules stop
+reaching clients that do not set ``logging.optInLogMessages``. Both migrations
+belong in the same piece of work as the flip.
 """
 
 from __future__ import annotations

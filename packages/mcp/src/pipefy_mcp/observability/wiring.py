@@ -36,6 +36,19 @@ def wire_hosted_observability(
     settings onto this call. The serving path leaves it off, so a POST reply is
     SSE-framed as before; the observability tests set it to read a reply as plain
     JSON without an SSE parser.
+
+    The returned app owns its own lifespan, and that lifespan is what enters
+    ``session_manager.run()``. ``run_server`` hands the app straight to uvicorn,
+    which runs the lifespan, so a served deployment needs nothing further. An
+    embedder that mounts the app under a host Starlette or FastAPI app takes on the
+    obligation instead, because Starlette does not run a mounted app's lifespan: the
+    host's own lifespan must enter ``app.session_manager.run()`` (the property
+    raises until this function has been called). Without that, the session manager
+    never starts and every request fails.
+
+    ``max_request_body_size`` is not forwarded, so the SDK's 4 MiB Streamable HTTP
+    POST limit applies and a larger body gets a 413. No tool takes bytes or base64,
+    so uploads are unaffected; a long free-text argument is the reachable case.
     """
     http_app = app.streamable_http_app(
         host=host,

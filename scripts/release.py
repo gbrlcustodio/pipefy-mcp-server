@@ -14,7 +14,16 @@ halves:
   local; nothing has left the machine. It stops and tells you to review.
 * ``publish`` — tag, push, watch the Release workflow, then verify. Asks for
   one explicit confirmation before the irreversible push.
+* ``alpha`` — cut a staging alpha off ``dev`` in one step (bump, tag, publish).
 * ``verify`` — re-run the post-publish checks for a tag.
+
+Which branch a tag may be cut from follows from the version itself, not the
+operator's checkout (``release_branch_for``): **alphas ship from ``dev``** as
+staging cuts, **betas and stables ship from ``main``**. The two flows differ in
+more than the branch — an alpha does not stamp the CHANGELOG, so consecutive
+alphas share one accumulating ``## [Unreleased]`` section that the eventual beta
+promotion stamps in full — so they are separate subcommands rather than one with
+a flag.
 
 The version transform itself is NOT reimplemented here: ``bump_version.py``
 stays the sole owner of which files carry the version and how they are
@@ -45,6 +54,9 @@ import bump_version  # noqa: E402
 REPO_ROOT = bump_version.REPO_ROOT
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 INSTALL_SH = REPO_ROOT / "install.sh"
+
+DEV_BRANCH = "dev"
+MAIN_BRANCH = "main"
 
 # Filename stems of the five wheels every release must attach (order-agnostic).
 EXPECTED_WHEEL_STEMS = (
@@ -114,21 +126,52 @@ def unreleased_body() -> str:
     return m.group(2).strip()
 
 
-def preflight_prepare() -> None:
+def release_branch_for(version: str) -> str:
+    """The branch ``version`` must be cut from, derived from its pre-release track.
+
+    Alphas are staging cuts off ``dev``: they exist so a release can be exercised
+    in staging (the hosted MCP server wrapper pins an exact PyPI version) before
+    it ships. Betas and stables ship from ``main``. Deriving the branch from the
+    version's own track — rather than trusting the operator's checkout — means a
+    tag can never be cut from the wrong branch.
+    """
+    track = bump_version.prerelease_track(version)
+    return DEV_BRANCH if track == "alpha" else MAIN_BRANCH
+
+
+def _refuse_alpha_target(target: str) -> None:
+    """Refuse an alpha target in a ``main``-bound flow (``prepare``, ``release_pr``).
+
+    Only ``alpha`` may cut an alpha, because it is the one flow that skips the
+    CHANGELOG stamp. Reaching an alpha through a ``main``-bound flow would burn
+    the accumulating ``## [Unreleased]`` section into an alpha heading and aim
+    that commit at ``main``. ``publish`` refuses the tag later so nothing reaches
+    PyPI, but by then the CHANGELOG contract is already broken, and a merged
+    release PR would carry the damage onto ``main``.
+    """
+    if release_branch_for(target) != MAIN_BRANCH:
+        raise ReleaseError(
+            f"v{target} is an alpha, a staging cut off {DEV_BRANCH}. Cut it with "
+            f"'release.py alpha <bump>', or promote the line to a "
+            f"{MAIN_BRANCH}-bound release with the 'beta' bump."
+        )
+
+
+def preflight_prepare(branch: str) -> None:
     """Assert the repo is in a releasable state before mutating anything."""
-    branch = current_branch()
-    if branch != "main":
-        raise ReleaseError(f"Must release from 'main', on '{branch}'")
+    checked_out = current_branch()
+    if checked_out != branch:
+        raise ReleaseError(f"Must release from {branch!r}, on {checked_out!r}")
     if not working_tree_clean():
         raise ReleaseError("Working tree is dirty; commit or stash first")
 
-    run(["git", "fetch", "--quiet", "origin", "main"])
+    run(["git", "fetch", "--quiet", "origin", branch])
     local = capture(["git", "rev-parse", "HEAD"])
-    remote = capture(["git", "rev-parse", "origin/main"])
+    remote = capture(["git", "rev-parse", f"origin/{branch}"])
     if local != remote:
         raise ReleaseError(
-            "Local 'main' differs from 'origin/main'; pull/push so they match "
-            "before cutting a release"
+            f"Local {branch!r} differs from 'origin/{branch}'; pull/push so they "
+            "match before cutting a release"
         )
 
     if not unreleased_body():
@@ -172,11 +215,12 @@ def target_for(bump_arg: str, current: str) -> str:
         "minor": bump_version.bump_minor,
         "patch": bump_version.bump_patch,
         "prerelease": bump_version.bump_prerelease,
+        "beta": bump_version.bump_beta,
     }
     if bump_arg not in bumpers:
         raise ReleaseError(
             f"Unknown bump {bump_arg!r}. Use major, minor, patch, prerelease, "
-            "or version=X.Y.Z"
+            "beta, or version=X.Y.Z"
         )
     return bumpers[bump_arg](current)
 
@@ -187,12 +231,16 @@ def compute_target_version(bump_arg: str) -> tuple[str, str]:
     return current, target_for(bump_arg, current)
 
 
-def _apply_prepare(bump_arg: str, target: str) -> str:
-    """Bump, stamp the CHANGELOG, and commit on the current branch.
+def _apply_prepare(bump_arg: str, target: str, *, stamp: bool = True) -> str:
+    """Bump, optionally stamp the CHANGELOG, and commit on the current branch.
 
-    The mutating core shared by ``prepare`` (main flow) and ``release_pr``
-    (dev→main flow); callers own the preflight and confirmation. Returns the
-    version bump_version actually wrote.
+    The mutating core shared by ``prepare`` (main flow), ``release_pr``
+    (dev→main flow), and ``alpha`` (staging cut off dev); callers own the
+    preflight and confirmation. Returns the version bump_version actually wrote.
+
+    ``stamp=False`` leaves ``## [Unreleased]`` intact — what the alpha flow
+    needs, since consecutive alphas share one accumulating section (see
+    ``alpha``).
     """
     # bump_version.py owns the transform; run its CLI so the file set and lock
     # refresh live in exactly one place.
@@ -202,7 +250,8 @@ def _apply_prepare(bump_arg: str, target: str) -> str:
         raise ReleaseError(
             f"bump_version wrote {version!r} but {target!r} was confirmed"
         )
-    stamp_changelog(version)
+    if stamp:
+        stamp_changelog(version)
     run(["git", "add", "-A"])
     run(["git", "commit", "-m", f"chore: release v{version}"])
     return version
@@ -210,9 +259,10 @@ def _apply_prepare(bump_arg: str, target: str) -> str:
 
 def prepare(bump_arg: str, *, assume_yes: bool = False) -> str:
     """Bump, stamp the CHANGELOG, and commit on ``main``. Returns the version."""
-    preflight_prepare()
+    preflight_prepare(MAIN_BRANCH)
 
     current, target = compute_target_version(bump_arg)
+    _refuse_alpha_target(target)
     confirm(
         f"Will bump {current} -> {target} and cut tag v{target}. Proceed?",
         assume_yes=assume_yes,
@@ -228,9 +278,6 @@ def prepare(bump_arg: str, *, assume_yes: bool = False) -> str:
 
 
 # --- release-pr (dev -> main) ----------------------------------------------
-
-DEV_BRANCH = "dev"
-MAIN_BRANCH = "main"
 
 
 def branch_exists(branch: str) -> bool:
@@ -327,6 +374,11 @@ def release_pr(bump_arg: str, *, assume_yes: bool = False) -> None:
     current = _version_at(f"origin/{DEV_BRANCH}")
     target = target_for(bump_arg, current)
 
+    # Refuse before the branch/bump: on an alpha line, `prerelease` computes the
+    # next alpha, which belongs to the `alpha` flow (no CHANGELOG stamp), not to
+    # a main-bound release PR.
+    _refuse_alpha_target(target)
+
     # Guard against a downgrade-shaped release: if origin/dev is behind
     # origin/main (a release bump on main not back-merged into dev), the bump
     # computed from dev can land below main's already-released version.
@@ -375,6 +427,63 @@ def release_pr(bump_arg: str, *, assume_yes: bool = False) -> None:
     )
     print(f"    git checkout {MAIN_BRANCH} && git pull")
     print("    uv run python scripts/release.py publish")
+
+
+# --- alpha (staging cut off dev) -------------------------------------------
+
+
+def alpha(bump_arg: str, *, assume_yes: bool = False) -> None:
+    """Cut a staging alpha straight off ``dev``: bump, commit, tag, push, verify.
+
+    Alphas exist to exercise a release in staging before it ships, so there is no
+    release PR — ``dev`` is already the integration branch and the tag is cut on
+    it in place. The wheels land on PyPI as a pre-release for the hosted MCP
+    server wrapper to pin.
+
+    The CHANGELOG is deliberately NOT stamped. ``## [Unreleased]`` keeps
+    accumulating across ``alpha.1..alpha.N`` and is what the Release workflow
+    uses as an alpha's release body, so the eventual ``beta`` promotion on
+    ``main`` still stamps the whole set into one section rather than finding the
+    notes already spent.
+    """
+    preflight_prepare(DEV_BRANCH)
+
+    run(["git", "fetch", "--quiet", "origin", MAIN_BRANCH])
+    current, target = compute_target_version(bump_arg)
+
+    if release_branch_for(target) != DEV_BRANCH:
+        raise ReleaseError(
+            f"v{target} is not an alpha, so it does not belong on {DEV_BRANCH}. "
+            f"Ship it from {MAIN_BRANCH} with 'release-pr' + 'publish'."
+        )
+
+    # An alpha's release body is dev's ## [Unreleased]. If dev is behind main,
+    # that section still holds notes main has already released under its own
+    # heading, so the alpha would re-ship them — and PEP 440 would order the
+    # alpha below main's beta besides.
+    main_version = _version_at(f"origin/{MAIN_BRANCH}")
+    if not _target_ahead_of_main(target, main_version):
+        raise ReleaseError(
+            f"Computed target v{target} is not ahead of origin/{MAIN_BRANCH} "
+            f"(v{main_version}); origin/{DEV_BRANCH} (v{current}) is behind "
+            f"{MAIN_BRANCH}. Back-merge {MAIN_BRANCH} into {DEV_BRANCH} before "
+            "cutting an alpha."
+        )
+
+    confirm(
+        f"Will bump {current} -> {target} on {DEV_BRANCH} and cut tag v{target} "
+        f"(origin/{MAIN_BRANCH} is at {main_version}). Proceed?",
+        assume_yes=assume_yes,
+    )
+
+    version = _apply_prepare(bump_arg, target, stamp=False)
+    _tag_and_publish(DEV_BRANCH, version, assume_yes=assume_yes)
+    print(
+        f"\nStaging alpha v{version} is on PyPI. Pin it in the hosted server "
+        "wrapper to exercise this release in staging."
+    )
+    print(f"When it checks out, promote it to a beta release from {MAIN_BRANCH}:")
+    print("    uv run python scripts/release.py release-pr beta")
 
 
 # --- publish ---------------------------------------------------------------
@@ -463,14 +572,29 @@ def watch_release_workflow(tag: str, *, exclude: frozenset[str] = frozenset()) -
     run(["gh", "run", "watch", run_id, "--exit-status"])
 
 
-def publish(*, assume_yes: bool) -> None:
-    """Tag, push, watch the workflow, then verify the published release."""
-    if current_branch() != "main":
-        raise ReleaseError("Must publish from 'main'")
-    if not working_tree_clean():
-        raise ReleaseError("Working tree is dirty; publish the exact reviewed commit")
+def _tag_and_publish(branch: str, version: str, *, assume_yes: bool) -> None:
+    """Tag ``version``, push ``branch`` and the tag, watch the workflow, verify.
 
-    version = bump_version.read_sdk_version()
+    The irreversible half, shared by ``publish`` (beta/stable off ``main``) and
+    ``alpha`` (staging cut off ``dev``) so both cross the same gate and run the
+    same post-publish checks.
+    """
+    # Re-assert the branch here, not just in the caller's preflight: the bump
+    # commit lands in between, and the tag is cut from whatever HEAD is now. The
+    # Release workflow checks this again server-side, since that is where the
+    # publish actually happens.
+    checked_out = current_branch()
+    if checked_out != branch:
+        raise ReleaseError(
+            f"v{version} must be tagged on {branch!r}, but {checked_out!r} is "
+            "checked out"
+        )
+    if release_branch_for(version) != branch:
+        raise ReleaseError(
+            f"v{version} does not belong on {branch!r} "
+            f"(its track ships from {release_branch_for(version)!r})"
+        )
+
     tag = f"v{version}"
     if tag_exists(tag):
         raise ReleaseError(f"Tag {tag} already exists on origin")
@@ -487,9 +611,9 @@ def publish(*, assume_yes: bool) -> None:
         assume_yes=assume_yes,
     )
 
-    # Push main before tagging so a rejected main push never leaves a dangling
-    # local tag to trip the next attempt.
-    run(["git", "push", "origin", "main"])
+    # Push the branch before tagging so a rejected branch push never leaves a
+    # dangling local tag to trip the next attempt.
+    run(["git", "push", "origin", branch])
     run(["git", "tag", tag])
     # Snapshot runs that already exist for this tag (from a prior cut) so the
     # watcher waits for the run this push creates, not a stale completed one.
@@ -500,6 +624,23 @@ def publish(*, assume_yes: bool) -> None:
     verify(tag)
     print(f"\nReleased {tag}.")
     print_release_links(tag, version)
+
+
+def publish(*, assume_yes: bool) -> None:
+    """Tag, push, watch the workflow, then verify the published release."""
+    version = bump_version.read_sdk_version()
+    if release_branch_for(version) != MAIN_BRANCH:
+        raise ReleaseError(
+            f"v{version} is an alpha, which is a staging cut off {DEV_BRANCH}. "
+            f"Use 'release.py alpha <bump>' instead, or promote it to a beta "
+            f"first with 'release-pr beta'."
+        )
+    if current_branch() != MAIN_BRANCH:
+        raise ReleaseError(f"Must publish from {MAIN_BRANCH!r}")
+    if not working_tree_clean():
+        raise ReleaseError("Working tree is dirty; publish the exact reviewed commit")
+
+    _tag_and_publish(MAIN_BRANCH, version, assume_yes=assume_yes)
 
 
 # --- verify ----------------------------------------------------------------
@@ -577,9 +718,8 @@ def pep440_candidates(text: str) -> set[str]:
     return found
 
 
-def verify_installer_resolves(tag: str) -> None:
-    """Assert install.sh's dry-run resolves the just-cut tag as the latest release."""
-    print("Verifying install.sh resolves the latest release ...")
+def _installer_dry_run() -> str:
+    """Run install.sh's dry-run and return its combined output."""
     result = subprocess.run(
         [
             "sh",
@@ -594,13 +734,63 @@ def verify_installer_resolves(tag: str) -> None:
         capture_output=True,
         text=True,
     )
-    output = result.stdout + result.stderr
+    return result.stdout + result.stderr
+
+
+def verify_installer_resolves(tag: str) -> None:
+    """Assert install.sh's dry-run resolves the just-cut tag as the latest release."""
+    print("Verifying install.sh resolves the latest release ...")
+    output = _installer_dry_run()
     expected = f"Resolved tag: {tag}"
     if expected not in output:
         raise ReleaseError(
             f"install.sh dry-run did not report '{expected}'. Output:\n{output}"
         )
     print(f"install.sh resolves {tag}.")
+
+
+def verify_installer_skips(tag: str) -> None:
+    """Assert install.sh's dry-run resolves a non-alpha release, not ``tag``.
+
+    The inverse of ``verify_installer_resolves``, and the check that keeps a
+    staging alpha from leaking into the public one-line install: the alpha is on
+    PyPI (so the hosted wrapper can pin it) and has a GitHub Release (so its
+    wheels are downloadable), but ``install.sh`` must stay on the newest
+    non-alpha release. Without this, publishing an alpha would silently
+    repoint ``curl … | sh`` at an untested build.
+
+    Asserts the resolved tag is not an alpha at all, rather than merely not this
+    one: a filter that skipped only the newest alpha would still leave the
+    installer on an older staging cut, which is the same leak.
+    """
+    print(f"Verifying install.sh skips the staging alpha {tag} ...")
+    output = _installer_dry_run()
+    if f"Resolved tag: {tag}" in output:
+        raise ReleaseError(
+            f"install.sh dry-run resolved the staging alpha {tag}; it must stay "
+            f"on the newest non-alpha release. Output:\n{output}"
+        )
+    m = re.search(r"Resolved tag: (\S+)", output)
+    if not m:
+        raise ReleaseError(
+            f"install.sh dry-run reported no resolved tag at all. Output:\n{output}"
+        )
+    resolved = m.group(1)
+    from packaging.version import InvalidVersion
+
+    try:
+        track = bump_version.prerelease_track(version_from_tag(resolved))
+    except InvalidVersion:
+        raise ReleaseError(
+            f"install.sh resolved {resolved!r}, which is not a version tag; "
+            f"cannot confirm it is not an alpha. Output:\n{output}"
+        ) from None
+    if track == "alpha":
+        raise ReleaseError(
+            f"install.sh resolved {resolved}, which is also an alpha; the "
+            f"installer must land on a non-alpha release. Output:\n{output}"
+        )
+    print(f"install.sh stays on {resolved}.")
 
 
 def print_release_links(tag: str, version: str) -> None:
@@ -624,11 +814,18 @@ def version_from_tag(tag: str) -> str:
 
 
 def verify(tag: str) -> None:
-    """Run all post-publish checks; raise on the first failure."""
+    """Run all post-publish checks; raise on the first failure.
+
+    The installer check flips by track: a beta/stable must become what
+    ``install.sh`` hands out, an alpha must not.
+    """
     version = version_from_tag(tag)
     verify_github_wheels(tag)
     verify_pypi_install(version)
-    verify_installer_resolves(tag)
+    if bump_version.prerelease_track(version) == "alpha":
+        verify_installer_skips(tag)
+    else:
+        verify_installer_resolves(tag)
     print(f"\nAll checks passed for {tag}.")
 
 
@@ -644,7 +841,7 @@ def main() -> int:
     )
     p_prepare.add_argument(
         "bump",
-        help="major | minor | patch | prerelease | version=X.Y.Z",
+        help="major | minor | patch | prerelease | beta | version=X.Y.Z",
     )
     p_prepare.add_argument(
         "--yes", action="store_true", help="skip the version confirmation prompt"
@@ -655,10 +852,21 @@ def main() -> int:
     )
     p_release_pr.add_argument(
         "bump",
-        help="major | minor | patch | prerelease | version=X.Y.Z",
+        help="major | minor | patch | prerelease | beta | version=X.Y.Z",
     )
     p_release_pr.add_argument(
         "--yes", action="store_true", help="skip the confirmation prompt"
+    )
+
+    p_alpha = sub.add_parser(
+        "alpha", help="cut a staging alpha off dev: bump, tag, publish (irreversible)"
+    )
+    p_alpha.add_argument(
+        "bump",
+        help="prerelease (next alpha in the line) | version=X.Y.Z-alpha.N",
+    )
+    p_alpha.add_argument(
+        "--yes", action="store_true", help="skip the confirmation prompts"
     )
 
     p_publish = sub.add_parser(
@@ -677,6 +885,8 @@ def main() -> int:
             prepare(args.bump, assume_yes=args.yes)
         elif args.command == "release-pr":
             release_pr(args.bump, assume_yes=args.yes)
+        elif args.command == "alpha":
+            alpha(args.bump, assume_yes=args.yes)
         elif args.command == "publish":
             publish(assume_yes=args.yes)
         elif args.command == "verify":

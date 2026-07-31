@@ -343,3 +343,52 @@ def test_write_dep_pins_rejects_duplicate_dep_occurrence(
 
     with pytest.raises(ValueError, match="Expected one 'pipefy' dependency"):
         _bump.write_dep_pins("9.9.9")
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("0.5.0-alpha.1", "alpha"),
+        ("0.5.0a1", "alpha"),
+        ("0.5.0-beta.2", "beta"),
+        ("0.5.0b2", "beta"),
+        ("0.5.0-rc.1", "rc"),
+        ("0.5.0rc1", "rc"),
+        ("0.5.0", None),
+        ("1.0.0", None),
+    ],
+)
+def test_prerelease_track_ignores_spelling(version: str, expected: str | None) -> None:
+    # The branch gate in release.py keys off this, so the SemVer-style and the
+    # compact PEP 440 form must classify identically.
+    assert _bump.prerelease_track(version) == expected
+
+
+@pytest.mark.parametrize(
+    ("current", "expected"),
+    [
+        # Promotion keeps X.Y.Z and resets the counter, preserving the style.
+        ("0.5.0-alpha.1", "0.5.0-beta.1"),
+        ("0.5.0-alpha.7", "0.5.0-beta.1"),
+        ("0.5.0a3", "0.5.0b1"),
+        ("1.0.0.alpha.2", "1.0.0.beta.1"),
+    ],
+)
+def test_bump_beta_promotes_alpha_to_first_beta(current: str, expected: str) -> None:
+    assert _bump.bump_beta(current) == expected
+
+
+def test_bump_beta_promotion_is_an_upgrade() -> None:
+    # PEP 440 must order the promotion upward, or release_pr's ahead-of-main
+    # guard would reject its own output.
+    from packaging.version import Version
+
+    assert Version(_bump.bump_beta("0.5.0-alpha.3")) > Version("0.5.0-alpha.3")
+
+
+@pytest.mark.parametrize("current", ["0.5.0-beta.1", "0.5.0-rc.1", "0.5.0"])
+def test_bump_beta_refuses_non_alpha(current: str) -> None:
+    # Only alphas promote; walking a beta line is `prerelease`, and opening a
+    # new line is an explicit `version=`, so no core bump is implied here.
+    with pytest.raises(ValueError, match="not an alpha"):
+        _bump.bump_beta(current)

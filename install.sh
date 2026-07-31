@@ -5,6 +5,10 @@
 # discovers its wheel assets, installs the CLI and MCP server via
 # `uv tool install`, optionally installs skills via `npx skills add`, and
 # writes the MCP server registration into the chosen client's config.
+#
+# "Latest" deliberately excludes alpha tags: those are staging cuts off `dev`,
+# published for the hosted MCP server to pin, and must never be what this
+# installer hands out. Pass --version to install one on purpose.
 
 set -eu
 
@@ -75,7 +79,8 @@ Options:
                       One of: claude-code, claude-desktop, cursor, codex, none.
                       Defaults to 'none' (prints snippet to paste).
   --version <tag>     Install a specific GitHub Release tag (e.g. v0.2.0-beta.2).
-                      Defaults to the most recent release (incl. prereleases).
+                      Defaults to the most recent release, skipping staging
+                      alphas; pass the tag to install one of those on purpose.
   --prefix <dir>      Pass through as UV_TOOL_DIR for uv tool install.
   --allow-root        Allow running as root (refuses by default).
   --dry-run           Print commands without executing them.
@@ -232,19 +237,30 @@ pick_system_python() {
 resolve_release() {
     if [ -n "$TAG" ]; then
         say "Using --version: $TAG"
-        api_url="https://api.github.com/repos/$REPO/releases/tags/$TAG"
     else
         say "Resolving latest release from GitHub..."
-        api_url="https://api.github.com/repos/$REPO/releases?per_page=1"
-    fi
-    body=$(curl -fsSL "$api_url") || err "Failed to reach GitHub API: $api_url"
-    if [ -z "$TAG" ]; then
-        TAG=$(printf '%s' "$body" \
-            | grep -m1 '"tag_name"' \
-            | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-        [ -n "$TAG" ] || err "GitHub returned no releases for $REPO"
+        # The releases list is newest-first, so the first non-alpha tag in it is
+        # the newest release a default install should get. Filtering by tag
+        # shape (rather than the API's `prerelease` flag) keeps this working
+        # while the whole line is still pre-1.0 betas, which must stay
+        # installable.
+        list_url="https://api.github.com/repos/$REPO/releases?per_page=30"
+        list=$(curl -fsSL "$list_url") \
+            || err "Failed to reach GitHub API: $list_url"
+        # -i so the spelling agrees with the release tooling's own classifier
+        # (scripts/bump_version.py prerelease_track), which is case-insensitive.
+        TAG=$(printf '%s' "$list" \
+            | grep '"tag_name"' \
+            | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' \
+            | grep -Eiv '^v?[0-9]+\.[0-9]+\.[0-9]+[-_.]?(a|alpha)\.?[0-9]+$' \
+            | head -n 1)
+        [ -n "$TAG" ] || err "GitHub returned no non-alpha releases for $REPO"
         say "Resolved tag: $TAG"
     fi
+    # Fetch the chosen release on its own so the wheel URLs below come from that
+    # tag only, never from a neighbour in the list above.
+    api_url="https://api.github.com/repos/$REPO/releases/tags/$TAG"
+    body=$(curl -fsSL "$api_url") || err "Failed to reach GitHub API: $api_url"
     WHEEL_URLS=$(printf '%s' "$body" \
         | grep '"browser_download_url"' \
         | grep -oE 'https://[^"]+\.whl' \

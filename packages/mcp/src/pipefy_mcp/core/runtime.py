@@ -31,14 +31,17 @@ class McpRuntime:
 
     Built once at server startup via :meth:`for_profile`, which turns the resolved
     settings into wired resources: the outbound identity (whose :meth:`resolve`
-    backs each request's session), the HTTP transport's DNS-rebinding allowlist, and,
-    under the ``remote`` profile, the inbound resource-server ``(verifier, auth)`` pair
-    the SDK uses to validate each caller's bearer. It parses the ``resource_server_url``
-    into one :class:`ResourceServer` and feeds it to both the inbound-auth and the
-    allowlist builders, so they cannot disagree on the resource host. It owns the
-    process-scoped :class:`PipefyEngine` (the shared endpoints and GraphQL schema cache,
-    built auth-agnostic with no network I/O) and opens a cheap per-request session bound
-    to the caller's identity.
+    backs each request's session) and, under the ``remote`` profile, the inbound
+    resource-server ``(verifier, auth)`` pair the SDK uses to validate each caller's
+    bearer. It owns the process-scoped :class:`PipefyEngine` (the shared endpoints and
+    GraphQL schema cache, built auth-agnostic with no network I/O) and opens a cheap
+    per-request session bound to the caller's identity.
+
+    The HTTP transport's DNS-rebinding allowlist is deliberately not held here. The
+    SDK takes it per transport, on ``streamable_http_app()``, so it travels with the
+    serving call instead: :func:`pipefy_mcp.server.run_server` resolves it through
+    :func:`pipefy_mcp.core.transport_security.transport_security_for`, and only the
+    HTTP transport has anything to apply it to.
 
     Building the engine here is safe off the event loop: it does no network I/O and
     binds nothing to a running loop (its endpoints open a fresh per-request
@@ -46,7 +49,7 @@ class McpRuntime:
     later handles requests.
 
     This is a stepping stone toward a single per-app runtime; today it owns the
-    shared engine, the inbound-auth pair, and the transport allowlist.
+    shared engine and the inbound-auth pair.
     """
 
     def __init__(
@@ -83,11 +86,9 @@ class McpRuntime:
         """Build the runtime for the resolved profile, wiring inbound and outbound auth.
 
         The composition root's one build step: it parses the ``resource_server_url``
-        once, builds the transport allowlist from that one parsed resource, and
-        selects the per-profile identity (and, for ``remote``, the inbound-auth pair).
-        Parsing here keeps the resource a single value both the allowlist and the
-        inbound-auth pair are derived from, so they cannot disagree on the host; the
-        one ``cls(...)`` call then wires the fields common to both profiles.
+        into one :class:`ResourceServer` and selects the per-profile identity from it
+        (and, for ``remote``, the inbound-auth pair derived from that same resource).
+        The one ``cls(...)`` call then wires the fields common to both profiles.
         """
         url = settings.rs.resource_server_url
         resource = ResourceServer.from_url(url) if url else None

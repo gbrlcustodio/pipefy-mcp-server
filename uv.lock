@@ -1194,6 +1194,7 @@ dependencies = [
     { name = "pipefy-infra" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "starlette" },
 ]
 
 [package.dev-dependencies]
@@ -1216,6 +1217,7 @@ requires-dist = [
     { name = "pipefy-infra", editable = "packages/infra" },
     { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "pydantic-settings", specifier = ">=2.8.1" },
+    { name = "starlette", specifier = ">=1.3.1,<2" },
 ]
 
 [package.metadata.requires-dev]

@@ -146,3 +146,83 @@ def test_stamp_changelog_requires_unreleased(tmp_path: Path, monkeypatch) -> Non
 
     with pytest.raises(_release.ReleaseError):
         _release.stamp_changelog("2.0.0")
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        # Alphas are staging cuts; everything else ships from main.
+        ("0.5.0-alpha.1", "dev"),
+        ("0.5.0a1", "dev"),
+        ("0.5.0-beta.1", "main"),
+        ("0.5.0-rc.1", "main"),
+        ("0.5.0", "main"),
+        ("1.0.0", "main"),
+    ],
+)
+def test_release_branch_for_derives_from_track(version: str, expected: str) -> None:
+    assert _release.release_branch_for(version) == expected
+
+
+def test_publish_refuses_an_alpha(monkeypatch) -> None:
+    # An alpha must go through `alpha` (which cuts it on dev without stamping the
+    # CHANGELOG); reaching it via `publish` would tag it on main.
+    monkeypatch.setattr(
+        _release.bump_version, "read_sdk_version", lambda: "0.5.0-alpha.1"
+    )
+    with pytest.raises(_release.ReleaseError, match="staging cut off dev"):
+        _release.publish(assume_yes=True)
+
+
+def test_beta_bump_is_reachable_through_target_for() -> None:
+    # The promotion the dev->main flow needs every cycle must be a named bump,
+    # not a hand-typed version= string.
+    assert _release.target_for("beta", "0.5.0-alpha.3") == "0.5.0-beta.1"
+
+
+def test_alpha_target_is_ahead_of_a_released_beta() -> None:
+    # The convention's core invariant: the alpha line opens a new X.Y.Z, so it
+    # sorts above main's already-released beta rather than below it.
+    assert _release._target_ahead_of_main("0.5.0-alpha.1", "0.4.0-beta.2")
+    # And an alpha on the same core as that beta does not -- PEP 440 puts
+    # 0.4.0a1 below 0.4.0b2, which is why `alpha` guards on this.
+    assert not _release._target_ahead_of_main("0.4.0-alpha.1", "0.4.0-beta.2")
+
+
+def test_verify_installer_skips_accepts_a_different_tag(monkeypatch) -> None:
+    monkeypatch.setattr(
+        _release, "_installer_dry_run", lambda: "Resolved tag: v0.4.0-beta.2\n"
+    )
+    _release.verify_installer_skips("v0.5.0-alpha.1")
+
+
+def test_verify_installer_skips_rejects_the_alpha(monkeypatch) -> None:
+    # The regression this guards: publishing an alpha repoints the public
+    # one-line install at an untested staging build.
+    monkeypatch.setattr(
+        _release, "_installer_dry_run", lambda: "Resolved tag: v0.5.0-alpha.1\n"
+    )
+    with pytest.raises(_release.ReleaseError, match="resolved the staging alpha"):
+        _release.verify_installer_skips("v0.5.0-alpha.1")
+
+
+def test_verify_installer_skips_rejects_no_resolution(monkeypatch) -> None:
+    monkeypatch.setattr(_release, "_installer_dry_run", lambda: "boom\n")
+    with pytest.raises(_release.ReleaseError, match="no resolved tag"):
+        _release.verify_installer_skips("v0.5.0-alpha.1")
+
+
+def test_tag_and_publish_refuses_a_mismatched_checkout(monkeypatch) -> None:
+    # The bump commit lands between the caller's preflight and the tag, so the
+    # branch is re-asserted here; a stray checkout must not get a tag.
+    monkeypatch.setattr(_release, "current_branch", lambda: "main")
+    with pytest.raises(_release.ReleaseError, match="must be tagged on 'dev'"):
+        _release._tag_and_publish("dev", "0.5.0-alpha.1", assume_yes=True)
+
+
+def test_tag_and_publish_refuses_a_track_branch_mismatch(monkeypatch) -> None:
+    # Even standing on the requested branch, the version's own track decides
+    # where it may be tagged -- so a beta can never be tagged on dev.
+    monkeypatch.setattr(_release, "current_branch", lambda: "dev")
+    with pytest.raises(_release.ReleaseError, match="does not belong on 'dev'"):
+        _release._tag_and_publish("dev", "0.5.0-beta.1", assume_yes=True)

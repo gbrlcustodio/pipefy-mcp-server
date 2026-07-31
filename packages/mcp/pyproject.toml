@@ -29,6 +29,12 @@ dependencies = [
     # a major starlette release a deliberate upgrade, which the SDK's own floor
     # (`starlette>=0.27` on Python < 3.14) would not.
     "starlette>=1.3.1,<2",
+    # Declared for the same reason as starlette: `run_server` imports uvicorn and
+    # builds a `Config`/`Server` pair on the `--transport http` path. `mcp` requires
+    # it too, but under a `sys_platform != 'emscripten'` marker, so the transitive
+    # guarantee is conditional. The floor is what resolves today; the `<1` cap keeps
+    # a major uvicorn release a deliberate upgrade.
+    "uvicorn>=0.34.0,<1",
 ]
 
 [tool.uv.sources]

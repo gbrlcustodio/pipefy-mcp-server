@@ -27,7 +27,9 @@ jobs:
           # release.py enforces locally (release_branch_for) -- enforced here
           # too, because this is the step that actually publishes, and a tag
           # pushed by hand from the wrong branch would otherwise sail through.
-          if printf '%s' "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+[-_.]?(a|alpha)\.?[0-9]+$'; then
+          # -i to agree with the release-notes step's own re.I match below, and
+          # with prerelease_track in scripts/bump_version.py.
+          if printf '%s' "$ver" | grep -Eiq '^[0-9]+\.[0-9]+\.[0-9]+[-_.]?(a|alpha)\.?[0-9]+$'; then
             expected=dev
           else
             expected=main

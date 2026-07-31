@@ -247,10 +247,12 @@ resolve_release() {
         list_url="https://api.github.com/repos/$REPO/releases?per_page=30"
         list=$(curl -fsSL "$list_url") \
             || err "Failed to reach GitHub API: $list_url"
+        # -i so the spelling agrees with the release tooling's own classifier
+        # (scripts/bump_version.py prerelease_track), which is case-insensitive.
         TAG=$(printf '%s' "$list" \
             | grep '"tag_name"' \
             | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' \
-            | grep -Ev '^v?[0-9]+\.[0-9]+\.[0-9]+[-_.]?(a|alpha)\.?[0-9]+$' \
+            | grep -Eiv '^v?[0-9]+\.[0-9]+\.[0-9]+[-_.]?(a|alpha)\.?[0-9]+$' \
             | head -n 1)
         [ -n "$TAG" ] || err "GitHub returned no non-alpha releases for $REPO"
         say "Resolved tag: $TAG"

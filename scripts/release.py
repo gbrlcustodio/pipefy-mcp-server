@@ -139,6 +139,24 @@ def release_branch_for(version: str) -> str:
     return DEV_BRANCH if track == "alpha" else MAIN_BRANCH
 
 
+def _refuse_alpha_target(target: str) -> None:
+    """Refuse an alpha target in a ``main``-bound flow (``prepare``, ``release_pr``).
+
+    Only ``alpha`` may cut an alpha, because it is the one flow that skips the
+    CHANGELOG stamp. Reaching an alpha through a ``main``-bound flow would burn
+    the accumulating ``## [Unreleased]`` section into an alpha heading and aim
+    that commit at ``main``. ``publish`` refuses the tag later so nothing reaches
+    PyPI, but by then the CHANGELOG contract is already broken, and a merged
+    release PR would carry the damage onto ``main``.
+    """
+    if release_branch_for(target) != MAIN_BRANCH:
+        raise ReleaseError(
+            f"v{target} is an alpha, a staging cut off {DEV_BRANCH}. Cut it with "
+            f"'release.py alpha <bump>', or promote the line to a "
+            f"{MAIN_BRANCH}-bound release with the 'beta' bump."
+        )
+
+
 def preflight_prepare(branch: str) -> None:
     """Assert the repo is in a releasable state before mutating anything."""
     checked_out = current_branch()
@@ -244,6 +262,7 @@ def prepare(bump_arg: str, *, assume_yes: bool = False) -> str:
     preflight_prepare(MAIN_BRANCH)
 
     current, target = compute_target_version(bump_arg)
+    _refuse_alpha_target(target)
     confirm(
         f"Will bump {current} -> {target} and cut tag v{target}. Proceed?",
         assume_yes=assume_yes,
@@ -354,6 +373,11 @@ def release_pr(bump_arg: str, *, assume_yes: bool = False) -> None:
 
     current = _version_at(f"origin/{DEV_BRANCH}")
     target = target_for(bump_arg, current)
+
+    # Refuse before the branch/bump: on an alpha line, `prerelease` computes the
+    # next alpha, which belongs to the `alpha` flow (no CHANGELOG stamp), not to
+    # a main-bound release PR.
+    _refuse_alpha_target(target)
 
     # Guard against a downgrade-shaped release: if origin/dev is behind
     # origin/main (a release bump on main not back-merged into dev), the bump
@@ -726,7 +750,7 @@ def verify_installer_resolves(tag: str) -> None:
 
 
 def verify_installer_skips(tag: str) -> None:
-    """Assert install.sh's dry-run does NOT resolve an alpha tag.
+    """Assert install.sh's dry-run resolves a non-alpha release, not ``tag``.
 
     The inverse of ``verify_installer_resolves``, and the check that keeps a
     staging alpha from leaking into the public one-line install: the alpha is on
@@ -734,6 +758,10 @@ def verify_installer_skips(tag: str) -> None:
     wheels are downloadable), but ``install.sh`` must stay on the newest
     non-alpha release. Without this, publishing an alpha would silently
     repoint ``curl … | sh`` at an untested build.
+
+    Asserts the resolved tag is not an alpha at all, rather than merely not this
+    one: a filter that skipped only the newest alpha would still leave the
+    installer on an older staging cut, which is the same leak.
     """
     print(f"Verifying install.sh skips the staging alpha {tag} ...")
     output = _installer_dry_run()
@@ -747,7 +775,22 @@ def verify_installer_skips(tag: str) -> None:
         raise ReleaseError(
             f"install.sh dry-run reported no resolved tag at all. Output:\n{output}"
         )
-    print(f"install.sh stays on {m.group(1)}.")
+    resolved = m.group(1)
+    from packaging.version import InvalidVersion
+
+    try:
+        track = bump_version.prerelease_track(version_from_tag(resolved))
+    except InvalidVersion:
+        raise ReleaseError(
+            f"install.sh resolved {resolved!r}, which is not a version tag; "
+            f"cannot confirm it is not an alpha. Output:\n{output}"
+        ) from None
+    if track == "alpha":
+        raise ReleaseError(
+            f"install.sh resolved {resolved}, which is also an alpha; the "
+            f"installer must land on a non-alpha release. Output:\n{output}"
+        )
+    print(f"install.sh stays on {resolved}.")
 
 
 def print_release_links(tag: str, version: str) -> None:

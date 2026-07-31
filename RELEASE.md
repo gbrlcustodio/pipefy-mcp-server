@@ -13,7 +13,9 @@ The branch a release is cut from determines its pre-release track, and `release.
 | Track | Cut from | Purpose |
 | --- | --- | --- |
 | **alpha** (`vX.Y.Z-alpha.N`) | `dev` | Staging. Published to PyPI so the hosted MCP server's deployment wrapper can pin an exact version and exercise the release in staging. |
-| **beta** (`vX.Y.Z-beta.N`) | `main` | The release. What the public installer and a default `--pre` install resolve. |
+| **beta** (`vX.Y.Z-beta.N`) | `main` | The release. What the public `install.sh` resolves. |
+
+One caveat on PyPI: `--pre` (and `uv`'s `--prerelease allow`) considers **every** pre-release and takes the highest version, so once `0.5.0-alpha.1` is published it outranks `0.4.0-beta.2` and a `--pre` install resolves the alpha. `install.sh` is unaffected — it filters alphas out by tag — but pin the exact version if you need the beta from PyPI.
 
 This rule is enforced in three places, so a tag cannot be published from the wrong branch by mistake: `release.py` derives the required branch from the version and refuses a mismatch before it bumps; it re-checks the checked-out branch again immediately before cutting the tag (the bump commit lands in between); and the Release workflow itself asserts the tagged commit is an ancestor of `origin/dev` for an alpha, or `origin/main` for anything else. The last one is the one that matters — it runs before any wheel is built or uploaded, so even a tag pushed by hand from the wrong branch fails instead of publishing.
 
@@ -74,7 +76,7 @@ If `main` already carries the merged work, run the steps below (this is also exa
    uv run python scripts/release.py prepare patch
    ```
 
-   The bump argument accepts `major`, `minor`, `patch`, `prerelease`, `beta`, or `version=X.Y.Z` (optional `v` prefix on `X.Y.Z`). `prepare` prints the computed target (`Will bump 0.3.0-beta.1 -> 0.3.0-beta.2 and cut tag v0.3.0-beta.2. Proceed?`) and waits for confirmation before touching any file, so a wrong bump costs nothing to walk away from (`--yes` skips the prompt for automation). Note `prerelease` only increments the current pre-release track (`beta.1 -> beta.2`) and never promotes across tracks; `beta` is the one promotion (`alpha.N -> beta.1`, same `X.Y.Z`). For any other exact string pass `version=X.Y.Z` with the PEP-440 form (for example `version=0.5.0-alpha.1`) so it matches `GITHUB_REF_NAME` without the leading `v`.
+   The bump argument accepts `major`, `minor`, `patch`, `prerelease`, `beta`, or `version=X.Y.Z` (optional `v` prefix on `X.Y.Z`). `prepare` prints the computed target (`Will bump 0.3.0-beta.1 -> 0.3.0-beta.2 and cut tag v0.3.0-beta.2. Proceed?`) and waits for confirmation before touching any file, so a wrong bump costs nothing to walk away from (`--yes` skips the prompt for automation). Note `prerelease` only increments the current pre-release track (`beta.1 -> beta.2`) and never promotes across tracks; `beta` is the one promotion (`alpha.N -> beta.1`, same `X.Y.Z`). For any other exact string pass `version=X.Y.Z` with the PEP-440 form (for example `version=0.5.0-beta.1`) so it matches `GITHUB_REF_NAME` without the leading `v`. `prepare` and `release-pr` both refuse an alpha-shaped target — alphas are cut by `release.py alpha` off `dev`, which is the only flow that leaves `## [Unreleased]` unstamped.
 
 3. Review the release commit (`git show HEAD`). Nothing has been pushed yet.
 4. Publish. This tags `vX.Y.Z`, pushes `main` and the tag, waits for the **Release** workflow (`.github/workflows/release.yml`), then verifies the result:

@@ -226,3 +226,79 @@ def test_tag_and_publish_refuses_a_track_branch_mismatch(monkeypatch) -> None:
     monkeypatch.setattr(_release, "current_branch", lambda: "dev")
     with pytest.raises(_release.ReleaseError, match="does not belong on 'dev'"):
         _release._tag_and_publish("dev", "0.5.0-beta.1", assume_yes=True)
+
+
+@pytest.mark.parametrize(
+    "bump",
+    ["prerelease", "version=0.5.0-alpha.2", "version=0.6.0-alpha.1", "version=0.5.0a2"],
+)
+def test_release_pr_refuses_an_alpha_target(bump: str, monkeypatch) -> None:
+    # On an alpha line, `prerelease` computes the next alpha. Without this gate
+    # release_pr would stamp `## [Unreleased]` into an alpha heading and aim the
+    # commit at main -- breaking the contract that only `alpha` cuts alphas.
+    monkeypatch.setattr(_release, "working_tree_clean", lambda: True)
+    monkeypatch.setattr(_release, "run", lambda *a, **k: None)
+    monkeypatch.setattr(_release, "_dev_unreleased_body", lambda: "- a thing")
+    monkeypatch.setattr(
+        _release,
+        "_version_at",
+        lambda ref: "0.5.0-alpha.1" if "dev" in ref else "0.4.0-beta.2",
+    )
+    with pytest.raises(_release.ReleaseError, match="staging cut off dev"):
+        _release.release_pr(bump, assume_yes=True)
+
+
+def test_release_pr_still_allows_the_beta_promotion(monkeypatch) -> None:
+    # The gate must not block the promotion the alpha line exists to reach; this
+    # fails if _refuse_alpha_target is widened to reject any pre-release.
+    monkeypatch.setattr(_release, "working_tree_clean", lambda: True)
+    monkeypatch.setattr(_release, "_dev_unreleased_body", lambda: "- a thing")
+    monkeypatch.setattr(
+        _release,
+        "_version_at",
+        lambda ref: "0.5.0-alpha.3" if "dev" in ref else "0.4.0-beta.2",
+    )
+    monkeypatch.setattr(_release, "branch_exists", lambda b: False)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(_release, "run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(_release, "capture", lambda cmd: "https://example/pr/1")
+    monkeypatch.setattr(_release, "_apply_prepare", lambda *a, **k: "0.5.0-beta.1")
+
+    _release.release_pr("beta", assume_yes=True)
+    assert [
+        "git",
+        "checkout",
+        "-b",
+        "rc-main/release/v0.5.0-beta.1",
+        "origin/dev",
+    ] in calls
+
+
+@pytest.mark.parametrize("bump", ["version=0.5.0-alpha.1", "version=0.5.0a1"])
+def test_prepare_refuses_an_alpha_target(bump: str, monkeypatch) -> None:
+    # prepare runs on main; an alpha there would stamp the CHANGELOG and commit
+    # an alpha version onto the release branch.
+    monkeypatch.setattr(_release, "preflight_prepare", lambda branch: None)
+    monkeypatch.setattr(
+        _release.bump_version, "read_sdk_version", lambda: "0.4.0-beta.2"
+    )
+    with pytest.raises(_release.ReleaseError, match="staging cut off dev"):
+        _release.prepare(bump, assume_yes=True)
+
+
+def test_verify_installer_skips_rejects_an_older_alpha(monkeypatch) -> None:
+    # A filter that skipped only the newest alpha would leave the installer on an
+    # older staging cut -- the same leak, so the check must reject any alpha.
+    monkeypatch.setattr(
+        _release, "_installer_dry_run", lambda: "Resolved tag: v0.3.0-alpha.1\n"
+    )
+    with pytest.raises(_release.ReleaseError, match="which is also an alpha"):
+        _release.verify_installer_skips("v0.5.0-alpha.1")
+
+
+def test_verify_installer_skips_rejects_an_unparseable_tag(monkeypatch) -> None:
+    monkeypatch.setattr(
+        _release, "_installer_dry_run", lambda: "Resolved tag: nightly\n"
+    )
+    with pytest.raises(_release.ReleaseError, match="not a version tag"):
+        _release.verify_installer_skips("v0.5.0-alpha.1")

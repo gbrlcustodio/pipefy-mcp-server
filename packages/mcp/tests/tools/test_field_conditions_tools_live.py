@@ -24,10 +24,10 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from _shared.live_settings import pipefy_live_configured, require_live_creds
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.live_settings import pipefy_live_configured, require_live_creds
 
 from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
@@ -64,7 +64,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
                 "get_phase_fields",
                 {"phase_id": phase_id, "required_only": False},
             )
-    assert r_fields.isError is False, r_fields
+    assert r_fields.is_error is False, r_fields
     pf_payload = extract_payload(r_fields)
     fields = pf_payload.get("fields") or []
     if len(fields) < 2:
@@ -120,7 +120,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
                         "debug": True,
                     },
                 )
-        assert r_create.isError is False, r_create
+        assert r_create.is_error is False, r_create
         created = extract_payload(r_create)
         assert created.get("success") is True, created
         condition_id_created = created.get("condition_id")
@@ -136,7 +136,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
                     "delete_field_condition",
                     {"condition_id": condition_id_created, "debug": True},
                 )
-        assert r_delete.isError is False, r_delete
+        assert r_delete.is_error is False, r_delete
         deleted = extract_payload(r_delete)
         assert deleted.get("success") is True, deleted
         deleted_successfully = True

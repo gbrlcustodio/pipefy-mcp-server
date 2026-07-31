@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     CreateAiAutomationInput,
@@ -41,7 +40,7 @@ class AiAutomationTools:
     """Declares MCP tools for AI Automation create and update."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register AI Automation tools on the MCP server."""
 
         @mcp.tool(
@@ -243,7 +242,7 @@ class AiAutomationTools:
             meta=REMOTE,
         )
         async def delete_ai_automation(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             automation_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,

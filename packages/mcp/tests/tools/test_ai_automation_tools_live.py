@@ -29,10 +29,10 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from _shared.live_settings import pipefy_live_configured, require_live_creds
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.live_settings import pipefy_live_configured, require_live_creds
 
 from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
@@ -84,7 +84,7 @@ async def test_live_create_ai_automation_omits_condition_uses_default_placeholde
                     "field_ids": [field_id],
                 },
             )
-    assert create_result.isError is False, create_result
+    assert create_result.is_error is False, create_result
     payload = extract_payload(create_result)
     assert payload.get("success") is True, payload
     automation_id = str(payload.get("automation_id") or "").strip()
@@ -100,6 +100,6 @@ async def test_live_create_ai_automation_omits_condition_uses_default_placeholde
                 "delete_automation",
                 {"automation_id": automation_id, "confirm": True},
             )
-    assert delete_result.isError is False, delete_result
+    assert delete_result.is_error is False, delete_result
     del_payload = extract_payload(delete_result)
     assert del_payload.get("success") is True, del_payload

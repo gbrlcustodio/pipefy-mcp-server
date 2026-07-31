@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -56,7 +56,7 @@ async def test_get_organization_success(org_session, mock_org_client, extract_pa
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "123"})
-    assert result.isError is False
+    assert result.is_error is False
     mock_org_client.get_organization.assert_awaited_once_with("123")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -74,7 +74,7 @@ async def test_get_organization_not_found_returns_error(
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "999"})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not found" in tool_error_message(payload).lower()
@@ -90,7 +90,7 @@ async def test_get_organization_transport_error(
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "123"})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     err = payload.get("error")
@@ -110,7 +110,7 @@ async def test_list_organizations_success(
     )
     async with org_session as session:
         result = await session.call_tool("list_organizations", {})
-    assert result.isError is False
+    assert result.is_error is False
     mock_org_client.list_organizations.assert_awaited_once_with()
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -127,7 +127,7 @@ async def test_list_organizations_empty(org_session, mock_org_client, extract_pa
     mock_org_client.list_organizations = AsyncMock(return_value=[])
     async with org_session as session:
         result = await session.call_tool("list_organizations", {})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["organizations"] == []
@@ -143,7 +143,7 @@ async def test_list_organizations_transport_error(
     )
     async with org_session as session:
         result = await session.call_tool("list_organizations", {})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     err = payload.get("error")
@@ -171,7 +171,7 @@ async def test_get_organization_coerces_int_organization_id(
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": 123})
-    assert result.isError is False
+    assert result.is_error is False
     mock_org_client.get_organization.assert_awaited_once_with("123")
     payload = extract_payload(result)
     assert payload["success"] is True

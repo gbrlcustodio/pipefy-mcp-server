@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
@@ -44,7 +43,7 @@ class FieldConditionTools:
     """Declares MCP tools for field conditions (read, create, update, delete)."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(
                 readOnlyHint=True,
@@ -52,7 +51,7 @@ class FieldConditionTools:
             meta=REMOTE,
         )
         async def get_field_conditions(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             phase_id: PipefyId,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -109,7 +108,7 @@ class FieldConditionTools:
             meta=REMOTE,
         )
         async def get_field_condition(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             field_condition_id: PipefyId,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -441,7 +440,7 @@ class FieldConditionTools:
             meta=REMOTE,
         )
         async def delete_field_condition(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             condition_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,

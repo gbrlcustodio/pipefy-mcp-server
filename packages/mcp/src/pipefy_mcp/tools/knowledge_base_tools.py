@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import KnowledgeBaseDocumentUploadError, classify_exception
 
@@ -105,7 +105,7 @@ class KnowledgeBaseTools:
     """Declares MCP tools for pipe-scoped AI knowledge bases."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register knowledge base tools on the MCP server."""
 
         @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)

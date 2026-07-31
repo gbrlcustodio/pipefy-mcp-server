@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
-from pipefy_mcp.auth.resource_server import PipefyAccessToken
 from pipefy_mcp.observability.json_logging import (
     build_http_request_event,
     emit_structured_event,
@@ -77,8 +76,9 @@ def _caller_identity(
     if not isinstance(user, AuthenticatedUser):
         return None, None
     access_token = user.access_token
-    sub = access_token.sub if isinstance(access_token, PipefyAccessToken) else None
-    return sub, access_token.client_id
+    # `subject` is the SDK's own field for the JWT `sub`, so every AccessToken
+    # carries it and no narrowing to a subclass is needed.
+    return access_token.subject, access_token.client_id
 
 
 class RequestLogMiddleware:

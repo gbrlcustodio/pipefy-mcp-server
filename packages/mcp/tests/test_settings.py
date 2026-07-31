@@ -306,7 +306,7 @@ def test_mcp_remote_binds_any_host_without_the_escape_hatch():
 
 @pytest.mark.unit
 def test_mcp_allowlists_default_to_none():
-    """Unset allowlists stay None so the builder can preserve FastMCP's default."""
+    """Unset allowlists stay None so the builder can preserve the SDK's default."""
     mcp = McpSettings()
     assert mcp.allowed_hosts is None
     assert mcp.allowed_origins is None

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from mcp.server.transport_security import TransportSecuritySettings
 from pipefy_sdk import PipefyClient, PipefyEngine
 from starlette.requests import Request
 
@@ -13,7 +12,6 @@ from pipefy_mcp.auth import (
     build_resource_server_auth,
 )
 from pipefy_mcp.core.ipaas_gateway import IpaasGateway
-from pipefy_mcp.core.transport_security import build_transport_security
 from pipefy_mcp.settings import Settings
 
 
@@ -33,14 +31,17 @@ class McpRuntime:
 
     Built once at server startup via :meth:`for_profile`, which turns the resolved
     settings into wired resources: the outbound identity (whose :meth:`resolve`
-    backs each request's session), the HTTP transport's DNS-rebinding allowlist, and,
-    under the ``remote`` profile, the inbound resource-server ``(verifier, auth)`` pair
-    FastMCP uses to validate each caller's bearer. It parses the ``resource_server_url``
-    into one :class:`ResourceServer` and feeds it to both the inbound-auth and the
-    allowlist builders, so they cannot disagree on the resource host. It owns the
-    process-scoped :class:`PipefyEngine` (the shared endpoints and GraphQL schema cache,
-    built auth-agnostic with no network I/O) and opens a cheap per-request session bound
-    to the caller's identity.
+    backs each request's session) and, under the ``remote`` profile, the inbound
+    resource-server ``(verifier, auth)`` pair the SDK uses to validate each caller's
+    bearer. It owns the process-scoped :class:`PipefyEngine` (the shared endpoints and
+    GraphQL schema cache, built auth-agnostic with no network I/O) and opens a cheap
+    per-request session bound to the caller's identity.
+
+    The HTTP transport's DNS-rebinding allowlist is deliberately not held here. The
+    SDK takes it per transport, on ``streamable_http_app()``, so it travels with the
+    serving call instead: :func:`pipefy_mcp.server.run_server` resolves it through
+    :func:`pipefy_mcp.core.transport_security.transport_security_for`, and only the
+    HTTP transport has anything to apply it to.
 
     Building the engine here is safe off the event loop: it does no network I/O and
     binds nothing to a running loop (its endpoints open a fresh per-request
@@ -48,7 +49,7 @@ class McpRuntime:
     later handles requests.
 
     This is a stepping stone toward a single per-app runtime; today it owns the
-    shared engine, the inbound-auth pair, and the transport allowlist.
+    shared engine and the inbound-auth pair.
     """
 
     def __init__(
@@ -57,11 +58,9 @@ class McpRuntime:
         identity: AuthSource,
         *,
         inbound_auth: ResourceServerAuth | None = None,
-        transport_security: TransportSecuritySettings | None = None,
     ) -> None:
         self._identity = identity
         self.inbound_auth = inbound_auth
-        self.transport_security = transport_security
         # Narrow per-deployment facts resolved at startup. The runtime deliberately
         # holds no Settings tree: tools reach it off the request context, so
         # exposing the tree would let tool code read any process-global value at
@@ -87,15 +86,15 @@ class McpRuntime:
         """Build the runtime for the resolved profile, wiring inbound and outbound auth.
 
         The composition root's one build step: it parses the ``resource_server_url``
-        once, builds the transport allowlist from that one parsed resource, and
-        selects the per-profile identity (and, for ``remote``, the inbound-auth pair).
-        Parsing here keeps the resource a single value both the allowlist and the
-        inbound-auth pair are derived from, so they cannot disagree on the host; the
-        one ``cls(...)`` call then wires the fields common to both profiles.
+        into one :class:`ResourceServer`, then selects the per-profile identity.
+        ``remote`` requires that resource (it fails fast without one) and builds the
+        inbound-auth pair from it, alongside a per-request identity; ``local`` resolves
+        its identity from the configured startup credential and never reads the parsed
+        resource. The one ``cls(...)`` call then wires the fields common to both
+        profiles.
         """
         url = settings.rs.resource_server_url
         resource = ResourceServer.from_url(url) if url else None
-        transport_security = build_transport_security(settings.mcp, resource)
         if settings.mcp.profile == "remote":
             identity, inbound_auth = cls._remote_identity(settings, resource)
         else:
@@ -104,7 +103,6 @@ class McpRuntime:
             settings,
             identity,
             inbound_auth=inbound_auth,
-            transport_security=transport_security,
         )
 
     @staticmethod

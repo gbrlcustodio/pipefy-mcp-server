@@ -24,7 +24,7 @@ Three roles:
 ### How the roles map onto `pipefy_mcp` today
 
 - Composition root: `server.py` (`build_pipefy_mcp_server`), `main.py`, and `core/runtime.py` (`McpRuntime.for_profile`).
-- Driving adapter: `tools/` (MCP tool registration and the GraphQL calls behind each tool), plus `core/fastmcp_tool_lifecycle.py` and `core/tool_middleware.py` (the FastMCP lifecycle helper and the tool-call middleware chain), which are adapter code that currently lives under `core/`.
+- Driving adapter: `tools/` (MCP tool registration, the tool-table edits behind the remote and toolset profiles, and the GraphQL calls behind each tool), plus `core/tool_middleware.py` (the tool-call middleware chain), which is adapter code that currently lives under `core/`.
 - Auth adapter: `auth/` (inbound bearer validation; `JwtTokenVerifier` maps validated claims onto the SDK `AccessToken`).
 - Driven side: Pipefy data access through the `pipefy` SDK (`PipefyClient` / `PipefyEngine`), which is a separate package, consumed concretely.
 - Config boundary: `settings.py` (pydantic-settings parses `PIPEFY_*` into typed settings).

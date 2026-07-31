@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -52,7 +52,7 @@ async def test_invite_members_rejects_empty_members(member_session, extract_payl
             {"pipe_id": "pipe-1", "members": []},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "members" in tool_error_message(payload)
@@ -95,7 +95,7 @@ async def test_add_service_account_verified_member(
             {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_member_client.add_service_account_to_pipe.assert_awaited_once_with(
         "100", "svc@x.com", "member"
     )
@@ -216,7 +216,7 @@ async def test_add_service_account_handles_null_pipe_members(
         )
 
     # No crash; verification treats null as absent -> tool reports not-added.
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "svc@x.com" in tool_error_message(payload)
@@ -290,7 +290,7 @@ async def test_add_service_account_graphql_error(
             "add_service_account_to_pipe",
             {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "permission denied" in tool_error_message(payload)
@@ -307,7 +307,7 @@ async def test_remove_member_from_pipe_rejects_empty_user_ids(
             {"pipe_id": "pipe-1", "user_ids": []},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "user_ids" in tool_error_message(payload)
@@ -334,7 +334,7 @@ async def test_invite_members_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_member_client.invite_members.assert_awaited_once_with(
         "pipe-1", [{"email": "a@x.com", "role_name": "member"}]
     )
@@ -385,7 +385,7 @@ async def test_invite_members_graphql_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid email" in tool_error_message(payload)
@@ -406,7 +406,7 @@ async def test_remove_member_from_pipe_value_error_from_client(
             {"pipe_id": "bad", "user_ids": ["u1"], "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "pipe_id" in tool_error_message(payload)
@@ -442,7 +442,7 @@ async def test_remove_member_verified_all_removed(
             {"pipe_id": "100", "user_ids": ["user-1", "user-2"], "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
         "100", ["user-1", "user-2"]
     )
@@ -616,7 +616,7 @@ async def test_remove_member_from_pipe_graphql_error(
             {"pipe_id": "p1", "user_ids": ["u1"], "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "forbidden" in tool_error_message(payload)
@@ -629,8 +629,8 @@ async def test_remove_member_from_pipe_has_destructive_hint(member_session):
         listed = await session.list_tools()
     remove_tool = next(t for t in listed.tools if t.name == "remove_member_from_pipe")
     assert remove_tool.annotations is not None
-    assert remove_tool.annotations.destructiveHint is True
-    assert remove_tool.annotations.readOnlyHint is False
+    assert remove_tool.annotations.destructive_hint is True
+    assert remove_tool.annotations.read_only_hint is False
 
 
 @pytest.mark.anyio
@@ -655,7 +655,7 @@ async def test_set_role_success(member_session, mock_member_client, extract_payl
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_member_client.set_role.assert_awaited_once_with("pipe-1", "member-1", "admin")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -730,7 +730,7 @@ async def test_set_role_graphql_error(
             {"pipe_id": "p1", "member_id": "m1", "role_name": "admin"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid role" in tool_error_message(payload)

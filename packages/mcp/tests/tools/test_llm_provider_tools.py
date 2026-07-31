@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -121,7 +121,7 @@ async def test_get_llm_providers_success_with_pagination(
         result = await session.call_tool(
             "get_llm_providers", {"organization_uuid": "org-uuid-1", "first": 2}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.get_llm_providers.assert_awaited_once_with(
         "org-uuid-1", only_active=False, first=2, after=None
     )
@@ -384,7 +384,7 @@ async def test_create_and_update_take_file_path_not_inline_configuration(
     async with provider_session as session:
         tools = {t.name: t for t in (await session.list_tools()).tools}
     for name in ("create_llm_provider", "update_llm_provider"):
-        props = tools[name].inputSchema.get("properties", {})
+        props = tools[name].input_schema.get("properties", {})
         assert "configuration_file_path" in props
         assert "configuration" not in props
 
@@ -404,7 +404,7 @@ async def test_create_llm_provider_success_returns_no_configuration(
                 "configuration_file_path": "/tmp/config.json",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.create_llm_provider.assert_awaited_once_with(
         "org-uuid-1", name="My OpenAI", configuration_file_path="/tmp/config.json"
     )
@@ -454,7 +454,7 @@ async def test_update_llm_provider_success(
                 "name": "Renamed",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.update_llm_provider.assert_awaited_once_with(
         "42",
         "org-uuid-1",
@@ -490,7 +490,7 @@ async def test_delete_with_confirm_executes(
             "delete_llm_provider",
             {"provider_id": "42", "organization_uuid": "org-uuid-1", "confirm": True},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.delete_llm_provider.assert_awaited_once_with(
         "42", "org-uuid-1"
     )
@@ -527,7 +527,7 @@ async def test_set_active_status_success(
         result = await session.call_tool(
             "set_llm_provider_active_status", {"provider_id": "42", "active": False}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.set_llm_provider_active_status.assert_awaited_once_with(
         "42", active=False
     )
@@ -547,7 +547,7 @@ async def test_set_default_success(
             "set_default_llm_provider",
             {"organization_id": "123456", "provider_id": "42"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.set_default_llm_provider.assert_awaited_once_with(
         "123456", provider_id="42", system_provider_id=None
     )
@@ -590,6 +590,6 @@ async def test_reset_default_success(
         result = await session.call_tool(
             "reset_default_llm_provider", {"organization_id": "123456"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.reset_default_llm_provider.assert_awaited_once_with("123456")
     assert extract_payload(result)["data"]["organization_id"] == "123456"

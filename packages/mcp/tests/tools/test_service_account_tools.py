@@ -5,7 +5,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -67,7 +67,7 @@ async def test_create_service_account_success(
             {"organization_uuid": ORG, "name": "sa", "role": "normal"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_sa_client.create_service_account.assert_awaited_once_with(
         organization_uuid=ORG,
         name="sa",
@@ -146,7 +146,7 @@ async def test_create_service_account_with_pipe_ids_chains_and_verifies(
                 "pipe_ids": ["100"],
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     # pipe_role defaults to admin.
     mock_sa_client.create_service_account.assert_awaited_once_with(
         organization_uuid=ORG,
@@ -194,7 +194,7 @@ async def test_create_service_account_pipe_ids_null_members_still_returns_secret
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["serviceAccount"]["client"]["secret"] == "csecret"
@@ -289,7 +289,7 @@ async def test_create_service_account_graphql_error(
             "create_service_account",
             {"organization_uuid": ORG, "name": "sa", "role": "normal"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not allowed" in tool_error_message(payload)
@@ -322,7 +322,7 @@ async def test_create_service_account_soft_failure_is_not_reported_as_created(
             "create_service_account",
             {"organization_uuid": ORG, "name": "sa", "role": "normal"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "once" not in json.dumps(payload)
@@ -369,7 +369,7 @@ async def test_create_service_account_without_secret_fails_closed(
             "create_service_account",
             {"organization_uuid": ORG, "name": "sa", "role": "normal"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "once" not in json.dumps(payload)
@@ -456,7 +456,7 @@ async def test_delete_service_account_confirmed(
                 "confirm": True,
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_sa_client.delete_service_account.assert_awaited_once_with(
         organization_uuid=ORG, service_account_uuid="sa-uuid-1"
     )
@@ -487,7 +487,7 @@ async def test_delete_service_account_soft_failure_is_not_reported_as_deleted(
                 "confirm": True,
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "did not succeed" in tool_error_message(payload).lower()
@@ -516,4 +516,4 @@ async def test_delete_service_account_has_destructive_hint(sa_session):
         listed = await session.list_tools()
     tool = next(t for t in listed.tools if t.name == "delete_service_account")
     assert tool.annotations is not None
-    assert tool.annotations.destructiveHint is True
+    assert tool.annotations.destructive_hint is True

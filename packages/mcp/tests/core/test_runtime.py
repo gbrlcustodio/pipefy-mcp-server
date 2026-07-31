@@ -23,6 +23,7 @@ from pipefy_sdk import PipefyClient, PipefySettings
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.auth import RequestScopedIdentity, StartupIdentity
 from pipefy_mcp.core.runtime import McpRuntime
+from pipefy_mcp.core.transport_security import transport_security_for
 from pipefy_mcp.settings import McpSettings, Settings
 
 
@@ -167,12 +168,17 @@ class TestForProfile:
         :class:`ResourceServer` to both builders, so the allowlist's public host and
         the advertised metadata resource cannot disagree.
         """
-        runtime = McpRuntime.for_profile(remote_rs_settings())
+        settings = remote_rs_settings()
+        runtime = McpRuntime.for_profile(settings)
 
-        assert runtime.transport_security is not None
-        assert "mcp.example.com" in runtime.transport_security.allowed_hosts
+        # The allowlist is a per-transport argument in 2.x, so it is resolved on the
+        # serving path rather than held on the runtime. Both derive from the same
+        # parsed resource, which is the property under test.
+        allowlist = transport_security_for(settings)
+        assert allowlist is not None
+        assert "mcp.example.com" in allowlist.allowed_hosts
         _, auth = runtime.inbound_auth
-        assert str(auth.resource_server_url).rstrip("/") == RS_RESOURCE
+        assert str(auth.resource_server_url) == RS_RESOURCE
 
     @pytest.mark.unit
     def test_local_builds_the_transport_allowlist_from_explicit_hosts(
@@ -188,8 +194,9 @@ class TestForProfile:
         runtime = McpRuntime.for_profile(settings)
 
         assert runtime.inbound_auth is None
-        assert runtime.transport_security is not None
-        assert "proxy.internal" in runtime.transport_security.allowed_hosts
+        allowlist = transport_security_for(settings)
+        assert allowlist is not None
+        assert "proxy.internal" in allowlist.allowed_hosts
 
     @pytest.mark.unit
     def test_remote_snapshots_the_callers_bearer_into_its_session(self):
@@ -257,7 +264,7 @@ class TestForProfile:
         runtime = McpRuntime.for_profile(settings)
 
         _, auth = runtime.inbound_auth
-        assert str(auth.issuer_url).rstrip("/") == login_issuer
+        assert str(auth.issuer_url) == login_issuer
 
     @pytest.mark.unit
     def test_local_static_token_binds_the_static_bearer(self, clear_auth_env):

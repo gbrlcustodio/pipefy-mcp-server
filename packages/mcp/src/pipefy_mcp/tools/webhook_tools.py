@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
@@ -27,7 +26,7 @@ class WebhookTools:
     """MCP tools for sending emails from card inboxes and managing webhooks."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
             meta=REMOTE,
@@ -276,7 +275,7 @@ class WebhookTools:
             meta=REMOTE,
         )
         async def get_webhooks(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -473,7 +472,7 @@ class WebhookTools:
             meta=REMOTE,
         )
         async def delete_webhook(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             webhook_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,

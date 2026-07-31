@@ -6,7 +6,7 @@ validation-error and not-found paths never reach a Pipefy client, so no runtime 
 needed.
 """
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.tools.meta_tools import register_meta_tools
 from pipefy_mcp.tools.registry import ToolRegistry
@@ -19,7 +19,7 @@ _META_TOOLS = ("get_tool_categories", "search_tools", "describe_tool", "execute_
 def _catalog(*, remote: bool = False) -> dict:
     """A catalog snapshot of the registered Pipefy tools (optionally post-floor)."""
     install_pipefy_validation_envelope()
-    mcp = FastMCP("catalog-source")
+    mcp = MCPServer("catalog-source")
     registry = ToolRegistry(mcp=mcp)
     registry.register_tools()
     if remote:
@@ -34,7 +34,7 @@ def _catalog(*, remote: bool = False) -> dict:
 
 def _meta_fns(catalog: dict) -> dict:
     """Register the meta-tools over ``catalog`` and return their callables by name."""
-    host = FastMCP("meta-host")
+    host = MCPServer("meta-host")
     register_meta_tools(host, catalog)
     return {name: host._tool_manager._tools[name].fn for name in _META_TOOLS}
 

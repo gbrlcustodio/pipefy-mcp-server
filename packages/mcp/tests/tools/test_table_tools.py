@@ -4,10 +4,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _shared.pagination_test_defaults import DEFAULT_FIRST
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.pagination_test_defaults import DEFAULT_FIRST
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
@@ -65,7 +65,7 @@ async def test_get_table_success(table_session, mock_table_client, extract_paylo
     async with table_session as session:
         result = await session.call_tool("get_table", {"table_id": 1})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_table_client.get_table.assert_awaited_once_with("1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -84,7 +84,7 @@ async def test_get_table_graphql_error(
     async with table_session as session:
         result = await session.call_tool("get_table", {"table_id": 9})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not found" in tool_error_message(payload)
@@ -98,7 +98,7 @@ async def test_get_tables_success(table_session, mock_table_client, extract_payl
     async with table_session as session:
         result = await session.call_tool("get_tables", {"table_ids": [1, 2]})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_table_client.get_tables.assert_awaited_once_with(["1", "2"])
     assert extract_payload(result)["success"] is True
 
@@ -887,7 +887,7 @@ async def test_search_tables_without_name_calls_client_with_none(
     async with table_session as session:
         result = await session.call_tool("search_tables", {})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_table_client.search_tables.assert_awaited_once_with(None, first=100)
 
 
@@ -901,7 +901,7 @@ async def test_search_tables_with_name_passes_it_to_client(
     async with table_session as session:
         result = await session.call_tool("search_tables", {"table_name": "Clients"})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_table_client.search_tables.assert_awaited_once_with("Clients", first=100)
 
 
@@ -1730,5 +1730,5 @@ class TestPipefyIdCoercion:
         )
         async with table_session as session:
             result = await session.call_tool("get_table", {"table_id": 42})
-        assert result.isError is False
+        assert result.is_error is False
         mock_table_client.get_table.assert_awaited_once_with("42")

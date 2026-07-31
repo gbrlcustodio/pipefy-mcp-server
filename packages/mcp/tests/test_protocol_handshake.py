@@ -53,7 +53,6 @@ def mocked_runtime():
     runtime = MagicMock()
     runtime.session_for_request.return_value = MagicMock()
     runtime.inbound_auth = None
-    runtime.transport_security = None
     with patch("pipefy_mcp.server.McpRuntime.for_profile", return_value=runtime):
         yield runtime
 

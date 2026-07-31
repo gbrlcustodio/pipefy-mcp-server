@@ -113,6 +113,16 @@ class PipeTools:
             elicitation, an interactive form is presented even if ``fields``
             carries pre-filled values — the human can review and adjust them.
 
+            A form is only possible when the connection can carry a
+            server-to-client request. It cannot on protocol revision 2026-07-28,
+            on a stateless HTTP transport, or on a deployment serving
+            ``json_response=True`` (which the hosted server does). There the tool
+            takes the ``skip_elicitation`` path instead, without saying so in the
+            result: ``fields`` is sent as given, so an omitted ``fields`` sends no
+            values at all and the API decides whether its required fields were
+            satisfied. A caller that cannot be sure of the client's channel should
+            discover the fields first and pass every required value.
+
             Without ``phase_id``, discover start-form fields via
             ``get_start_form_fields`` and pass all required values.
 
@@ -153,6 +163,14 @@ class PipeTools:
             client = get_pipefy_client(ctx)
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            if not can_elicit and not skip_elicitation:
+                # Logged for the same reason the NoBackChannelError absorb in
+                # _elicit_field_details logs: a caller asked for a form and the
+                # result cannot say it never appeared.
+                await ctx.debug(
+                    "Elicitation unavailable: no interactive form for this "
+                    "connection; proceeding with the supplied fields"
+                )
             # Stays None when elicitation is skipped or the connection turns out
             # to have no back channel; either way the supplied fields are used.
             elicited: dict[str, Any] | None = None
@@ -1121,6 +1139,14 @@ class PipeTools:
             elicitation, an interactive form is presented — ``fields`` pre-fills
             it so the human can review and adjust.
 
+            A form is only possible when the connection can carry a
+            server-to-client request. It cannot on protocol revision 2026-07-28,
+            on a stateless HTTP transport, or on a deployment serving
+            ``json_response=True`` (which the hosted server does). There the tool
+            takes the ``skip_elicitation`` path instead: only ``fields`` is sent,
+            so an omitted ``fields`` collects nothing and the result reports that
+            no values were collected rather than that the card was updated.
+
             Args:
                 card_id: The ID of the card to update.
                     Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
@@ -1154,6 +1180,14 @@ class PipeTools:
 
             field_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            if not can_elicit and not skip_elicitation:
+                # Logged for the same reason the NoBackChannelError absorb in
+                # _elicit_field_details logs: a caller asked for a form and the
+                # result cannot say it never appeared.
+                await ctx.debug(
+                    "Elicitation unavailable: no interactive form for this "
+                    "connection; proceeding with the supplied fields"
+                )
 
             elicited: dict[str, Any] | None = None
             if can_elicit and expected_fields and not skip_elicitation:
@@ -1175,9 +1209,24 @@ class PipeTools:
                 field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
             if not field_data:
+                if expected_fields:
+                    # The phase does have editable fields, so "No fields to
+                    # update." would be false: values were needed and none were
+                    # collected. Reachable when no form could be shown and the
+                    # caller passed no fields, or when every key it passed was
+                    # dropped by the editable-field filter. An agent reading only
+                    # the message must not conclude the card is complete.
+                    message = (
+                        "No field values were collected, so nothing was updated. "
+                        f"Phase '{phase_name}' has {len(expected_fields)} editable "
+                        "field(s); pass 'fields' keyed by the IDs from "
+                        "get_phase_fields(phase_id)."
+                    )
+                else:
+                    message = "No fields to update."
                 return {
                     "success": True,
-                    "message": "No fields to update.",
+                    "message": message,
                     "phase_id": phase_id,
                     "phase_name": phase_name,
                 }

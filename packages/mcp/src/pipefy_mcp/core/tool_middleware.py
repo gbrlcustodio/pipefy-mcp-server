@@ -229,6 +229,16 @@ def short_circuit_error(
     is the SDK's supported per-revision shaper (a legacy revision drops
     ``resultType``, 2026-07-28 keeps it), so this defers to it rather than deciding
     which keys belong at which revision.
+
+    One shape difference from a real result remains, on 2026-07-28 only: the ``_meta``
+    ``io.modelcontextprotocol/serverInfo`` stamp. ``_serialize`` applies it via
+    ``_stamp_server_info`` after the per-revision shaper, on the ``call_next`` path
+    only, and the SDK does not patch a middleware's own result up afterwards. So a
+    modern client sees the stamp on a tool's result and not on a middleware denial
+    (measured: real result carries ``_meta``, a short circuit has none). Left as is:
+    the stamp comes off the ``MCPServer`` (``server.server_info_stamp``) and
+    :class:`ToolCallContext` carries no route to it, so reproducing that pipeline step
+    would mean widening the context for a ``_meta`` field no client is known to read.
     """
     envelope = tool_error(message, code=code, details=details)
     result = types.CallToolResult(

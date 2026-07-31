@@ -14,17 +14,37 @@ def supports_elicitation(ctx: Context) -> bool:
 
     Two independent conditions have to hold. The client must advertise the
     ``elicitation`` capability, and the request's channel must be able to carry
-    a server-initiated request. The advertised capability alone is not enough:
-    a client on protocol revision 2026-07-28 still declares ``elicitation`` in
-    its request envelope, but that revision has no server-to-client back
-    channel, so ``ctx.elicit`` raises ``NoBackChannelError``. The same is true
-    on a stateless HTTP transport at any revision, where the client's reply to
-    a server request would have nowhere to land.
+    a server-initiated request. ``ServerSession.can_send_request`` is the SDK's
+    own gate for the second: ``DispatchContext.send_raw_request`` raises
+    ``NoBackChannelError`` exactly when it is ``False``.
 
-    ``ServerSession.can_send_request`` is the SDK's own gate:
-    ``DispatchContext.send_raw_request`` raises ``NoBackChannelError`` exactly
-    when it is ``False``. A session object that does not expose it (an older
-    SDK, a hand-built test double) is treated as able to send, and the
+    The advertised capability alone is not enough, because three deployment
+    shapes clear it and still have no back channel:
+
+    * Protocol revision 2026-07-28. A client on that revision still declares
+      ``elicitation`` in its request envelope, but the revision has no
+      server-to-client channel, so the modern HTTP entry builds its context
+      with ``can_send_request=False`` (``_streamable_http_modern``).
+    * A stateless HTTP transport at any revision. A server request can be
+      written to the POST's response stream, but the client's reply has nowhere
+      to land, so ``StreamableHTTPSessionManager`` stamps ``False``
+      (``streamable_http_manager``).
+    * ``json_response=True`` on the stateful Streamable HTTP transport, at any
+      revision including 2025-11-25. A JSON body carries only the response, so
+      ``StreamableHTTPServerTransport._message_metadata`` stamps
+      ``can_send_request=not is_json_response_enabled`` (``streamable_http``).
+      Measured over the real ASGI stack: ``json_response=False`` gives ``True``
+      at 2025-11-25, ``json_response=True`` gives ``False``.
+
+    The third case is the one an embedder controls, and it is the flag the
+    hosted wrapper sets (``pipefy_remote_mcp.asgi`` passes
+    ``json_response=True`` so a POST answers as plain JSON rather than SSE). A
+    deployment that keeps that flag has no elicitation at any revision, so
+    ``create_card`` and ``fill_card_phase_fields`` always take their
+    no-elicitation path there and callers must pass ``fields`` explicitly.
+
+    A session object that does not expose ``can_send_request`` (an older SDK, a
+    hand-built test double) is treated as able to send, and the
     ``NoBackChannelError`` handling at the elicitation call sites covers that
     case.
 

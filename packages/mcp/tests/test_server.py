@@ -250,7 +250,7 @@ async def test_extra_tool_middlewares_register_through_the_public_builder(
     """
 
     async def deny(ctx: ToolCallContext, call_next):
-        return short_circuit_error("blocked by consumer", code="DENIED")
+        return short_circuit_error(ctx, "blocked by consumer", code="DENIED")
 
     app = build_pipefy_mcp_server(
         _MINIMAL_PIPEFY_SETTINGS, extra_tool_middlewares=[deny]

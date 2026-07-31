@@ -14,7 +14,7 @@ import pytest
 from mcp import UrlElicitationRequiredError, types
 
 from pipefy_mcp.auth.request_identity import CallerIdentity
-from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
+from pipefy_mcp.core.tool_middleware import ToolCallContext
 from pipefy_mcp.observability.json_logging import (
     TOOL_CALL_EVENT_KEYS,
     configure_observability_logging,
@@ -27,14 +27,23 @@ def _context(**arguments: object) -> ToolCallContext:
     return ToolCallContext(
         argument_keys=tuple(sorted(arguments)),
         identity=CallerIdentity(client_id="acting-client", scopes=("read",)),
+        protocol_version="2025-11-25",
         request_id="req-42",
         tool_name="get_card",
         arguments=dict(arguments) or None,
     )
 
 
-def _ok_result() -> types.CallToolResult:
-    return types.CallToolResult(content=[types.TextContent(type="text", text="ok")])
+def _ok_result() -> dict:
+    """A successful tool call as the middleware really sees it: the wire dict.
+
+    ``ServerRunner._inner`` serializes the handler result before returning it into the
+    middleware chain, so a middleware never sees a ``CallToolResult`` model from a real
+    call - success or failure. A model fixture here is the same mismatch that let the
+    outcome-logging regression through on the error path: it type-checks, it reads
+    fine, and it exercises a branch production never takes.
+    """
+    return {"content": [{"type": "text", "text": "ok"}], "isError": False}
 
 
 def _read_log_lines(capsys: pytest.CaptureFixture[str]) -> list[dict]:
@@ -121,17 +130,22 @@ def test_error_result_logs_outcome_error_for_the_wire_dict(capsys):
 
 
 @pytest.mark.unit
-def test_error_result_logs_outcome_error_for_a_short_circuit_model(capsys):
-    """A governance short-circuit reports ``error`` too, from the model shape.
+def test_error_result_logs_outcome_error_for_a_model_shape(capsys):
+    """An inner middleware's own ``CallToolResult`` reports ``error`` too.
 
-    Both shapes reach the chain, so both have to read correctly:
-    ``short_circuit_error`` builds a ``CallToolResult`` that never passes through
-    the SDK's serialization.
+    Both shapes reach the chain, so both have to read correctly. The wire dict covers
+    every result that came through the SDK's handler (and every ``short_circuit_error``,
+    which shapes itself for the negotiated revision); a model only ever arrives from an
+    inner middleware that built its result by hand and returned it without awaiting
+    ``call_next``. That is still supported, and its flag is snake_case ``is_error``.
     """
     _configure_for_capture()
 
     async def terminal(ctx):
-        return short_circuit_error("quota exceeded", code="RATE_LIMITED")
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text="quota exceeded")],
+            is_error=True,
+        )
 
     asyncio.run(tool_log_middleware(_context(card_id="1"), terminal))
 

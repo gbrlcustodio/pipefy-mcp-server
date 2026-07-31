@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from mcp import types
+from mcp.types import methods as spec_methods
 
 from pipefy_mcp.auth.request_identity import CallerIdentity, caller_identity
 from pipefy_mcp.core.tool_error_envelope import tool_error
@@ -80,10 +81,15 @@ class ToolCallContext:
     ``request_id`` correlates a call to its HTTP request when one is available;
     otherwise it falls back to the JSON-RPC message id, which is client-chosen and
     only unique within a session (see :func:`context_from_server_request`).
+
+    ``protocol_version`` is the revision negotiated for this connection. A
+    middleware that short-circuits owns the wire shape of the result it returns,
+    and that shape is per-revision, so :func:`short_circuit_error` needs it.
     """
 
     argument_keys: tuple[str, ...]
     identity: CallerIdentity
+    protocol_version: str
     request_id: str | None
     tool_name: str
     arguments: dict[str, Any] | None
@@ -143,6 +149,7 @@ def context_from_server_request(
     return ToolCallContext(
         argument_keys=_argument_keys(arguments),
         identity=caller_identity(ctx.request),
+        protocol_version=ctx.protocol_version,
         request_id=_request_id(ctx),
         tool_name=name if isinstance(name, str) else "",
         arguments=arguments,
@@ -177,11 +184,12 @@ def result_is_error(result: HandlerResult) -> bool:
     ``HandlerResult`` is polymorphic, and a middleware sees BOTH shapes, so read the
     flag through here rather than off an attribute:
 
-    - the SDK's own handler returns the **serialized wire dict**, keyed ``isError``
-      in camelCase (``ServerRunner._on_request`` shapes the result for the wire
-      inside the middleware chain, so the outermost span records a failing return);
-    - :func:`short_circuit_error` and any middleware that builds its own result
-      return a ``CallToolResult`` **model**, with a snake_case ``is_error``.
+    - the SDK's own handler and :func:`short_circuit_error` return the **serialized
+      wire dict**, keyed ``isError`` in camelCase (``ServerRunner._on_request``
+      shapes a handler's result for the wire inside the middleware chain, so the
+      outermost span records a failing return);
+    - a middleware that builds its own result may still return a ``CallToolResult``
+      **model**, with a snake_case ``is_error``.
 
     Reading ``result.is_error`` directly is the trap: on the dict it silently
     returns the default, so every real tool failure reads as a success. Anything
@@ -195,27 +203,43 @@ def result_is_error(result: HandlerResult) -> bool:
 
 
 def short_circuit_error(
+    ctx: ToolCallContext,
     message: str,
     *,
     code: str | None = None,
     details: dict[str, Any] | None = None,
-) -> types.CallToolResult:
+) -> dict[str, Any]:
     """A short-circuit result a middleware returns instead of running the tool.
 
     Carries the canonical ``tool_error`` envelope so a client reads a governance
     stop (quota, rate limit) the same way it reads a tool's own failure, but sets
-    ``is_error=True`` deliberately: the tool never ran, distinct from a tool that
-    ran and reported a business error (``is_error=False``). Bypassing the SDK's
-    handler, it builds the result directly, putting the envelope in the serialized
-    ``content`` (where an in-tool error carries it too) and in
-    ``structured_content``. The match to an in-tool error is on the decoded
-    envelope, not the byte serialization.
+    ``isError=True`` deliberately: the tool never ran, distinct from a tool that ran
+    and reported a business error (``isError=False``). Bypassing the SDK's handler,
+    it builds the result directly, putting the envelope in the serialized ``content``
+    (where an in-tool error carries it too) and in ``structuredContent``. The match
+    to an in-tool error is on the decoded envelope, not the byte serialization.
+
+    Returns the **wire dict**, not the model, because a short-circuiting middleware
+    owns its response envelope: the SDK shapes a handler's result per negotiated
+    revision inside ``ServerRunner._serialize``, and that runs in ``call_next``, so
+    a result returned without awaiting it is never shaped. Left as a model,
+    ``CallToolResult`` would dump its 2026-era ``resultType`` default onto a
+    connection whose revision has no such field, and the client's own surface
+    validation ignores extras, so nothing would object. ``serialize_server_result``
+    is the SDK's supported per-revision shaper (a legacy revision drops
+    ``resultType``, 2026-07-28 keeps it), so this defers to it rather than deciding
+    which keys belong at which revision.
     """
     envelope = tool_error(message, code=code, details=details)
-    return types.CallToolResult(
+    result = types.CallToolResult(
         content=[types.TextContent(type="text", text=json.dumps(envelope, indent=2))],
         structured_content=envelope,
         is_error=True,
+    )
+    return spec_methods.serialize_server_result(
+        TOOLS_CALL_METHOD,
+        ctx.protocol_version,
+        result.model_dump(by_alias=True, mode="json", exclude_none=True),
     )
 
 

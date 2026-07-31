@@ -14,6 +14,25 @@ _release = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_release)
 
 
+@pytest.fixture(autouse=True)
+def _forbid_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail loudly if a test reaches a real ``git``/``uv`` command.
+
+    These tests exercise release *decisions*, not the commands they authorize. A
+    guard that stops working would otherwise let a test fall through into a real
+    ``bump_version.py`` run, which rewrites every version-bearing file and
+    ``uv.lock`` in the working tree — so a broken guard would silently corrupt
+    the checkout instead of failing. Tests that need a command stub one
+    explicitly; their ``setattr`` wins over this.
+    """
+
+    def _forbid(cmd, **kwargs):
+        raise AssertionError(f"test reached a real subprocess: {cmd}")
+
+    monkeypatch.setattr(_release, "run", _forbid)
+    monkeypatch.setattr(_release, "capture", _forbid)
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [

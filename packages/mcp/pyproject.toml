@@ -16,9 +16,9 @@ dependencies = [
     # server imports mcp.server.mcpserver, which no 1.x release has.
     "mcp[cli]==2.0.*",
     # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
-    "pipefy-auth==0.5.0a1",
-    "pipefy-infra==0.5.0a1",
-    "pipefy==0.5.0a1",
+    "pipefy-auth==0.4.0-beta.2",
+    "pipefy-infra==0.4.0-beta.2",
+    "pipefy==0.4.0-beta.2",
     "pydantic>=2.13.4,<3",
     "pydantic-settings>=2.8.1",
     # Declared even though `mcp` already pulls it, because this package imports

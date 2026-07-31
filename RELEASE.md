@@ -21,7 +21,7 @@ This rule is enforced in three places, so a tag cannot be published from the wro
 
 An alpha and the beta it becomes **share a core `X.Y.Z`**: `0.5.0-alpha.1` → `0.5.0-alpha.2` → promoted to `0.5.0-beta.1` on `main`. PEP 440 orders `0.5.0a1 < 0.5.0a2 < 0.5.0b1`, so each step is an upgrade. A new cycle opens the next core version (`0.6.0-alpha.1`).
 
-Because the alpha line must sort **above** whatever `main` last released, an alpha always opens a core version `main` has not reached — you cannot cut `0.4.0-alpha.1` once `0.4.0-beta.2` is out, since `0.4.0a1 < 0.4.0b2`. `release.py alpha` refuses that, and refuses to run at all while `dev` is behind `main`, since `dev`'s `## [Unreleased]` would then still hold notes `main` has already released.
+Because the alpha line must sort **above** whatever `main` last released, an alpha always opens a core version `main` has not reached — you cannot cut `0.4.0-alpha.1` once `0.4.0-beta.2` is out, since `0.4.0a1 < 0.4.0b2`. `alpha-pr` refuses that, and refuses to run at all while `dev` is behind `main`, since `dev`'s `## [Unreleased]` would then still hold notes `main` has already released.
 
 ### Cutting an alpha from `dev`
 
@@ -61,7 +61,7 @@ The next **GitHub pre-release** after the standalone repo’s [`v0.1.0-beta.1`](
 
 The Release workflow requires the git tag (without leading `v`) to **exactly match** `__version__` in `packages/sdk/src/pipefy_sdk/__init__.py` (and the MCP/CLI/Auth/Infra copies). For example tag **`v0.2.0-beta.1`** implies **`__version__ = "0.2.0-beta.1"`** in all five packages before you push the tag (set via step 2 below using `version=0.2.0-beta.1`, or edit the five `__init__.py` files together).
 
-`scripts/release.py` drives the flow, split at the irreversible boundary — everything before the tag push is local and reversible, so you review before anything leaves your machine. The subcommands are `release-pr` (open a dev→main release PR), `prepare` (bump/stamp/commit on `main`), `publish` (tag, push, watch, verify), `alpha` (cut a staging alpha off `dev`), and `verify` (re-run the post-publish checks).
+`scripts/release.py` drives the flow, split at the irreversible boundary — everything before the tag push is local and reversible, so you review before anything leaves your machine. The subcommands are `release-pr` (open a dev→main release PR), `alpha-pr` (open a staging-alpha PR into `dev`), `prepare` (bump/commit locally), `publish` (tag the merged commit, push the tag, watch, verify), and `verify` (re-run the post-publish checks).
 
 ### Recommended: `dev → main` release PR
 

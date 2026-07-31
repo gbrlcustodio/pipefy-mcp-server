@@ -249,9 +249,9 @@ def compute_target_version(bump_arg: str) -> tuple[str, str]:
 def _apply_prepare(bump_arg: str, target: str, *, stamp: bool = True) -> str:
     """Bump, optionally stamp the CHANGELOG, and commit on the current branch.
 
-    The mutating core shared by ``prepare`` (main flow), ``release_pr``
-    (dev→main flow), and ``alpha`` (staging cut off dev); callers own the
-    preflight and confirmation. Returns the version bump_version actually wrote.
+    The mutating core shared by ``prepare`` and ``release_pr`` (which
+    ``alpha_pr`` delegates to); callers own the preflight and confirmation.
+    Returns the version bump_version actually wrote.
 
     ``stamp=False`` leaves ``## [Unreleased]`` intact — what the alpha flow
     needs, since consecutive alphas share one accumulating section (see
@@ -580,7 +580,7 @@ def watch_release_workflow(tag: str, *, exclude: frozenset[str] = frozenset()) -
 
 
 def _tag_and_publish(branch: str, version: str, *, assume_yes: bool) -> None:
-    """Tag ``version``, push ``branch`` and the tag, watch the workflow, verify.
+    """Tag ``version`` on ``branch``, push the tag, watch the workflow, verify.
 
     The irreversible half, shared by every flow, so all of them cross the same
     gate and run the same post-publish checks.

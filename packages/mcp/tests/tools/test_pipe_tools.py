@@ -11,6 +11,7 @@ from _mcp_compat import (
 )
 from mcp import ClientSession
 from mcp.server import ServerRequestContext
+from mcp.shared.exceptions import NoBackChannelError
 from mcp.types import (
     ElicitRequestParams,
     ElicitResult,
@@ -2800,6 +2801,263 @@ class TestSkipElicitation:
             card_id="99",
             field_updates=[{"field_id": "status", "value": "approved"}],
         )
+
+
+@pytest.mark.anyio
+class TestElicitationWithoutABackChannel:
+    """Elicitation must degrade, not escape, when the client cannot be called.
+
+    A default ``Client`` negotiates 2026-07-28, which has no server-to-client
+    channel: the client still advertises the ``elicitation`` capability in its
+    request envelope, but ``ctx.elicit`` raises ``NoBackChannelError``. Gating on
+    the advertised capability alone let that raise leave the tool as a JSON-RPC
+    protocol error instead of a tool result. Each tool must instead take the same
+    path it takes for a client that advertises no elicitation at all: use the
+    values it was given.
+    """
+
+    @staticmethod
+    def _modern_session(mcp_server):
+        return create_client_session(
+            mcp_server,
+            mode="auto",
+            read_timeout_seconds=timedelta(seconds=10),
+            raise_exceptions=True,
+            elicitation_callback=elicitation_callback_for(
+                action="accept", content={"f1": "from-elicitation"}
+            ),
+        )
+
+    async def test_create_card_uses_supplied_fields(
+        self, mcp_server, mock_pipefy_client, pipe_id
+    ):
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": [
+                {
+                    "id": "f1",
+                    "label": "F1",
+                    "type": "short_text",
+                    "required": False,
+                    "editable": True,
+                },
+            ]
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "12"}}
+        }
+
+        async with self._modern_session(mcp_server) as session:
+            assert session.protocol_version == "2026-07-28"
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "fields": {"f1": "from-arguments"}},
+            )
+
+        assert result.is_error is False
+        mock_pipefy_client.create_card.assert_called_once_with(
+            str(pipe_id), {"f1": "from-arguments"}
+        )
+
+    async def test_create_card_with_phase_id_uses_supplied_fields(
+        self, mcp_server, mock_pipefy_client, pipe_id
+    ):
+        field = {
+            "id": "f1",
+            "label": "F1",
+            "type": "short_text",
+            "required": False,
+            "editable": True,
+        }
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": [field]
+        }
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={"phase_id": "100", "phase_name": "Review", "fields": [field]}
+        )
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "13"}}
+        }
+
+        async with self._modern_session(mcp_server) as session:
+            result = await session.call_tool(
+                "create_card",
+                {
+                    "pipe_id": pipe_id,
+                    "phase_id": "100",
+                    "fields": {"f1": "from-arguments"},
+                },
+            )
+
+        assert result.is_error is False
+        mock_pipefy_client.create_card.assert_called_once_with(
+            str(pipe_id), {"f1": "from-arguments"}, phase_id="100"
+        )
+
+    async def test_fill_card_phase_fields_uses_supplied_fields(
+        self, mcp_server, mock_pipefy_client
+    ):
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "phase_id": "100",
+                "phase_name": "Review",
+                "fields": [
+                    {
+                        "id": "f1",
+                        "label": "F1",
+                        "type": "short_text",
+                        "required": False,
+                        "editable": True,
+                    },
+                ],
+            }
+        )
+        mock_pipefy_client.update_card = AsyncMock(
+            return_value={"updateFieldsValues": {"success": True}}
+        )
+
+        async with self._modern_session(mcp_server) as session:
+            result = await session.call_tool(
+                "fill_card_phase_fields",
+                {
+                    "card_id": "99",
+                    "phase_id": "100",
+                    "fields": {"f1": "from-arguments"},
+                },
+            )
+
+        assert result.is_error is False
+        mock_pipefy_client.update_card.assert_called_once_with(
+            card_id="99",
+            field_updates=[{"field_id": "f1", "value": "from-arguments"}],
+        )
+
+    async def test_create_card_without_fields_sends_no_values(
+        self, mcp_server, mock_pipefy_client, pipe_id, extract_payload
+    ):
+        """The uncovered corner: no form, a required field, and no ``fields``.
+
+        The other cases in this class supply ``fields``, so they cannot show what
+        happens when there is nothing to fall back to. ``create_card`` sends an
+        empty field map and lets the API rule on its own required fields; it does
+        not pre-empt that check locally. Pinned so a change to either half (a
+        local required-field guard, or a different fallback) is deliberate.
+        """
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": [
+                {
+                    "id": "f_req",
+                    "label": "Required",
+                    "type": "short_text",
+                    "required": True,
+                    "editable": True,
+                },
+            ]
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "77"}}
+        }
+
+        async with self._modern_session(mcp_server) as session:
+            result = await session.call_tool("create_card", {"pipe_id": pipe_id})
+
+        assert result.is_error is False
+        mock_pipefy_client.create_card.assert_called_once_with(str(pipe_id), {})
+        assert extract_payload(result)["createCard"]["card"]["id"] == "77"
+
+    async def test_fill_card_phase_fields_without_fields_reports_nothing_collected(
+        self, mcp_server, mock_pipefy_client, extract_payload
+    ):
+        """Same corner on the sibling tool, where the API never gets a say.
+
+        ``fill_card_phase_fields`` short-circuits before ``update_card`` when
+        nothing was collected, so the message is the only thing a caller reads.
+        "No fields to update." would be false here: the phase has a required
+        editable field and no form could be shown to collect it.
+        """
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "phase_id": "100",
+                "phase_name": "Review",
+                "fields": [
+                    {
+                        "id": "f_req",
+                        "label": "Required",
+                        "type": "short_text",
+                        "required": True,
+                        "editable": True,
+                    },
+                ],
+            }
+        )
+        mock_pipefy_client.update_card = AsyncMock()
+
+        async with self._modern_session(mcp_server) as session:
+            result = await session.call_tool(
+                "fill_card_phase_fields", {"card_id": "99", "phase_id": "100"}
+            )
+
+        assert result.is_error is False
+        mock_pipefy_client.update_card.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["message"] != "No fields to update."
+        assert "nothing was updated" in payload["message"]
+        assert "1 editable field(s)" in payload["message"]
+
+    async def test_elicit_raising_no_back_channel_is_absorbed(
+        self, mock_pipefy_client, pipe_id
+    ):
+        """The residual case: the channel closes after the capability check.
+
+        ``supports_elicitation`` reads ``can_send_request`` at the top of the
+        tool, but the channel can close before the elicitation request goes out
+        (the inbound request finishing closes its dispatch context), and a
+        session shape that does not expose the flag passes the check unmeasured.
+        Here the check is satisfied and ``ctx.elicit`` still raises.
+        """
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": [
+                {
+                    "id": "f1",
+                    "label": "F1",
+                    "type": "short_text",
+                    "required": False,
+                    "editable": True,
+                },
+            ]
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "14"}}
+        }
+
+        mcp = build_tool_test_server(
+            "Pipefy MCP Test Server", PipeTools.register, mock_pipefy_client
+        )
+        runtime = McpRuntime(settings, RequestScopedIdentity())
+        runtime.session_for_request = lambda _req: mock_pipefy_client
+
+        ctx = MagicMock()
+        ctx.debug = AsyncMock()
+        ctx.elicit = AsyncMock(side_effect=NoBackChannelError("elicitation/create"))
+        ctx.session = SimpleNamespace(
+            client_params=SimpleNamespace(
+                capabilities=SimpleNamespace(elicitation=True)
+            ),
+            can_send_request=True,
+        )
+        ctx.request_context = SimpleNamespace(lifespan_context=runtime, request=None)
+
+        result = await mcp._tool_manager.call_tool(
+            "create_card",
+            {"pipe_id": pipe_id, "fields": {"f1": "from-arguments"}},
+            context=ctx,
+            convert_result=False,
+        )
+
+        ctx.elicit.assert_awaited_once()
+        mock_pipefy_client.create_card.assert_called_once_with(
+            str(pipe_id), {"f1": "from-arguments"}
+        )
+        assert result["createCard"]["card"]["id"] == "14"
 
 
 # =============================================================================

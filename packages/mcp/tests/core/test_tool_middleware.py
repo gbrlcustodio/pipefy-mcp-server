@@ -1,8 +1,8 @@
 """Unit tests for the tool-call middleware chain.
 
 Covers the seam mechanics against a real ``MCPServer``: composition order,
-short-circuit, exception propagation, the short-circuit envelope shape, the
-pass-through of non-tool methods, and the argument-context build.
+short-circuit, exception propagation, the short-circuit envelope and its wire field
+set, the pass-through of non-tool methods, and the argument-context build.
 
 The chain is registered the way the composition root registers it, through
 ``MCPServer(middleware=[...])``, and driven through a real client, so these tests
@@ -13,11 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 
 import pytest
 from _mcp_compat import create_connected_server_and_client_session as create_client
+from mcp import types
 from mcp.server import ServerRequestContext
 from mcp.server.mcpserver import MCPServer
+from pydantic import TypeAdapter
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.core.tool_middleware import (
@@ -27,6 +30,15 @@ from pipefy_mcp.core.tool_middleware import (
     context_from_server_request,
     short_circuit_error,
 )
+
+_RAW_RESULT = TypeAdapter(dict[str, Any])
+"""Result type for reading a ``tools/call`` response as the untouched wire dict.
+
+``Client.call_tool`` parses into ``CallToolResult``, whose 2026-era ``resultType``
+default is re-added by any later dump, so the parsed model cannot show which keys
+actually crossed the wire. ``session.send_request`` with a raw adapter returns the
+response ``result`` verbatim.
+"""
 
 
 def _app(*middlewares) -> MCPServer:
@@ -46,6 +58,7 @@ def _bare_context(**arguments: object) -> ToolCallContext:
     return ToolCallContext(
         argument_keys=tuple(sorted(arguments)),
         identity=None,  # type: ignore[arg-type]
+        protocol_version="2025-11-25",
         request_id=None,
         tool_name="echo",
         arguments=dict(arguments) or None,
@@ -108,7 +121,7 @@ def test_middleware_short_circuits_without_running_the_tool():
     reached_inner = False
 
     async def deny(ctx: ToolCallContext, call_next):
-        return short_circuit_error("denied", code="DENIED")
+        return short_circuit_error(ctx, "denied", code="DENIED")
 
     async def inner(ctx: ToolCallContext, call_next):
         nonlocal reached_inner
@@ -201,11 +214,11 @@ def test_chain_propagates_arbitrary_exceptions():
 @pytest.mark.unit
 def test_short_circuit_error_shape():
     """The envelope is the canonical tool_error dict in both content and structured."""
-    result = short_circuit_error("quota exceeded", code="RATE_LIMITED")
+    result = short_circuit_error(_bare_context(), "quota exceeded", code="RATE_LIMITED")
 
-    envelope = json.loads(result.content[0].text)
-    assert result.is_error is True
-    assert result.structured_content == envelope
+    envelope = json.loads(result["content"][0]["text"])
+    assert result["isError"] is True
+    assert result["structuredContent"] == envelope
     assert envelope == {
         "success": False,
         "error": {"message": "quota exceeded", "code": "RATE_LIMITED"},
@@ -213,39 +226,91 @@ def test_short_circuit_error_shape():
 
 
 @pytest.mark.unit
-def test_short_circuit_matches_the_in_tool_error_envelope():
-    """A short-circuit decodes to the same envelope a client reads from an in-tool error.
+def test_short_circuit_is_shaped_for_the_negotiated_revision():
+    """The result carries only fields the connection's revision defines.
+
+    ``short_circuit_error`` returns without awaiting ``call_next``, so the SDK's
+    per-revision shaping (``ServerRunner._serialize``) never runs on it and the
+    middleware owns the envelope. ``CallToolResult`` defaults ``resultType`` to
+    ``"complete"``, a field the 2026-07-28 schema introduced, so a result left as the
+    model leaks it onto a legacy connection.
+    """
+    legacy = short_circuit_error(_bare_context(), "denied")
+    modern = short_circuit_error(
+        ToolCallContext(
+            argument_keys=(),
+            identity=None,  # type: ignore[arg-type]
+            protocol_version="2026-07-28",
+            request_id=None,
+            tool_name="echo",
+            arguments=None,
+        ),
+        "denied",
+    )
+
+    assert "resultType" not in legacy
+    assert modern["resultType"] == "complete"
+
+
+@pytest.mark.unit
+def test_short_circuit_matches_the_in_tool_error_on_the_wire():
+    """A short-circuit reaches the client as the same envelope, and the same field set.
 
     A governance stop should carry the same ``tool_error`` payload an agent gets when a
-    tool runs and fails, so the client needs no special-casing. The two are compared on
-    the parsed envelope, not the bytes: MCPServer serializes a dict return through its own
-    encoder (non-ASCII left raw, ``structured_content`` unset for a schema-less tool),
-    while ``short_circuit_error`` uses ``json.dumps`` and fills ``structured_content``.
-    Comparing decoded JSON pins the contract that matters and fails loud if either
-    encoder or the envelope shape drifts, without false-alarming on cosmetics. The one
-    intended divergence: the short-circuit is ``is_error=True`` (the tool never ran). The
-    non-ASCII value below crosses the encoders' escaping difference to prove the point.
+    tool runs and fails, so the client needs no special-casing. Both branches are driven
+    through a real client here, and both results are read as the raw response ``result``
+    rather than the parsed model: a short-circuit skips the SDK's per-revision shaping
+    (it never awaits ``call_next``), so it is the only branch that can put a field on the
+    wire that this connection's revision does not define, and the parsed model hides
+    exactly that.
+
+    The two envelopes are compared decoded, not byte for byte: MCPServer serializes a
+    dict return through its own encoder (non-ASCII left raw), while
+    ``short_circuit_error`` uses ``json.dumps``. The non-ASCII value below crosses that
+    escaping difference to prove the comparison is on content. Two divergences are
+    intended: the short-circuit sets ``isError`` (the tool never ran) and fills
+    ``structuredContent``, which the SDK leaves unset for a schema-less tool.
     """
     message, code, details = "blocked", "DENIED", {"reason": "quota (café)"}
 
-    app = MCPServer("parity")
+    async def deny(ctx: ToolCallContext, call_next):
+        if ctx.tool_name == "denied":
+            return short_circuit_error(ctx, message, code=code, details=details)
+        return await call_next(ctx)
+
+    adapter = build_tool_call_middleware([deny])
+    app = MCPServer("parity", middleware=[adapter])
 
     @app.tool()
     async def failing() -> dict:
         return tool_error(message, code=code, details=details)
 
-    async def run():
+    @app.tool()
+    async def denied() -> str:
+        return "never reached"
+
+    async def run() -> tuple[dict, dict]:
         async with create_client(app) as client:
-            return await client.call_tool("failing", {})
 
-    in_tool = asyncio.run(run())
-    short_circuit = short_circuit_error(message, code=code, details=details)
+            async def raw(name: str) -> dict:
+                return await client.session.send_request(
+                    types.CallToolRequest(
+                        params=types.CallToolRequestParams(name=name, arguments={})
+                    ),
+                    _RAW_RESULT,
+                )
 
-    assert json.loads(in_tool.content[0].text) == json.loads(
-        short_circuit.content[0].text
+            return await raw("failing"), await raw("denied")
+
+    in_tool, short_circuit = asyncio.run(run())
+
+    assert json.loads(in_tool["content"][0]["text"]) == json.loads(
+        short_circuit["content"][0]["text"]
     )
-    assert in_tool.is_error is False
-    assert short_circuit.is_error is True
+    assert sorted(in_tool) == ["content", "isError"]
+    assert sorted(short_circuit) == ["content", "isError", "structuredContent"]
+    assert in_tool["isError"] is False
+    assert short_circuit["isError"] is True
 
 
 @pytest.mark.unit
@@ -273,6 +338,7 @@ def test_context_exposes_bounded_argument_keys_without_values():
     assert ctx.argument_keys == ("alpha", "zeta")
     # No HTTP request in scope -> falls back to the JSON-RPC message id.
     assert ctx.request_id == "m-1"
+    assert ctx.protocol_version == "2025-11-25"
 
 
 @pytest.mark.unit

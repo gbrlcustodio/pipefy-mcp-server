@@ -350,7 +350,7 @@ from pipefy_mcp.core.tool_middleware import ToolCallContext, CallNext, short_cir
 
 async def quota(ctx: ToolCallContext, call_next: CallNext):
     if over_quota(ctx.identity.client_id):
-        return short_circuit_error("quota exceeded", code="RATE_LIMITED")
+        return short_circuit_error(ctx, "quota exceeded", code="RATE_LIMITED")
     return await call_next(ctx)
 
 # a serving layer registers its own middleware through the public builder:
@@ -363,7 +363,14 @@ async def quota(ctx: ToolCallContext, call_next: CallNext):
   the inner chain and the tool. Use `short_circuit_error`, which carries the
   canonical `tool_error` envelope but sets `isError=True` deliberately: a
   governance stop means the tool never ran, distinct from a tool that ran and
-  reported a business error (`isError=False`).
+  reported a business error (`isError=False`). It takes `ctx` because a
+  short-circuiting middleware owns its response envelope: the SDK shapes a result
+  per negotiated revision inside `call_next`, so a result returned without awaiting
+  it is never shaped, and `short_circuit_error` runs the SDK's own
+  `serialize_server_result` against `ctx.protocol_version` instead. That is why it
+  returns the wire dict, not a `CallToolResult`: the model would dump its 2026-era
+  `resultType` default onto a legacy connection, and nothing downstream (including
+  the client's own surface validation, which ignores extras) would object.
 - **Identity** (`ctx.identity`): the validated caller's `client_id` and `scopes`,
   read off the request's bearer, never re-decoded. Empty under stdio/local (no
   inbound bearer). The end-user `subject` is intentionally absent until its
@@ -379,9 +386,13 @@ async def quota(ctx: ToolCallContext, call_next: CallNext):
 - **Reading the result**: what `call_next` returns is polymorphic, so use
   `result_is_error(result)` rather than an attribute read. A real tool call comes back
   as the serialized wire dict keyed `isError` (the SDK shapes the result for the wire
-  inside the chain), while `short_circuit_error` and any middleware building its own
-  result return a `CallToolResult` model with `is_error`. `result.is_error` reads
-  `False` on the dict, so every real failure would look like a success. `ctx.argument_keys` is bounded (count and length caps) and values-free
+  inside the chain), success and failure alike, and so does `short_circuit_error`; a
+  `CallToolResult` model with snake_case `is_error` only arrives from an inner
+  middleware that built its result by hand. `result.is_error` reads `False` on the
+  dict, so every real failure would look like a success. A middleware test fixture
+  must use the dict shape for anything standing in for a real call, or it exercises a
+  branch production never takes.
+- **Privacy**: `ctx.argument_keys` is bounded (count and length caps) and values-free
   for privacy-sensitive consumers; `ctx.arguments` values are passed unbounded to
   any consumer that opts to read them. Never log a bearer or argument values.
 

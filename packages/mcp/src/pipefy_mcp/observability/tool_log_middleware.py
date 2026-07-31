@@ -25,6 +25,7 @@ from mcp import UrlElicitationRequiredError
 
 from pipefy_mcp.core.tool_middleware import CallNext, ToolCallContext, result_is_error
 from pipefy_mcp.observability.json_logging import (
+    UNNAMED_TOOL,
     ToolCallOutcome,
     build_tool_call_event,
     emit_structured_event,
@@ -59,6 +60,10 @@ async def tool_log_middleware(
     Swallowing either would break cancellation and elicitation. ``BaseException``
     (not ``Exception``) is caught so a ``CancelledError`` cannot skip the handler
     and let ``finally`` emit a stale ``ok``.
+
+    A ``tools/call`` that named no tool reaches the chain too (middleware sees raw
+    params), and is logged under :data:`UNNAMED_TOOL` rather than an empty ``tool``,
+    so it does not land in a dashboard's blank bucket beside the real tool names.
     """
     started_at = time.perf_counter()
     outcome: ToolCallOutcome = "ok"
@@ -79,7 +84,7 @@ async def tool_log_middleware(
         duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
         emit_structured_event(
             build_tool_call_event(
-                tool=ctx.tool_name,
+                tool=ctx.tool_name or UNNAMED_TOOL,
                 outcome=outcome,
                 duration_ms=duration_ms,
                 arg_keys=list(ctx.argument_keys),

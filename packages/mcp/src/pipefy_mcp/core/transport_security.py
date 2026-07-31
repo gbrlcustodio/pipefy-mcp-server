@@ -14,11 +14,11 @@ config value the SDK reads, mirroring
 SDK's ``AuthSettings``). The mcp-SDK type is kept out of ``settings.py`` so the
 config boundary stays framework-free.
 
-The public host comes from the :class:`pipefy_mcp.auth.ResourceServer` the runtime
-parses once and feeds in (which the remote profile already requires), so the standard
-fronted deployment needs no allowlist config; ``allowed_hosts`` / ``allowed_origins``
-extend it. When neither a resource nor an explicit allowlist is given the function
-returns ``None``, leaving the SDK's own loopback default in force.
+The public host comes from the ``resource_server_url`` this module parses into a
+:class:`pipefy_mcp.auth.ResourceServer` (which the remote profile already requires), so
+the standard fronted deployment needs no allowlist config; ``allowed_hosts`` /
+``allowed_origins`` extend it. When neither a resource nor an explicit allowlist is
+given the function returns ``None``, leaving the SDK's own loopback default in force.
 """
 
 from __future__ import annotations
@@ -37,12 +37,13 @@ _LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 def transport_security_for(settings: Settings) -> TransportSecuritySettings | None:
     """Parse the resource-server URL and build the allowlist from it, in one step.
 
-    The single place the parse and the build are paired. Two callers need the result
-    at different times: :meth:`McpRuntime.for_profile` at construction (where the
-    same parsed resource also feeds the inbound-auth pair, so the two cannot
-    disagree on the host) and the serving path at ``streamable_http_app()`` time,
-    since the SDK takes the allowlist per transport rather than on the constructor.
-    Both go through here so a second caller cannot re-derive it differently.
+    Called from the serving path only (:func:`pipefy_mcp.server.run_server`, which hands
+    the result to the Streamable HTTP transport), because the SDK takes the allowlist
+    per transport on ``streamable_http_app()`` rather than on the constructor, and only
+    the HTTP transport has anything to apply it to. Pairing the parse with the build
+    here keeps the host derivation in one place: :meth:`McpRuntime.for_profile` parses
+    the same ``resource_server_url`` for the inbound-auth pair, so a caller that
+    re-derived the allowlist by hand could disagree with it.
     """
     url = settings.rs.resource_server_url
     resource = ResourceServer.from_url(url) if url else None

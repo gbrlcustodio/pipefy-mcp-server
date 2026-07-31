@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.shared.exceptions import NoBackChannelError
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     CardSearch,
@@ -112,6 +113,16 @@ class PipeTools:
             elicitation, an interactive form is presented even if ``fields``
             carries pre-filled values — the human can review and adjust them.
 
+            A form is only possible when the connection can carry a
+            server-to-client request. It cannot on protocol revision 2026-07-28,
+            on a stateless HTTP transport, or on a deployment serving
+            ``json_response=True`` (which the hosted server does). There the tool
+            takes the ``skip_elicitation`` path instead, without saying so in the
+            result: ``fields`` is sent as given, so an omitted ``fields`` sends no
+            values at all and the API decides whether its required fields were
+            satisfied. A caller that cannot be sure of the client's channel should
+            discover the fields first and pass every required value.
+
             Without ``phase_id``, discover start-form fields via
             ``get_start_form_fields`` and pass all required values.
 
@@ -152,6 +163,17 @@ class PipeTools:
             client = get_pipefy_client(ctx)
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            if not can_elicit and not skip_elicitation:
+                # Logged for the same reason the NoBackChannelError absorb in
+                # _elicit_field_details logs: a caller asked for a form and the
+                # result cannot say it never appeared.
+                await ctx.debug(
+                    "Elicitation unavailable: no interactive form for this "
+                    "connection; proceeding with the supplied fields"
+                )
+            # Stays None when elicitation is skipped or the connection turns out
+            # to have no back channel; either way the supplied fields are used.
+            elicited: dict[str, Any] | None = None
 
             if phase_id is not None:
                 phase_id_str, phase_err = validate_tool_id(phase_id, "phase_id")
@@ -199,6 +221,8 @@ class PipeTools:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
+
+                if elicited is not None:
                     merged_source = {**(fields or {}), **elicited}
                     card_data = _merge_phase_and_start_form_field_values(
                         merged_source,
@@ -230,7 +254,7 @@ class PipeTools:
 
                 if can_elicit and not skip_elicitation:
                     try:
-                        card_data = await PipeTools._elicit_field_details(
+                        elicited = await PipeTools._elicit_field_details(
                             message=f"Creating a card in pipe {pipe_id}",
                             prefilled_fields=fields,
                             expected_fields=expected_fields,
@@ -240,6 +264,9 @@ class PipeTools:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
+
+                if elicited is not None:
+                    card_data = elicited
                 elif expected_fields:
                     card_data = _filter_fields_by_definitions(
                         card_data, expected_fields
@@ -1112,6 +1139,14 @@ class PipeTools:
             elicitation, an interactive form is presented — ``fields`` pre-fills
             it so the human can review and adjust.
 
+            A form is only possible when the connection can carry a
+            server-to-client request. It cannot on protocol revision 2026-07-28,
+            on a stateless HTTP transport, or on a deployment serving
+            ``json_response=True`` (which the hosted server does). There the tool
+            takes the ``skip_elicitation`` path instead: only ``fields`` is sent,
+            so an omitted ``fields`` collects nothing and the result reports that
+            no values were collected rather than that the card was updated.
+
             Args:
                 card_id: The ID of the card to update.
                     Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
@@ -1145,10 +1180,19 @@ class PipeTools:
 
             field_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            if not can_elicit and not skip_elicitation:
+                # Logged for the same reason the NoBackChannelError absorb in
+                # _elicit_field_details logs: a caller asked for a form and the
+                # result cannot say it never appeared.
+                await ctx.debug(
+                    "Elicitation unavailable: no interactive form for this "
+                    "connection; proceeding with the supplied fields"
+                )
 
+            elicited: dict[str, Any] | None = None
             if can_elicit and expected_fields and not skip_elicitation:
                 try:
-                    field_data = await PipeTools._elicit_field_details(
+                    elicited = await PipeTools._elicit_field_details(
                         message=f"Filling fields for phase '{phase_name}' (ID: {phase_id})",
                         prefilled_fields=fields,
                         expected_fields=expected_fields,
@@ -1158,13 +1202,31 @@ class PipeTools:
                     return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
+
+            if elicited is not None:
+                field_data = elicited
             elif expected_fields:
                 field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
             if not field_data:
+                if expected_fields:
+                    # The phase does have editable fields, so "No fields to
+                    # update." would be false: values were needed and none were
+                    # collected. Reachable when no form could be shown and the
+                    # caller passed no fields, or when every key it passed was
+                    # dropped by the editable-field filter. An agent reading only
+                    # the message must not conclude the card is complete.
+                    message = (
+                        "No field values were collected, so nothing was updated. "
+                        f"Phase '{phase_name}' has {len(expected_fields)} editable "
+                        "field(s); pass 'fields' keyed by the IDs from "
+                        "get_phase_fields(phase_id)."
+                    )
+                else:
+                    message = "No fields to update."
                 return {
                     "success": True,
-                    "message": "No fields to update.",
+                    "message": message,
                     "phase_id": phase_id,
                     "phase_name": phase_name,
                 }
@@ -1333,17 +1395,41 @@ class PipeTools:
         prefilled_fields: dict[str, Any] | None,
         expected_fields: list,
         ctx: Context,
-    ) -> dict:
-        """Handle interactive field elicitation."""
+    ) -> dict | None:
+        """Handle interactive field elicitation.
+
+        Returns the accepted field values, or ``None`` when the connection
+        cannot carry a server-initiated request. A caller that gets ``None``
+        proceeds with the values it was already given, exactly as it does for a
+        client that advertises no elicitation support.
+
+        ``supports_elicitation`` already gates on the back channel, so ``None``
+        is the residual case: the channel can also close between that check and
+        the request (the inbound request finishing closes its dispatch context),
+        and a session shape that does not expose ``can_send_request`` passes the
+        gate unmeasured. Letting ``NoBackChannelError`` escape instead would
+        leave the tool as a JSON-RPC protocol error rather than a tool result.
+
+        Raises:
+            MalformedFieldDefinitionError: ``expected_fields`` cannot be turned
+                into a form model.
+            UserCancelledError: The user declined or cancelled the form.
+        """
         DynamicFormModel = create_form_model(expected_fields, prefilled_fields)
         await ctx.debug(
             f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
         )
 
-        result = await ctx.elicit(
-            message=message,
-            schema=DynamicFormModel,
-        )
+        try:
+            result = await ctx.elicit(
+                message=message,
+                schema=DynamicFormModel,
+            )
+        except NoBackChannelError:
+            await ctx.debug(
+                "Elicitation skipped: connection has no server-to-client back channel"
+            )
+            return None
         await ctx.debug(f"Elicited result: {result}")
 
         if result.action != "accept":

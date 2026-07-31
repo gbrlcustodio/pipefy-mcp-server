@@ -46,6 +46,19 @@ TOOL_CALL_EVENT_KEYS = frozenset(
     }
 )
 
+UNNAMED_TOOL = "<unnamed>"
+"""The ``tool`` label for a ``tools/call`` that named no tool.
+
+Middleware deliberately sees a request that will go on to fail request-layer
+validation, so a ``tools/call`` whose params carry no ``name`` reaches the chain and
+gets a line. Its ``tool_name`` is genuinely empty, but an empty label groups under a
+blank bucket in any dashboard that facets by tool, next to the real ones. The angle
+brackets cannot collide with a tool name (they are not valid in one), so the bucket
+reads as what it is. ``ctx.tool_name`` itself stays ``""``: it is the raw view of what
+the client sent, and a governance middleware matching on it must not see a name the
+client did not send.
+"""
+
 
 _LOG_LEVELS = {
     "DEBUG": logging.DEBUG,

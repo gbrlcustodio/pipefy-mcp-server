@@ -63,3 +63,16 @@ markers = [
     "unit: marks a test as a unit test",
     "integration: marks tests that call the live Pipefy GraphQL API (PIPEFY_* env)",
 ]
+filterwarnings = [
+    # The mcp SDK deprecated the logging capability in its 2026-07-28 revision
+    # (SEP-2577), so the 68 ctx.debug / ctx.info calls across the tool modules emit
+    # ~997 warning lines. That buries any genuinely new warning, and replacing the
+    # calls stops the client receiving those lines, which is a behavior change owed
+    # its own review. Remove this line with the ctx.debug migration.
+    #
+    # Matched on the message, not the bare class, so the SDK's other
+    # MCPDeprecationWarning subjects (sampling, roots) still surface. When the SDK
+    # eventually removes the capability the calls fail outright, so this cannot hide
+    # the removal, only the interim warning.
+    "ignore:The logging capability is deprecated:mcp.shared.exceptions.MCPDeprecationWarning",
+]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.shared.exceptions import NoBackChannelError
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     CardSearch,
@@ -152,6 +153,9 @@ class PipeTools:
             client = get_pipefy_client(ctx)
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            # Stays None when elicitation is skipped or the connection turns out
+            # to have no back channel; either way the supplied fields are used.
+            elicited: dict[str, Any] | None = None
 
             if phase_id is not None:
                 phase_id_str, phase_err = validate_tool_id(phase_id, "phase_id")
@@ -199,6 +203,8 @@ class PipeTools:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
+
+                if elicited is not None:
                     merged_source = {**(fields or {}), **elicited}
                     card_data = _merge_phase_and_start_form_field_values(
                         merged_source,
@@ -230,7 +236,7 @@ class PipeTools:
 
                 if can_elicit and not skip_elicitation:
                     try:
-                        card_data = await PipeTools._elicit_field_details(
+                        elicited = await PipeTools._elicit_field_details(
                             message=f"Creating a card in pipe {pipe_id}",
                             prefilled_fields=fields,
                             expected_fields=expected_fields,
@@ -240,6 +246,9 @@ class PipeTools:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
+
+                if elicited is not None:
+                    card_data = elicited
                 elif expected_fields:
                     card_data = _filter_fields_by_definitions(
                         card_data, expected_fields
@@ -1146,9 +1155,10 @@ class PipeTools:
             field_data = fields or {}
             can_elicit = supports_elicitation(ctx)
 
+            elicited: dict[str, Any] | None = None
             if can_elicit and expected_fields and not skip_elicitation:
                 try:
-                    field_data = await PipeTools._elicit_field_details(
+                    elicited = await PipeTools._elicit_field_details(
                         message=f"Filling fields for phase '{phase_name}' (ID: {phase_id})",
                         prefilled_fields=fields,
                         expected_fields=expected_fields,
@@ -1158,6 +1168,9 @@ class PipeTools:
                     return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
+
+            if elicited is not None:
+                field_data = elicited
             elif expected_fields:
                 field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
@@ -1333,17 +1346,41 @@ class PipeTools:
         prefilled_fields: dict[str, Any] | None,
         expected_fields: list,
         ctx: Context,
-    ) -> dict:
-        """Handle interactive field elicitation."""
+    ) -> dict | None:
+        """Handle interactive field elicitation.
+
+        Returns the accepted field values, or ``None`` when the connection
+        cannot carry a server-initiated request. A caller that gets ``None``
+        proceeds with the values it was already given, exactly as it does for a
+        client that advertises no elicitation support.
+
+        ``supports_elicitation`` already gates on the back channel, so ``None``
+        is the residual case: the channel can also close between that check and
+        the request (the inbound request finishing closes its dispatch context),
+        and a session shape that does not expose ``can_send_request`` passes the
+        gate unmeasured. Letting ``NoBackChannelError`` escape instead would
+        leave the tool as a JSON-RPC protocol error rather than a tool result.
+
+        Raises:
+            MalformedFieldDefinitionError: ``expected_fields`` cannot be turned
+                into a form model.
+            UserCancelledError: The user declined or cancelled the form.
+        """
         DynamicFormModel = create_form_model(expected_fields, prefilled_fields)
         await ctx.debug(
             f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
         )
 
-        result = await ctx.elicit(
-            message=message,
-            schema=DynamicFormModel,
-        )
+        try:
+            result = await ctx.elicit(
+                message=message,
+                schema=DynamicFormModel,
+            )
+        except NoBackChannelError:
+            await ctx.debug(
+                "Elicitation skipped: connection has no server-to-client back channel"
+            )
+            return None
         await ctx.debug(f"Elicited result: {result}")
 
         if result.action != "accept":

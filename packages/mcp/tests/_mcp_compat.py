@@ -14,18 +14,22 @@ identical; a test that reaches for a paginated ``list_*`` needs ``cursor=`` rath
 than ``params=PaginatedRequestParams(...)``.
 
 ``mode="legacy"`` is the deliberate default. ``Client`` otherwise negotiates
-2026-07-28, where the server cannot call the client, and elicitation tests
-(``pipe_config``, ``service_account``) drive exactly that back channel. Legacy also
-matches what this server negotiates in production today, so the suite exercises the
-protocol revision the deployment actually serves.
+2026-07-28, where the server cannot call the client, and the elicitation tests in
+``tools/test_pipe_tools.py`` drive exactly that back channel. ``create_card`` and
+``fill_card_phase_fields`` are the only tools that elicit (the destructive-tool
+guard deliberately does not). Legacy also matches what this server negotiates in
+production today, so the suite exercises the protocol revision the deployment
+actually serves.
 
 Adopting 2026-07-28 is separate work from the SDK upgrade (#543 records why the two
 are separable). Flipping the ``setdefault`` below is one line, and it comes last:
-under that revision a server-initiated elicitation raises ``NoBackChannelError``, so
-``pipe_config`` and ``service_account`` have to move to ``InputRequiredResult``
-first, and the ``ctx.debug`` / ``ctx.info`` calls across the tool modules stop
-reaching clients that do not set ``logging.optInLogMessages``. Both migrations
-belong in the same piece of work as the flip.
+under that revision elicitation is unavailable, so the two eliciting tools have to
+move to ``InputRequiredResult`` to keep collecting field values interactively, and
+the ``ctx.debug`` / ``ctx.info`` calls across the tool modules stop reaching clients
+that do not set ``logging.optInLogMessages``. Both migrations belong in the same
+piece of work as the flip. ``tests/test_protocol_handshake.py`` asserts the
+negotiated revision directly, so a flip (deliberate or accidental) fails there
+rather than only as a cluster of confusing elicitation failures.
 """
 
 from __future__ import annotations

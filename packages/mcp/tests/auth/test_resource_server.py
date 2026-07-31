@@ -8,6 +8,10 @@ renders as a 401). The JWT/JWKS validation itself is covered in ``pipefy_auth``'
 :func:`build_resource_server_auth` wires an already-resolved issuer onto the verifier
 and ``AuthSettings``; the issuer resolution and active/inactive gating it used to own
 now live at the composition root and are covered in ``core/test_runtime.py``.
+
+What the mapped ``subject``/``claims["iss"]`` are *for* -- the SDK's per-session
+credential binding -- is covered in ``test_session_ownership.py``, which drives the
+real session manager rather than inspecting the token.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from mcp.server.auth.provider import principal_components
 from pipefy_auth import JwtValidationSettings, TokenValidationError
 
 from pipefy_mcp.auth import (
@@ -55,7 +60,7 @@ async def test_maps_claims_to_access_token() -> None:
     assert token is not None
     assert token.token == "the-token"
     assert token.client_id == "client-abc"
-    assert token.sub == "user-123"
+    assert token.subject == "user-123"
     assert token.scopes == ["read", "write"]
     assert token.expires_at == _EXP
     assert token.resource == _RESOURCE
@@ -68,7 +73,7 @@ async def test_sub_is_none_when_claim_absent() -> None:
     ).verify_token("t")
     assert token is not None
     assert token.client_id == "client-abc"
-    assert token.sub is None
+    assert token.subject is None
 
 
 @pytest.mark.unit
@@ -78,18 +83,79 @@ async def test_sub_preserved_when_azp_is_client_id() -> None:
     ).verify_token("t")
     assert token is not None
     assert token.client_id == "client-abc"
-    assert token.sub == "user-123"
+    assert token.subject == "user-123"
 
 
 @pytest.mark.unit
 async def test_non_string_sub_degrades_to_none_instead_of_rejecting() -> None:
-    """sub feeds logging only; a malformed sub must not reject a valid token."""
+    """A malformed sub must not reject a token the signature check accepted.
+
+    The principal comparison then degrades to the remaining components, which is
+    the behaviour the SDK documents for an unsupplied component.
+    """
     token = await JwtTokenVerifier(
         _StubValidator(claims={"azp": "client-abc", "sub": 12345, "exp": _EXP})
     ).verify_token("t")
     assert token is not None
     assert token.client_id == "client-abc"
-    assert token.sub is None
+    assert token.subject is None
+
+
+@pytest.mark.unit
+async def test_iss_is_carried_on_claims_for_the_principal_comparison() -> None:
+    """`principal_components` reads the issuer out of `claims`, so it must be there.
+
+    `subject` is unique only within an issuer, so the issuer namespaces it.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(
+            claims={"azp": "client-abc", "sub": "user-123", "iss": _ISSUER, "exp": _EXP}
+        )
+    ).verify_token("t")
+    assert token is not None
+    assert token.claims == {"iss": _ISSUER}
+    assert principal_components(token) == ("client-abc", _ISSUER, "user-123")
+
+
+@pytest.mark.unit
+async def test_claims_carries_only_the_issuer_not_the_whole_payload() -> None:
+    """The rest of the validated payload has no consumer and must not be copied.
+
+    `AccessToken` is reachable off ``request.scope["user"]`` anywhere in the ASGI
+    stack, so copying every claim would widen what that exposes for no gain.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(
+            claims={
+                "azp": "client-abc",
+                "sub": "user-123",
+                "iss": _ISSUER,
+                "email": "someone@example.com",
+                "groups": ["admins"],
+                "exp": _EXP,
+            }
+        )
+    ).verify_token("t")
+    assert token is not None
+    assert token.claims == {"iss": _ISSUER}
+
+
+@pytest.mark.unit
+async def test_claims_is_none_when_iss_is_absent_or_malformed() -> None:
+    """No issuer means no `claims` entry, never a stamped ``{"iss": None}``."""
+    absent = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": "user-123", "exp": _EXP})
+    ).verify_token("t")
+    assert absent is not None and absent.claims is None
+
+    malformed = await JwtTokenVerifier(
+        _StubValidator(
+            claims={"azp": "client-abc", "sub": "user-123", "iss": 42, "exp": _EXP}
+        )
+    ).verify_token("t")
+    assert malformed is not None and malformed.claims is None
+    # The comparison still discriminates on the subject.
+    assert principal_components(malformed) == ("client-abc", None, "user-123")
 
 
 @pytest.mark.unit

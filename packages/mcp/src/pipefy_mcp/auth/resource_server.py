@@ -13,6 +13,11 @@ transport-agnostic auth primitive). This class maps the validated claims onto
 the SDK's ``AccessToken`` and turns a validation failure into the ``None`` the
 protocol reads as "reject".
 
+The mapping populates ``subject`` and ``claims["iss"]`` as well as ``client_id``,
+because those three are what the SDK's ``principal_components`` compares to decide
+whether a request may use an existing Streamable HTTP session. See
+:meth:`JwtTokenVerifier._to_access_token`.
+
 :func:`build_resource_server_auth` constructs the verifier over a ``JwtValidator``
 and pairs it with the SDK's ``AuthSettings`` for the server to wire in. It takes an
 already-resolved issuer: the composition root
@@ -72,12 +77,6 @@ class ResourceServer:
             if parsed.port:
                 authorities.append(f"{host}:{parsed.port}")
         return cls(url=url, host_authorities=tuple(authorities))
-
-
-class PipefyAccessToken(AccessToken):
-    """AccessToken with the JWT ``sub`` claim preserved for request logging."""
-
-    sub: str | None = None
 
 
 def _parse_scopes(scope: Any) -> list[str]:
@@ -145,12 +144,23 @@ class JwtTokenVerifier(TokenVerifier):
         if exp is None:
             raise ValueError("token has no exp claim")
 
-        # sub feeds request logging only; a malformed (non-string) sub must
-        # degrade to None, not reject a token the verifier accepted before the
-        # field existed.
+        # `subject` and `claims["iss"]` are the two components the SDK's
+        # `principal_components` reads on top of `client_id` to identify a
+        # token's principal, and session ownership compares that whole triple:
+        # a request whose triple differs from the session creator's gets a 404.
+        # Supplying only `client_id` would collapse the comparison onto `azp`,
+        # which for the hosted server is the one public OAuth client every end
+        # user authorizes through (`--client-id pipefy-mcp`), so two users of
+        # that client would share one authorization context. `subject`
+        # namespaced by `iss` is what makes the check per-user.
+        #
+        # A malformed (non-string) claim degrades to None rather than rejecting
+        # a token the verifier would otherwise accept; the comparison then
+        # falls back to the remaining components, as the SDK documents.
         sub_claim = claims.get("sub")
+        iss_claim = claims.get("iss")
 
-        return PipefyAccessToken(
+        return AccessToken(
             token=token,
             client_id=client_id,
             scopes=_parse_scopes(claims.get("scope")),
@@ -158,7 +168,13 @@ class JwtTokenVerifier(TokenVerifier):
             # wants an int.
             expires_at=int(exp),
             resource=self._resource,
-            sub=sub_claim if isinstance(sub_claim, str) else None,
+            subject=sub_claim if isinstance(sub_claim, str) else None,
+            # Only `iss` is carried over. The rest of the validated payload
+            # (email, name, groups) has no consumer here, and `AccessToken` is
+            # reachable off `request.scope["user"]` from anything in the ASGI
+            # stack, so copying the whole claim set would widen what that
+            # exposes for no gain.
+            claims={"iss": iss_claim} if isinstance(iss_claim, str) else None,
         )
 
 

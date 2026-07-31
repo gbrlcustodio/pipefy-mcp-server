@@ -19,7 +19,6 @@ from mcp.server.auth.settings import AuthSettings as SdkAuthSettings
 from mcp.server.mcpserver import MCPServer
 from starlette.applications import Starlette
 
-from pipefy_mcp.auth.resource_server import PipefyAccessToken
 from pipefy_mcp.observability.json_logging import (
     configure_observability_logging,
     reset_observability_logging,
@@ -33,18 +32,18 @@ _SUB = "user-123"
 
 
 class _StubTokenVerifier:
-    """Accept one fixed bearer and map it to a PipefyAccessToken with sub."""
+    """Accept one fixed bearer and map it to an AccessToken carrying a subject."""
 
     async def verify_token(self, token: str) -> AccessToken | None:
         if token != _GOOD_TOKEN:
             return None
-        return PipefyAccessToken(
+        return AccessToken(
             token=token,
             client_id=_CLIENT_ID,
             scopes=["read"],
             expires_at=None,
             resource="https://mcp.example.com/mcp",
-            sub=_SUB,
+            subject=_SUB,
         )
 
 

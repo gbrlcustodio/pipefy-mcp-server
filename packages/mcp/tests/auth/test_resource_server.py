@@ -87,17 +87,77 @@ async def test_sub_preserved_when_azp_is_client_id() -> None:
 
 
 @pytest.mark.unit
-async def test_non_string_sub_degrades_to_none_instead_of_rejecting() -> None:
-    """A malformed sub must not reject a token the signature check accepted.
+@pytest.mark.parametrize(
+    ("sub", "expected"),
+    [
+        (12345, "12345"),
+        (1.5, "1.5"),
+        (True, "True"),
+        (["u1"], "['u1']"),
+        ({"id": "u1"}, "{'id': 'u1'}"),
+    ],
+)
+async def test_non_string_sub_is_coerced_not_dropped(sub: Any, expected: str) -> None:
+    """A non-string sub keeps its distinction instead of collapsing to None.
 
-    The principal comparison then degrades to the remaining components, which is
-    the behaviour the SDK documents for an unsupplied component.
+    RFC 9068 asks for a StringOrURI, but an IdP that emits another type is still
+    naming a specific user. Dropping the claim merged every such bearer into one
+    principal, so ``subject`` stopped discriminating for the whole class -- the
+    hazard ``test_session_ownership.py`` drives through the real manager. Coercing
+    also keeps the token acceptable, so no caller the signature check accepted is
+    turned away.
     """
     token = await JwtTokenVerifier(
-        _StubValidator(claims={"azp": "client-abc", "sub": 12345, "exp": _EXP})
+        _StubValidator(claims={"azp": "client-abc", "sub": sub, "exp": _EXP})
     ).verify_token("t")
     assert token is not None
     assert token.client_id == "client-abc"
+    assert token.subject == expected
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("sub", ["", " ", "\t\n", "   "])
+async def test_blank_sub_is_rejected(sub: str) -> None:
+    """An empty or whitespace-only sub is not a subject, so the bearer is refused.
+
+    Rejecting rather than mapping to ``None`` is the point: ``None`` is the
+    no-subject class two ``azp``-only bearers already share, so folding a blank
+    ``sub`` into it would put two blank-``sub`` bearers in one authorization
+    context. A 401 keeps them out of the comparison altogether.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": sub, "exp": _EXP})
+    ).verify_token("t")
+    assert token is None
+
+
+@pytest.mark.unit
+async def test_a_padded_sub_is_carried_verbatim() -> None:
+    """Only blankness is judged; a non-blank value is never trimmed.
+
+    Stripping would fuse ``" user-123"`` and ``"user-123"`` into one principal on
+    a guess about what the IdP meant, which is the merge this normalization exists
+    to prevent.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": " user-123", "exp": _EXP})
+    ).verify_token("t")
+    assert token is not None
+    assert token.subject == " user-123"
+
+
+@pytest.mark.unit
+async def test_null_sub_is_the_no_subject_class_not_a_rejection() -> None:
+    """A JSON ``null`` sub reads as absent, the same as omitting the claim.
+
+    Both leave ``subject`` unset, which is the waived case: see
+    ``test_session_ownership.test_two_subjectless_bearers_of_one_client_share_one_context``
+    for what that costs and why it is accepted.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": None, "exp": _EXP})
+    ).verify_token("t")
+    assert token is not None
     assert token.subject is None
 
 

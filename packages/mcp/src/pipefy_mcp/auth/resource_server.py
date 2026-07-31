@@ -16,7 +16,30 @@ protocol reads as "reject".
 The mapping populates ``subject`` and ``claims["iss"]`` as well as ``client_id``,
 because those three are what the SDK's ``principal_components`` compares to decide
 whether a request may use an existing Streamable HTTP session. See
-:meth:`JwtTokenVerifier._to_access_token`.
+:meth:`JwtTokenVerifier._to_access_token` and :func:`_subject`.
+
+One accepted limitation, since ``subject`` is an ownership component: a bearer that
+carries no ``sub`` at all maps to ``subject=None``, so two such bearers of the same
+client and issuer share one authorization context. That is deliberate. The identity
+precedence in :meth:`JwtTokenVerifier._to_access_token` exists to accept a bearer
+whose only identity claim is ``azp``/``client_id``, and such a bearer has no end
+user to tell apart -- it *is* the client, so collapsing two of them onto the client
+identity is the right answer, and it is the degradation the SDK documents for an
+unsupplied component (``mcp.server.request_state.authenticated_principal``). The
+alternative, synthesizing a per-credential ``subject`` from ``jti`` or a hash of the
+bearer, would put a credential id in the field every reader takes for an end user
+(``observability.request_log_middleware`` logs it as ``sub``) and would break the
+caller's own session on every token refresh, since a fresh credential would no
+longer match the principal that created it. ``test_session_ownership.py`` pins the
+waiver against the real session manager, so changing it is a decision someone makes
+on purpose rather than an accident.
+
+The waiver also costs nothing on the deployed path today: the configured issuer
+emits a string ``sub`` on every access token it mints, client-credentials tokens
+included, so no real flow reaches the no-subject class. Revisit it if that stops
+holding -- a later Keycloak can be configured to omit ``sub`` (a lightweight access
+token, or a realm with the ``basic`` client scope detached), and a self-hosted
+deployment can point ``PIPEFY_JWT_ISSUER_URL`` at an IdP that never sent one.
 
 :func:`build_resource_server_auth` constructs the verifier over a ``JwtValidator``
 and pairs it with the SDK's ``AuthSettings`` for the server to wire in. It takes an
@@ -93,6 +116,52 @@ def _parse_scopes(scope: Any) -> list[str]:
     return []
 
 
+def _subject(sub: Any) -> str | None:
+    """Normalize the ``sub`` claim into the SDK's ``subject`` ownership component.
+
+    ``subject`` is one third of the ``(client_id, iss, subject)`` triple that
+    session ownership and ``requestState`` binding compare, so the invariant here
+    is a security one, not a formatting one: two distinct principals must never
+    normalize to the same value. Each shape is handled against that invariant.
+
+    ``None`` (absent, or JSON ``null``) yields ``None`` -- the no-subject class
+    the module docstring records the waiver for.
+
+    A non-string ``sub`` is **coerced** with ``str``, not dropped. RFC 9068 §2.2
+    requires a StringOrURI, but an IdP that emits a numeric ``sub`` still
+    distinguishes its users by it, and dropping the claim merged every such
+    bearer into the single no-subject principal -- discarding a distinction the
+    IdP had made. Coercion keeps it. The SDK's own ``principal_components``
+    treats a non-string ``iss`` exactly this way (``str(issuer)``). Coercion can
+    still collide across types (an integer ``1`` and the string ``"1"`` both
+    normalize to ``"1"``), which needs an IdP that emits ``sub`` under two
+    different types; that is a strict subset of the shapes that used to collide,
+    so this only ever narrows the set.
+
+    An empty or whitespace-only ``sub`` is **rejected** (the caller turns the
+    raise into a 401). It is never a valid subject, and the tempting alternative
+    of mapping it to ``None`` would be worse than today: it would merge a
+    blank-``sub`` bearer into the no-subject class, so a blank one and a
+    ``sub``-less one would start sharing a context where they currently do not.
+
+    A non-blank value is carried **verbatim**, never stripped, so a padded
+    ``" u1"`` stays distinct from ``"u1"`` rather than being fused into one
+    principal on the strength of a guess about the IdP's intent.
+
+    This is asymmetric with the ``iss`` handling in
+    :meth:`JwtTokenVerifier._to_access_token`, which does drop a non-string
+    claim, and deliberately so: ``iss`` has already been checked for equality
+    against the configured issuer by ``JwtValidator``, so a non-string one cannot
+    reach the mapping. Nothing upstream constrains ``sub``.
+    """
+    if sub is None:
+        return None
+    subject = sub if isinstance(sub, str) else str(sub)
+    if not subject.strip():
+        raise ValueError("token carries an empty sub claim")
+    return subject
+
+
 class JwtTokenVerifier(TokenVerifier):
     """Adapt :class:`~pipefy_auth.JwtValidator` to the SDK's ``TokenVerifier``."""
 
@@ -122,8 +191,8 @@ class JwtTokenVerifier(TokenVerifier):
             return self._to_access_token(token, claims)
         except (ValueError, TypeError) as exc:
             # A validly-signed token can still carry claims we can't map onto an
-            # AccessToken (e.g. an exp outside int range). Reject rather than let
-            # the mapping error escape verify_token as a 500.
+            # AccessToken (an exp outside int range, a blank sub). Reject rather
+            # than let the mapping error escape verify_token as a 500.
             logger.warning("Inbound bearer rejected (unmappable claims): %s", exc)
             return None
 
@@ -154,10 +223,12 @@ class JwtTokenVerifier(TokenVerifier):
         # that client would share one authorization context. `subject`
         # namespaced by `iss` is what makes the check per-user.
         #
-        # A malformed (non-string) claim degrades to None rather than rejecting
-        # a token the verifier would otherwise accept; the comparison then
-        # falls back to the remaining components, as the SDK documents.
-        sub_claim = claims.get("sub")
+        # Because `subject` decides that, its shape handling is a security
+        # concern and lives in `_subject`, which coerces rather than drops and
+        # rejects a blank `sub` outright. `iss` may be dropped safely: the
+        # validator has already compared it for equality against the configured
+        # issuer, so a non-string one cannot reach here.
+        subject = _subject(claims.get("sub"))
         iss_claim = claims.get("iss")
 
         return AccessToken(
@@ -168,7 +239,7 @@ class JwtTokenVerifier(TokenVerifier):
             # wants an int.
             expires_at=int(exp),
             resource=self._resource,
-            subject=sub_claim if isinstance(sub_claim, str) else None,
+            subject=subject,
             # Only `iss` is carried over. The rest of the validated payload
             # (email, name, groups) has no consumer here, and `AccessToken` is
             # reachable off `request.scope["user"]` from anything in the ASGI

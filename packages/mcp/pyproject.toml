@@ -6,11 +6,15 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27.0",
-    # Upper bound is a major-version guard, not a known incompatibility: 2.0
-    # renamed the server class and removed the handler dicts, so a 3.0 is assumed
-    # to move something we depend on until proven otherwise. The floor is 2.0
-    # because the server imports mcp.server.mcpserver, which no 1.x release has.
-    "mcp[cli]>=2.0,<3",
+    # Pinned to the 2.0 patch line rather than opened to <3, because two of the
+    # surfaces this package builds on are outside what SemVer covers: the
+    # MCPServer(middleware=[...]) list, which upstream marks provisional, and the
+    # Tool.run patch behind the argument-validation envelope. A minor release can
+    # move either with no signal, and nothing in CI resolves past the lock to
+    # catch it. Patch releases are accepted; widening to a new minor is a
+    # deliberate change that re-tests both surfaces. The floor is 2.0 because the
+    # server imports mcp.server.mcpserver, which no 1.x release has.
+    "mcp[cli]==2.0.*",
     # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
     "pipefy-auth==0.4.0-beta.1",
     "pipefy-infra==0.4.0-beta.1",

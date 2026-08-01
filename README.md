@@ -1,7 +1,7 @@
 <div align="center">
   <img
     src="docs/images/pipefy-developers-banner.png"
-    alt="Pipefy Developers — Where developers orchestrate intelligence"
+    alt="Pipefy Developers — AI Toolkit (MCP Server, Pipefy CLI, GraphQL SDK, Agent Skills)"
     width="100%"
   />
 </div>
@@ -14,10 +14,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
 </p>
 
-# Pipefy AI Toolkit
-
-Open-source toolkit for **Pipefy** developers: a Model Context Protocol (MCP) server for AI agents, a **`pipefy`** CLI for terminals and automation, a shared GraphQL SDK, and a catalog of agent skill playbooks.
-
 <p align="center">
   <a href="#overview">Overview</a> •
   <a href="#installation">Installation</a> •
@@ -27,7 +23,8 @@ Open-source toolkit for **Pipefy** developers: a Model Context Protocol (MCP) se
   <a href="#agent-skills">Agent skills</a> •
   <a href="#documentation">Documentation</a> •
   <a href="#development">Development</a> •
-  <a href="#contributing">Contributing</a>
+  <a href="#contributing">Contributing</a> •
+  <a href="#legal">Legal</a>
 </p>
 
 ---
@@ -111,6 +108,8 @@ curl -fsSL https://raw.githubusercontent.com/pipefy/ai-toolkit/main/install.sh \
 ```
 
 Replace `--client cursor` with one of `claude-code`, `claude-desktop`, `codex`, or `none` (prints the snippet to paste). Useful flags: `--yes` (skip prompts), `--no-skills` (skip `npx skills add`), `--version vX.Y.Z` (pin a [Release](https://github.com/pipefy/ai-toolkit/releases)), `--dry-run` (print commands without executing), `--allow-root` (opt-in; refused by default). After install, run `pipefy auth login` (`--device` on headless systems). The installer puts `pipefy-mcp-server` on PATH, so each client's config collapses to `{"command": "pipefy-mcp-server"}`.
+
+> **Production / shared environments:** pin an explicit release with `--version vX.Y.Z` (and prefer fetching `install.sh` from that same [Release](https://github.com/pipefy/ai-toolkit/releases) tag, not the floating `main` branch). Untagged/`@latest`-style installs are fine for local experiments; they are not the default practice for reproducible or corporate rollouts.
 
 ### 4. CLI only
 
@@ -278,7 +277,7 @@ Whatever is checked out in that clone — any branch — is what loads. Use the 
 
 ## Contributing
 
-Contributions are welcome via issues and pull requests.
+Contributions are welcome via issues and pull requests. Commits must include a [DCO](https://developercertificate.org/) sign-off (`git commit -s`); see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 | Area | How to contribute |
 |------|-------------------|
@@ -286,3 +285,19 @@ Contributions are welcome via issues and pull requests.
 | **MCP / CLI / SDK** | Follow [`AGENTS.md`](AGENTS.md) and [`docs/parity.md`](docs/parity.md). |
 | **Field mapping gaps** | Open an issue with the field type and expected behavior. |
 | **Existing MCP setups** | [`docs/MIGRATION.md`](docs/MIGRATION.md) — configuration remains compatible. |
+
+---
+
+## Legal
+
+This toolkit (MCP server, CLI, SDK, and skill/blueprint playbooks) is licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for trademark reservations.
+
+Your access to and use of the Pipefy platform through this toolkit is governed by the [Pipefy Solutions Terms and Conditions](https://www.pipefy.com/terms-and-conditions/) ([versão em português](https://www.pipefy.com/pt-br/termos-e-condicoes/)) and, for AI features, by the Pipefy AI Additional Terms (to be published and incorporated by reference into those terms), including their acceptable use provisions. Using this toolkit requires a Pipefy account; nothing in the Apache 2.0 license grants rights to the Pipefy service.
+
+**Templates, not advice.** Skills and blueprints are configurable templates provided for general informational purposes. They do not constitute legal, HR, financial, tax, or other professional advice, and must be reviewed, configured, and validated by qualified professionals before production use. Each published blueprint ships with a `COMPLIANCE.md` describing its intended purpose, out-of-scope uses, AI risk classification, and default human-oversight settings (see [`docs/compliance/COMPLIANCE.template.md`](docs/compliance/COMPLIANCE.template.md)).
+
+**AI-generated output.** Outputs produced by AI features may contain errors or omissions and must be independently verified before being relied upon.
+
+**Beta software.** Pre-1.0 releases are provided “AS IS”, without warranties of any kind, and may change or be discontinued at any time. See the full disclaimer in [TERMS.md](TERMS.md).
+
+Security reports: see [SECURITY.md](SECURITY.md). Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).

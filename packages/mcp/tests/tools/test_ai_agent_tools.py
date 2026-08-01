@@ -6,15 +6,15 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from _mcp_compat import (
+    create_connected_server_and_client_session as create_client_session,
+)
 from _shared.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
 from _shared.fixture_ids import (
     EXAMPLE_FIELD_INTERNAL_ID,
     EXAMPLE_FIELD_SLUG,
     make_field_id,
     make_pipe_id,
-)
-from mcp.shared.memory import (
-    create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.models.ai_agent import UpdateAiAgentInput
@@ -86,7 +86,7 @@ class TestCreateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         update_arg = mock_pipefy_client.update_ai_agent.call_args[0][0]
@@ -110,7 +110,7 @@ class TestCreateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -134,7 +134,7 @@ class TestCreateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_agent.assert_not_called()
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
@@ -161,7 +161,7 @@ class TestCreateAiAgent:
                     "behaviors": [behavior],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
@@ -187,7 +187,7 @@ class TestCreateAiAgent:
                     "behaviors": [behavior],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
@@ -220,7 +220,7 @@ class TestCreateAiAgent:
                     "data_source_ids": ["ds-1", "ds-2"],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_agent.assert_awaited_once()
         mock_pipefy_client.update_ai_agent.assert_awaited_once()
         update_arg = mock_pipefy_client.update_ai_agent.call_args[0][0]
@@ -261,7 +261,7 @@ class TestCreateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert payload["agent_uuid"] == "created-uuid"
@@ -287,7 +287,7 @@ class TestCreateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "permission denied" in tool_error_message(payload)
@@ -309,7 +309,7 @@ class TestCreateAiAgent:
                     "behaviors": [],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_agent.assert_not_called()
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
@@ -333,7 +333,7 @@ class TestCreateAiAgent:
                     "behaviors": six,
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_agent.assert_not_called()
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
@@ -356,7 +356,7 @@ class TestCreateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
@@ -378,7 +378,7 @@ class TestCreateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
@@ -409,7 +409,7 @@ class TestUpdateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload == {
             "success": True,
@@ -436,7 +436,7 @@ class TestUpdateAiAgent:
                     "behaviors": [],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
@@ -461,7 +461,7 @@ class TestUpdateAiAgent:
                     ],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
@@ -484,7 +484,7 @@ class TestUpdateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
@@ -508,7 +508,7 @@ class TestUpdateAiAgent:
                     "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -681,7 +681,7 @@ class TestToggleAiAgentStatus:
                 "toggle_ai_agent_status",
                 {"uuid": "agent-uuid", "active": True},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload == {
             "success": True,
@@ -704,7 +704,7 @@ class TestToggleAiAgentStatus:
                 "toggle_ai_agent_status",
                 {"uuid": "agent-uuid", "active": False},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         assert "deactivated" in payload["message"]
@@ -723,7 +723,7 @@ class TestToggleAiAgentStatus:
                 "toggle_ai_agent_status",
                 {"uuid": "agent-uuid", "active": True},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -743,7 +743,7 @@ class TestToggleAiAgentStatus:
                 "toggle_ai_agent_status",
                 {"uuid": "agent-uuid", "active": True},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "locked" in tool_error_message(payload)
@@ -830,7 +830,7 @@ class TestValidateAiAgentBehaviors:
                     "strict_unknown_action_types": True,
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         assert payload["valid"] is True
@@ -1028,7 +1028,7 @@ class TestGetAiAgent:
                 "get_ai_agent",
                 {"uuid": "agent-1"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_ai_agent.assert_awaited_once_with("agent-1")
         payload = extract_payload(result)
         assert payload == {"success": True, "agent": agent}
@@ -1068,7 +1068,7 @@ class TestGetAiAgent:
                 "get_ai_agent",
                 {"uuid": "agent-with-behaviors"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         behaviors = payload["agent"]["behaviors"]
@@ -1104,7 +1104,7 @@ class TestGetAiAgent:
                 "get_ai_agent",
                 {"uuid": "agent-1"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         assert payload["agent"]["behaviors"] is None
@@ -1118,7 +1118,7 @@ class TestGetAiAgent:
         mock_pipefy_client.get_ai_agent.return_value = {}
         async with client_session as session:
             result = await session.call_tool("get_ai_agent", {"uuid": "missing-uuid"})
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "not found" in tool_error_message(payload).lower()
@@ -1144,7 +1144,7 @@ class TestGetAiAgent:
         )
         async with client_session as session:
             result = await session.call_tool("get_ai_agent", {"uuid": "missing"})
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "not found" in tool_error_message(payload)
@@ -1166,7 +1166,7 @@ class TestGetAiAgents:
                 "get_ai_agents",
                 {"repo_uuid": "pipe-uuid-9"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_ai_agents.assert_awaited_once_with("pipe-uuid-9")
         payload = extract_payload(result)
         assert payload == {"success": True, "agents": agents}
@@ -1213,7 +1213,7 @@ class TestGetAiAgents:
                 "get_ai_agents",
                 {"repo_uuid": "repo-x"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "denied" in tool_error_message(payload)
@@ -1233,7 +1233,7 @@ class TestDeleteAiAgent:
                 "delete_ai_agent",
                 {"uuid": "to-delete", "confirm": True},
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.delete_ai_agent.assert_awaited_once_with("to-delete")
         payload = extract_payload(result)
         assert payload["success"] is True
@@ -1279,7 +1279,7 @@ class TestDeleteAiAgent:
                 "delete_ai_agent",
                 {"uuid": "bad", "confirm": True},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "gone" in tool_error_message(payload)
@@ -1289,8 +1289,8 @@ class TestDeleteAiAgent:
             listed = await session.list_tools()
         delete_tool = next(t for t in listed.tools if t.name == "delete_ai_agent")
         assert delete_tool.annotations is not None
-        assert delete_tool.annotations.destructiveHint is True
-        assert delete_tool.annotations.readOnlyHint is False
+        assert delete_tool.annotations.destructive_hint is True
+        assert delete_tool.annotations.read_only_hint is False
 
 
 @pytest.mark.anyio
@@ -2248,7 +2248,7 @@ async def test_get_ai_agent_tools_have_read_only_hint(client_session):
     for name in ("get_ai_agent", "get_ai_agents", "validate_ai_agent_behaviors"):
         tool = by_name[name]
         assert tool.annotations is not None
-        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.read_only_hint is True
 
 
 @pytest.mark.anyio

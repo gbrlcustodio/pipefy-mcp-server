@@ -2,12 +2,16 @@
 
 The adapter tests (claims -> AccessToken, reject -> None) use a stub validator to
 pin :class:`JwtTokenVerifier`'s two jobs: mapping validated claims onto the SDK
-``AccessToken`` and turning a validation failure into ``None`` (which FastMCP
+``AccessToken`` and turning a validation failure into ``None`` (which the SDK
 renders as a 401). The JWT/JWKS validation itself is covered in ``pipefy_auth``'s
 ``test_verification.py``. The builder tests pin that
 :func:`build_resource_server_auth` wires an already-resolved issuer onto the verifier
 and ``AuthSettings``; the issuer resolution and active/inactive gating it used to own
 now live at the composition root and are covered in ``core/test_runtime.py``.
+
+What the mapped ``subject``/``claims["iss"]`` are *for* -- the SDK's per-session
+credential binding -- is covered in ``test_session_ownership.py``, which drives the
+real session manager rather than inspecting the token.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from mcp.server.auth.provider import principal_components
 from pipefy_auth import JwtValidationSettings, TokenValidationError
 
 from pipefy_mcp.auth import (
@@ -55,7 +60,7 @@ async def test_maps_claims_to_access_token() -> None:
     assert token is not None
     assert token.token == "the-token"
     assert token.client_id == "client-abc"
-    assert token.sub == "user-123"
+    assert token.subject == "user-123"
     assert token.scopes == ["read", "write"]
     assert token.expires_at == _EXP
     assert token.resource == _RESOURCE
@@ -68,7 +73,7 @@ async def test_sub_is_none_when_claim_absent() -> None:
     ).verify_token("t")
     assert token is not None
     assert token.client_id == "client-abc"
-    assert token.sub is None
+    assert token.subject is None
 
 
 @pytest.mark.unit
@@ -78,18 +83,139 @@ async def test_sub_preserved_when_azp_is_client_id() -> None:
     ).verify_token("t")
     assert token is not None
     assert token.client_id == "client-abc"
-    assert token.sub == "user-123"
+    assert token.subject == "user-123"
 
 
 @pytest.mark.unit
-async def test_non_string_sub_degrades_to_none_instead_of_rejecting() -> None:
-    """sub feeds logging only; a malformed sub must not reject a valid token."""
+@pytest.mark.parametrize(
+    ("sub", "expected"),
+    [
+        (12345, "12345"),
+        (1.5, "1.5"),
+        (True, "True"),
+        (["u1"], "['u1']"),
+        ({"id": "u1"}, "{'id': 'u1'}"),
+    ],
+)
+async def test_non_string_sub_is_coerced_not_dropped(sub: Any, expected: str) -> None:
+    """A non-string sub keeps its distinction instead of collapsing to None.
+
+    RFC 9068 asks for a StringOrURI, but an IdP that emits another type is still
+    naming a specific user. Dropping the claim merged every such bearer into one
+    principal, so ``subject`` stopped discriminating for the whole class -- the
+    hazard ``test_session_ownership.py`` drives through the real manager. Coercing
+    also keeps the token acceptable, so no caller the signature check accepted is
+    turned away.
+    """
     token = await JwtTokenVerifier(
-        _StubValidator(claims={"azp": "client-abc", "sub": 12345, "exp": _EXP})
+        _StubValidator(claims={"azp": "client-abc", "sub": sub, "exp": _EXP})
     ).verify_token("t")
     assert token is not None
     assert token.client_id == "client-abc"
-    assert token.sub is None
+    assert token.subject == expected
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("sub", ["", " ", "\t\n", "   "])
+async def test_blank_sub_is_rejected(sub: str) -> None:
+    """An empty or whitespace-only sub is not a subject, so the bearer is refused.
+
+    Rejecting rather than mapping to ``None`` is the point: ``None`` is the
+    no-subject class two ``azp``-only bearers already share, so folding a blank
+    ``sub`` into it would put two blank-``sub`` bearers in one authorization
+    context. A 401 keeps them out of the comparison altogether.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": sub, "exp": _EXP})
+    ).verify_token("t")
+    assert token is None
+
+
+@pytest.mark.unit
+async def test_a_padded_sub_is_carried_verbatim() -> None:
+    """Only blankness is judged; a non-blank value is never trimmed.
+
+    Stripping would fuse ``" user-123"`` and ``"user-123"`` into one principal on
+    a guess about what the IdP meant, which is the merge this normalization exists
+    to prevent.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": " user-123", "exp": _EXP})
+    ).verify_token("t")
+    assert token is not None
+    assert token.subject == " user-123"
+
+
+@pytest.mark.unit
+async def test_null_sub_is_the_no_subject_class_not_a_rejection() -> None:
+    """A JSON ``null`` sub reads as absent, the same as omitting the claim.
+
+    Both leave ``subject`` unset, which is the waived case: see
+    ``test_session_ownership.test_two_subjectless_bearers_of_one_client_share_one_context``
+    for what that costs and why it is accepted.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": None, "exp": _EXP})
+    ).verify_token("t")
+    assert token is not None
+    assert token.subject is None
+
+
+@pytest.mark.unit
+async def test_iss_is_carried_on_claims_for_the_principal_comparison() -> None:
+    """`principal_components` reads the issuer out of `claims`, so it must be there.
+
+    `subject` is unique only within an issuer, so the issuer namespaces it.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(
+            claims={"azp": "client-abc", "sub": "user-123", "iss": _ISSUER, "exp": _EXP}
+        )
+    ).verify_token("t")
+    assert token is not None
+    assert token.claims == {"iss": _ISSUER}
+    assert principal_components(token) == ("client-abc", _ISSUER, "user-123")
+
+
+@pytest.mark.unit
+async def test_claims_carries_only_the_issuer_not_the_whole_payload() -> None:
+    """The rest of the validated payload has no consumer and must not be copied.
+
+    `AccessToken` is reachable off ``request.scope["user"]`` anywhere in the ASGI
+    stack, so copying every claim would widen what that exposes for no gain.
+    """
+    token = await JwtTokenVerifier(
+        _StubValidator(
+            claims={
+                "azp": "client-abc",
+                "sub": "user-123",
+                "iss": _ISSUER,
+                "email": "someone@example.com",
+                "groups": ["admins"],
+                "exp": _EXP,
+            }
+        )
+    ).verify_token("t")
+    assert token is not None
+    assert token.claims == {"iss": _ISSUER}
+
+
+@pytest.mark.unit
+async def test_claims_is_none_when_iss_is_absent_or_malformed() -> None:
+    """No issuer means no `claims` entry, never a stamped ``{"iss": None}``."""
+    absent = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": "user-123", "exp": _EXP})
+    ).verify_token("t")
+    assert absent is not None and absent.claims is None
+
+    malformed = await JwtTokenVerifier(
+        _StubValidator(
+            claims={"azp": "client-abc", "sub": "user-123", "iss": 42, "exp": _EXP}
+        )
+    ).verify_token("t")
+    assert malformed is not None and malformed.claims is None
+    # The comparison still discriminates on the subject.
+    assert principal_components(malformed) == ("client-abc", None, "user-123")
 
 
 @pytest.mark.unit
@@ -212,7 +338,7 @@ def test_build_advertises_the_parsed_resource_url_in_the_metadata() -> None:
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
         issuer_url=_ISSUER,
     )
-    assert str(auth.resource_server_url).rstrip("/") == _RESOURCE
+    assert str(auth.resource_server_url) == _RESOURCE
 
 
 @pytest.mark.unit
@@ -255,7 +381,28 @@ def test_build_advertises_the_given_issuer() -> None:
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
         issuer_url=_ISSUER,
     )
-    assert str(auth.issuer_url).rstrip("/") == _ISSUER
+    assert str(auth.issuer_url) == _ISSUER
+
+
+@pytest.mark.unit
+def test_build_advertises_urls_byte_for_byte_including_a_trailing_slash() -> None:
+    """A configured trailing slash survives to the advertised metadata unchanged.
+
+    OAuth compares an issuer literally, so a normalizing layer between config and
+    the RFC 9728 document would point clients at a string the JWT validator does
+    not accept (``jwt.decode(issuer=...)`` is an exact match too). Pinning both
+    spellings means an SDK that starts adding or stripping a slash fails here
+    rather than at a client's handshake.
+    """
+    issuer_with_slash = f"{_ISSUER}/"
+    resource_with_slash = f"{_RESOURCE}/"
+    _, auth = build_resource_server_auth(
+        ResourceServer.from_url(resource_with_slash),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        issuer_url=issuer_with_slash,
+    )
+    assert str(auth.issuer_url) == issuer_with_slash
+    assert str(auth.resource_server_url) == resource_with_slash
 
 
 # --- ResourceServer.from_url (host-authority parsing) -------------------------

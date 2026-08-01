@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     AutomationConditionInput,
@@ -73,7 +72,7 @@ class AutomationTools:
     """MCP tools for traditional (non-AI) pipe automations."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
             meta=REMOTE,
@@ -717,7 +716,7 @@ class AutomationTools:
             meta=REMOTE,
         )
         async def delete_automation(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             automation_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,

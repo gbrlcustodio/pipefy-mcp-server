@@ -13,8 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.core.tool_error_envelope import tool_error, tool_success
@@ -32,7 +31,7 @@ class ServiceAccountTools:
     """MCP tools for creating and deleting organization service accounts."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
             meta=REMOTE,
@@ -177,7 +176,7 @@ class ServiceAccountTools:
             meta=REMOTE,
         )
         async def delete_service_account(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             organization_uuid: str,
             service_account_uuid: str,
             confirm: bool = False,

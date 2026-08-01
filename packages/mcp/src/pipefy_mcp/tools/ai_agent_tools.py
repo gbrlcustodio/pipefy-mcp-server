@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     BehaviorPayload,
@@ -89,7 +89,7 @@ class AiAgentTools:
     """Declares MCP tools for AI Agent CRUD and status."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register AI Agent tools on the MCP server."""
 
         def error_payload_from_exception(exc: BaseException) -> dict:

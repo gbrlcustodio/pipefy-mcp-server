@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.shared.exceptions import NoBackChannelError
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     CardSearch,
@@ -86,7 +86,7 @@ class PipeTools:
     """Declares tools to be used in the Pipe context."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register the tools in the MCP server"""
 
         @mcp.tool(
@@ -94,7 +94,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def create_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             title: str | None = None,
             fields: dict[str, Any] | None = None,
@@ -112,6 +112,16 @@ class PipeTools:
             When ``skip_elicitation`` is False (default) and the client supports
             elicitation, an interactive form is presented even if ``fields``
             carries pre-filled values — the human can review and adjust them.
+
+            A form is only possible when the connection can carry a
+            server-to-client request. It cannot on protocol revision 2026-07-28,
+            on a stateless HTTP transport, or on a deployment serving
+            ``json_response=True`` (which the hosted server does). There the tool
+            takes the ``skip_elicitation`` path instead, without saying so in the
+            result: ``fields`` is sent as given, so an omitted ``fields`` sends no
+            values at all and the API decides whether its required fields were
+            satisfied. A caller that cannot be sure of the client's channel should
+            discover the fields first and pass every required value.
 
             Without ``phase_id``, discover start-form fields via
             ``get_start_form_fields`` and pass all required values.
@@ -153,6 +163,17 @@ class PipeTools:
             client = get_pipefy_client(ctx)
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            if not can_elicit and not skip_elicitation:
+                # Logged for the same reason the NoBackChannelError absorb in
+                # _elicit_field_details logs: a caller asked for a form and the
+                # result cannot say it never appeared.
+                await ctx.debug(
+                    "Elicitation unavailable: no interactive form for this "
+                    "connection; proceeding with the supplied fields"
+                )
+            # Stays None when elicitation is skipped or the connection turns out
+            # to have no back channel; either way the supplied fields are used.
+            elicited: dict[str, Any] | None = None
 
             if phase_id is not None:
                 phase_id_str, phase_err = validate_tool_id(phase_id, "phase_id")
@@ -200,6 +221,8 @@ class PipeTools:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
+
+                if elicited is not None:
                     merged_source = {**(fields or {}), **elicited}
                     card_data = _merge_phase_and_start_form_field_values(
                         merged_source,
@@ -231,7 +254,7 @@ class PipeTools:
 
                 if can_elicit and not skip_elicitation:
                     try:
-                        card_data = await PipeTools._elicit_field_details(
+                        elicited = await PipeTools._elicit_field_details(
                             message=f"Creating a card in pipe {pipe_id}",
                             prefilled_fields=fields,
                             expected_fields=expected_fields,
@@ -241,6 +264,9 @@ class PipeTools:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
+
+                if elicited is not None:
+                    card_data = elicited
                 elif expected_fields:
                     card_data = _filter_fields_by_definitions(
                         card_data, expected_fields
@@ -286,7 +312,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             include_fields: bool = False,
             debug: bool = False,
@@ -330,7 +356,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_card_relations(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -394,7 +420,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def add_card_comment(
-            card_id: PipefyId, text: str, ctx: Context[ServerSession, None]
+            card_id: PipefyId, text: str, ctx: Context
         ) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
 
@@ -432,7 +458,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def update_comment(
-            comment_id: PipefyId, text: str, ctx: Context[ServerSession, None]
+            comment_id: PipefyId, text: str, ctx: Context
         ) -> UpdateCommentPayload:
             """Update an existing comment by its ID.
 
@@ -471,7 +497,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_comment(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             comment_id: PipefyId,
             confirm: bool = False,
         ) -> DeleteCommentPayload:
@@ -521,7 +547,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_card_relation(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             child_id: PipefyId,
             parent_id: PipefyId,
             source_id: PipefyId,
@@ -602,7 +628,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_cards(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             title: str | None = None,
             search: CardSearch | None = None,
@@ -680,7 +706,7 @@ class PipeTools:
             pipe_id: PipefyId,
             field_id: str,
             field_value: str,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             include_fields: bool = False,
             first: int | None = None,
             after: str | None = None,
@@ -740,7 +766,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_pipe(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -783,7 +809,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_labels(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -837,7 +863,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_pipe_members(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -878,7 +904,7 @@ class PipeTools:
         async def move_card_to_phase(
             card_id: PipefyId,
             destination_phase_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
         ) -> dict:
             """Move a card to a target phase (Kanban column) within the same pipe.
 
@@ -919,7 +945,7 @@ class PipeTools:
             card_id: PipefyId,
             field_id: str,
             new_value: Any,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             debug: bool = False,
         ) -> dict:
             """Update a single field of a card.
@@ -962,7 +988,7 @@ class PipeTools:
         )
         async def update_card(
             card_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             title: str | None = None,
             assignee_ids: list[PipefyId] | None = None,
             label_ids: list[PipefyId] | None = None,
@@ -1024,7 +1050,7 @@ class PipeTools:
         )
         async def get_start_form_fields(
             pipe_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             required_only: bool = False,
         ) -> dict:
             """Get the start form fields of a pipe.
@@ -1060,7 +1086,7 @@ class PipeTools:
         )
         async def get_phase_fields(
             phase_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             required_only: bool = False,
         ) -> dict:
             """Get the fields available in a specific phase.
@@ -1096,7 +1122,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def fill_card_phase_fields(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             phase_id: PipefyId,
             fields: dict[str, Any] | None = None,
@@ -1112,6 +1138,14 @@ class PipeTools:
             When ``skip_elicitation`` is False (default) and the client supports
             elicitation, an interactive form is presented — ``fields`` pre-fills
             it so the human can review and adjust.
+
+            A form is only possible when the connection can carry a
+            server-to-client request. It cannot on protocol revision 2026-07-28,
+            on a stateless HTTP transport, or on a deployment serving
+            ``json_response=True`` (which the hosted server does). There the tool
+            takes the ``skip_elicitation`` path instead: only ``fields`` is sent,
+            so an omitted ``fields`` collects nothing and the result reports that
+            no values were collected rather than that the card was updated.
 
             Args:
                 card_id: The ID of the card to update.
@@ -1146,10 +1180,19 @@ class PipeTools:
 
             field_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            if not can_elicit and not skip_elicitation:
+                # Logged for the same reason the NoBackChannelError absorb in
+                # _elicit_field_details logs: a caller asked for a form and the
+                # result cannot say it never appeared.
+                await ctx.debug(
+                    "Elicitation unavailable: no interactive form for this "
+                    "connection; proceeding with the supplied fields"
+                )
 
+            elicited: dict[str, Any] | None = None
             if can_elicit and expected_fields and not skip_elicitation:
                 try:
-                    field_data = await PipeTools._elicit_field_details(
+                    elicited = await PipeTools._elicit_field_details(
                         message=f"Filling fields for phase '{phase_name}' (ID: {phase_id})",
                         prefilled_fields=fields,
                         expected_fields=expected_fields,
@@ -1159,13 +1202,31 @@ class PipeTools:
                     return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
+
+            if elicited is not None:
+                field_data = elicited
             elif expected_fields:
                 field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
             if not field_data:
+                if expected_fields:
+                    # The phase does have editable fields, so "No fields to
+                    # update." would be false: values were needed and none were
+                    # collected. Reachable when no form could be shown and the
+                    # caller passed no fields, or when every key it passed was
+                    # dropped by the editable-field filter. An agent reading only
+                    # the message must not conclude the card is complete.
+                    message = (
+                        "No field values were collected, so nothing was updated. "
+                        f"Phase '{phase_name}' has {len(expected_fields)} editable "
+                        "field(s); pass 'fields' keyed by the IDs from "
+                        "get_phase_fields(phase_id)."
+                    )
+                else:
+                    message = "No fields to update."
                 return {
                     "success": True,
-                    "message": "No fields to update.",
+                    "message": message,
                     "phase_id": phase_id,
                     "phase_name": phase_name,
                 }
@@ -1187,7 +1248,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def search_pipes(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_name: str | None = None,
             max_pipes_per_org: int = 500,
         ) -> dict:
@@ -1238,7 +1299,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
@@ -1333,18 +1394,42 @@ class PipeTools:
         message: str,
         prefilled_fields: dict[str, Any] | None,
         expected_fields: list,
-        ctx: Context[ServerSession, None],
-    ) -> dict:
-        """Handle interactive field elicitation."""
+        ctx: Context,
+    ) -> dict | None:
+        """Handle interactive field elicitation.
+
+        Returns the accepted field values, or ``None`` when the connection
+        cannot carry a server-initiated request. A caller that gets ``None``
+        proceeds with the values it was already given, exactly as it does for a
+        client that advertises no elicitation support.
+
+        ``supports_elicitation`` already gates on the back channel, so ``None``
+        is the residual case: the channel can also close between that check and
+        the request (the inbound request finishing closes its dispatch context),
+        and a session shape that does not expose ``can_send_request`` passes the
+        gate unmeasured. Letting ``NoBackChannelError`` escape instead would
+        leave the tool as a JSON-RPC protocol error rather than a tool result.
+
+        Raises:
+            MalformedFieldDefinitionError: ``expected_fields`` cannot be turned
+                into a form model.
+            UserCancelledError: The user declined or cancelled the form.
+        """
         DynamicFormModel = create_form_model(expected_fields, prefilled_fields)
         await ctx.debug(
             f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
         )
 
-        result = await ctx.elicit(
-            message=message,
-            schema=DynamicFormModel,
-        )
+        try:
+            result = await ctx.elicit(
+                message=message,
+                schema=DynamicFormModel,
+            )
+        except NoBackChannelError:
+            await ctx.debug(
+                "Elicitation skipped: connection has no server-to-client back channel"
+            )
+            return None
         await ctx.debug(f"Elicited result: {result}")
 
         if result.action != "accept":

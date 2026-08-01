@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     PipefyClient,
@@ -28,7 +27,7 @@ class MemberTools:
     """MCP tools for inviting, removing, and setting roles for pipe members."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
             meta=REMOTE,
@@ -179,7 +178,7 @@ class MemberTools:
             meta=REMOTE,
         )
         async def remove_member_from_pipe(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             user_ids: list[PipefyId],
             confirm: bool = False,

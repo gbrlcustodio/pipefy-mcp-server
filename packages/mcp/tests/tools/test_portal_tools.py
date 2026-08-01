@@ -6,11 +6,11 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
-from gql.transport.exceptions import TransportError
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
+from gql.transport.exceptions import TransportError
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_sdk.exceptions import PortalPermissionError
 
@@ -174,7 +174,7 @@ async def test_list_portals_success(
             "list_portals", {"organization_uuid": "org-abc-123"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.list_portals.assert_awaited_once_with(
         "org-abc-123", search_term=None
     )
@@ -199,7 +199,7 @@ async def test_list_portals_coerces_int_organization_uuid(
             {"organization_uuid": int(EXAMPLE_NUMERIC_ORG_ID)},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.list_portals.assert_awaited_once_with(
         EXAMPLE_NUMERIC_ORG_ID, search_term=None
     )
@@ -220,7 +220,7 @@ async def test_list_portals_passes_search_term(
             {"organization_uuid": "org-abc-123", "search_term": "intake"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.list_portals.assert_awaited_once_with(
         "org-abc-123", search_term="intake"
     )
@@ -241,7 +241,7 @@ async def test_list_portals_empty_returns_empty_list(
             "list_portals", {"organization_uuid": "org-empty"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["portals"] == []
@@ -261,7 +261,7 @@ async def test_list_portals_value_error_returns_error_envelope(
             "list_portals", {"organization_uuid": "org-bad"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not found" in tool_error_message(payload).lower()
@@ -275,7 +275,7 @@ async def test_get_portal_success(portal_session, mock_portal_client, extract_pa
     async with portal_session as session:
         result = await session.call_tool("get_portal", {"portal_uuid": "portal-uuid-1"})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.get_portal.assert_awaited_once_with("portal-uuid-1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -300,7 +300,7 @@ async def test_get_portal_not_found_returns_error_envelope(
             "get_portal", {"portal_uuid": "portal-missing"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not found" in tool_error_message(payload).lower()
@@ -320,7 +320,7 @@ async def test_list_portals_transport_error_returns_error_envelope(
             "list_portals", {"organization_uuid": "org-abc-123"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     err = payload.get("error")
@@ -339,7 +339,7 @@ async def test_get_portal_transport_error_returns_error_envelope(
     async with portal_session as session:
         result = await session.call_tool("get_portal", {"portal_uuid": "portal-uuid-1"})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     err = payload.get("error")
@@ -358,7 +358,7 @@ async def test_read_tools_have_readonly_hint(portal_session):
     for name in read_tool_names:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.readOnlyHint is True, (
+        assert tool.annotations.read_only_hint is True, (
             f"{name} should be readOnlyHint=True"
         )
 
@@ -382,7 +382,7 @@ async def test_create_portal_coerces_int_organization_uuid(
             {"organization_uuid": int(EXAMPLE_NUMERIC_ORG_ID)},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.create_portal.assert_awaited_once_with(EXAMPLE_NUMERIC_ORG_ID)
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -400,7 +400,7 @@ async def test_create_portal_success(
             "create_portal", {"organization_uuid": EXAMPLE_NUMERIC_ORG_ID}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.create_portal.assert_awaited_once_with(EXAMPLE_NUMERIC_ORG_ID)
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -422,7 +422,7 @@ async def test_create_portal_permission_denied_returns_actionable_error(
             "create_portal", {"organization_uuid": "org-abc-123"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -447,7 +447,7 @@ async def test_update_portal_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.update_portal.assert_awaited_once_with(
         "portal-created-uuid",
         name="Renamed Portal",
@@ -562,7 +562,7 @@ async def test_update_portal_permission_denied_returns_actionable_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -579,7 +579,7 @@ async def test_delete_portal_preview_does_not_delete(
             "delete_portal", {"portal_uuid": "portal-to-delete"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_portal.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -603,7 +603,7 @@ async def test_delete_portal_success(
             {"portal_uuid": "portal-to-delete", "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_portal.assert_awaited_once_with("portal-to-delete")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -625,7 +625,7 @@ async def test_delete_portal_fails_when_success_false(
             {"portal_uuid": "portal-to-delete", "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_portal.assert_awaited_once_with("portal-to-delete")
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -647,7 +647,7 @@ async def test_delete_portal_permission_denied_returns_actionable_error(
             {"portal_uuid": "portal-to-delete", "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -663,8 +663,8 @@ async def test_delete_portal_has_destructive_hint(portal_session):
     tool_map = {t.name: t for t in listed.tools}
     delete_tool = tool_map["delete_portal"]
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is not True
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is not True
 
 
 # ---------------------------------------------------------------------------
@@ -685,7 +685,7 @@ async def test_create_portal_page_success(
             {"portal_uuid": _PORTAL_UUID, "title": _PAGE_TITLE},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.create_portal_page.assert_awaited_once_with(
         _PORTAL_UUID,
         _PAGE_TITLE,
@@ -716,7 +716,7 @@ async def test_create_portal_page_passes_optional_fields(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.create_portal_page.assert_awaited_once_with(
         _PORTAL_UUID,
         _PAGE_TITLE,
@@ -742,7 +742,7 @@ async def test_create_portal_page_permission_denied_returns_actionable_error(
             {"portal_uuid": _PORTAL_UUID, "title": _PAGE_TITLE},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -802,7 +802,7 @@ async def test_update_portal_page_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.update_portal_page.assert_awaited_once_with(
         _PORTAL_UUID,
         _PAGE_UUID,
@@ -864,7 +864,7 @@ async def test_delete_portal_page_preview_does_not_delete(
             {"portal_uuid": _PORTAL_UUID, "page_id": _PAGE_UUID},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_portal_page.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -892,7 +892,7 @@ async def test_delete_portal_page_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_portal_page.assert_awaited_once_with(
         _PORTAL_UUID, _PAGE_UUID
     )
@@ -920,7 +920,7 @@ async def test_delete_portal_page_fails_when_success_false(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed to delete" in tool_error_message(payload).lower()
@@ -935,8 +935,8 @@ async def test_delete_portal_page_has_destructive_hint(portal_session):
     tool_map = {t.name: t for t in listed.tools}
     delete_tool = tool_map["delete_portal_page"]
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is not True
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is not True
 
 
 @pytest.mark.anyio
@@ -955,7 +955,7 @@ async def test_sort_portal_pages_success(
             {"portal_uuid": _PORTAL_UUID, "page_ids": page_ids},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.sort_portal_pages.assert_awaited_once_with(
         _PORTAL_UUID, page_ids
     )
@@ -1045,7 +1045,7 @@ async def test_sort_portal_pages_fails_when_success_false(
             {"portal_uuid": _PORTAL_UUID, "page_ids": page_ids},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.sort_portal_pages.assert_awaited_once_with(
         _PORTAL_UUID, page_ids
     )
@@ -1069,7 +1069,7 @@ async def test_update_portal_page_layout_success(
             {"page_id": _PAGE_UUID, "layout": _PAGE_LAYOUT},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.update_portal_page_layout.assert_awaited_once_with(
         _PAGE_UUID, _PAGE_LAYOUT
     )
@@ -1093,7 +1093,7 @@ async def test_update_portal_page_layout_fails_when_success_false(
             {"page_id": _PAGE_UUID, "layout": _PAGE_LAYOUT},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.update_portal_page_layout.assert_awaited_once_with(
         _PAGE_UUID, _PAGE_LAYOUT
     )
@@ -1117,7 +1117,7 @@ async def test_update_portal_page_layout_permission_denied_returns_actionable_er
             {"page_id": _PAGE_UUID, "layout": _PAGE_LAYOUT},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -1139,7 +1139,7 @@ async def test_update_portal_page_layout_transport_error_returns_envelope(
             {"page_id": _PAGE_UUID, "layout": _PAGE_LAYOUT},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     err = payload.get("error")
@@ -1164,7 +1164,7 @@ async def test_page_write_tools_are_not_readonly(portal_session):
     for name in write_tool_names:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.readOnlyHint is not True, (
+        assert tool.annotations.read_only_hint is not True, (
             f"{name} should not be readOnlyHint=True"
         )
 
@@ -1199,7 +1199,7 @@ async def test_create_portal_element_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.create_portal_element.assert_awaited_once_with(
         _PAGE_UUID,
         type="forms",
@@ -1296,7 +1296,7 @@ async def test_create_portal_element_permission_denied_returns_actionable_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -1344,7 +1344,7 @@ async def test_update_portal_element_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.update_portal_element.assert_awaited_once_with(
         _ELEMENT_UUID,
         _PAGE_UUID,
@@ -1391,7 +1391,7 @@ async def test_delete_portal_element_preview_does_not_delete(
             {"element_id": _ELEMENT_UUID, "page_id": _PAGE_UUID},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_portal_element.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -1419,7 +1419,7 @@ async def test_delete_portal_element_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_portal_element.assert_awaited_once_with(
         _ELEMENT_UUID, _PAGE_UUID
     )
@@ -1447,7 +1447,7 @@ async def test_delete_portal_element_fails_when_success_false(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed to delete" in tool_error_message(payload).lower()
@@ -1462,8 +1462,8 @@ async def test_delete_portal_element_has_destructive_hint(portal_session):
     tool_map = {t.name: t for t in listed.tools}
     delete_tool = tool_map["delete_portal_element"]
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is not True
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is not True
 
 
 @pytest.mark.anyio
@@ -1489,7 +1489,7 @@ async def test_duplicate_portal_element_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.duplicate_portal_element.assert_awaited_once_with(
         element_id=_ELEMENT_UUID,
         portal_uuid=_PORTAL_UUID,
@@ -1531,7 +1531,7 @@ async def test_element_write_tools_are_not_readonly(portal_session):
     for name in _ELEMENT_WRITE_TOOL_NAMES:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.readOnlyHint is not True, (
+        assert tool.annotations.read_only_hint is not True, (
             f"{name} should not be readOnlyHint=True"
         )
 
@@ -1557,7 +1557,7 @@ async def test_create_sub_portal_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.create_sub_portal.assert_awaited_once_with(
         _MAIN_PORTAL_UUID,
         _SUB_PORTAL_NAME,
@@ -1602,7 +1602,7 @@ async def test_create_sub_portal_transport_error_not_permission_envelope(
             {"main_portal_uuid": _MAIN_PORTAL_UUID},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -1630,7 +1630,7 @@ async def test_update_sub_portal_element_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.update_sub_portal_element.assert_awaited_once_with(
         _MAIN_PORTAL_UUID,
         _FORMS_ELEMENT_ID,
@@ -1681,7 +1681,7 @@ async def test_update_sub_portal_element_fails_when_success_false(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed" in tool_error_message(payload).lower()
@@ -1705,7 +1705,7 @@ async def test_publish_sub_portal_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.publish_sub_portal.assert_awaited_once_with(
         _MAIN_PORTAL_UUID,
         _FORMS_ELEMENT_ID,
@@ -1756,7 +1756,7 @@ async def test_publish_sub_portal_fails_when_success_false(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed" in tool_error_message(payload).lower()
@@ -1781,7 +1781,7 @@ async def test_publish_sub_portal_permission_denied_returns_actionable_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -1843,7 +1843,7 @@ async def test_sub_portal_internal_api_permission_denied_returns_actionable_erro
     async with portal_session as session:
         result = await session.call_tool(tool_name, tool_args)
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
@@ -1867,7 +1867,7 @@ async def test_unpublish_sub_portal_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.unpublish_sub_portal.assert_awaited_once_with(
         _MAIN_PORTAL_UUID,
         _FORMS_ELEMENT_ID,
@@ -1915,7 +1915,7 @@ async def test_unpublish_sub_portal_fails_when_success_false(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed" in tool_error_message(payload).lower()
@@ -1935,7 +1935,7 @@ async def test_delete_sub_portal_element_preview_does_not_delete(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_sub_portal_element.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -1963,7 +1963,7 @@ async def test_delete_sub_portal_element_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_sub_portal_element.assert_awaited_once_with(
         _MAIN_PORTAL_UUID,
         _FORMS_ELEMENT_ID,
@@ -1992,7 +1992,7 @@ async def test_delete_sub_portal_element_fails_when_success_false(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed" in tool_error_message(payload).lower()
@@ -2007,8 +2007,8 @@ async def test_delete_sub_portal_element_has_destructive_hint(portal_session):
     tool_map = {t.name: t for t in listed.tools}
     delete_tool = tool_map["delete_sub_portal_element"]
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is not True
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is not True
 
 
 @pytest.mark.anyio
@@ -2022,7 +2022,7 @@ async def test_delete_sub_portal_preview_does_not_delete(
             {"sub_portal_uuid": _SUB_PORTAL_UUID},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_sub_portal.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -2046,7 +2046,7 @@ async def test_delete_sub_portal_success(
             {"sub_portal_uuid": _SUB_PORTAL_UUID, "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_portal_client.delete_sub_portal.assert_awaited_once_with(_SUB_PORTAL_UUID)
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -2068,7 +2068,7 @@ async def test_delete_sub_portal_fails_when_success_false(
             {"sub_portal_uuid": _SUB_PORTAL_UUID, "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed" in tool_error_message(payload).lower()
@@ -2263,8 +2263,8 @@ async def test_delete_sub_portal_has_destructive_hint(portal_session):
     tool_map = {t.name: t for t in listed.tools}
     delete_tool = tool_map["delete_sub_portal"]
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is not True
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is not True
 
 
 @pytest.mark.anyio
@@ -2277,7 +2277,7 @@ async def test_sub_portal_write_tools_are_not_readonly(portal_session):
     for name in _SUB_PORTAL_WRITE_TOOL_NAMES:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.readOnlyHint is not True, (
+        assert tool.annotations.read_only_hint is not True, (
             f"{name} should not be readOnlyHint=True"
         )
 

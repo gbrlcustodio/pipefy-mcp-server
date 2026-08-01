@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
@@ -63,7 +62,7 @@ class TableTools:
     """MCP tools for database tables and records (reads and mutations)."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
             meta=REMOTE,
@@ -519,7 +518,7 @@ class TableTools:
             meta=REMOTE,
         )
         async def delete_table(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             table_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
@@ -744,7 +743,7 @@ class TableTools:
             meta=REMOTE,
         )
         async def delete_table_record(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             record_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
@@ -1016,7 +1015,7 @@ class TableTools:
             meta=REMOTE,
         )
         async def delete_table_field(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             field_id: PipefyId,
             table_id: PipefyId,
             confirm: bool = False,

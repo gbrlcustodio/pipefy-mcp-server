@@ -26,8 +26,8 @@ def _build(*, resource_server_url=None, allowed_hosts=None, allowed_origins=None
 
 
 @pytest.mark.unit
-def test_unset_returns_none_to_keep_fastmcp_default():
-    """No resource URL and no explicit allowlist -> FastMCP's own default stands."""
+def test_unset_returns_none_to_keep_sdk_default():
+    """No resource URL and no explicit allowlist -> MCPServer's own default stands."""
     assert _build() is None
 
 
@@ -130,7 +130,7 @@ def test_explicit_empty_origins_are_honored_as_the_strictest_override():
 
 @pytest.mark.unit
 def test_explicit_empty_origins_alone_still_enable_protection():
-    """Empty origins with no host still builds an allowlist (not FastMCP's default)."""
+    """Empty origins with no host still builds an allowlist (not the SDK's default)."""
     security = _build(allowed_origins=[])
     assert security is not None
     assert security.enable_dns_rebinding_protection is True

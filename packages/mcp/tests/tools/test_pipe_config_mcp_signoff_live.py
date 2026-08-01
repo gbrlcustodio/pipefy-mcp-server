@@ -25,10 +25,10 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from _shared.live_settings import pipefy_live_configured, require_live_creds
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.live_settings import pipefy_live_configured, require_live_creds
 
 from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
@@ -98,7 +98,7 @@ async def test_live_get_pipe_then_get_ai_agents(extract_payload):
         ) as session:
             r_pipe = await session.call_tool("get_pipe", {"pipe_id": pipe_id})
 
-    assert r_pipe.isError is False, r_pipe
+    assert r_pipe.is_error is False, r_pipe
     payload = extract_payload(r_pipe)
     pipe = payload.get("pipe")
     assert pipe is not None, payload
@@ -119,7 +119,7 @@ async def test_live_get_pipe_then_get_ai_agents(extract_payload):
                 {"repo_uuid": str(repo_uuid)},
             )
 
-    assert r_agents.isError is False, r_agents
+    assert r_agents.is_error is False, r_agents
     agents_payload = extract_payload(r_agents)
     assert agents_payload.get("success") is True, agents_payload
     assert "agents" in agents_payload
@@ -144,7 +144,7 @@ async def test_live_get_ai_agent_when_env_set(extract_payload):
         ) as session:
             r = await session.call_tool("get_ai_agent", {"uuid": agent_uuid})
 
-    assert r.isError is False, r
+    assert r.is_error is False, r
     body = extract_payload(r)
     assert body.get("success") is True, body
     assert body.get("agent"), body
@@ -175,7 +175,7 @@ async def test_live_get_phase_fields_includes_internal_id_and_uuid(
                 {"phase_id": phase_id, "required_only": False},
             )
 
-    assert r.isError is False, r
+    assert r.is_error is False, r
     payload = extract_payload(r)
     fields = payload.get("fields") or []
     if not fields:

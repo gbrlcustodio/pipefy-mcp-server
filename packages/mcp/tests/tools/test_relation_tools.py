@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -60,7 +60,7 @@ async def test_get_pipe_relations_success(
     async with relation_session as session:
         result = await session.call_tool("get_pipe_relations", {"pipe_id": 1})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_relation_client.get_pipe_relations.assert_awaited_once_with("1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -79,7 +79,7 @@ async def test_get_pipe_relations_graphql_error(
     async with relation_session as session:
         result = await session.call_tool("get_pipe_relations", {"pipe_id": 9})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not allowed" in tool_error_message(payload)
@@ -105,7 +105,7 @@ async def test_get_pipe_relations_rejects_pipe_id_zero(
     async with relation_session as session:
         result = await session.call_tool("get_pipe_relations", {"pipe_id": 0})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_relation_client.get_pipe_relations.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
@@ -126,7 +126,7 @@ async def test_get_table_relations_success(
             "get_table_relations", {"relation_ids": ["r1"]}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_relation_client.get_table_relations.assert_awaited_once_with(["r1"])
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -145,7 +145,7 @@ async def test_get_table_relations_graphql_error(
     async with relation_session as session:
         result = await session.call_tool("get_table_relations", {"relation_ids": [1]})
 
-    assert result.isError is False
+    assert result.is_error is False
     assert extract_payload(result)["success"] is False
 
 
@@ -157,7 +157,7 @@ async def test_get_table_relations_invalid_relation_ids(
     async with relation_session as session:
         result = await session.call_tool("get_table_relations", {"relation_ids": []})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_relation_client.get_table_relations.assert_not_called()
     assert extract_payload(result)["success"] is False
 
@@ -177,7 +177,7 @@ async def test_create_pipe_relation_success(
             {"parent_id": 1, "child_id": 2, "name": "L"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_relation_client.create_pipe_relation.assert_awaited_once_with(
         "1", "2", "L", extra_input=None
     )
@@ -235,7 +235,7 @@ async def test_update_pipe_relation_success(
             {"relation_id": 9, "name": "N"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_relation_client.update_pipe_relation.assert_awaited_once_with(
         "9", "N", extra_input=None
     )
@@ -275,7 +275,7 @@ async def test_delete_pipe_relation_success(
             {"relation_id": 100, "confirm": True},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_relation_client.delete_pipe_relation.assert_awaited_once_with("100")
     assert extract_payload(result)["success"] is True
 
@@ -306,8 +306,8 @@ async def test_delete_pipe_relation_has_destructive_hint(relation_session):
         listed = await session.list_tools()
     delete_tool = next(t for t in listed.tools if t.name == "delete_pipe_relation")
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is False
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is False
 
 
 @pytest.mark.anyio
@@ -325,7 +325,7 @@ async def test_create_card_relation_success(
             {"parent_id": 10, "child_id": 20, "source_id": 30},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_relation_client.create_card_relation.assert_awaited_once_with(
         "10", "20", "30", extra_input=None
     )

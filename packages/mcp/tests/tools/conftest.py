@@ -4,7 +4,7 @@ import json
 from contextlib import asynccontextmanager
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.auth import RequestScopedIdentity
 from pipefy_mcp.core.runtime import McpRuntime
@@ -12,7 +12,7 @@ from pipefy_mcp.settings import settings
 
 
 def build_tool_test_server(name, register, client):
-    """Build a FastMCP server whose lifespan yields a runtime serving ``client``.
+    """Build an MCPServer whose lifespan yields a runtime serving ``client``.
 
     Tools resolve their client per request from the ``lifespan_context`` by calling
     :meth:`McpRuntime.session_for_request` (see
@@ -29,7 +29,7 @@ def build_tool_test_server(name, register, client):
         runtime.session_for_request = lambda _req: client
         yield runtime
 
-    mcp = FastMCP(name, lifespan=_lifespan)
+    mcp = MCPServer(name, lifespan=_lifespan)
     register(mcp)
     return mcp
 
@@ -91,14 +91,14 @@ def extract_payload():
 def assert_invalid_arguments_envelope(result):
     """Assert a ``CallToolResult`` carries a Pipefy ``INVALID_ARGUMENTS`` envelope.
 
-    Use this for cases where FastMCP's argument coercion rejects the input
+    Use this for cases where the SDK's argument coercion rejects the input
     (missing required arg, wrong type, ``@field_validator`` rejecting blank /
     empty strings). The envelope is produced by
     :class:`pipefy_mcp.tools.validation_envelope.PipefyValidationTool` and is
     delivered as a structured success payload (``isError == False``), not as a
     transport-level error.
     """
-    assert result.isError is False, (
+    assert result.is_error is False, (
         "Expected a tool-error envelope (isError=False), got a transport error: "
         f"{result}"
     )

@@ -4,15 +4,21 @@ import logging
 import textwrap
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import TYPE_CHECKING
 
 import anyio
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
+if TYPE_CHECKING:
+    from mcp.server.transport_security import TransportSecuritySettings
+
+from pipefy_mcp import __version__ as pipefy_mcp_version
 from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.core.tool_middleware import (
     ToolCallMiddleware,
-    install_tool_call_middleware,
+    build_tool_call_middleware,
 )
+from pipefy_mcp.core.transport_security import transport_security_for
 from pipefy_mcp.observability.json_logging import configure_observability_logging
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.observability.wiring import wire_hosted_observability
@@ -30,27 +36,28 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
 
 def _make_lifespan(
     runtime: McpRuntime,
-) -> Callable[[FastMCP], AbstractAsyncContextManager[McpRuntime]]:
-    """Build the FastMCP lifespan bound to the one app-scoped ``runtime``.
+) -> Callable[[MCPServer], AbstractAsyncContextManager[McpRuntime]]:
+    """Build the SDK lifespan bound to the one app-scoped ``runtime``.
 
-    Following the FastMCP lifespan contract, the lifespan owns resources only: it
+    Following the SDK lifespan contract, the lifespan owns resources only: it
     yields the runtime as the request ``lifespan_context``. Tools resolve the live
     client per request from that context (see
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so both transports
     must run a lifespan for tools to find a client.
 
     The one runtime is built once at server construction (which builds its engine)
-    and captured here. Streamable HTTP re-enters this context manager per session;
-    each entry yields the same already-wired runtime, so every session shares one
-    engine and opens its own cheap per-request session. See AGENTS.md for the fuller
-    rationale.
+    and captured here. Under 2.0 Streamable HTTP enters this context manager once, at
+    session-manager startup, rather than per session; either way every entry yields
+    the same already-wired runtime, so all sessions share one engine and each opens
+    its own cheap per-request session. See AGENTS.md for the fuller rationale.
 
     Tools are registered once, up front, by :func:`_register_pipefy_tools`, never
-    here, so re-entry cannot race the tool table.
+    here, so registration cannot race the tool table regardless of how often the
+    lifespan runs.
     """
 
     @asynccontextmanager
-    async def lifespan(_app: FastMCP) -> AsyncIterator[McpRuntime]:
+    async def lifespan(_app: MCPServer) -> AsyncIterator[McpRuntime]:
         logger.info(
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
             "enabled" if runtime.unified_envelope else "disabled",
@@ -61,7 +68,7 @@ def _make_lifespan(
 
 
 def _register_pipefy_tools(
-    app: FastMCP, *, remote_mode: bool, toolsets: str | None
+    app: MCPServer, *, remote_mode: bool, toolsets: str | None
 ) -> None:
     """Register every Pipefy tool on ``app`` exactly once, at construction.
 
@@ -110,74 +117,84 @@ def default_tool_middlewares(settings: Settings) -> list[ToolCallMiddleware]:
 def build_pipefy_mcp_server(
     settings: Settings,
     extra_tool_middlewares: Sequence[ToolCallMiddleware] = (),
-) -> FastMCP:
-    """Build the FastMCP app with its tools registered once, before serving.
+) -> MCPServer:
+    """Build the MCP app with its tools registered once, before serving.
 
     Reads everything from the resolved ``settings`` the composition root
     (:func:`run_server`) hands in: the ``remote`` profile selects the default-deny
-    remote-safe tool surface, and ``settings.mcp.host`` / ``settings.mcp.port`` give
-    the HTTP bind (they matter only for the HTTP transport; stdio ignores them).
+    remote-safe tool surface.
 
-    The DNS-rebinding allowlist for the HTTP transport is built by the runtime (from
-    the ``resource_server_url`` host plus any ``allowed_hosts`` / ``allowed_origins``)
-    and read off it here as ``runtime.transport_security``; it is ``None`` (FastMCP's
-    own loopback default) when nothing is configured, and irrelevant for stdio.
+    This builder sets no bind host/port and no DNS-rebinding allowlist. The SDK takes
+    them per transport, on ``run()`` / ``streamable_http_app()``, so they travel with
+    the serving call (:func:`_serve_streamable_http`) instead. Only the HTTP transport
+    has anything to apply them to.
 
     ``extra_tool_middlewares`` is the public registration seam for a consumer of this
-    builder (a hosted serving layer that wants per-tool metrics, say): the chain
-    installs once, so a consumer folds its middleware in here rather than reaching
-    into the private ``request_handlers`` slot or re-wrapping the handler. The
-    built-in middleware runs outer to the consumer's, so the default observability
-    layer records every call including those a consumer's middleware short-circuits.
+    builder (a hosted serving layer that wants per-tool metrics, say): the chain is
+    composed once and registered at construction, so a consumer folds its middleware
+    in here. The built-in middleware runs outer to the consumer's, so the default
+    observability layer records every call including those a consumer's middleware
+    short-circuits.
 
     The one app-scoped :class:`McpRuntime` is built via
     :meth:`McpRuntime.for_profile`, which owns both the outbound identity and (under
     ``remote``) the inbound resource-server ``(verifier, auth)`` pair. When that pair
-    is present FastMCP validates the inbound bearer per request and serves the
+    is present the SDK validates the inbound bearer per request and serves the
     resource-server metadata; when it is ``None`` (stdio, or a ``local`` HTTP
     profile) the app has no inbound auth. The lifespan is bound to that runtime; only
     the transport ``run`` differs.
     """
     runtime = McpRuntime.for_profile(settings)
     verifier, auth = runtime.inbound_auth or (None, None)
-    app = FastMCP(
+    # One ServerMiddleware carrying the built-in chain plus any consumer middleware,
+    # registered at construction because the SDK takes middleware on the constructor.
+    # Both transports serve this app, so tool calls over stdio and HTTP alike run
+    # through the chain; the list is empty (and the middleware None) by default.
+    tool_middleware = build_tool_call_middleware(
+        [*default_tool_middlewares(settings), *extra_tool_middlewares]
+    )
+    app = MCPServer(
         "pipefy",
+        version=pipefy_mcp_version,
         instructions=PIPEFY_INSTRUCTIONS,
         lifespan=_make_lifespan(runtime),
-        host=settings.mcp.host,
-        port=settings.mcp.port,
         log_level=settings.mcp.log_level,
         token_verifier=verifier,
         auth=auth,
-        transport_security=runtime.transport_security,
+        middleware=[tool_middleware] if tool_middleware else None,
     )
     _register_pipefy_tools(
         app,
         remote_mode=settings.mcp.profile == "remote",
         toolsets=settings.mcp.toolsets,
     )
-    # Wrap the tool-call handler with the built-in chain plus any consumer middleware.
-    # Both transports serve this app, so tool calls over stdio and HTTP alike run
-    # through the chain; the install is a no-op when the combined list is empty.
-    install_tool_call_middleware(
-        app, [*default_tool_middlewares(settings), *extra_tool_middlewares]
-    )
     return app
 
 
-async def _serve_streamable_http(app: FastMCP, settings: Settings) -> None:
+async def _serve_streamable_http(
+    app: MCPServer,
+    settings: Settings,
+    transport_security: TransportSecuritySettings | None,
+) -> None:
     """Serve Streamable HTTP with hosted observability middleware wired in.
 
     The structured emitter is configured here, not in :func:`run_server`, so the
     stdio path never installs it. Structured lines go to stderr (not the JSON-RPC
     stdout wire); keeping configuration off the stdio path still avoids arming a
     process-global handler that local installs do not need.
+
+    ``transport_security`` (the DNS-rebinding allowlist) and the bind ``host`` reach
+    the SDK here rather than at construction, because the SDK takes both on
+    ``streamable_http_app()``. Passing the same ``host`` uvicorn binds keeps the
+    allowlist's loopback default aligned with the interface actually served.
     """
     import uvicorn
 
     configure_observability_logging()
-    http_app = wire_hosted_observability(app)
     mcp = settings.mcp
+    http_app = wire_hosted_observability(
+        app, host=mcp.host, transport_security=transport_security
+    )
     config = uvicorn.Config(
         http_app,
         host=mcp.host,
@@ -237,4 +254,9 @@ def run_server(settings: Settings) -> None:
 
     # Bind safety is enforced at the settings boundary (McpSettings._enforce_bind_safety);
     # host/port arrive already vetted, so there is nothing to re-check here.
-    anyio.run(_serve_streamable_http, build_pipefy_mcp_server(settings), settings)
+    anyio.run(
+        _serve_streamable_http,
+        build_pipefy_mcp_server(settings),
+        settings,
+        transport_security_for(settings),
+    )

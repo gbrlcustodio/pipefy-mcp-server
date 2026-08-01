@@ -16,14 +16,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.core.tool_error_envelope import tool_error, tool_success
 from pipefy_mcp.tools.toolsets import DOMAIN_DESCRIPTIONS, domain_of
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp.tools.base import Tool
+    from mcp.server.mcpserver.tools.base import Tool
 
 # Cap on ``search_tools`` results so a broad keyword cannot flood the context.
 _MAX_SEARCH_RESULTS = 25
@@ -54,7 +54,7 @@ def _summary(tool: Tool) -> dict[str, Any]:
     }
 
 
-def register_meta_tools(mcp: FastMCP, catalog: dict[str, Tool]) -> None:
+def register_meta_tools(mcp: MCPServer, catalog: dict[str, Tool]) -> None:
     """Register the four ``power``-profile meta-tools over a hidden-tool ``catalog``.
 
     ``catalog`` maps each hidden tool's name to its live ``Tool`` (a post-floor

@@ -24,6 +24,8 @@ This document explains **why** the main third-party packages exist across the **
 | `mcp[cli]` | MCP protocol server runtime and CLI entry for `pipefy-mcp-server`. |
 | `httpx` | Attachment downloads and any direct HTTP outside `gql` (same family as the SDK). |
 | `pydantic` / `pydantic-settings` | Tool inputs and server settings. |
+| `starlette` | The ASGI types this package names directly: the `Starlette` app `wire_hosted_observability` returns, and the `Request` the runtime and the identity resolvers take. Arrives via `mcp[cli]` too, but declared here because the imports are ours. |
+| `uvicorn` | The ASGI server `run_server` drives on the `--transport http` path (`uvicorn.Config` / `uvicorn.Server`, `access_log=False`). Arrives via `mcp[cli]` too, but only under a `sys_platform != 'emscripten'` marker, so it is declared here because the import is ours and unconditional. |
 
 ## pipefy-cli (`packages/cli`)
 

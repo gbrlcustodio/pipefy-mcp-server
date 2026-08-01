@@ -5,7 +5,7 @@ from random import randint
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -74,7 +74,7 @@ class TestGetFieldConditions:
             result = await session.call_tool(
                 "get_field_conditions", {"phase_id": phase_id}
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_field_conditions.assert_called_once_with(str(phase_id))
         payload = extract_payload(result)
         assert payload == {
@@ -95,7 +95,7 @@ class TestGetFieldConditions:
         )
         async with client_session as session:
             result = await session.call_tool("get_field_conditions", {"phase_id": 1})
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         assert payload["field_conditions"] == []
@@ -116,7 +116,7 @@ class TestGetFieldConditions:
             result = await session.call_tool(
                 "get_field_conditions", {"phase_id": 1, "debug": False}
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -147,7 +147,7 @@ class TestGetFieldCondition:
             result = await session.call_tool(
                 "get_field_condition", {"field_condition_id": "fc-9"}
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_field_condition.assert_called_once_with("fc-9")
         payload = extract_payload(result)
         assert payload == {
@@ -170,7 +170,7 @@ class TestGetFieldCondition:
             result = await session.call_tool(
                 "get_field_condition", {"field_condition_id": 999}
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "access denied" in tool_error_message(payload).lower()
@@ -191,7 +191,7 @@ class TestGetFieldCondition:
             result = await session.call_tool(
                 "get_field_condition", {"field_condition_id": "x", "debug": False}
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload

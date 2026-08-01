@@ -16,13 +16,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from _mcp_compat import (
+    create_connected_server_and_client_session as create_client_session,
+)
 from _shared.live_settings import (
     live_resolved_auth,
     pipefy_live_configured,
     require_live_creds,
-)
-from mcp.shared.memory import (
-    create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
@@ -127,7 +127,7 @@ async def test_live_upload_attachment_to_card_end_to_end(
                 "content_type": "text/plain",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload.get("success") is True
     assert payload.get("file_name") == file_name
@@ -178,7 +178,7 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
                 "content_type": "text/plain",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload.get("success") is True
     assert payload.get("table_record_id") == record_id
@@ -225,6 +225,6 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(
                     "file_path": str(file_path),
                 },
             )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload.get("success") is True

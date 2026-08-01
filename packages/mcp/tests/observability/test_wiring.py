@@ -15,11 +15,10 @@ import anyio
 import httpx
 import pytest
 from mcp.server.auth.provider import AccessToken
-from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
-from mcp.server.fastmcp import FastMCP
+from mcp.server.auth.settings import AuthSettings as SdkAuthSettings
+from mcp.server.mcpserver import MCPServer
 from starlette.applications import Starlette
 
-from pipefy_mcp.auth.resource_server import PipefyAccessToken
 from pipefy_mcp.observability.json_logging import (
     configure_observability_logging,
     reset_observability_logging,
@@ -33,18 +32,18 @@ _SUB = "user-123"
 
 
 class _StubTokenVerifier:
-    """Accept one fixed bearer and map it to a PipefyAccessToken with sub."""
+    """Accept one fixed bearer and map it to an AccessToken carrying a subject."""
 
     async def verify_token(self, token: str) -> AccessToken | None:
         if token != _GOOD_TOKEN:
             return None
-        return PipefyAccessToken(
+        return AccessToken(
             token=token,
             client_id=_CLIENT_ID,
             scopes=["read"],
             expires_at=None,
             resource="https://mcp.example.com/mcp",
-            sub=_SUB,
+            subject=_SUB,
         )
 
 
@@ -64,16 +63,16 @@ def _read_log_lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, Any]]:
 
 
 def _build_auth_http_app() -> Starlette:
-    app = FastMCP(
+    app = MCPServer(
         "wiring-identity",
         token_verifier=_StubTokenVerifier(),
-        auth=FastMcpAuthSettings(
+        auth=SdkAuthSettings(
             issuer_url="https://issuer.example.com",
             resource_server_url="https://mcp.example.com/mcp",
         ),
     )
-    app.settings.json_response = True
-    return wire_hosted_observability(app)
+    # 2.0 takes json_response on the transport call, not on server settings.
+    return wire_hosted_observability(app, json_response=True)
 
 
 @pytest.mark.anyio

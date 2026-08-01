@@ -14,6 +14,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history so the branch-provenance check below can resolve
+          # origin/dev and origin/main; a tag push checks out only the tag.
+          fetch-depth: 0
+      - name: Verify the tag is on the branch its track ships from
+        run: |
+          set -eu
+          ver="${GITHUB_REF_NAME#v}"
+          # Alphas are staging cuts that must come off dev; betas and stables
+          # ship from main. This is the server-side half of the same rule
+          # release.py enforces locally (release_branch_for) -- enforced here
+          # too, because this is the step that actually publishes, and a tag
+          # pushed by hand from the wrong branch would otherwise sail through.
+          # -i to agree with the release-notes step's own re.I match below, and
+          # with prerelease_track in scripts/bump_version.py.
+          if printf '%s' "$ver" | grep -Eiq '^[0-9]+\.[0-9]+\.[0-9]+[-_.]?(a|alpha)\.?[0-9]+$'; then
+            expected=dev
+          else
+            expected=main
+          fi
+          # Explicit refspec: a tag-push checkout has no reason to carry a
+          # branch ref, and `git fetch origin <branch>` alone only guarantees
+          # FETCH_HEAD.
+          git fetch --quiet origin \
+            "+refs/heads/$expected:refs/remotes/origin/$expected"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$expected"; then
+            echo "Tag $GITHUB_REF_NAME ($GITHUB_SHA) is not on origin/$expected." >&2
+            echo "An alpha must be tagged on dev; a beta or stable on main." >&2
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME is on origin/$expected."
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
         with:
@@ -40,6 +71,7 @@ jobs:
               sys.exit(1)
           PY
       - name: Build release notes body for this tag
+        id: notes
         run: |
           python <<'PY'
           import os
@@ -50,12 +82,31 @@ jobs:
           tag = os.environ["GITHUB_REF_NAME"]
           ver = tag.removeprefix("v")
           text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+          # Alpha tags are staging cuts off `dev`. They deliberately do not stamp
+          # the CHANGELOG -- consecutive alphas share one accumulating
+          # `## [Unreleased]` section, which the beta promotion on `main` later
+          # stamps in full -- so an alpha's body is that section. Every other tag
+          # must have its own stamped heading, and a missing one stays a hard
+          # failure.
+          is_alpha = bool(
+              re.fullmatch(r"\d+\.\d+\.\d+[-_.]?(a|alpha)\.?\d+", ver, re.I)
+          )
           pat = rf"(?ms)^## \[{re.escape(ver)}\][^\n]*\n.*?(?=^## |\Z)"
           m = re.search(pat, text)
+          if not m and is_alpha:
+              m = re.search(r"(?ms)^## \[Unreleased\][^\n]*\n.*?(?=^## |\Z)", text)
+              if m and not m.group(0).partition("\n")[2].strip():
+                  print(
+                      "'## [Unreleased]' is empty; an alpha needs release notes.",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
           if not m:
+              expected = "## [Unreleased]" if is_alpha else f"## [{ver}] ..."
               print(
                   f"No CHANGELOG section found for version {ver!r} "
-                  f"(expected a heading like ## [{ver}] ...).",
+                  f"(expected a heading like {expected}).",
                   file=sys.stderr,
               )
               sys.exit(1)
@@ -63,6 +114,8 @@ jobs:
               m.group(0).rstrip() + "\n",
               encoding="utf-8",
           )
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              fh.write(f"is_alpha={'true' if is_alpha else 'false'}\n")
           PY
       - name: Build wheels and sdist (all workspace packages)
         run: uv build --all-packages -o dist --wheel --sdist
@@ -99,6 +152,11 @@ jobs:
         with:
           files: dist/*.whl
           body_path: CHANGELOG_RELEASE_BODY.md
+          # Flag only alphas, so the "Latest" badge stays on the newest beta.
+          # install.sh filters by tag shape rather than this flag, so the two are
+          # independent; this is what makes the GitHub UI honest about staging
+          # cuts.
+          prerelease: ${{ steps.notes.outputs.is_alpha == 'true' }}
       - name: Stage PyPI wheels (SDK + CLI + MCP + Auth + Infra)
         run: |
           mkdir -p dist-pypi

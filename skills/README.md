@@ -50,4 +50,5 @@ git clone https://github.com/pipefy/ai-toolkit.git
 ## Contributing
 
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — frontmatter, CI checks, style, review rubric.
-- [`AGENTS.md`](AGENTS.md) — authoring guide and `SKILL.md` template.
+- [`AGENTS.md`](AGENTS.md) — authoring guide.
+- [`_template/`](_template/) — copyable `SKILL.md` starter for new skills (local repos or PRs here).

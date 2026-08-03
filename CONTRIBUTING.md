@@ -1,4 +1,4 @@
-# Contributing to pipefy-labs
+# Contributing to ai-toolkit
 
 Thanks for helping improve the monorepo. This guide covers **skills** (Markdown playbooks). For **MCP tools, CLI commands, and SDK** work, follow [`AGENTS.md`](AGENTS.md) and the [Development](README.md#development) section in the root README (TDD, parity with [`docs/parity.md`](docs/parity.md), `ruff`, `pytest`).
 
@@ -12,7 +12,14 @@ Skills are Markdown-only — no Python, no `uv`, no test infrastructure required
 
 1. Fork and clone the repo.
 2. Choose or create a domain folder under `skills/`.
-3. Create `skills/<domain>/<skill-name>/SKILL.md` using the template in [`skills/AGENTS.md`](skills/AGENTS.md).
+3. Copy the starter skill and rename it:
+
+   ```bash
+   cp -R skills/_template/pipefy-skill-template \
+     skills/<domain>/pipefy-<domain>-<action>
+   ```
+
+   Fill in [`SKILL.md`](skills/_template/pipefy-skill-template/SKILL.md) using the rules in [`skills/AGENTS.md`](skills/AGENTS.md) (and [`skills/_template/README.md`](skills/_template/README.md)).
 4. Run the reference linter locally (optional; CI runs the same check):
 
    ```bash
@@ -78,6 +85,26 @@ PRs are reviewed for:
 3. Examples are runnable (checked manually by reviewer against a real Pipefy org for high-impact skills).
 4. Style matches guide above.
 5. No persona-specific content (skills are generic, not tailored to a specific agent identity).
+
+---
+
+## Developer Certificate of Origin (DCO)
+
+By contributing to this repository you certify the [Developer Certificate of Origin v1.1](https://developercertificate.org). All commits must be signed off:
+
+```bash
+git commit -s -m "feat(skills): add vendor-onboarding skill"
+```
+
+Contributions are licensed to Pipefy and to all recipients under the Apache License 2.0. Pull requests without sign-off will fail CI.
+
+---
+
+## Content review for regulated domains
+
+Skills and blueprints under `skills/legal/`, `skills/human-resources/`, `skills/finance/`, `skills/compliance/` (and any domain involving decisions about natural persons) undergo **substantive review by Pipefy’s Privacy, Legal & Compliance team** before merge, in addition to the standard CI lint. Expect additional review time and possible content changes. Community-contributed skills are published as templates and do not constitute professional advice; Pipefy may decline, edit, or remove any contribution at its discretion.
+
+Published blueprints in regulated domains must include a `COMPLIANCE.md` beside the skill (start from [`docs/compliance/COMPLIANCE.template.md`](docs/compliance/COMPLIANCE.template.md)).
 
 ---
 

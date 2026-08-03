@@ -1,4 +1,4 @@
-# Migration Guide — v0.1 Cutover (pipefy-mcp-server → pipefy-labs)
+# Migration Guide — v0.1 Cutover (pipefy-mcp-server → ai-toolkit)
 
 Existing users of `pipefy-mcp-server`: this guide covers what changed and what to do. **TL;DR:** almost nothing breaks.
 

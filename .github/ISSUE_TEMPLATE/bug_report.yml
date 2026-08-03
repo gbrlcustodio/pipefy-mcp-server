@@ -1,0 +1,62 @@
+name: Bug report
+description: Report unexpected behavior in the MCP server, CLI, SDK, or skills.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. For **security** issues, follow [SECURITY.md](https://github.com/pipefy/ai-toolkit/blob/main/SECURITY.md) instead of this form.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where does the bug show up?
+      options:
+        - MCP server
+        - CLI
+        - SDK
+        - Skills
+        - Docs / other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps, commands, or tool calls.
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Package version, release tag, or commit SHA if known.
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, MCP client (Cursor, Claude, etc.), relevant config (no secrets).
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      description: Paste relevant errors. Redact tokens and credentials.
+      render: shell
+    validations:
+      required: false

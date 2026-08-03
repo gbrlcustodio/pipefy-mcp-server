@@ -36,6 +36,8 @@ Logs, usage, and job exports for automations live in [skills/observability/pipef
 
 ## AI automations (prompt-driven)
 
+**Consent:** create or suggest an AI automation only when the user explicitly asked for AI. If it seems useful but was not requested, ask first — never introduce AI automations without being asked.
+
 | Tool (MCP) | CLI | Purpose |
 |------------|-----|---------|
 | `get_ai_automations` | `pipefy ai-automation list` | List AI automations for a pipe. |
@@ -79,8 +81,9 @@ Logs, usage, and job exports for automations live in [skills/observability/pipef
 
 1. **Discover events** for the pipe: `get_automation_events pipe_id=67890`.
 2. **Discover actions** for the pipe: `get_automation_actions pipe_id=67890`. (Always discover first; never guess `trigger_id` / `action_id`.)
-3. **Build the rule** with the discovered IDs and call `create_automation`.
-4. **Verify** by reading back with `get_automation`.
+3. **Confirm event×action compatibility** — the chosen `event_id` must appear in the action's `triggerEvents` (from `get_automation_actions`). If it does not, pick another pair; do not call `create_automation` yet. See [Event×action compatibility](#eventaction-compatibility).
+4. **Build the rule** with the discovered IDs and call `create_automation`.
+5. **Verify** by reading back with `get_automation`.
 
 ---
 
@@ -167,6 +170,12 @@ Use when the user wants an if/then rule to **stamp or copy values** onto the tri
 
 ## Traditional automation preflight
 
+### Event×action compatibility
+
+Before `create_automation`, confirm the chosen `event_id` is listed in that action's `triggerEvents` from `get_automation_actions` (cross-check with `get_automation_events` as needed). The API may still accept some incompatible pairs; those rules never fire.
+
+**Known dead combo:** `field_updated` + `move_single_card` — create can succeed and the rule never executes. Do not use this pairing; pick a compatible event (for example `card_moved` when the action is a move) or a different action for field-update triggers.
+
 ### `field_map` destination `fieldId`
 
 On `create_automation`, when `extra_input.action_params.field_map` is present, the SDK checks each `fieldId` against numeric `internal_id` values on the action pipe (`action_repo_id`, default `pipe_id`). Slug-shaped `fieldId` values and unknown numeric ids fail before GraphQL with `success: false` and the offending id. Recovery: `get_start_form_fields` / `get_phase_fields` → use `internal_id`, not slug.
@@ -218,6 +227,16 @@ Use this pattern for approvals, financial decisions, content publication, and an
 
 ## Failure modes
 
+### Automation did not fire / empty logs
+
+1. `get_automation` — re-read the rule and its `condition`.
+2. Re-check event×action: `event_id` must be in the action's `triggerEvents` (see [Event×action compatibility](#eventaction-compatibility)); known dead pairs never run even when create succeeded.
+3. Empty logs are not proof of a platform outage — the rule may be dormant, inactive, or incompatible.
+4. Invalid `fieldId` in `field_map` may fail without updating the card (see below).
+5. Read the tool error payload and required-field / phase-transition hints **before** concluding "MCP down" or blaming the platform.
+
+### Other failure modes
+
 - **`simulate_automation` is AI-only.** Only `generate_with_ai` `action_id` accepted. For traditional rules, use `get_automation_logs` after the rule fires.
 - **Async simulation result.** `simulate_automation` returns `simulation_id` + `status:"processing"` + null `simulationResult`; no polling tool in v0.1. Wait, then call `get_automation_logs` or re-invoke `simulate_automation`.
 - **`validate_ai_automation_prompt` returns `valid:false`.** Read `problems` (per-field) and `warnings`. Most common: prompt missing `%{internal_id}` reference, or `field_ids` overlap with prompt `%{id}` tokens.
@@ -239,6 +258,7 @@ Use this pattern for approvals, financial decisions, content publication, and an
 
 ## See also
 
+- [skills/building/pipefy-building/SKILL.md](../../building/pipefy-building/SKILL.md) — intent → domain skill router for build asks.
 - [skills/ai-agents/pipefy-ai-agents/SKILL.md](../../ai-agents/pipefy-ai-agents/SKILL.md) — conversational agents with behaviors (different from AI automations).
 - [skills/observability/pipefy-observability/SKILL.md](../../observability/pipefy-observability/SKILL.md) — execution logs and usage stats.
 - [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — discover trigger and action types via raw schema.

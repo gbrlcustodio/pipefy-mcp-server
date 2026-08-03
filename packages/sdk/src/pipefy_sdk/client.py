@@ -104,7 +104,7 @@ from pipefy_sdk.services.types import (
 from pipefy_sdk.services.user_service import UserService
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
-from pipefy_sdk.telemetry import ClientSurface, telemetry_headers
+from pipefy_sdk.telemetry import ClientDeployment, ClientSurface, telemetry_headers
 
 
 @dataclass(frozen=True)
@@ -131,21 +131,30 @@ class PipefyEndpoints:
 
 
 def build_endpoints(
-    settings: PipefySettings, *, surface: ClientSurface = "sdk"
+    settings: PipefySettings,
+    *,
+    surface: ClientSurface = "sdk",
+    deployment: ClientDeployment | None = None,
 ) -> PipefyEndpoints:
     """Build one auth-less endpoint per Pipefy API endpoint from ``settings``.
 
     This is the seam that resolves each endpoint URL from settings; the endpoints
     take a ready URL and stay agnostic to endpoint topology and to identity.
 
-    The client telemetry headers are resolved once here from ``surface`` and the
-    package version, then shared by all three endpoints: every endpoint targets a
-    Pipefy API host, so each carries the same surface/version stamp. ``surface`` is
-    the caller's identity (the MCP server passes ``mcp``, the CLI ``cli``); direct
-    SDK use keeps the ``sdk`` default.
+    The client telemetry headers are resolved once here from ``surface``,
+    ``deployment``, and the package version, then shared by all three endpoints:
+    every endpoint targets a Pipefy API host, so each carries the same stamp.
+    ``surface`` is the caller's entry point (the MCP server passes ``mcp``, the CLI
+    ``cli``); direct SDK use keeps the ``sdk`` default. ``deployment`` says where
+    that entry point runs and is passed only by a surface that can run in more than
+    one place (the MCP server passes ``hosted`` under the remote profile and
+    ``local`` otherwise); omitting it leaves the headers as they were before the
+    deployment axis existed.
     """
     cache_schema = settings.gql_reuse_fetched_graphql_schema
-    headers = telemetry_headers(surface=surface, version=__version__)
+    headers = telemetry_headers(
+        surface=surface, version=__version__, deployment=deployment
+    )
     return PipefyEndpoints(
         public=GraphQLEndpoint(
             url=settings.graphql_url, cache_schema=cache_schema, headers=headers
@@ -177,7 +186,11 @@ def _bind(endpoints: PipefyEndpoints, auth: Auth) -> Executors:
 
 
 def build_executors(
-    settings: PipefySettings, auth: Auth, *, surface: ClientSurface = "sdk"
+    settings: PipefySettings,
+    auth: Auth,
+    *,
+    surface: ClientSurface = "sdk",
+    deployment: ClientDeployment | None = None,
 ) -> Executors:
     """Build shared endpoints and bind ``auth`` to them in one step.
 
@@ -185,7 +198,9 @@ def build_executors(
     the endpoints from ``settings`` and binds them to a single ``auth``. Callers
     that want the endpoints once and many identities later use the engine instead.
     """
-    return _bind(build_endpoints(settings, surface=surface), auth)
+    return _bind(
+        build_endpoints(settings, surface=surface, deployment=deployment), auth
+    )
 
 
 @dataclass(frozen=True)
@@ -206,10 +221,16 @@ class PipefyEngine:
 
     @classmethod
     def build(
-        cls, settings: PipefySettings, *, surface: ClientSurface = "sdk"
+        cls,
+        settings: PipefySettings,
+        *,
+        surface: ClientSurface = "sdk",
+        deployment: ClientDeployment | None = None,
     ) -> PipefyEngine:
         """Build the shared endpoints from ``settings`` and hold both."""
-        return cls(build_endpoints(settings, surface=surface), settings)
+        return cls(
+            build_endpoints(settings, surface=surface, deployment=deployment), settings
+        )
 
     def session(self, auth: Auth) -> PipefyClient:
         """Bind ``auth`` to the shared endpoints and return an operation surface."""
@@ -232,6 +253,7 @@ class PipefyClient:
         *,
         auth: Auth,
         surface: ClientSurface = "sdk",
+        deployment: ClientDeployment | None = None,
     ) -> None:
         """Build a facade wired with a pre-constructed ``httpx.Auth``.
 
@@ -246,8 +268,15 @@ class PipefyClient:
             surface: Client surface stamped into the telemetry headers. The
                 composition root passes its own (``mcp``/``cli``); direct SDK use
                 keeps the ``sdk`` default.
+            deployment: Where that surface runs (``local``/``hosted``), stamped into
+                the telemetry headers beside it. Only a surface that can run in more
+                than one place passes it; left unset, the headers keep their
+                pre-deployment-axis shape.
         """
-        self._wire(build_executors(settings, auth, surface=surface), settings)
+        self._wire(
+            build_executors(settings, auth, surface=surface, deployment=deployment),
+            settings,
+        )
 
     @classmethod
     def from_executors(

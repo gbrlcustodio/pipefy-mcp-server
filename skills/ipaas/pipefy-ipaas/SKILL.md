@@ -17,6 +17,7 @@ Pipefy's embedded workflow-automation platform. A **flow** is a trigger plus a s
 ## When to use
 
 - "Integrate with Slack / Gmail / Google Sheets / an external app."
+- User says **"integração"** / **"integrar com X"** (or similar) meaning connect Pipefy to an external system — use iPaaS tools here, not traditional automations or AI agents by default.
 - "When a webhook comes in, do X." "On a schedule, do Y."
 - "Build a multi-step flow with a router / loop / code step."
 - Managing iPaaS data tables (separate from Pipefy database tables).

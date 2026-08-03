@@ -1,7 +1,7 @@
 <div align="center">
   <img
     src="docs/images/pipefy-developers-banner.png"
-    alt="Pipefy Developers — Where developers orchestrate intelligence"
+    alt="Pipefy Developers — AI Toolkit (MCP Server, Pipefy CLI, GraphQL SDK, Agent Skills)"
     width="100%"
   />
 </div>

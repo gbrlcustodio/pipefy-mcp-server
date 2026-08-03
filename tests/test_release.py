@@ -214,7 +214,7 @@ def test_alpha_target_is_ahead_of_a_released_beta() -> None:
     # sorts above main's already-released beta rather than below it.
     assert _release._target_ahead_of_main("0.5.0-alpha.1", "0.4.0-beta.2")
     # And an alpha on the same core as that beta does not -- PEP 440 puts
-    # 0.4.0a1 below 0.4.0b2, which is why `alpha` guards on this.
+    # 0.4.0a1 below 0.4.0b2, which is why the release flows guard on this.
     assert not _release._target_ahead_of_main("0.4.0-alpha.1", "0.4.0-beta.2")
 
 
@@ -264,7 +264,7 @@ def test_tag_and_publish_refuses_a_track_branch_mismatch(monkeypatch) -> None:
 def test_release_pr_refuses_an_alpha_target(bump: str, monkeypatch) -> None:
     # On an alpha line, `prerelease` computes the next alpha. Without this gate
     # release_pr would stamp `## [Unreleased]` into an alpha heading and aim the
-    # commit at main -- breaking the contract that only `alpha` cuts alphas.
+    # commit at main -- breaking the contract that only `alpha-pr` cuts alphas.
     monkeypatch.setattr(_release, "working_tree_clean", lambda: True)
     monkeypatch.setattr(_release, "run", lambda *a, **k: None)
     monkeypatch.setattr(_release, "_dev_unreleased_body", lambda: "- a thing")

@@ -27,7 +27,7 @@ If the user already has a building skill or a detailed build prompt/spec, use th
 | Pipes, phases, fields, labels, cards, field conditions | [pipefy-pipes-and-cards](../../pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) |
 | Traditional or AI automations (if/then, prompt-driven rules) | [pipefy-automations](../../automations/pipefy-automations/SKILL.md) |
 | Conversational AI agents and behaviors | [pipefy-ai-agents](../../ai-agents/pipefy-ai-agents/SKILL.md) |
-| External integration / "integração" / "integrar com X" / Slack, Gmail, Sheets flows | [pipefy-ipaas](../../ipaas/pipefy-ipaas/SKILL.md) |
+| External integration / integrate with Slack, Gmail, Sheets, or another app | [pipefy-ipaas](../../ipaas/pipefy-ipaas/SKILL.md) |
 | Portals, pages, elements, sub-portals | [pipefy-portal-setup](../../portal-setup/pipefy-portal-setup/SKILL.md) |
 | Members, email templates, inbox email, webhooks | [pipefy-members-email-webhooks](../../members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) |
 | Database tables and records | [pipefy-database-tables](../../database-tables/pipefy-database-tables/SKILL.md) |

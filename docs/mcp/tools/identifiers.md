@@ -60,7 +60,14 @@ A field is addressed by **slug** for one-off card edits, and by **internal_id** 
 
 ### Pipes and cards
 - `get_pipe` / `get_card` / `create_card` / `move_card_to_phase`: numeric ids (`pipe_id`, `card_id`, `destination_phase_id`).
+- `phase_id` / `destination_phase_id`: numeric phase ids on every phase-scoped tool (`get_phase_fields`, `get_phase_cards`, `create_phase_field`, `update_phase`, `delete_phase`, `move_card_to_phase`, `create_card`, field conditions, …). Discover via `get_pipe` → `phases[].id` for workflow phases, or `get_pipe` → `startFormPhaseId` when the tool needs the start form (e.g. `get_phase_cards` / `get_phase_cards_count`).
+- Labels: `label_id` / `label_ids` (on update/delete/`update_card`) are numeric. Discover via `get_labels` or `get_pipe` → `labels[].id`.
 - Field references: see [Field references](#field-references-slug-vs-internal_id) above.
+
+### Members, email, webhooks
+- Members: `invite_members` addresses by **email** + `role_name` (not by id). `set_role(member_id)` and `remove_member_from_pipe(user_ids)` take the **user** id — `member_id` is that user id despite the name. Prefer numeric `user.id` from `get_pipe_members`; remove also accepts a user UUID.
+- Email templates: `get_email_templates(repo_id)` — `repo_id` is a numeric **pipe or table** id (not an org id). `email_template_id` is numeric; discover via `get_email_templates`.
+- Webhooks: `webhook_id` is numeric; discover via `get_webhooks(pipe_id)` → `id`.
 
 ### AI agents and knowledge bases
 - AI agent tools scope by `repo_uuid` (pipe **UUID**); the agent itself is addressed by its own `uuid`.

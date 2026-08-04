@@ -26,7 +26,7 @@ dev = [
     "pipefy-cli",
     "pipefy-auth",
     "pipefy-infra",
-    "aiohttp>=3.11.16",
+    "aiohttp>=3.14.3",
     "import-linter>=2.1",
     "packaging>=24",
     "pytest>=8.3.5",

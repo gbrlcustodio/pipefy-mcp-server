@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **AI agents (active lifecycle)**: create can start inactive (`create_ai_agent(active=false)` / `pipefy agent create --inactive`) by sending `disabledAt` on create and the chained update so the second step does not revive; routine update preserves `disabledAt` (use `toggle_ai_agent_status` / `pipefy agent toggle` to activate or deactivate); create/update success payloads expose `disabled_at` and `active`. Skills document the contract. (#520)
+
 ### Added
 
 - **Skills**: thin `pipefy-building` router (`skills/building/pipefy-building/`) maps build/configure intent to the correct domain skill; catalog and authoring domain list include `building`. Consulting-only `pipefy-process-design` links execution asks to the router instead of growing a delivery playbook.

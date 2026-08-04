@@ -129,28 +129,50 @@ def build_update_automation_success(
     return {"success": True, "automation_id": automation_id, "message": message}
 
 
-def build_create_agent_success(*, agent_uuid: str, message: str) -> dict[str, Any]:
+def build_create_agent_success(
+    *,
+    agent_uuid: str,
+    message: str,
+    disabled_at: str | None = None,
+) -> dict[str, Any]:
     """Successful AI agent create.
 
     Args:
         agent_uuid: New agent UUID from the API.
         message: Short summary for the client.
+        disabled_at: ISO-8601 disable timestamp from the API, or None when active.
     """
+    data = {
+        "agent_uuid": agent_uuid,
+        "disabled_at": disabled_at,
+        "active": disabled_at is None,
+    }
     if is_unified_envelope_enabled():
-        return tool_success(data={"agent_uuid": agent_uuid}, message=message)
-    return {"success": True, "agent_uuid": agent_uuid, "message": message}
+        return tool_success(data=data, message=message)
+    return {"success": True, "message": message, **data}
 
 
-def build_update_agent_success(*, agent_uuid: str, message: str) -> dict[str, Any]:
+def build_update_agent_success(
+    *,
+    agent_uuid: str,
+    message: str,
+    disabled_at: str | None = None,
+) -> dict[str, Any]:
     """Successful AI agent update.
 
     Args:
         agent_uuid: Target agent UUID.
         message: Short summary for the client.
+        disabled_at: ISO-8601 disable timestamp from the API, or None when active.
     """
+    data = {
+        "agent_uuid": agent_uuid,
+        "disabled_at": disabled_at,
+        "active": disabled_at is None,
+    }
     if is_unified_envelope_enabled():
-        return tool_success(data={"agent_uuid": agent_uuid}, message=message)
-    return {"success": True, "agent_uuid": agent_uuid, "message": message}
+        return tool_success(data=data, message=message)
+    return {"success": True, "message": message, **data}
 
 
 def build_toggle_agent_status_success(*, message: str) -> dict[str, Any]:

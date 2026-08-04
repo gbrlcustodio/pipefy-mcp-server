@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
@@ -164,6 +166,7 @@ class AiAgentTools:
             instruction: str,
             behaviors: list[dict],
             data_source_ids: list[str] | None = None,
+            active: bool = True,
         ) -> dict:
             """Create an AI Agent and configure it in one call (GraphQL create + update).
 
@@ -173,6 +176,13 @@ class AiAgentTools:
 
             Each behavior must also include ``actionParams.aiBehaviorParams.actionsAttributes`` with
             at least one action; otherwise the API rejects the update.
+
+            Active lifecycle: default ``active=True`` creates an enabled agent. The chained
+            configure update omits ``disabledAt`` so the API clears its default disabled shell.
+            Pass ``active=False`` to create inactive (sets ``disabled_at`` on create and the
+            chained update so the second step does not revive). Confirm status from the
+            response ``disabled_at`` / ``active`` fields - no extra get required. To change
+            status later, use ``toggle_ai_agent_status`` (not ``update_ai_agent``).
 
             Discovery workflow (call these tools first):
               1. ``get_pipe(pipe_id)`` → obtain ``uuid`` (use as ``repo_uuid``) and phase IDs.
@@ -287,12 +297,14 @@ class AiAgentTools:
                     Discover via: ``get_automation_events(pipe_id)`` for ``event_id`` and
                     ``get_phase_fields(phase_id)`` for ``triggerFieldIds`` / ``destinationPhaseId``.
                 data_source_ids: Optional knowledge-source IDs (same as ``update_ai_agent``).
+                active: When True (default), create enabled. When False, create inactive by
+                    setting ``disabled_at`` (ISO-8601 UTC) on create and the chained update.
             """
             client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"create_ai_agent: name={name}, repo_uuid={repo_uuid}, "
                 f"instruction_len={len(instruction)}, behaviors_count={len(behaviors)}, "
-                f"data_source_ids={data_source_ids!r}"
+                f"data_source_ids={data_source_ids!r}, active={active}"
             )
             if not name or not name.strip():
                 return build_ai_tool_error("name must not be blank")
@@ -305,6 +317,7 @@ class AiAgentTools:
                 behaviors_expanded = expand_behaviors_placeholders(behaviors)
             except ValueError as exc:
                 return build_ai_tool_error(str(exc))
+            disabled_at = None if active else datetime.now(timezone.utc).isoformat()
             try:
                 validated = CreateAiAgentInput(
                     name=name,
@@ -312,6 +325,7 @@ class AiAgentTools:
                     instruction=instruction,
                     behaviors=behaviors_expanded,
                     data_source_ids=data_source_ids or [],
+                    disabled_at=disabled_at,
                 )
             except ValidationError as exc:
                 return build_ai_tool_error(str(exc))
@@ -335,9 +349,11 @@ class AiAgentTools:
                 instruction=validated.instruction,
                 behaviors=validated.behaviors,
                 data_source_ids=validated.data_source_ids,
+                disabled_at=validated.disabled_at,
+                preserve_disabled_at=not active,
             )
             try:
-                await client.update_ai_agent(update_input)
+                update_result = await client.update_ai_agent(update_input)
             except Exception as exc:  # noqa: BLE001
                 try:
                     resolved = await resolve_and_populate_field_refs(
@@ -359,7 +375,11 @@ class AiAgentTools:
                 )
 
             msg = f"AI Agent created and configured successfully. UUID: {agent_uuid}"
-            return build_create_agent_success(agent_uuid=agent_uuid, message=msg)
+            return build_create_agent_success(
+                agent_uuid=agent_uuid,
+                message=msg,
+                disabled_at=update_result.get("disabled_at"),
+            )
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
@@ -380,6 +400,11 @@ class AiAgentTools:
             Each behavior must include ``actionParams.aiBehaviorParams.actionsAttributes`` with at least
             one action (same constraint and shape as ``create_ai_agent`` — see its docstring for the
             full behavior dict example, discovery workflow, and constraints).
+
+            Active lifecycle: a routine update never reactivates (or deactivates) the agent.
+            ``disabled_at`` is preserved by the SDK when omitted. Use ``toggle_ai_agent_status``
+            to activate or deactivate. Confirm status from the response ``disabled_at`` /
+            ``active`` fields.
 
             To modify an existing agent: call ``get_ai_agent`` first, edit the returned config,
             and send the full payload back. The server replaces ``referenceId`` and appends
@@ -480,6 +505,7 @@ class AiAgentTools:
             return build_update_agent_success(
                 agent_uuid=result["agent_uuid"],
                 message=result["message"],
+                disabled_at=result.get("disabled_at"),
             )
 
         @mcp.tool(
@@ -491,10 +517,12 @@ class AiAgentTools:
             uuid: str,
             active: bool,
         ) -> dict:
-            """Enable or disable an AI Agent.
+            """Enable or disable an AI Agent (explicit activation path).
 
             Set active=true to activate or active=false to deactivate.
             Does not require resending the agent configuration.
+            Use this tool to change active status; ``update_ai_agent`` never
+            reactivates or deactivates an agent.
 
             Args:
                 uuid: UUID of the agent to enable/disable.

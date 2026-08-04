@@ -52,11 +52,17 @@ def test_build_create_agent_success_parametrized_flag(envelope_flag):
     if envelope_flag:
         assert out == {
             "success": True,
-            "data": {"agent_uuid": "abc"},
+            "data": {"agent_uuid": "abc", "disabled_at": None, "active": True},
             "message": "ok",
         }
     else:
-        assert out == {"success": True, "agent_uuid": "abc", "message": "ok"}
+        assert out == {
+            "success": True,
+            "agent_uuid": "abc",
+            "disabled_at": None,
+            "active": True,
+            "message": "ok",
+        }
 
 
 @pytest.mark.unit
@@ -65,11 +71,17 @@ def test_build_update_agent_success_parametrized_flag(envelope_flag):
     if envelope_flag:
         assert out == {
             "success": True,
-            "data": {"agent_uuid": "u1"},
+            "data": {"agent_uuid": "u1", "disabled_at": None, "active": True},
             "message": "updated",
         }
     else:
-        assert out == {"success": True, "agent_uuid": "u1", "message": "updated"}
+        assert out == {
+            "success": True,
+            "agent_uuid": "u1",
+            "disabled_at": None,
+            "active": True,
+            "message": "updated",
+        }
 
 
 @pytest.mark.unit

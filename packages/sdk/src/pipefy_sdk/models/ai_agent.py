@@ -405,7 +405,7 @@ class BehaviorInput(BaseModel):
 
 
 class CreateAiAgentInput(BaseModel):
-    """Validated input for create-and-configure flow: create mutation uses name and repo_uuid only."""
+    """Validated input for create-and-configure: name/repo_uuid plus optional disabled_at for inactive create."""
 
     name: NonBlankStr
     repo_uuid: NonBlankStr
@@ -416,10 +416,18 @@ class CreateAiAgentInput(BaseModel):
         description="List of behaviors (1 to MAX_BEHAVIORS)",
     )
     data_source_ids: list[str] = Field(default_factory=list)
+    disabled_at: str | None = None
 
 
 class UpdateAiAgentInput(BaseModel):
-    """Validated input for updating an AI Agent."""
+    """Validated input for updating an AI Agent.
+
+    When ``preserve_disabled_at`` is True (default) and ``disabled_at`` is None,
+    the adapter fetches the current agent and re-sends ``disabledAt`` if set
+    (routine update must not clear a disabled agent). When False and
+    ``disabled_at`` is None, ``disabledAt`` is omitted from the payload so the
+    API can clear/activate (used by the create-active configure chain).
+    """
 
     uuid: NonBlankStr
     name: NonBlankStr
@@ -431,3 +439,5 @@ class UpdateAiAgentInput(BaseModel):
     )
     instruction: str | None = None
     data_source_ids: list[str] = Field(default_factory=list)
+    disabled_at: str | None = None
+    preserve_disabled_at: bool = True

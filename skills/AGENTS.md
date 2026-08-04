@@ -1,6 +1,6 @@
 # Skills — Authoring Guide
 
-This document defines how to author, name, and maintain skills in the `pipefy-labs` monorepo.
+This document defines how to author, name, and maintain skills in the `ai-toolkit` monorepo.
 
 ---
 
@@ -14,15 +14,24 @@ A skill is a single Markdown file (`SKILL.md`) with YAML frontmatter and a struc
 
 ```
 skills/
+  _template/            ← copyable starter (not in the catalog; skipped by CI lint)
+    README.md
+    pipefy-skill-template/
+      SKILL.md
   <domain>/
     <skill-name>/
       SKILL.md          ← the skill file
+      COMPLIANCE.md     ← required for regulated-domain / blueprint skills
   AGENTS.md             ← this file
   README.md             ← catalog index
 ```
 
 **Domain folders** match the MCP tool surface:
 `pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ipaas`, `ai-agents`, `observability`, `members-email-webhooks`, `portal-setup`, `attachments`, `introspection`, `building`, `process-design`, `process-intelligence`, `api-troubleshoot`, `onboarding`
+
+Regulated domains (`legal`, `human-resources`, `finance`, `compliance`, or any skill involving decisions about natural persons) require substantive Legal review and a filled `COMPLIANCE.md` (start from [`docs/compliance/COMPLIANCE.template.md`](../docs/compliance/COMPLIANCE.template.md)). See [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+
+To start a new skill, copy [`_template/pipefy-skill-template/`](_template/pipefy-skill-template/) (see [`_template/README.md`](_template/README.md)). The inline skeleton below matches that file.
 
 ---
 

@@ -20,7 +20,7 @@ The single biggest source of wrong-id errors: the same pipe is addressed by five
 | Argument | Form | Where |
 | --- | --- | --- |
 | `pipe_id` | numeric id | pipes/cards, automations, relations, most tools |
-| `repo_id` | numeric id (string) | observability automation-by-repo logs (`get_automation_logs_by_repo`) |
+| `repo_id` | numeric id (string) | pipe or table id: email templates (`get_email_templates`), observability automation-by-repo logs (`get_automation_logs_by_repo`), optional scope on `get_automation_execution_metrics` |
 | `source_repo_id` | numeric id | knowledge-base data lookups (a UUID is accepted on create but breaks at index time — use the numeric id) |
 | `repo_uuid` | **uuid** | AI agents (`get_ai_agents`, `create_ai_agent`, …), AI agent logs |
 | `pipe_uuid` | **uuid** | knowledge-base tools; pipe report **reads** (`get_pipe_report*`) — report create/update use numeric `pipe_id` |
@@ -59,7 +59,7 @@ A field is addressed by **slug** for one-off card edits, and by **internal_id** 
 ## Per-area quick reference
 
 ### Pipes and cards
-- `get_pipe` / `get_card` / `create_card` / `move_card_to_phase`: numeric ids (`pipe_id`, `card_id`, `destination_phase_id`).
+- `get_pipe` / `get_card` / `create_card` / `move_card_to_phase`: numeric ids (`pipe_id`, `card_id`).
 - `phase_id` / `destination_phase_id`: numeric phase ids on every phase-scoped tool (`get_phase_fields`, `get_phase_cards`, `create_phase_field`, `update_phase`, `delete_phase`, `move_card_to_phase`, `create_card`, field conditions, …). Discover via `get_pipe` → `phases[].id` for workflow phases, or `get_pipe` → `startFormPhaseId` when the tool needs the start form (e.g. `get_phase_cards` / `get_phase_cards_count`).
 - Labels: `label_id` / `label_ids` (on update/delete/`update_card`) are numeric. Discover via `get_labels` or `get_pipe` → `labels[].id`.
 - Field references: see [Field references](#field-references-slug-vs-internal_id) above.

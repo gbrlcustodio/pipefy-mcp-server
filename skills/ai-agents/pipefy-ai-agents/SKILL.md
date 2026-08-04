@@ -40,7 +40,7 @@ Execution logs live in [skills/observability/](../../observability/pipefy-observ
 - Agents are **active by default**. Create-active clears the API default disabled shell via the configure update (omits `disabledAt`). Create-inactive (`active=false` / `--inactive`) sets `disabled_at` explicitly on create and the chained update.
 - Routine `update_ai_agent` / `pipefy agent update` **preserves** disabled state — it does not reactivate.
 - Explicit activate/deactivate: `toggle_ai_agent_status` / `pipefy agent toggle` (`--active` / `--inactive`).
-- After create/update, confirm status from the response `disabled_at` / `active` fields (or re-read via `get_ai_agent` / `pipefy agent get`). Never assume inactive without that confirmation.
+- After create/update, confirm status from the response `disabled_at` / `active` fields when present. To re-read via `get_ai_agent` / `pipefy agent get`, use agent `disabledAt` (null means active) — get does not expose write-envelope `disabled_at` / `active`, and `behaviors[].active` is not agent enablement. Never assume inactive without that confirmation.
 
 ---
 
@@ -192,7 +192,7 @@ Inside `actionParams.aiBehaviorParams` a behavior may also carry:
 
 `create_ai_agent` with `name`, `repo_uuid`, `instruction`, and `behaviors`. One-call creation is preferred — avoids partial agent shells. Agents are **active by default**; pass `active=false` (MCP) or `--inactive` (CLI) to start disabled (see [Active lifecycle](#active-lifecycle)).
 
-The **CLI** `agent create` / `agent update` require `--pipe` (numeric pipe id) and run `validate_ai_agent_behaviors` automatically as a pre-flight, blocking the write when `problems` are found and surfacing `warnings` under a `preflight` key. The MCP tools do **not** auto-preflight, so call `validate_ai_agent_behaviors` yourself (step 6) before `create_ai_agent` / `update_ai_agent`. CLI flags: `--repo-uuid`, `--name`, `--instruction`, `--behaviors` (JSON array), `--data-sources` (JSON array), `--active` / `--inactive`; `agent validate-behaviors` instead takes `--data-source-id` (repeatable).
+The **CLI** `agent create` / `agent update` require `--pipe` (numeric pipe id) and run `validate_ai_agent_behaviors` automatically as a pre-flight, blocking the write when `problems` are found and surfacing `warnings` under a `preflight` key. The MCP tools do **not** auto-preflight, so call `validate_ai_agent_behaviors` yourself (step 6) before `create_ai_agent` / `update_ai_agent`. CLI flags: `--repo-uuid`, `--name`, `--instruction`, `--behaviors` (JSON array), `--data-sources` (JSON array); create also: `--active` / `--inactive` (update has no status flags — use `agent toggle`); `agent validate-behaviors` instead takes `--data-source-id` (repeatable).
 
 On create/update, slug `fieldId` values are resolved to numeric `internal_id`, `%{field:<slug>}` is rewritten to `%{field:<internal_id>}`, and `referencedFieldIds` is auto-populated when applicable.
 
@@ -204,7 +204,7 @@ On create/update, slug `fieldId` values are resolved to numeric `internal_id`, `
 
 ### 9 — Verify
 
-`get_ai_agent(uuid)` to confirm behaviors match expectations **and** to re-read active status / `disabled_at` when the write response is unclear. Prefer the create/update response `disabled_at` / `active` fields when present; never assume inactive without that confirmation.
+`get_ai_agent(uuid)` to confirm behaviors match expectations **and**, when the write response is unclear, re-read agent enablement via `disabledAt` (null means active). Prefer create/update response `disabled_at` / `active` when present. Do not treat `behaviors[].active` as agent enablement; never assume inactive without confirmation.
 
 ---
 
@@ -311,7 +311,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
 
 ## Success criteria
 
-- Create/update response (or `get_ai_agent`) shows the expected `disabled_at` / `active` (active when `disabled_at` is null).
+- Create/update response shows the expected `disabled_at` / `active` (active when `disabled_at` is null). If confirming via `get_ai_agent`, use agent `disabledAt` (null means active) — not write-envelope keys and not `behaviors[].active`.
 - `validate_ai_agent_behaviors` reports no errors before creation.
 - Agent appears in the Pipefy UI under the pipe's AI settings.
 
@@ -319,7 +319,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
 
 - **`update_ai_agent` is full-replace, not patch.** Fetch existing behaviors with `get_ai_agent` first, merge, then update — otherwise existing behaviors are silently dropped. Update never reactivates a disabled agent — use `toggle_ai_agent_status` / `pipefy agent toggle` for that.
 - **Behavior save is all-or-nothing (`RECORD_NOT_SAVED`).** One invalid behavior rejects the entire list. The MCP tool auto-validates the payload on failure; if structurally correct, the error indicates a pipe-level restriction (not your payload). Inform the user this pipe does not support AI agent behaviors and suggest alternatives.
-- **Partial-failure recovery.** If `create_ai_agent` returns a UUID but reports failure, call `update_ai_agent(uuid, repo_uuid, name, instruction, behaviors)` — all five are required. Reuse the create `repo_uuid`; send the full behaviors list. Do NOT create a second agent.
+- **Partial-failure recovery.** If `create_ai_agent` returns a UUID but reports failure, call `update_ai_agent(uuid, repo_uuid, name, instruction, behaviors)` — all five are required. Reuse the create `repo_uuid`; send the full behaviors list. Do NOT create a second agent. Update preserves disabled state; use `toggle_ai_agent_status` / `pipefy agent toggle` to change enablement.
 - **Cross-pipe `PERMISSION_DENIED`.** Behaviors with `create_connected_card` or cross-pipe `create_card` require the service account to be a member of **both** source and destination pipes. When it is not, the API returns a bare `PERMISSION_DENIED`. Recovery: `get_pipe_members` + `invite_members` on the destination pipe.
 - **Phase transition rule on `move_card`.** Destination must be reachable from the source phase (`cards_can_be_moved_to_phases`). Both `validate_ai_agent_behaviors` and `create_ai_agent` / `update_ai_agent` enrich this error with `valid_destinations` and a hint that transition rules are editable in the Pipefy UI only.
 - **Maximum 5 behaviors per agent.** Adding a 6th rejects the whole save.

@@ -102,7 +102,11 @@ def _load_pipefy_tool_names() -> frozenset[str]:
 
 
 def _iter_skill_files(skills_root: Path) -> list[Path]:
-    return sorted(p for p in skills_root.rglob("SKILL.md") if p.is_file())
+    return sorted(
+        p
+        for p in skills_root.rglob("SKILL.md")
+        if p.is_file() and "_template" not in p.parts
+    )
 
 
 def _lint_file(path: Path, tool_names: frozenset[str]) -> list[str]:

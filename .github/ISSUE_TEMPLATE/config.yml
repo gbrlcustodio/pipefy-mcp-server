@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/pipefy/ai-toolkit/tree/main/docs
+    about: Product docs for MCP, CLI, and SDK.
+  - name: Contributing guide
+    url: https://github.com/pipefy/ai-toolkit/blob/main/CONTRIBUTING.md
+    about: How to contribute skills and follow project conventions.
+  - name: Email maintainers
+    url: mailto:dev@pipefy.com
+    about: Questions that do not fit a public issue.

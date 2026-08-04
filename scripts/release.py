@@ -330,6 +330,15 @@ def _target_ahead_of_main(target: str, main_version: str) -> bool:
     return Version(target) > Version(main_version)
 
 
+def _main_only_commit_count() -> int:
+    """How many commits ``origin/main`` carries that ``origin/dev`` does not."""
+    return int(
+        capture(
+            ["git", "rev-list", "--count", f"origin/{DEV_BRANCH}..origin/{MAIN_BRANCH}"]
+        )
+    )
+
+
 def _dev_unreleased_body() -> str:
     """The text under ``## [Unreleased]`` in ``origin/dev``'s CHANGELOG."""
     m = UNRELEASED_RE.search(_show_at(f"origin/{DEV_BRANCH}", "CHANGELOG.md"))
@@ -440,6 +449,19 @@ def release_pr(
             f"(v{main_version}); origin/{DEV_BRANCH} (v{current}) is behind "
             f"{MAIN_BRANCH}. Back-merge {MAIN_BRANCH} into {DEV_BRANCH} before "
             "cutting a release."
+        )
+
+    # The same staleness in the shape the version comparison cannot see: a commit
+    # merged straight into main without a bump. The released notes come from
+    # dev's `## [Unreleased]` alone, so the cut would stamp it out of them.
+    # Applies to an alpha too, which must stage what main already shipped.
+    behind = _main_only_commit_count()
+    if behind:
+        raise ReleaseError(
+            f"origin/{MAIN_BRANCH} has {behind} commit(s) not in "
+            f"origin/{DEV_BRANCH}; a cut from {DEV_BRANCH} would omit them. "
+            f"Back-merge {MAIN_BRANCH} into {DEV_BRANCH} before cutting a "
+            "release."
         )
 
     branch = f"rc-{base}/release/v{target}"

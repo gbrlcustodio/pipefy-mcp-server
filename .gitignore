@@ -51,6 +51,7 @@ RALPH_TASK.md
 scripts/*
 !scripts/bump_version.py
 !scripts/release.py
+!scripts/smoke_entry_points.py
 
 # macOS
 .DS_Store

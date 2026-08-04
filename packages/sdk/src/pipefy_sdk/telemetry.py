@@ -7,9 +7,15 @@ share one ``User-Agent`` format.
 from __future__ import annotations
 
 from pipefy_infra.telemetry import (
+    ClientDeployment,
     ClientSurface,
     telemetry_headers,
     telemetry_user_agent,
 )
 
-__all__ = ["ClientSurface", "telemetry_headers", "telemetry_user_agent"]
+__all__ = [
+    "ClientDeployment",
+    "ClientSurface",
+    "telemetry_headers",
+    "telemetry_user_agent",
+]

@@ -73,6 +73,8 @@ uv run python scripts/release.py release-pr patch
 
 It reads the current version and `## [Unreleased]` from `origin/dev` (not your checked-out branch), confirms the computed target, then opens the PR. After the PR is approved and merged into `main`, cut the release from `main` with `publish` (step 4 below) — deliberately a human step, so the tag push triggers the Release workflow. `release-pr` never tags or publishes.
 
+**Precondition: `origin/dev` must contain every commit on `origin/main`.** Because the cut branches off `dev` and the released notes come from `dev`'s `## [Unreleased]` alone, anything merged straight into `main` — a doc fix, a CI workflow — would be stamped out of the release notes. `release-pr` refuses with the count and the remedy before it creates or pushes anything, so a stale `dev` costs nothing to walk away from: back-merge `main` into `dev`, then re-run. `alpha-pr` enforces the same precondition, since a staging cut that is missing what `main` already shipped does not represent what will ship.
+
 ### The bump, step by step
 
 `release-pr` automates steps 1–2 below off `dev`; they are spelled out here because the bump argument and its guards are what you actually choose. Note that `main` and `dev` both require a pull request, so a locally-prepared commit can never be pushed to either — `prepare` gives you the commit, but it still reaches the branch through a PR.

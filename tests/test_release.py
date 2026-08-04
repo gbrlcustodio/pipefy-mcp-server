@@ -83,6 +83,15 @@ def test_target_ahead_of_main() -> None:
     assert not _release._target_ahead_of_main("0.3.0-beta.1", "0.3.0-beta.1")
 
 
+def test_main_only_commit_count_reads_the_rev_list_range(monkeypatch) -> None:
+    # The range must be dev..main: reversed, it would count dev's own work and
+    # block every release.
+    seen: list[list[str]] = []
+    monkeypatch.setattr(_release, "capture", lambda cmd: (seen.append(cmd), "2")[1])
+    assert _release._main_only_commit_count() == 2
+    assert seen == [["git", "rev-list", "--count", "origin/dev..origin/main"]]
+
+
 def test_release_pr_body_inlines_content() -> None:
     body = _release._release_pr_body(
         "0.3.0-beta.4", "0.3.0-beta.5", "### Added\n\n- a shipped thing"
@@ -288,6 +297,7 @@ def test_release_pr_still_allows_the_beta_promotion(monkeypatch) -> None:
         lambda ref: "0.5.0-alpha.3" if "dev" in ref else "0.4.0-beta.2",
     )
     monkeypatch.setattr(_release, "branch_exists", lambda b: False)
+    monkeypatch.setattr(_release, "_main_only_commit_count", lambda: 0)
     calls: list[list[str]] = []
     monkeypatch.setattr(_release, "run", lambda cmd, **k: calls.append(cmd))
     monkeypatch.setattr(_release, "capture", lambda cmd: "https://example/pr/1")
@@ -342,10 +352,33 @@ def _stub_release_pr_env(monkeypatch, dev: str, main: str) -> list[list[str]]:
         _release, "_version_at", lambda ref: dev if "dev" in ref else main
     )
     monkeypatch.setattr(_release, "branch_exists", lambda b: False)
+    monkeypatch.setattr(_release, "_main_only_commit_count", lambda: 0)
     monkeypatch.setattr(_release, "run", lambda cmd, **k: calls.append(cmd))
     monkeypatch.setattr(_release, "capture", lambda cmd: "https://example/pr/1")
     monkeypatch.setattr(_release, "_apply_prepare", lambda bump, target, **k: target)
     return calls
+
+
+def test_release_pr_refuses_when_main_has_commits_absent_from_dev(monkeypatch) -> None:
+    # The version guard passes here (dev's alpha sorts above main's beta), so
+    # this is the case only the commit count catches: work merged straight into
+    # main without a bump, whose notes the stamped section would omit.
+    calls = _stub_release_pr_env(monkeypatch, "0.5.0-alpha.3", "0.4.0-beta.2")
+    monkeypatch.setattr(_release, "_main_only_commit_count", lambda: 3)
+    with pytest.raises(_release.ReleaseError, match=r"has 3 commit\(s\) not in"):
+        _release.release_pr("beta", assume_yes=True)
+    # Nothing was created: the operator can walk away at no cost.
+    assert not [c for c in calls if c[:3] == ["git", "checkout", "-b"]]
+    assert not [c for c in calls if c[:2] == ["git", "push"]]
+
+
+def test_alpha_pr_refuses_when_main_has_commits_absent_from_dev(monkeypatch) -> None:
+    # alpha_pr delegates to release_pr, so the guard covers the staging cut too:
+    # an alpha missing what main already shipped does not represent what ships.
+    _stub_release_pr_env(monkeypatch, "0.5.0-alpha.3", "0.4.0-beta.2")
+    monkeypatch.setattr(_release, "_main_only_commit_count", lambda: 1)
+    with pytest.raises(_release.ReleaseError, match=r"has 1 commit\(s\) not in"):
+        _release.alpha_pr("prerelease", assume_yes=True)
 
 
 def test_alpha_pr_targets_dev_and_does_not_stamp(monkeypatch) -> None:

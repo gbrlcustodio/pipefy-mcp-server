@@ -37,6 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Installer**: `install.sh` resolves the newest GitHub Release whose tag is **not** an alpha, so a staging alpha published from `dev` never becomes what a default `curl … | sh` install hands out; the public install path stays on the beta line. Alphas are also flagged as GitHub pre-releases, keeping the "Latest" badge on the newest beta. Filtering is by tag shape rather than the API's `prerelease` flag, because the whole pre-1.0 line is betas that must stay installable. `install.sh --version vX.Y.Z-alpha.N` still installs an alpha on purpose.
 
+### Fixed
+
+- **Release process**: `release-pr` (and `alpha-pr`, which delegates to it) now refuses to cut when `origin/main` carries commits absent from `origin/dev`, naming the count and prescribing the back-merge. The existing staleness guard compared version strings, so it only saw divergence that moved the version; work merged straight into `main` without a bump — a doc fix, a CI workflow — passed it unnoticed. Since the cut branches off `dev` and the released notes come from `dev`'s `## [Unreleased]` alone, those entries were stamped out of the release section and left orphaned under `## [Unreleased]` on `main`, and the resulting tag covered a combination only ever exercised by the PR merge check. The new guard runs before the branch is created, so a stale `dev` costs nothing to walk away from. `prepare` is unaffected: it runs on `main` and stamps `main`'s own section, never consulting `dev`. Closes #528.
+
 ## [0.4.0-beta.2] - 2026-07-29
 
 ### Added

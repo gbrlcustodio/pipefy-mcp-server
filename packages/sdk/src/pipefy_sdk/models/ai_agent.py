@@ -416,7 +416,7 @@ class CreateAiAgentInput(BaseModel):
         description="List of behaviors (1 to MAX_BEHAVIORS)",
     )
     data_source_ids: list[str] = Field(default_factory=list)
-    disabled_at: str | None = None
+    disabled_at: NonBlankStr | None = None
 
 
 class UpdateAiAgentInput(BaseModel):
@@ -440,5 +440,5 @@ class UpdateAiAgentInput(BaseModel):
     )
     instruction: str | None = None
     data_source_ids: list[str] = Field(default_factory=list)
-    disabled_at: str | None = None
+    disabled_at: NonBlankStr | None = None
     preserve_disabled_at: bool = True

@@ -178,8 +178,7 @@ jobs:
           python -m venv .venv-pypi-smoke
           .venv-pypi-smoke/bin/python -m pip install --upgrade pip
           .venv-pypi-smoke/bin/pip install dist-pypi/*.whl
-          .venv-pypi-smoke/bin/pipefy --help
-          .venv-pypi-smoke/bin/pipefy-mcp-server --help
+          .venv-pypi-smoke/bin/python scripts/smoke_entry_points.py
       - name: Upload to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

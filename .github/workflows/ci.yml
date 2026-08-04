@@ -73,18 +73,19 @@ jobs:
       run: cd packages/mcp && uv run lint-imports
     - name: Build workspace wheels (packaging smoke)
       run: uv build --all-packages --wheel -o dist-packaging-smoke
-    # Mirrors the release workflow's smoke step. Both entry points are launched
-    # because this resolves dependencies from PyPI rather than uv.lock, so it is
-    # the only gate that sees an upstream release the lock pins us away from.
-    - name: Smoke install CLI and MCP wheels (clean venv)
+    # Resolves dependencies from PyPI rather than uv.lock, which is the only way
+    # to see an upstream release the lock pins us away from. This covers pushes
+    # and pull requests; packaging-smoke.yml runs the same check on a timer, for
+    # the window between them where no commit triggers anything at all.
+    - name: Smoke install workspace wheels (clean venv)
       run: |
+        # Membership is checked before the install, not after: an incomplete set
+        # is not an error for pip, which satisfies the absent member from the
+        # index through the sibling `==` pins. The smoke would then pass against
+        # a wheel this build never produced.
+        python scripts/smoke_entry_points.py --check-wheels dist-packaging-smoke
         python -m venv .venv-cli-smoke
-        .venv-cli-smoke/bin/pip install dist-packaging-smoke/pipefy_infra-*.whl \
-          dist-packaging-smoke/pipefy-*.whl \
-          dist-packaging-smoke/pipefy_auth-*.whl \
-          dist-packaging-smoke/pipefy_cli-*.whl \
-          dist-packaging-smoke/pipefy_mcp_server-*.whl
-        .venv-cli-smoke/bin/pipefy --help
-        .venv-cli-smoke/bin/pipefy-mcp-server --help
+        .venv-cli-smoke/bin/pip install dist-packaging-smoke/*.whl
+        .venv-cli-smoke/bin/python scripts/smoke_entry_points.py
     - name: Run tests
       run: uv run pytest -m "not integration"

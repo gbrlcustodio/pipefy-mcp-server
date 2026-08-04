@@ -97,6 +97,10 @@ Usage: pipefy agent create [OPTIONS]
  Create and configure an AI agent (``create_ai_agent`` + ``update_ai_agent``
  chain).
 
+ Agents are active by default. Pass ``--inactive`` to start disabled. Confirm
+ status from the response ``disabled_at`` / ``active`` fields. To change status
+ later, use ``pipefy agent toggle`` (routine update preserves disabled state).
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --repo-uuid                        TEXT  Pipe UUID. [required]            │
 │ *  --name          -n                 TEXT  Agent display name. [required]   │
@@ -110,6 +114,12 @@ Usage: pipefy agent create [OPTIONS]
 │                                             [required]                       │
 │    --data-sources                     TEXT  Optional JSON array of           │
 │                                             knowledge-source id strings.     │
+│    --active            --inactive           Create enabled (default) or      │
+│                                             inactive. --inactive sets        │
+│                                             disabled_at on create and the    │
+│                                             chained update so the second     │
+│                                             step does not revive.            │
+│                                             [default: active]                │
 │    --strict            --no-strict          Pre-flight strictness: when      │
 │                                             --strict (default), unknown      │
 │                                             actionType values block; with    │
@@ -219,6 +229,10 @@ Usage: pipefy agent toggle [OPTIONS] UUID
 Usage: pipefy agent update [OPTIONS]
 
  Replace AI agent configuration (``update_ai_agent``).
+
+ Full-replace of behaviors; does not reactivate a disabled agent. Use ``pipefy
+ agent toggle`` to change active status. Confirm status from the response
+ ``disabled_at`` / ``active`` fields (or re-read via ``agent get``).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --uuid                             TEXT  Agent UUID. [required]           │

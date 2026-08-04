@@ -192,7 +192,8 @@ class MemberTools:
 
             Args:
                 pipe_id: ID of the pipe.
-                user_ids: List of user IDs to remove.
+                user_ids: User ids to remove. Prefer numeric ``user.id`` from
+                    ``get_pipe_members``; a user UUID is also accepted.
                 confirm: Set to True to execute the removal (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -264,7 +265,8 @@ class MemberTools:
 
             Args:
                 pipe_id: ID of the pipe.
-                member_id: User ID of the member.
+                member_id: User id of the member (not a membership row id).
+                    Discover via: ``get_pipe_members`` → ``user.id``.
                 role_name: New role name (e.g. 'member', 'admin').
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """

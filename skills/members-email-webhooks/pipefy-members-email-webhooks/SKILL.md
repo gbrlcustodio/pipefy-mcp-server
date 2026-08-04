@@ -18,10 +18,10 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 |------------|-----|-----------|---------|
 | `invite_members` | `pipefy member invite` | No | Invite one or more users by email + role. |
 | `add_service_account_to_pipe` | `pipefy member add-service-account` | No | Attach an existing org **service account** to a pipe by email + role (iPaaS setup). Verifies membership afterwards. |
-| `remove_member_from_pipe` | `pipefy member remove` | No | **Two-step destructive.** Warns on external emails. |
-| `set_role` | `pipefy member set-role` | No | Change a member's pipe role. |
+| `remove_member_from_pipe` | `pipefy member remove` | No | **Two-step destructive.** Verifies afterwards and warns if the member is still present (org-level permissions can override pipe removal). |
+| `set_role` | `pipefy member set-role` | No | Change a member's pipe role (`member_id` = user id). |
 
-List existing members with `get_pipe_members` from [skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md](../../pipes-and-cards/pipefy-pipes-and-cards/SKILL.md).
+List existing members with `get_pipe_members` from [skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md](../../pipes-and-cards/pipefy-pipes-and-cards/SKILL.md). Id forms: [`docs/mcp/tools/identifiers.md#members-email-webhooks`](../../../docs/mcp/tools/identifiers.md#members-email-webhooks).
 
 ### Steps — invite members
 
@@ -65,8 +65,8 @@ When setting up an iPaaS (Advanced Automations) flow that runs under a **service
 |------------|-----|-----------|---------|
 | `get_card_inbox_emails` | `pipefy email inbox list --card <id>` | Yes | Read emails in a card's inbox. |
 | `send_inbox_email` | `pipefy email inbox send` | No | Send an email from a card inbox. |
-| `get_email_templates` | `pipefy email template list --repo <id>` | Yes | List org-level email templates. |
-| `send_email_with_template` | `pipefy email template send` | No | Send using a template (substitutes variables). |
+| `get_email_templates` | `pipefy email template list --repo <id>` | Yes | List templates for a pipe or table (`repo_id` numeric). |
+| `send_email_with_template` | `pipefy email template send` | No | Send using a template (`email_template_id` from that list). |
 
 ### Steps — send a card inbox email
 

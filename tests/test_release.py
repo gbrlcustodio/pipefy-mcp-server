@@ -423,10 +423,8 @@ def test_alpha_pr_refuses_a_non_alpha_target(monkeypatch) -> None:
         _release.alpha_pr("beta", assume_yes=True)
 
 
-def test_tag_and_publish_never_pushes_the_branch(monkeypatch) -> None:
-    # Both release branches reject direct pushes (ruleset requires a PR), so the
-    # bump arrives via a merged PR and only the tag is ever pushed. A `git push
-    # origin <branch>` here would fail the release outright.
+def _stub_tag_and_publish_env(monkeypatch) -> list[list[str]]:
+    """Stub everything around ``_tag_and_publish``; return the recorded commands."""
     calls: list[list[str]] = []
     monkeypatch.setattr(_release, "current_branch", lambda: "dev")
     monkeypatch.setattr(_release, "run", lambda cmd, **k: calls.append(cmd))
@@ -437,6 +435,15 @@ def test_tag_and_publish_never_pushes_the_branch(monkeypatch) -> None:
     monkeypatch.setattr(_release, "watch_release_workflow", lambda t, **k: None)
     monkeypatch.setattr(_release, "verify", lambda t: None)
     monkeypatch.setattr(_release, "print_release_links", lambda t, v: None)
+    return calls
+
+
+def test_tag_and_publish_never_pushes_the_branch(monkeypatch) -> None:
+    # Both release branches reject direct pushes (ruleset requires a PR), so the
+    # bump arrives via a merged PR and only the tag is ever pushed. A `git push
+    # origin <branch>` here would fail the release outright.
+    calls = _stub_tag_and_publish_env(monkeypatch)
+    monkeypatch.setattr(_release, "smoke_build_and_install", lambda: None)
 
     _release._tag_and_publish("dev", "0.5.0-alpha.1", assume_yes=True)
 
@@ -472,3 +479,132 @@ def test_target_for_reports_bump_rejections_as_release_errors(
 ) -> None:
     with pytest.raises(_release.ReleaseError):
         _release.target_for(bump, current)
+
+
+# --- the pre-publish artifact check ----------------------------------------
+
+
+def test_expected_wheel_stems_are_derived_from_the_published_members() -> None:
+    # The wheel set every release must attach is derived, not typed out again:
+    # adding a published member updates it with no edit here. The literals pin
+    # the escaping -- a wheel filename replaces the dashes a name carries.
+    assert set(_release.EXPECTED_WHEEL_STEMS) == {
+        "pipefy-",
+        "pipefy_auth-",
+        "pipefy_cli-",
+        "pipefy_infra-",
+        "pipefy_mcp_server-",
+    }
+    assert len(_release.EXPECTED_WHEEL_STEMS) == len(
+        _release.smoke_entry_points.PUBLISHED_DISTRIBUTIONS
+    )
+
+
+def test_tag_and_publish_checks_the_artifacts_before_tagging(monkeypatch) -> None:
+    # The whole point of the check: it runs on the reversible side, so a wheel
+    # that cannot start costs nothing instead of a tag and a GitHub Release.
+    calls = _stub_tag_and_publish_env(monkeypatch)
+    monkeypatch.setattr(
+        _release, "smoke_build_and_install", lambda: calls.append(["<smoke>"])
+    )
+
+    _release._tag_and_publish("dev", "0.5.0-alpha.1", assume_yes=True)
+
+    smoke = calls.index(["<smoke>"])
+    assert smoke < calls.index(["git", "tag", "v0.5.0-alpha.1"])
+    assert smoke < calls.index(["git", "push", "origin", "v0.5.0-alpha.1"])
+
+
+def test_tag_and_publish_aborts_when_the_artifacts_fail(monkeypatch) -> None:
+    calls = _stub_tag_and_publish_env(monkeypatch)
+
+    def _boom() -> None:
+        raise _release.ReleaseError("wheels do not launch")
+
+    monkeypatch.setattr(_release, "smoke_build_and_install", _boom)
+    with pytest.raises(_release.ReleaseError, match="wheels do not launch"):
+        _release._tag_and_publish("dev", "0.5.0-alpha.1", assume_yes=True)
+
+    # Nothing irreversible happened, which is what makes the failure free.
+    assert not [c for c in calls if c[:2] == ["git", "tag"]]
+    assert not [c for c in calls if c[:2] == ["git", "push"]]
+
+
+def test_tag_and_publish_checks_repo_state_before_building(monkeypatch) -> None:
+    # A colliding tag or a stray checkout must fail in a second, not after a
+    # two-minute build, so the cheap guards stay ahead of the check.
+    _stub_tag_and_publish_env(monkeypatch)
+    monkeypatch.setattr(_release, "tag_exists", lambda t: True)
+    monkeypatch.setattr(
+        _release,
+        "smoke_build_and_install",
+        lambda: pytest.fail("built the wheels before the repository-state guards"),
+    )
+    with pytest.raises(_release.ReleaseError, match="already exists on origin"):
+        _release._tag_and_publish("dev", "0.5.0-alpha.1", assume_yes=True)
+
+
+def test_the_confirmation_states_the_artifacts_passed(monkeypatch) -> None:
+    # The prompt carries what the check found, so the operator confirming the
+    # irreversible push is told the wheels start rather than having to remember.
+    _stub_tag_and_publish_env(monkeypatch)
+    monkeypatch.setattr(_release, "smoke_build_and_install", lambda: None)
+    prompts: list[str] = []
+    monkeypatch.setattr(_release, "confirm", lambda prompt, **k: prompts.append(prompt))
+
+    _release._tag_and_publish("dev", "0.5.0-alpha.1", assume_yes=True)
+
+    assert len(prompts) == 1
+    assert "install and launch" in prompts[0]
+
+
+def test_smoke_build_and_install_runs_the_shared_script_from_a_temp_dir(
+    monkeypatch,
+) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(_release, "run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(
+        _release.smoke_entry_points,
+        "check_wheels",
+        lambda directory: ["pipefy-1.0-py3-none-any.whl"],
+    )
+
+    _release.smoke_build_and_install()
+
+    build = calls[0]
+    assert build[:5] == ["uv", "build", "--all-packages", "--wheel", "-o"]
+    out_dir = Path(build[5])
+    # Never dist/: a stale local build must not be mistaken for this one, and the
+    # check leaves nothing behind.
+    assert out_dir.name == "dist"
+    assert not out_dir.is_relative_to(_release.REPO_ROOT)
+    # The temp tree is gone once the check returns.
+    assert not out_dir.parent.exists()
+
+    # The launch half is the same script every workflow runs, under the fresh
+    # virtualenv's interpreter -- not this process's.
+    launch = calls[-1]
+    assert launch[1] == str(_release.SMOKE_SCRIPT)
+    assert launch[0] != _release.sys.executable
+    installed = calls[-2]
+    assert installed[:4] == [launch[0], "-m", "pip", "install"]
+    assert installed[4].endswith("pipefy-1.0-py3-none-any.whl")
+
+
+def test_smoke_build_and_install_reports_an_incomplete_wheel_set(monkeypatch) -> None:
+    # The build produced nothing here, which is exactly what check_wheels exists
+    # to catch: pip would satisfy the absent members from the index.
+    monkeypatch.setattr(_release, "run", lambda cmd, **k: None)
+    with pytest.raises(_release.ReleaseError, match="has no wheel for"):
+        _release.smoke_build_and_install()
+
+
+def test_smoke_run_names_the_step_and_says_nothing_shipped(monkeypatch) -> None:
+    def _fail(cmd, **kwargs):
+        raise _release.subprocess.CalledProcessError(2, cmd)
+
+    monkeypatch.setattr(_release, "run", _fail)
+    with pytest.raises(_release.ReleaseError) as exc:
+        _release._smoke_run("install the built wheels", ["pip", "install", "x"])
+    assert "install the built wheels" in str(exc.value)
+    assert "Nothing was tagged" in str(exc.value)

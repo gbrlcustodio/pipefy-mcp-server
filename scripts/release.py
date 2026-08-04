@@ -12,8 +12,9 @@ halves:
   gate.
 * ``alpha-pr`` — the same, based on ``dev``, for a staging alpha.
 * ``prepare`` — bump and commit locally, without opening anything.
-* ``publish`` — tag, push the tag, watch the Release workflow, then verify. Asks
-  for one explicit confirmation before the irreversible push.
+* ``publish`` — build and smoke-install the wheels, then tag, push the tag, watch
+  the Release workflow, and verify. Asks for one explicit confirmation before the
+  irreversible push.
 * ``verify`` — re-run the post-publish checks for a tag.
 
 Which branch a release ships from follows from the version itself, not the
@@ -36,6 +37,11 @@ Verification (also runnable on its own via ``verify <tag>``) asserts the three
 things RELEASE.md tells you to check by hand, so none of them can be forgotten:
 the GitHub Release ships all five wheels, the published version installs from
 PyPI, and the ``install.sh`` dry-run resolves the just-cut tag.
+
+The reversible half also carries the one check no diff can show: the wheels are
+built and installed into a throwaway virtualenv before the confirmation prompt,
+because a release can break with nothing in this repository changing (see
+``smoke_build_and_install``).
 """
 
 from __future__ import annotations
@@ -45,28 +51,33 @@ import datetime
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 # bump_version is the version-transform engine; import it for pure reads and
 # shell out to it for the mutating bump so it stays the single source of truth.
+# smoke_entry_points owns the published-member list and the packaging smoke every
+# workflow runs; the pre-publish check runs that same script rather than a second
+# implementation of it.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bump_version  # noqa: E402
+import smoke_entry_points  # noqa: E402
 
 REPO_ROOT = bump_version.REPO_ROOT
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 INSTALL_SH = REPO_ROOT / "install.sh"
+SMOKE_SCRIPT = Path(smoke_entry_points.__file__).resolve()
 
 DEV_BRANCH = "dev"
 MAIN_BRANCH = "main"
 
-# Filename stems of the five wheels every release must attach (order-agnostic).
-EXPECTED_WHEEL_STEMS = (
-    "pipefy-",
-    "pipefy_mcp_server-",
-    "pipefy_cli-",
-    "pipefy_auth-",
-    "pipefy_infra-",
+# Filename stems of the wheels every release must attach (order-agnostic),
+# derived from the published-member list so the set is not spelled out a second
+# time in a form that can drift from what the packaging gate checks.
+EXPECTED_WHEEL_STEMS = tuple(
+    smoke_entry_points.wheel_stem(name)
+    for name in sorted(smoke_entry_points.PUBLISHED_DISTRIBUTIONS)
 )
 
 # The [Unreleased] section spans from its heading to the next "## [" heading
@@ -601,11 +612,95 @@ def watch_release_workflow(tag: str, *, exclude: frozenset[str] = frozenset()) -
     run(["gh", "run", "watch", run_id, "--exit-status"])
 
 
+def _smoke_run(step: str, cmd: list[str]) -> None:
+    """Run one artifact-check step, naming it if the command fails.
+
+    A bare non-zero exit says which command broke but not what it was for, and
+    says nothing about how much of the release already happened. This reports
+    both, which is the difference between a legible abort and a scare.
+    """
+    try:
+        run(cmd)
+    except subprocess.CalledProcessError as exc:
+        raise ReleaseError(
+            f"Pre-publish artifact check failed trying to {step} "
+            f"(exit {exc.returncode}); the output above is the real error. "
+            "Nothing was tagged, pushed, or published."
+        ) from None
+
+
+def _venv_python(venv: Path) -> str:
+    return str(venv / ("Scripts" if sys.platform == "win32" else "bin") / "python")
+
+
+def smoke_build_and_install() -> None:
+    """Build the release wheels and launch every entry point from a fresh install.
+
+    The one check the release commit's diff can never show. A release can break
+    with nothing in this repository changing: an upstream publication inside the
+    declared bounds is enough, and only resolving dependencies and running the
+    result reveals it. So this resolves from PyPI rather than ``uv.lock``, and
+    will occasionally pick a newer permitted dependency than the lock pins —
+    that divergence is the subject of the check, not a defect in it.
+
+    Runs the same sequence ``release.yml`` runs on the far side of the tag, from
+    the same ``smoke_entry_points.py``, so a failure here is one that would
+    otherwise have arrived with the tag already pushed and a GitHub Release to
+    withdraw by hand.
+
+    Builds into a temporary directory rather than ``dist/``, so a stale local
+    build cannot be mistaken for this one and the check leaves nothing behind.
+    """
+    with tempfile.TemporaryDirectory(prefix="release-smoke-") as tmp:
+        dist = Path(tmp) / "dist"
+        venv = Path(tmp) / "venv"
+        print("\nBuilding and installing the release wheels before the boundary...")
+        _smoke_run(
+            "build the release wheels",
+            ["uv", "build", "--all-packages", "--wheel", "-o", str(dist)],
+        )
+        # Membership is asserted before the install: an incomplete set is not an
+        # error for pip, which satisfies the absent member from the index through
+        # the sibling `==` pins, and the smoke would then pass against a wheel
+        # this build never produced.
+        try:
+            wheels = smoke_entry_points.check_wheels(dist)
+        except smoke_entry_points.SmokeError as exc:
+            raise ReleaseError(f"Pre-publish artifact check: {exc}") from None
+
+        _smoke_run(
+            "create a clean virtualenv", [sys.executable, "-m", "venv", str(venv)]
+        )
+        python = _venv_python(venv)
+        _smoke_run(
+            "upgrade pip in the clean virtualenv",
+            [python, "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+        )
+        # Explicit paths rather than a glob: the sibling `==` pins then resolve to
+        # the wheels just built, while third-party requirements come from the
+        # index. Not quiet, deliberately -- the resolved versions are what may
+        # differ from what uv.lock pins, and that is what the operator is here to
+        # see.
+        _smoke_run(
+            "install the built wheels into the clean virtualenv",
+            [python, "-m", "pip", "install", *(str(dist / name) for name in wheels)],
+        )
+        _smoke_run(
+            "launch the console entry points from the fresh install",
+            [python, str(SMOKE_SCRIPT)],
+        )
+    print("The built wheels install and every console entry point launches.")
+
+
 def _tag_and_publish(branch: str, version: str, *, assume_yes: bool) -> None:
     """Tag ``version`` on ``branch``, push the tag, watch the workflow, verify.
 
-    The irreversible half, shared by every flow, so all of them cross the same
-    gate and run the same post-publish checks.
+    The irreversible half: the only code that tags and pushes a tag, which is why
+    the artifact check lives here rather than in a caller — no flow can reach the
+    tag without crossing it. The check runs after the repository-state guards and
+    before the confirmation prompt. After, so a wrong checkout or a colliding tag
+    fails in a second rather than after a build; before, so the operator answers
+    the prompt knowing the artifacts start.
 
     Deliberately does NOT push ``branch``. A repository ruleset requires a pull
     request on both ``main`` and ``dev``, so the bump commit always arrives via a
@@ -646,9 +741,11 @@ def _tag_and_publish(branch: str, version: str, *, assume_yes: bool) -> None:
             "and re-run."
         )
 
+    smoke_build_and_install()
+
     confirm(
-        f"About to tag {tag}, push to origin, and publish to PyPI. "
-        "This cannot be undone.",
+        f"About to tag {tag}, push to origin, and publish to PyPI (the built "
+        "wheels install and launch). This cannot be undone.",
         assume_yes=assume_yes,
     )
 
@@ -665,7 +762,7 @@ def _tag_and_publish(branch: str, version: str, *, assume_yes: bool) -> None:
 
 
 def publish(*, assume_yes: bool) -> None:
-    """Tag, push the tag, watch the workflow, then verify the published release.
+    """Check the artifacts, then tag, push the tag, watch the workflow, and verify.
 
     Publishes whichever release the checked-out branch carries: the branch is
     derived from the version's own track, so an alpha publishes from ``dev`` and
@@ -913,7 +1010,10 @@ def main() -> int:
 
     p_publish = sub.add_parser(
         "publish",
-        help="tag the merged release commit, push the tag, verify (irreversible)",
+        help=(
+            "build and smoke-install the wheels, then tag the merged release "
+            "commit, push the tag, verify (irreversible)"
+        ),
     )
     p_publish.add_argument(
         "--yes", action="store_true", help="skip the pre-push confirmation prompt"

@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **CLI (`pipefy auth logout`)**: a stored keychain entry that exists but cannot be parsed — stale, corrupt, or written by an older schema — is now deleted instead of being reported as `Not signed in. Nothing to do.` while surviving on disk. The decision comes from entry **presence** (`session_entry_presence` in `pipefy_auth.storage`: `present` / `absent` / `unknown`) rather than from `load_session`, which collapses all three into one `None`. Revocation needs a readable refresh token, so an unreadable entry is delete-only and stderr says the token stays valid at the IdP until natural expiry. When the presence probe itself fails and nothing is deleted, the command claims neither removal nor a clean machine and exits 1. Revoke-failure warnings, the revoke-then-delete order, and the exit-1 manual-removal hint on a rejected delete are unchanged. (#538)
 - **AI agents (active lifecycle)**: create can start inactive (`create_ai_agent(active=false)` / `pipefy agent create --inactive`) by sending `disabledAt` on create and the chained update so the second step does not revive; routine update preserves `disabledAt` (optional `disabled_at` / `--disabled-at` pass-through skips the re-read; use `toggle_ai_agent_status` / `pipefy agent toggle` to activate or deactivate); create/update success payloads expose `disabled_at` and `active`; partial-failure envelopes surface shell `disabled_at` and a toggle recovery hint. Skills document the contract. (#520)
 
 ### Added

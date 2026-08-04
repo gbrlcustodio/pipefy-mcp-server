@@ -29,6 +29,7 @@ from pipefy_auth import (
     load_session,
     revoke_session,
     run_login,
+    session_entry_presence,
     store_session,
 )
 from pipefy_auth.settings import _LEGACY_ENV_KEYS_TO_NEW
@@ -443,9 +444,46 @@ def auth_status(
     _render(report, json_out=json_out)
 
 
+_UNREADABLE_NOT_REVOKED = (
+    "The stored session entry could not be read, so its refresh token could "
+    "not be revoked at the IdP; that token remains valid at the server until "
+    "natural expiry."
+)
+
+
+def _revoke_or_warning(
+    *,
+    issuer: str,
+    client_id: str,
+    refresh_token: str,
+    policy: DiscoveryPolicy,
+) -> str | None:
+    """Revoke at the IdP; return a stderr warning when revocation did not happen."""
+    try:
+        revoke_session(
+            issuer=issuer,
+            client_id=client_id,
+            refresh_token=refresh_token,
+            policy=policy,
+        )
+    except RevocationUnsupportedError:
+        return (
+            "Pipefy auth server does not advertise a logout endpoint; the "
+            "refresh token could not be revoked server-side. Clearing local "
+            "session only."
+        )
+    except RevocationError as exc:
+        return (
+            f"Could not revoke refresh token at the IdP: {exc}. Clearing "
+            "local session anyway; the refresh token may remain valid at the "
+            "server until natural expiry."
+        )
+    return None
+
+
 @auth_app.command("logout")
 def auth_logout(ctx: typer.Context) -> None:
-    """Revoke the stored refresh token at the IdP and clear the local session."""
+    """Clear the local session, revoking the refresh token when it can be read."""
     settings, auth = settings_and_auth_from_ctx(ctx)
     if auth.oidc_client is None:
         typer.echo(
@@ -457,38 +495,28 @@ def auth_logout(ctx: typer.Context) -> None:
     issuer = auth.oidc_client.issuer_url
     client_id = auth.oidc_client.client_id
 
-    session = load_session(issuer=issuer, client_id=client_id)
-    if session is None:
+    # Presence, not readability, decides whether there is anything to clear: a
+    # corrupt or schema-drifted entry is still a credential on disk.
+    presence = session_entry_presence(issuer=issuer, client_id=client_id)
+    if presence == "absent":
         typer.echo("Not signed in. Nothing to do.")
         return
 
     # Revoke at the IdP first — once we delete the keychain entry we no longer
     # have the refresh_token to send. On any revoke failure still proceed to
-    # delete (warning makes the difference honest: server-side credential may
-    # remain valid until natural expiry).
+    # delete, and warn, because the server-side credential may remain valid.
+    session = load_session(issuer=issuer, client_id=client_id)
     revoke_warning: str | None = None
-    try:
-        revoke_session(
+    if session is not None:
+        revoke_warning = _revoke_or_warning(
             issuer=issuer,
             client_id=client_id,
             refresh_token=session.token.refresh_token,
             policy=DiscoveryPolicy(allow_insecure_urls=settings.allow_insecure_urls),
         )
-    except RevocationUnsupportedError:
-        revoke_warning = (
-            "Pipefy auth server does not advertise a logout endpoint; the "
-            "refresh token could not be revoked server-side. Clearing local "
-            "session only."
-        )
-    except RevocationError as exc:
-        revoke_warning = (
-            f"Could not revoke refresh token at the IdP: {exc}. Clearing "
-            "local session anyway; the refresh token may remain valid at the "
-            "server until natural expiry."
-        )
 
     try:
-        delete_session(issuer=issuer, client_id=client_id)
+        deleted = delete_session(issuer=issuer, client_id=client_id)
     except SessionDeleteError as exc:
         if revoke_warning:
             typer.echo(revoke_warning, err=True)
@@ -500,9 +528,26 @@ def auth_logout(ctx: typer.Context) -> None:
         )
         raise typer.Exit(1) from exc
 
-    if revoke_warning:
-        typer.echo(revoke_warning, err=True)
-    typer.echo(f"Signed out of Pipefy ({issuer}).")
+    if session is not None:
+        if revoke_warning:
+            typer.echo(revoke_warning, err=True)
+        typer.echo(f"Signed out of Pipefy ({issuer}).")
+        return
+    if deleted:
+        typer.echo(_UNREADABLE_NOT_REVOKED, err=True)
+        typer.echo(f"Removed an unreadable Pipefy session entry ({issuer}).")
+        return
+    if presence == "unknown":
+        typer.echo(
+            "Could not read the keychain to check for a stored session "
+            f"({issuer}), and no entry was removed. A credential may still be "
+            "present; check for it manually via your OS keychain (service: "
+            f"'pipefy'). See {DOCS_CLI_AUTH_REF}.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    # Probed as present, gone by the time we deleted: a concurrent logout won.
+    typer.echo("Not signed in. Nothing to do.")
 
 
 __all__ = ["auth_app"]

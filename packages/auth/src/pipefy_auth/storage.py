@@ -158,8 +158,43 @@ def store_session(
     return session
 
 
+SessionEntryPresence = Literal["present", "absent", "unknown"]
+
+
+def session_entry_presence(*, issuer: str, client_id: str) -> SessionEntryPresence:
+    """Report whether a keychain entry exists, without parsing its contents.
+
+    An entry that exists but cannot be parsed is ``"present"``: a caller whose
+    job is to clear the credential needs presence, not readability, and
+    :func:`load_session` cannot supply it because it collapses "absent",
+    "unreadable" and "backend failed" into ``None``.
+
+    Returns:
+        ``"present"`` when the backend returns a blob of any content,
+        ``"absent"`` when it returns nothing, and ``"unknown"`` when the
+        backend itself fails. ``"unknown"`` means presence was not
+        established: no caller may then report the credential as removed, or
+        as never having been there.
+    """
+    import keyring
+    from keyring.errors import KeyringError
+
+    try:
+        blob = keyring.get_password(_SERVICE, keychain_key(issuer, client_id))
+    except KeyringError:
+        return "unknown"
+    return "absent" if blob is None else "present"
+
+
 def load_session(*, issuer: str, client_id: str) -> StoredSession | None:
-    """Return the stored session for this issuer + client, or ``None`` if absent."""
+    """Return the stored session for this issuer + client, or ``None``.
+
+    ``None`` means "no usable session", which covers three distinct states:
+    no entry, an entry that fails validation, and a backend that refused the
+    read. Callers that must distinguish them — anything that deletes, or that
+    reports the credential as gone — need
+    :func:`session_entry_presence` instead.
+    """
     import keyring
     from keyring.errors import KeyringError
 
@@ -210,11 +245,13 @@ def keychain_backend_name() -> str:
 
 __all__ = [
     "SessionDeleteError",
+    "SessionEntryPresence",
     "StoredSession",
     "configure_keychain_backend",
     "delete_session",
     "keychain_backend_name",
     "keychain_key",
     "load_session",
+    "session_entry_presence",
     "store_session",
 ]

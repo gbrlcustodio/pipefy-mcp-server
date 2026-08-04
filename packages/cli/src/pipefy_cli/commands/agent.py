@@ -231,7 +231,8 @@ def agent_update(
 
     Full-replace of behaviors; does not reactivate a disabled agent. Use
     ``pipefy agent toggle`` to change active status. Confirm status from the
-    response ``disabled_at`` / ``active`` fields (or re-read via ``agent get``).
+    response ``disabled_at`` / ``active`` fields. To re-read via ``agent get``,
+    use agent ``disabledAt`` (null means active).
     """
     behavior_list = _parse_behaviors_json(behaviors)
     ds_raw = parse_json_value(data_sources, "--data-sources") if data_sources else None

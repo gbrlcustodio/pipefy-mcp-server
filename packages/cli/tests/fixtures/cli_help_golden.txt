@@ -232,7 +232,8 @@ Usage: pipefy agent update [OPTIONS]
 
  Full-replace of behaviors; does not reactivate a disabled agent. Use ``pipefy
  agent toggle`` to change active status. Confirm status from the response
- ``disabled_at`` / ``active`` fields (or re-read via ``agent get``).
+ ``disabled_at`` / ``active`` fields. To re-read via ``agent get``, use agent
+ ``disabledAt`` (null means active).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --uuid                             TEXT  Agent UUID. [required]           │

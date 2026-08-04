@@ -18,7 +18,7 @@ from pipefy_sdk.ai_pipe_validation import (
     validate_behaviors_against_pipe,
 )
 from pydantic import ValidationError
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from pipefy_mcp.core.tool_error_envelope import (
     ToolErrorDetail,
@@ -99,6 +99,8 @@ class CreateAgentPartialFailurePayload(TypedDict):
     success: Literal[False]
     agent_uuid: str
     error: ToolErrorDetail
+    disabled_at: NotRequired[str | None]
+    active: NotRequired[bool]
 
 
 def build_create_automation_success(
@@ -129,28 +131,50 @@ def build_update_automation_success(
     return {"success": True, "automation_id": automation_id, "message": message}
 
 
-def build_create_agent_success(*, agent_uuid: str, message: str) -> dict[str, Any]:
+def build_create_agent_success(
+    *,
+    agent_uuid: str,
+    message: str,
+    disabled_at: str | None = None,
+) -> dict[str, Any]:
     """Successful AI agent create.
 
     Args:
         agent_uuid: New agent UUID from the API.
         message: Short summary for the client.
+        disabled_at: ISO-8601 disable timestamp from the API, or None when active.
     """
+    data = {
+        "agent_uuid": agent_uuid,
+        "disabled_at": disabled_at,
+        "active": disabled_at is None,
+    }
     if is_unified_envelope_enabled():
-        return tool_success(data={"agent_uuid": agent_uuid}, message=message)
-    return {"success": True, "agent_uuid": agent_uuid, "message": message}
+        return tool_success(data=data, message=message)
+    return {"success": True, "message": message, **data}
 
 
-def build_update_agent_success(*, agent_uuid: str, message: str) -> dict[str, Any]:
+def build_update_agent_success(
+    *,
+    agent_uuid: str,
+    message: str,
+    disabled_at: str | None = None,
+) -> dict[str, Any]:
     """Successful AI agent update.
 
     Args:
         agent_uuid: Target agent UUID.
         message: Short summary for the client.
+        disabled_at: ISO-8601 disable timestamp from the API, or None when active.
     """
+    data = {
+        "agent_uuid": agent_uuid,
+        "disabled_at": disabled_at,
+        "active": disabled_at is None,
+    }
     if is_unified_envelope_enabled():
-        return tool_success(data={"agent_uuid": agent_uuid}, message=message)
-    return {"success": True, "agent_uuid": agent_uuid, "message": message}
+        return tool_success(data=data, message=message)
+    return {"success": True, "message": message, **data}
 
 
 def build_toggle_agent_status_success(*, message: str) -> dict[str, Any]:
@@ -233,17 +257,34 @@ def build_validate_prompt_payload(
     }
 
 
+_PARTIAL_FAILURE_DISABLED_HINT = (
+    " The agent shell is disabled until you call toggle_ai_agent_status after a "
+    "successful update_ai_agent recovery (routine update preserves disabled_at)."
+)
+
+
 def build_create_agent_partial_failure(
-    *, agent_uuid: str, error: str
+    *,
+    agent_uuid: str,
+    error: str,
+    disabled_at: str | None = None,
 ) -> CreateAgentPartialFailurePayload:
     """Create OK but follow-up update failed — surface UUID for recovery.
 
     Args:
         agent_uuid: Agent UUID from ``createAiAgent`` (retry update or delete).
         error: Why the chained update failed.
+        disabled_at: Disable timestamp from the create response, when present.
+            Empty create often stamps ``disabledAt``; recovery via update preserves
+            it, so callers must toggle to activate.
     """
-    body: dict[str, Any] = tool_error(error)
+    message = error
+    if disabled_at is not None:
+        message = f"{error}{_PARTIAL_FAILURE_DISABLED_HINT}"
+    body: dict[str, Any] = tool_error(message)
     body["agent_uuid"] = agent_uuid
+    body["disabled_at"] = disabled_at
+    body["active"] = disabled_at is None
     return cast(CreateAgentPartialFailurePayload, body)
 
 

@@ -24,10 +24,47 @@ from pipefy_sdk.queries.ai_agent_queries import (
 from pipefy_sdk.services.ai_agent_service import (
     AiAgentService,
     inject_reference_ids,
+    resolve_update_disabled_at,
 )
 from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 UUID_PATTERN = re.compile(r"%\{action:([a-f0-9-]{36})\}")
+
+
+@pytest.mark.unit
+def test_resolve_update_disabled_at_prefers_provided():
+    assert (
+        resolve_update_disabled_at(
+            provided="2026-01-01T00:00:00Z",
+            preserve=True,
+            current="2026-02-01T00:00:00Z",
+        )
+        == "2026-01-01T00:00:00Z"
+    )
+
+
+@pytest.mark.unit
+def test_resolve_update_disabled_at_preserves_current_when_omitted():
+    assert (
+        resolve_update_disabled_at(
+            provided=None,
+            preserve=True,
+            current="2026-07-15T09:30:00Z",
+        )
+        == "2026-07-15T09:30:00Z"
+    )
+
+
+@pytest.mark.unit
+def test_resolve_update_disabled_at_omits_when_not_preserving():
+    assert (
+        resolve_update_disabled_at(
+            provided=None,
+            preserve=False,
+            current="2026-07-15T09:30:00Z",
+        )
+        is None
+    )
 
 
 @pytest.mark.unit
@@ -300,6 +337,8 @@ async def test_create_agent_returns_success_format():
     assert result == {
         "agent_uuid": "xyz-789",
         "message": "AI Agent created successfully. UUID: xyz-789",
+        "disabled_at": None,
+        "active": True,
     }
 
 
@@ -308,7 +347,10 @@ async def test_create_agent_returns_success_format():
 async def test_update_agent_calls_execute_query_with_correct_variables():
     """update_agent calls execute_query with updateAiAgent mutation and correct variables."""
     service, executor = _create_mock_service(
-        {"updateAiAgent": {"agent": {"uuid": "agent-uuid"}}}
+        side_effect=[
+            {"aiAgent": {"uuid": "agent-uuid", "disabledAt": None}},
+            {"updateAiAgent": {"agent": {"uuid": "agent-uuid", "disabledAt": None}}},
+        ]
     )
     inp = UpdateAiAgentInput(
         uuid="agent-uuid",
@@ -321,18 +363,161 @@ async def test_update_agent_calls_execute_query_with_correct_variables():
 
     result = await service.update_agent(inp)
 
-    executor.execute_query.assert_called_once()
-    call_args = executor.execute_query.call_args
-    variables = call_args[0][1]
+    assert executor.execute_query.await_count == 2
+    variables = executor.execute_query.call_args_list[1][0][1]
 
     assert variables["uuid"] == "agent-uuid"
     assert variables["agent"]["name"] == "Updated Agent"
     assert variables["agent"]["repoUuid"] == "repo-456"
     assert variables["agent"]["instruction"] == "Do things"
     assert variables["agent"]["dataSourceIds"] == ["ds1"]
+    assert "disabledAt" not in variables["agent"]
     assert len(variables["agent"]["behaviors"]) == 1
     assert result["agent_uuid"] == "agent-uuid"
+    assert result["disabled_at"] is None
+    assert result["active"] is True
     assert "AI Agent updated successfully" in result["message"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_agent_includes_disabled_at_when_provided():
+    """update_agent sends disabledAt in the agent payload when input.disabled_at is set."""
+    disabled_at = "2026-08-01T12:00:00Z"
+    service, executor = _create_mock_service(
+        {"updateAiAgent": {"agent": {"uuid": "agent-uuid", "disabledAt": disabled_at}}}
+    )
+    inp = UpdateAiAgentInput(
+        uuid="agent-uuid",
+        name="Updated Agent",
+        repo_uuid="repo-456",
+        instruction="Do things",
+        behaviors=[minimal_behavior_dict(name="B1")],
+        disabled_at=disabled_at,
+    )
+
+    result = await service.update_agent(inp)
+
+    executor.execute_query.assert_called_once()
+    variables = executor.execute_query.call_args[0][1]
+    assert variables["agent"]["disabledAt"] == disabled_at
+    assert result["disabled_at"] == disabled_at
+    assert result["active"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_agent_preserves_current_disabled_at_when_omitted():
+    """When disabled_at is omitted, update_agent re-sends the current disabledAt."""
+    disabled_at = "2026-07-15T09:30:00Z"
+    service, executor = _create_mock_service(
+        side_effect=[
+            {"aiAgent": {"uuid": "agent-uuid", "disabledAt": disabled_at}},
+            {
+                "updateAiAgent": {
+                    "agent": {"uuid": "agent-uuid", "disabledAt": disabled_at}
+                }
+            },
+        ]
+    )
+    inp = UpdateAiAgentInput(
+        uuid="agent-uuid",
+        name="Updated Agent",
+        repo_uuid="repo-456",
+        instruction="Do things",
+        behaviors=[minimal_behavior_dict(name="B1")],
+    )
+
+    result = await service.update_agent(inp)
+
+    assert executor.execute_query.await_count == 2
+    get_query, get_vars = executor.execute_query.call_args_list[0][0]
+    assert get_query is GET_AI_AGENT_QUERY
+    assert get_vars == {"uuid": "agent-uuid"}
+    update_vars = executor.execute_query.call_args_list[1][0][1]
+    assert update_vars["agent"]["disabledAt"] == disabled_at
+    assert result["disabled_at"] == disabled_at
+    assert result["active"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_agent_omits_disabled_at_when_preserve_disabled_false():
+    """preserve_disabled_at=False skips get and omits disabledAt so the API can activate."""
+    service, executor = _create_mock_service(
+        {"updateAiAgent": {"agent": {"uuid": "agent-uuid", "disabledAt": None}}}
+    )
+    inp = UpdateAiAgentInput(
+        uuid="agent-uuid",
+        name="Updated Agent",
+        repo_uuid="repo-456",
+        instruction="Do things",
+        behaviors=[minimal_behavior_dict(name="B1")],
+        disabled_at=None,
+        preserve_disabled_at=False,
+    )
+
+    result = await service.update_agent(inp)
+
+    executor.execute_query.assert_called_once()
+    variables = executor.execute_query.call_args[0][1]
+    assert "disabledAt" not in variables["agent"]
+    assert result["disabled_at"] is None
+    assert result["active"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_agent_includes_disabled_at_when_provided():
+    """create_agent sends disabledAt when input.disabled_at is set (inactive create)."""
+    disabled_at = "2026-08-04T10:00:00Z"
+    service, executor = _create_mock_service(
+        {
+            "createAiAgent": {
+                "agent": {"uuid": "new-uuid-123", "disabledAt": disabled_at}
+            }
+        }
+    )
+    inp = CreateAiAgentInput(
+        name="My Agent",
+        repo_uuid="repo-456",
+        instruction="Purpose",
+        behaviors=[minimal_behavior_dict(name="B")],
+        disabled_at=disabled_at,
+    )
+
+    result = await service.create_agent(inp)
+
+    variables = executor.execute_query.call_args[0][1]
+    assert variables["agent"]["disabledAt"] == disabled_at
+    assert result["disabled_at"] == disabled_at
+    assert result["active"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_agent_returns_disabled_at_from_response():
+    """create_agent maps agent.disabledAt from the mutation response."""
+    service, _ = _create_mock_service(
+        {
+            "createAiAgent": {
+                "agent": {"uuid": "xyz-789", "disabledAt": "2026-01-01T00:00:00Z"}
+            }
+        }
+    )
+    inp = CreateAiAgentInput(
+        name="Test",
+        repo_uuid="repo-1",
+        instruction="Purpose",
+        behaviors=[minimal_behavior_dict(name="B")],
+        disabled_at="2026-01-01T00:00:00Z",
+    )
+
+    result = await service.create_agent(inp)
+
+    assert result["agent_uuid"] == "xyz-789"
+    assert result["disabled_at"] == "2026-01-01T00:00:00Z"
+    assert result["active"] is False
 
 
 @pytest.mark.unit
@@ -340,7 +525,10 @@ async def test_update_agent_calls_execute_query_with_correct_variables():
 async def test_update_agent_calls_inject_reference_ids():
     """update_agent calls inject_reference_ids before building the payload."""
     service, _ = _create_mock_service(
-        {"updateAiAgent": {"agent": {"uuid": "agent-uuid"}}}
+        side_effect=[
+            {"aiAgent": {"uuid": "agent-uuid", "disabledAt": None}},
+            {"updateAiAgent": {"agent": {"uuid": "agent-uuid"}}},
+        ]
     )
     inp = UpdateAiAgentInput(
         uuid="agent-uuid",
@@ -409,7 +597,12 @@ async def test_create_agent_missing_uuid_returns_clear_error():
 @pytest.mark.asyncio
 async def test_update_agent_missing_uuid_returns_clear_error():
     """update_agent returns clear error when API response missing agent.uuid."""
-    service, _ = _create_mock_service({"updateAiAgent": {"agent": {}}})
+    service, _ = _create_mock_service(
+        side_effect=[
+            {"aiAgent": {"uuid": "agent-uuid", "disabledAt": None}},
+            {"updateAiAgent": {"agent": {}}},
+        ]
+    )
     inp = UpdateAiAgentInput(
         uuid="agent-uuid",
         name="Agent",

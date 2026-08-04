@@ -143,6 +143,32 @@ def test_create_ai_agent_input_accepts_data_source_ids():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("disabled_at", ["", "   ", "\n\t  "])
+def test_create_ai_agent_input_rejects_blank_disabled_at(disabled_at):
+    with pytest.raises(ValidationError):
+        CreateAiAgentInput(
+            name="My Agent",
+            repo_uuid="repo-123",
+            instruction="Purpose",
+            behaviors=[_make_behavior()],
+            disabled_at=disabled_at,
+        )
+
+
+@pytest.mark.unit
+def test_create_ai_agent_input_accepts_iso_disabled_at():
+    stamp = "2026-08-04T12:00:00+00:00"
+    inp = CreateAiAgentInput(
+        name="My Agent",
+        repo_uuid="repo-123",
+        instruction="Purpose",
+        behaviors=[_make_behavior()],
+        disabled_at=stamp,
+    )
+    assert inp.disabled_at == stamp
+
+
+@pytest.mark.unit
 def test_behavior_input_requires_name_and_event_id():
     inp = BehaviorInput.model_validate(minimal_behavior_dict())
     assert inp.name == "Test Behavior"
@@ -304,6 +330,31 @@ def test_update_ai_agent_input_optional_instruction_defaults_none():
         behaviors=[_make_behavior()],
     )
     assert inp.instruction is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("disabled_at", ["", "   ", "\n\t  "])
+def test_update_ai_agent_input_rejects_blank_disabled_at(disabled_at):
+    with pytest.raises(ValidationError):
+        UpdateAiAgentInput(
+            uuid="agent-123",
+            name="My Agent",
+            repo_uuid="repo-456",
+            behaviors=[_make_behavior()],
+            disabled_at=disabled_at,
+        )
+
+
+@pytest.mark.unit
+def test_update_ai_agent_input_strips_disabled_at_whitespace():
+    inp = UpdateAiAgentInput(
+        uuid="agent-123",
+        name="My Agent",
+        repo_uuid="repo-456",
+        behaviors=[_make_behavior()],
+        disabled_at="  2026-08-04T12:00:00+00:00  ",
+    )
+    assert inp.disabled_at == "2026-08-04T12:00:00+00:00"
 
 
 @pytest.mark.unit

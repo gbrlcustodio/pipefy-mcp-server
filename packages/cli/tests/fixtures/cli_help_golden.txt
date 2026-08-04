@@ -97,6 +97,10 @@ Usage: pipefy agent create [OPTIONS]
  Create and configure an AI agent (``create_ai_agent`` + ``update_ai_agent``
  chain).
 
+ Agents are active by default. Pass ``--inactive`` to start disabled. Confirm
+ status from the response ``disabled_at`` / ``active`` fields. To change status
+ later, use ``pipefy agent toggle`` (routine update preserves disabled state).
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --repo-uuid                        TEXT  Pipe UUID. [required]            │
 │ *  --name          -n                 TEXT  Agent display name. [required]   │
@@ -110,6 +114,12 @@ Usage: pipefy agent create [OPTIONS]
 │                                             [required]                       │
 │    --data-sources                     TEXT  Optional JSON array of           │
 │                                             knowledge-source id strings.     │
+│    --active            --inactive           Create enabled (default) or      │
+│                                             inactive. --inactive sets        │
+│                                             disabled_at on create and the    │
+│                                             chained update so the second     │
+│                                             step does not revive.            │
+│                                             [default: active]                │
 │    --strict            --no-strict          Pre-flight strictness: when      │
 │                                             --strict (default), unknown      │
 │                                             actionType values block; with    │
@@ -220,6 +230,12 @@ Usage: pipefy agent update [OPTIONS]
 
  Replace AI agent configuration (``update_ai_agent``).
 
+ Full-replace of behaviors; does not intentionally reactivate a disabled agent.
+ Pass ``--disabled-at`` from ``agent get`` (``disabledAt``) to preserve without
+ an extra read. Use ``pipefy agent toggle`` to change active status. Confirm
+ status from the response ``disabled_at`` / ``active`` fields. To re-read via
+ ``agent get``, use agent ``disabledAt`` (null means active).
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --uuid                             TEXT  Agent UUID. [required]           │
 │ *  --name          -n                 TEXT  Agent display name. [required]   │
@@ -233,6 +249,10 @@ Usage: pipefy agent update [OPTIONS]
 │                                             [required]                       │
 │    --data-sources                     TEXT  Optional JSON array of           │
 │                                             knowledge-source id strings.     │
+│    --disabled-at                      TEXT  Optional ISO-8601 disabledAt     │
+│                                             from agent get. Pass through to  │
+│                                             skip the preserve re-read; omit  │
+│                                             to let the SDK preserve.         │
 │    --strict            --no-strict          Pre-flight strictness: --strict  │
 │                                             (default) blocks on unknown      │
 │                                             actionType values; --no-strict   │

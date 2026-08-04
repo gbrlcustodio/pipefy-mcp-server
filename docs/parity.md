@@ -29,7 +29,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `add_service_account_to_pipe` | `pipefy member add-service-account` | shipped | Attaches an existing org service account to a pipe by email (iPaaS setup); role defaults to `admin`; wraps `inviteMembers`. The MCP tool verifies membership afterwards (errors if absent); the CLI returns the raw invite result (inspect `inviteMembers.errors`). |
 | `call_ipaas_tool` | — | deferred | iPaaS (Advanced Automations) tool invocation; MCP-first surface, CLI twin considered once agent usage settles. |
 | `clone_pipe` | `pipefy pipe clone` | shipped | optional `--org`. |
-| `create_ai_agent` | `pipefy agent create` | shipped | AI Agents domain; post-v0.1 CLI unless explicitly rescoped. |
+| `create_ai_agent` | `pipefy agent create` | shipped | AI Agents domain; `--active/--inactive` (default active) mirrors MCP `active`; inactive sets `disabled_at` on create + chained update. |
 | `create_ai_automation` | `pipefy ai-automation create` | shipped | AI Automations domain; post-v0.1 CLI unless explicitly rescoped. |
 | `create_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup create` | shipped | Knowledge bases; pipe-scoped (`--pipe-uuid`, `--name`, `--description` <=900, `--source-repo-id` numeric pipe ID, `--output-fields` JSON array 1-30, `--conditions` JSON array, optional `--search-query`). Conditions are typed client-side (static needs a string value; AI-filled needs the input trio). CLI gates on the read-access probe. |
 | `create_ai_knowledge_base_document` | `pipefy kb document create` | shipped | Knowledge bases; one-shot PDF upload (presigned URL, S3 PUT, create mutation). Pipe-scoped (`--pipe-uuid`, `--file`, `--name`, `--description` <=900, all required). `.pdf` and 20 MiB cap enforced client-side; step-tagged errors (`file_read`/`presigned_url`/`s3_upload`/`kb_create`). CLI gates on the read-access probe. Indexing is asynchronous. |
@@ -179,7 +179,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `sort_portal_pages` | `pipefy portal page sort` | shipped | `--portal-uuid` plus ordered ids via `--page-ids` or `--ids-json`. |
 | `toggle_ai_agent_status` | `pipefy agent toggle` | shipped | AI Agents domain. |
 | `unpublish_sub_portal` | `pipefy portal sub-portal unpublish` | shipped | internal_api `updateSubPortalElement(subPortalUuid: null)`; sets `subPortals[].published` to false. |
-| `update_ai_agent` | `pipefy agent update` | shipped | AI Agents domain. |
+| `update_ai_agent` | `pipefy agent update` | shipped | AI Agents domain; preserves disabled state (optional `disabled_at` / `--disabled-at` pass-through); use `toggle` / `toggle_ai_agent_status` to change active. |
 | `update_ai_automation` | `pipefy ai-automation update` | shipped | AI Automations domain. |
 | `update_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup update` | shipped | Knowledge bases; full-replacement update (`--id`, `--pipe-uuid`, required `--source-repo-id`/`--output-fields`/`--conditions` every call; omitted `--search-query` clears it; only `--name`/`--description` are partial). CLI gates on the read-access probe. |
 | `update_ai_knowledge_base_document` | `pipefy kb document update` | shipped | Knowledge bases; metadata-only partial update (`--id`, `--pipe-uuid`, optional `--name`/`--description`, at least one); no file replacement. CLI gates on the read-access probe. |

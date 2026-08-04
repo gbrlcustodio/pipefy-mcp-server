@@ -138,6 +138,7 @@ class TestCreateAiAgentLifecycle:
         assert isinstance(update_arg, UpdateAiAgentInput)
         assert update_arg.disabled_at == create_arg.disabled_at
         assert update_arg.disabled_at is not None
+        assert update_arg.preserve_disabled_at is False
         payload = extract_payload(result)
         assert payload["success"] is True
         if envelope_flag:

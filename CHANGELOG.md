@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **AI agents (active lifecycle)**: create can start inactive (`create_ai_agent(active=false)` / `pipefy agent create --inactive`) by sending `disabledAt` on create and the chained update so the second step does not revive; routine update preserves `disabledAt` (use `toggle_ai_agent_status` / `pipefy agent toggle` to activate or deactivate); create/update success payloads expose `disabled_at` and `active`. Skills document the contract. (#520)
+- **AI agents (active lifecycle)**: create can start inactive (`create_ai_agent(active=false)` / `pipefy agent create --inactive`) by sending `disabledAt` on create and the chained update so the second step does not revive; routine update preserves `disabledAt` (optional `disabled_at` / `--disabled-at` pass-through skips the re-read; use `toggle_ai_agent_status` / `pipefy agent toggle` to activate or deactivate); create/update success payloads expose `disabled_at` and `active`; partial-failure envelopes surface shell `disabled_at` and a toggle recovery hint. Skills document the contract. (#520)
 
 ### Added
 

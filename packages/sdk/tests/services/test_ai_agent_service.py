@@ -24,10 +24,47 @@ from pipefy_sdk.queries.ai_agent_queries import (
 from pipefy_sdk.services.ai_agent_service import (
     AiAgentService,
     inject_reference_ids,
+    resolve_update_disabled_at,
 )
 from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 UUID_PATTERN = re.compile(r"%\{action:([a-f0-9-]{36})\}")
+
+
+@pytest.mark.unit
+def test_resolve_update_disabled_at_prefers_provided():
+    assert (
+        resolve_update_disabled_at(
+            provided="2026-01-01T00:00:00Z",
+            preserve=True,
+            current="2026-02-01T00:00:00Z",
+        )
+        == "2026-01-01T00:00:00Z"
+    )
+
+
+@pytest.mark.unit
+def test_resolve_update_disabled_at_preserves_current_when_omitted():
+    assert (
+        resolve_update_disabled_at(
+            provided=None,
+            preserve=True,
+            current="2026-07-15T09:30:00Z",
+        )
+        == "2026-07-15T09:30:00Z"
+    )
+
+
+@pytest.mark.unit
+def test_resolve_update_disabled_at_omits_when_not_preserving():
+    assert (
+        resolve_update_disabled_at(
+            provided=None,
+            preserve=False,
+            current="2026-07-15T09:30:00Z",
+        )
+        is None
+    )
 
 
 @pytest.mark.unit

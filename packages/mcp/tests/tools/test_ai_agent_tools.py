@@ -257,9 +257,12 @@ class TestCreateAiAgent:
         mock_pipefy_client,
         extract_payload,
     ):
+        stub_disabled_at = "2026-08-04T12:00:00+00:00"
         mock_pipefy_client.create_ai_agent.return_value = {
             "agent_uuid": "created-uuid",
             "message": "AI Agent created successfully. UUID: created-uuid",
+            "disabled_at": stub_disabled_at,
+            "active": False,
         }
         mock_pipefy_client.update_ai_agent.side_effect = ValueError("update failed")
         async with client_session as session:
@@ -276,8 +279,46 @@ class TestCreateAiAgent:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert payload["agent_uuid"] == "created-uuid"
+        assert payload["disabled_at"] == stub_disabled_at
+        assert payload["active"] is False
         assert "error" in payload
-        assert "update failed" in tool_error_message(payload)
+        err_msg = tool_error_message(payload)
+        assert "update failed" in err_msg
+        assert "toggle_ai_agent_status" in err_msg
+        assert "disabled" in err_msg.lower()
+
+    async def test_update_passes_disabled_at_when_provided(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        stub_disabled_at = "2026-01-15T12:00:00+00:00"
+        mock_pipefy_client.update_ai_agent.return_value = {
+            "agent_uuid": "agent-uuid",
+            "message": "AI Agent updated successfully. UUID: agent-uuid",
+            "disabled_at": stub_disabled_at,
+            "active": False,
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_ai_agent",
+                {
+                    "uuid": "agent-uuid",
+                    "name": "Updated Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Do things",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                    "disabled_at": stub_disabled_at,
+                },
+            )
+        assert result.is_error is False
+        update_arg = mock_pipefy_client.update_ai_agent.call_args[0][0]
+        assert isinstance(update_arg, UpdateAiAgentInput)
+        assert update_arg.disabled_at == stub_disabled_at
+        assert update_arg.preserve_disabled_at is True
+        payload = extract_payload(result)
+        assert payload["success"] is True
 
     async def test_graphql_error_extracts_messages(
         self,

@@ -177,7 +177,7 @@ def agent_create(
             behaviors=validated.behaviors,
             data_source_ids=validated.data_source_ids,
             disabled_at=validated.disabled_at,
-            preserve_disabled_at=not active,
+            preserve_disabled_at=False,
         )
         update_result = await client.update_ai_agent(update_input)
         result_disabled_at = update_result.get("disabled_at")
@@ -217,6 +217,14 @@ def agent_update(
         "--data-sources",
         help="Optional JSON array of knowledge-source id strings.",
     ),
+    disabled_at: str | None = typer.Option(
+        None,
+        "--disabled-at",
+        help=(
+            "Optional ISO-8601 disabledAt from agent get. Pass through to skip the "
+            "preserve re-read; omit to let the SDK preserve."
+        ),
+    ),
     strict_unknown: bool = typer.Option(
         True,
         "--strict/--no-strict",
@@ -229,9 +237,10 @@ def agent_update(
 ) -> None:
     """Replace AI agent configuration (``update_ai_agent``).
 
-    Full-replace of behaviors; does not reactivate a disabled agent. Use
-    ``pipefy agent toggle`` to change active status. Confirm status from the
-    response ``disabled_at`` / ``active`` fields. To re-read via ``agent get``,
+    Full-replace of behaviors; does not intentionally reactivate a disabled agent.
+    Pass ``--disabled-at`` from ``agent get`` (``disabledAt``) to preserve without an
+    extra read. Use ``pipefy agent toggle`` to change active status. Confirm status
+    from the response ``disabled_at`` / ``active`` fields. To re-read via ``agent get``,
     use agent ``disabledAt`` (null means active).
     """
     behavior_list = _parse_behaviors_json(behaviors)
@@ -252,6 +261,7 @@ def agent_update(
             instruction=inst,
             behaviors=expanded,
             data_source_ids=data_source_ids,
+            disabled_at=disabled_at.strip() if disabled_at else None,
         )
     except ValidationError as exc:
         raise typer.BadParameter(str(exc)) from exc

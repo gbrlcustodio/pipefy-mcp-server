@@ -38,9 +38,9 @@ Execution logs live in [skills/observability/](../../observability/pipefy-observ
 ## Active lifecycle
 
 - Agents are **active by default**. Create-active clears the API default disabled shell via the configure update (omits `disabledAt`). Create-inactive (`active=false` / `--inactive`) sets `disabled_at` explicitly on create and the chained update.
-- Routine `update_ai_agent` / `pipefy agent update` **preserves** disabled state — it does not reactivate.
+- Routine `update_ai_agent` / `pipefy agent update` **preserves** disabled state — it does not intentionally reactivate. Prefer passing `disabled_at` from a prior `get_ai_agent` (`disabledAt`) / `pipefy agent update --disabled-at` to skip the preserve re-read; when omitted, the SDK re-reads and re-sends.
 - Explicit activate/deactivate: `toggle_ai_agent_status` / `pipefy agent toggle` (`--active` / `--inactive`).
-- After create/update, confirm status from the response `disabled_at` / `active` fields when present. To re-read via `get_ai_agent` / `pipefy agent get`, use agent `disabledAt` (null means active) — get does not expose write-envelope `disabled_at` / `active`, and `behaviors[].active` is not agent enablement. Never assume inactive without that confirmation.
+- After create/update, confirm status from the response `disabled_at` / `active` fields when present. To re-read via `get_ai_agent` / `pipefy agent get`, use agent `disabledAt` (null means active) — get does not expose write-envelope `disabled_at` / `active`, and `behaviors[].active` is not agent enablement. Never assume inactive without that confirmation. An agent with no active behavior is disabled by the API regardless of the create/update enablement flags.
 
 ---
 
@@ -199,7 +199,7 @@ On create/update, slug `fieldId` values are resolved to numeric `internal_id`, `
 ### 8 — Handle responses
 
 - **Success with `agent_uuid`** → confirm `disabled_at` / `active` on the response (active when `disabled_at` is null).
-- **Partial failure (UUID returned, behaviors rejected)** → call `update_ai_agent` with the **full required payload**: `uuid`, `repo_uuid` (same pipe UUID used on create), `name`, `instruction`, and complete `behaviors` (full-replace, not patch). Do NOT create a second agent. Update preserves disabled state; use `toggle_ai_agent_status` if you need to change it.
+- **Partial failure (UUID returned, behaviors rejected)** → call `update_ai_agent` with the **full required payload**: `uuid`, `repo_uuid` (same pipe UUID used on create), `name`, `instruction`, and complete `behaviors` (full-replace, not patch). Do NOT create a second agent. The create shell is often disabled (`disabled_at` on the partial-failure envelope); update preserves that state — call `toggle_ai_agent_status` after a successful recovery update if you need the agent active.
 - **Failure without UUID** → validation or API error. Trust the hint text in the enriched error.
 
 ### 9 — Verify

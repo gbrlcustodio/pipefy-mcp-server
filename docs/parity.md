@@ -179,7 +179,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `sort_portal_pages` | `pipefy portal page sort` | shipped | `--portal-uuid` plus ordered ids via `--page-ids` or `--ids-json`. |
 | `toggle_ai_agent_status` | `pipefy agent toggle` | shipped | AI Agents domain. |
 | `unpublish_sub_portal` | `pipefy portal sub-portal unpublish` | shipped | internal_api `updateSubPortalElement(subPortalUuid: null)`; sets `subPortals[].published` to false. |
-| `update_ai_agent` | `pipefy agent update` | shipped | AI Agents domain; preserves disabled state (use `toggle` / `toggle_ai_agent_status` to change active). |
+| `update_ai_agent` | `pipefy agent update` | shipped | AI Agents domain; preserves disabled state (optional `disabled_at` / `--disabled-at` pass-through); use `toggle` / `toggle_ai_agent_status` to change active. |
 | `update_ai_automation` | `pipefy ai-automation update` | shipped | AI Automations domain. |
 | `update_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup update` | shipped | Knowledge bases; full-replacement update (`--id`, `--pipe-uuid`, required `--source-repo-id`/`--output-fields`/`--conditions` every call; omitted `--search-query` clears it; only `--name`/`--description` are partial). CLI gates on the read-access probe. |
 | `update_ai_knowledge_base_document` | `pipefy kb document update` | shipped | Knowledge bases; metadata-only partial update (`--id`, `--pipe-uuid`, optional `--name`/`--description`, at least one); no file replacement. CLI gates on the read-access probe. |

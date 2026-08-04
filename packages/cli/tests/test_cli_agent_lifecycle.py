@@ -170,7 +170,7 @@ def test_agent_create_inactive_sets_disabled_at_on_create_and_update_chain(
     datetime.fromisoformat(create_arg.disabled_at)
     update_arg = mock_client.update_ai_agent.call_args.args[0]
     assert update_arg.disabled_at == create_arg.disabled_at
-    assert update_arg.preserve_disabled_at is True
+    assert update_arg.preserve_disabled_at is False
 
 
 def test_agent_update_json_exposes_active_when_disabled_at_null(
@@ -281,6 +281,68 @@ def test_agent_update_json_exposes_active_false_when_disabled(
         )
 
     assert r.exit_code == 0, r.stderr
+    body = json.loads(r.stdout)
+    assert body["disabled_at"] == stub_disabled_at
+    assert body["active"] is False
+
+
+def test_agent_update_passes_disabled_at_when_provided(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``agent update --disabled-at`` pass-through skips inventing a preserve re-read."""
+    oauth_env("ag-update-disabled-at")
+    stub_disabled_at = "2026-01-15T12:00:00+00:00"
+    mock_client = MagicMock()
+    mock_client.update_ai_agent = AsyncMock(
+        return_value={
+            "agent_uuid": "agent-uuid",
+            "message": "AI Agent updated successfully. UUID: agent-uuid",
+            "disabled_at": stub_disabled_at,
+            "active": False,
+        }
+    )
+
+    with (
+        patch(
+            "pipefy_cli.commands._common.get_authenticated_client",
+            return_value=mock_client,
+        ),
+        patch(
+            "pipefy_cli.commands.agent.validate_ai_agent_behaviors_sdk",
+            new=AsyncMock(return_value=_PREFLIGHT_OK),
+        ),
+        patch(
+            "pipefy_sdk.client.resolve_and_populate_field_refs",
+            new=AsyncMock(side_effect=lambda _c, behaviors: behaviors),
+        ),
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "agent",
+                "update",
+                "--uuid",
+                "agent-uuid",
+                "--name",
+                "Updated",
+                "--repo-uuid",
+                "repo-456",
+                "--instruction",
+                "Do things",
+                "--pipe",
+                "1",
+                "--behaviors",
+                json.dumps([_AGENT_BEHAVIOR]),
+                "--disabled-at",
+                stub_disabled_at,
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    update_arg = mock_client.update_ai_agent.call_args.args[0]
+    assert update_arg.disabled_at == stub_disabled_at
+    assert update_arg.preserve_disabled_at is True
     body = json.loads(r.stdout)
     assert body["disabled_at"] == stub_disabled_at
     assert body["active"] is False

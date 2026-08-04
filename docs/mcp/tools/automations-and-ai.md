@@ -159,7 +159,7 @@ On **create**, if the caller omits `condition`, the MCP layer supplies `DEFAULT_
 | Tool | Read-only | Role |
 |------|-----------|------|
 | `create_ai_agent` | No | Creates and configures an AI agent with `instruction` (= Pipefy UI "Description") and 1–5 `behaviors` in one call. `repo_uuid` is the pipe UUID from `get_pipe`. Optional: `data_source_ids`; optional `active` (default `true`; `false` = inactive-on-create via `disabled_at`). Success payload includes `disabled_at` / `active`. |
-| `update_ai_agent` | No | Replaces full agent config; send the complete `behaviors` list (1-5). Preserves disabled status — use `toggle_ai_agent_status` to activate or deactivate. Success payload includes `disabled_at` / `active`. |
+| `update_ai_agent` | No | Replaces full agent config; send the complete `behaviors` list (1-5). Preserves disabled status (optional `disabled_at` pass-through from `get_ai_agent` skips the re-read). Use `toggle_ai_agent_status` to activate or deactivate. Success payload includes `disabled_at` / `active`. |
 | `toggle_ai_agent_status` | No | Enable/disable without resending configuration. |
 
 **Tip:** Pipefy UI **Description** maps to the API/tool field `instruction` (agent-level purpose). The per-behavior prompt in the UI maps to `actionParams.aiBehaviorParams.instruction` on each behavior (behavior-level).

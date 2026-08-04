@@ -5,6 +5,7 @@ from _shared.fixture_ids import make_pipe_id
 from pipefy_sdk import PipefyGraphQLError
 
 from pipefy_mcp.tools.ai_tool_helpers import (
+    build_create_agent_partial_failure,
     build_create_agent_success,
     build_create_automation_success,
     build_delete_agent_success,
@@ -44,6 +45,21 @@ def _make_behaviors(*specs):
 
 
 # --- Unified-envelope / legacy-shape parity for AI success builders ---
+
+
+@pytest.mark.unit
+def test_build_create_agent_partial_failure_includes_disabled_hint():
+    out = build_create_agent_partial_failure(
+        agent_uuid="u1",
+        error="update failed",
+        disabled_at="2026-08-04T12:00:00+00:00",
+    )
+    assert out["success"] is False
+    assert out["agent_uuid"] == "u1"
+    assert out["disabled_at"] == "2026-08-04T12:00:00+00:00"
+    assert out["active"] is False
+    assert "toggle_ai_agent_status" in out["error"]["message"]
+    assert "update failed" in out["error"]["message"]
 
 
 @pytest.mark.unit

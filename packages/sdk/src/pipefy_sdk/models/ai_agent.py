@@ -422,11 +422,12 @@ class CreateAiAgentInput(BaseModel):
 class UpdateAiAgentInput(BaseModel):
     """Validated input for updating an AI Agent.
 
-    When ``preserve_disabled_at`` is True (default) and ``disabled_at`` is None,
-    the adapter fetches the current agent and re-sends ``disabledAt`` if set
-    (routine update must not clear a disabled agent). When False and
-    ``disabled_at`` is None, ``disabledAt`` is omitted from the payload so the
-    API can clear/activate (used by the create-active configure chain).
+    Prefer passing ``disabled_at`` from a prior ``get_ai_agent`` read (pass-through;
+    skips the preserve re-read). When ``preserve_disabled_at`` is True (default) and
+    ``disabled_at`` is None, the adapter fetches the current agent and re-sends
+    ``disabledAt`` if set (routine update must not clear a disabled agent). When
+    False and ``disabled_at`` is None, ``disabledAt`` is omitted from the payload so
+    the API can clear a default disabled shell (create-active configure chain).
     """
 
     uuid: NonBlankStr

@@ -54,11 +54,22 @@ def inject_reference_ids(behaviors: list[dict[str, Any]]) -> list[dict[str, Any]
     return result
 
 
-def resolve_update_disabled_at(provided: str | None, current: str | None) -> str | None:
-    """Choose ``disabledAt`` for updateAiAgent; never clear (activation is toggle-only)."""
+def resolve_update_disabled_at(
+    *,
+    provided: str | None,
+    preserve: bool,
+    current: str | None,
+) -> str | None:
+    """Choose ``disabledAt`` for updateAiAgent.
+
+    Prefer an explicit ``provided`` value (pass-through). When omitted, re-send
+    ``current`` only if ``preserve`` is True; otherwise omit so the API can clear
+    a default disabled shell (create-active configure step). Activation remains
+    toggle-only — this helper never invents a clear beyond omitting the key.
+    """
     if provided is not None:
         return provided
-    if current:
+    if preserve:
         return current
     return None
 
@@ -120,12 +131,16 @@ class AiAgentService:
         ]
         behaviors_with_refs = inject_reference_ids(behaviors_raw)
 
-        disabled_at = agent_input.disabled_at
+        current_disabled_at: str | None = None
         if agent_input.disabled_at is None and agent_input.preserve_disabled_at:
             current = await self.get_agent(agent_input.uuid)
             raw = current.get("disabledAt")
             current_disabled_at = raw if isinstance(raw, str) else None
-            disabled_at = resolve_update_disabled_at(None, current_disabled_at)
+        disabled_at = resolve_update_disabled_at(
+            provided=agent_input.disabled_at,
+            preserve=agent_input.preserve_disabled_at,
+            current=current_disabled_at,
+        )
 
         agent_payload: dict[str, Any] = {
             "name": agent_input.name,

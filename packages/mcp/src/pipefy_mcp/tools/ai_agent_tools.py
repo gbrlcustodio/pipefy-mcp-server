@@ -182,7 +182,9 @@ class AiAgentTools:
             Pass ``active=False`` to create inactive (sets ``disabled_at`` on create and the
             chained update so the second step does not revive). Confirm status from the
             response ``disabled_at`` / ``active`` fields - no extra get required. To change
-            status later, use ``toggle_ai_agent_status`` (not ``update_ai_agent``).
+            status later, use ``toggle_ai_agent_status`` (not ``update_ai_agent``). An agent
+            with no active behavior is disabled by the API regardless of this flag
+            (``BehaviorInput.active`` defaults to true).
 
             Discovery workflow (call these tools first):
               1. ``get_pipe(pipe_id)`` → obtain ``uuid`` (use as ``repo_uuid``) and phase IDs.
@@ -350,7 +352,7 @@ class AiAgentTools:
                 behaviors=validated.behaviors,
                 data_source_ids=validated.data_source_ids,
                 disabled_at=validated.disabled_at,
-                preserve_disabled_at=not active,
+                preserve_disabled_at=False,
             )
             try:
                 update_result = await client.update_ai_agent(update_input)
@@ -372,6 +374,7 @@ class AiAgentTools:
                 return build_create_agent_partial_failure(
                     agent_uuid=agent_uuid,
                     error=error_text,
+                    disabled_at=create_result.get("disabled_at"),
                 )
 
             msg = f"AI Agent created and configured successfully. UUID: {agent_uuid}"
@@ -393,6 +396,7 @@ class AiAgentTools:
             instruction: str,
             behaviors: list[dict],
             data_source_ids: list[str] | None = None,
+            disabled_at: str | None = None,
         ) -> dict:
             """Update an AI Agent — replaces the entire config (all-or-nothing save).
 
@@ -401,10 +405,12 @@ class AiAgentTools:
             one action (same constraint and shape as ``create_ai_agent`` — see its docstring for the
             full behavior dict example, discovery workflow, and constraints).
 
-            Active lifecycle: a routine update never reactivates (or deactivates) the agent.
-            ``disabled_at`` is preserved by the SDK when omitted. Use ``toggle_ai_agent_status``
-            to activate or deactivate. Confirm status from the response ``disabled_at`` /
-            ``active`` fields.
+            Active lifecycle: a routine update does not intentionally reactivate or deactivate the
+            agent. Pass ``disabled_at`` from a prior ``get_ai_agent`` (agent ``disabledAt``) to
+            preserve without an extra read; when omitted, the SDK re-reads and re-sends. Use
+            ``toggle_ai_agent_status`` to activate or deactivate. Confirm status from the response
+            ``disabled_at`` / ``active`` fields. An agent with no active behavior is disabled by the
+            API regardless of preserve (``BehaviorInput.active`` defaults to true).
 
             To modify an existing agent: call ``get_ai_agent`` first, edit the returned config,
             and send the full payload back. The server replaces ``referenceId`` and appends
@@ -454,6 +460,8 @@ class AiAgentTools:
                     (same interpolation as ``create_ai_agent``).
                     Discover via: ``get_automation_events(pipe_id)`` and ``get_phase_fields(phase_id)``.
                 data_source_ids: Optional list of data source IDs.
+                disabled_at: Optional ISO-8601 ``disabledAt`` from ``get_ai_agent``. Pass through to
+                    skip the preserve re-read and avoid a toggle race. Omit to let the SDK preserve.
             """
             client = get_pipefy_client(ctx)
             await ctx.debug(
@@ -479,6 +487,7 @@ class AiAgentTools:
                     instruction=instruction,
                     behaviors=behaviors_expanded,
                     data_source_ids=data_source_ids or [],
+                    disabled_at=disabled_at,
                 )
             except ValidationError as exc:
                 return build_ai_tool_error(str(exc))
@@ -521,8 +530,9 @@ class AiAgentTools:
 
             Set active=true to activate or active=false to deactivate.
             Does not require resending the agent configuration.
-            Use this tool to change active status; ``update_ai_agent`` never
-            reactivates or deactivates an agent.
+            Use this tool to change active status; ``update_ai_agent`` preserves
+            disabled state and is not the activation path (an update whose behaviors
+            all carry ``active: false`` can still deactivate via the API).
 
             Args:
                 uuid: UUID of the agent to enable/disable.

@@ -19,6 +19,8 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, att
 - **Field types** are not validated locally — use `introspect_type` (e.g., on `CreatePhaseFieldInput`) for allowed values.
 - Most write tools support `debug=true` on errors (returns GraphQL codes + `correlation_id`).
 - `extra_input` merges extra API keys (camelCase); keys that duplicate primary arguments are ignored.
+- **Phase connections are UI-only.** Creating or reordering phases does not wire Phase Connections / `allowed_phases`. Configure edges in the Pipefy UI; use `get_phase_allowed_move_targets` before moves. The API cannot add transition edges.
+- **Verify-after-write.** After create/update, re-read with the matching get tool (`get_pipe`, `get_card`, `get_phase_fields`, etc.) before reporting success. Do not treat the write response alone as proof.
 
 ---
 

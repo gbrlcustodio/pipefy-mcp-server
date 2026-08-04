@@ -37,6 +37,8 @@ Execution logs live in [skills/observability/](../../observability/pipefy-observ
 
 ## Creation workflow (discover → validate → create → verify)
 
+**Consent:** create or suggest an AI agent only when the user explicitly asked for AI / an agent. If AI seems useful but was not requested, ask first — never introduce agents without being asked.
+
 Never guess event IDs, phase IDs, action types, or field IDs.
 
 ### 1 — Get pipe metadata
@@ -193,7 +195,7 @@ On create/update, slug `fieldId` values are resolved to numeric `internal_id`, `
 
 ### 9 — Verify
 
-`get_ai_agent(uuid)` to confirm behaviors match expectations.
+`get_ai_agent(uuid)` to confirm behaviors match expectations **and** to re-read active status / `disabledAt`. Do not treat the create/update write alone as proof the agent is enabled — re-read status after every write.
 
 ---
 

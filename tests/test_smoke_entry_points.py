@@ -51,6 +51,22 @@ def _full_install() -> list[FakeDistribution]:
     ]
 
 
+# Wheel filenames as `uv build --all-packages --wheel` writes them: the
+# distribution name is escaped with underscores.
+_COMPLETE_WHEELS = [
+    "pipefy-0.5.0a1-py3-none-any.whl",
+    "pipefy_auth-0.5.0a1-py3-none-any.whl",
+    "pipefy_cli-0.5.0a1-py3-none-any.whl",
+    "pipefy_infra-0.5.0a1-py3-none-any.whl",
+    "pipefy_mcp_server-0.5.0a1-py3-none-any.whl",
+]
+
+
+def _write_wheels(directory: Path, names: list[str]) -> None:
+    for name in names:
+        (directory / name).touch()
+
+
 @dataclass
 class FakeRunner:
     """Records the argv of each launch and replays canned results."""
@@ -145,6 +161,60 @@ class TestResolveScripts:
         assert scripts == ["pipefy", "pipefy-mcp-server"]
 
 
+class TestCheckWheels:
+    """Membership must fail closed before pip runs, not after the install."""
+
+    @pytest.mark.parametrize(
+        ("filename", "expected"),
+        [
+            ("pipefy-0.5.0a1-py3-none-any.whl", "pipefy"),
+            ("pipefy_mcp_server-0.5.0a1-py3-none-any.whl", "pipefy-mcp-server"),
+            ("pipefy_cli-1.0.0-py3-none-any.whl", "pipefy-cli"),
+        ],
+    )
+    def test_reads_the_distribution_from_the_filename(
+        self, filename: str, expected: str
+    ) -> None:
+        assert _smoke.wheel_distribution(filename) == expected
+
+    def test_accepts_one_wheel_per_member(self, tmp_path: Path) -> None:
+        _write_wheels(tmp_path, _COMPLETE_WHEELS)
+        assert _smoke.check_wheels(tmp_path) == sorted(_COMPLETE_WHEELS)
+
+    def test_rejects_a_missing_member(self, tmp_path: Path) -> None:
+        """The regression this guard exists for.
+
+        `pip install <dir>/*.whl` does not fail on an incomplete set: the sibling
+        `==` pins let it satisfy the absent member from the index, so the smoke
+        passes against a wheel the build never produced.
+        """
+        _write_wheels(tmp_path, [w for w in _COMPLETE_WHEELS if "infra" not in w])
+        with pytest.raises(_smoke.SmokeError, match="has no wheel for: pipefy-infra"):
+            _smoke.check_wheels(tmp_path)
+
+    def test_rejects_an_empty_directory(self, tmp_path: Path) -> None:
+        with pytest.raises(_smoke.SmokeError, match="has no wheel for:"):
+            _smoke.check_wheels(tmp_path)
+
+    def test_rejects_an_unexpected_sixth_member(self, tmp_path: Path) -> None:
+        _write_wheels(
+            tmp_path, [*_COMPLETE_WHEELS, "pipefy_extra-0.1.0-py3-none-any.whl"]
+        )
+        with pytest.raises(
+            _smoke.SmokeError, match="unexpected wheel for: pipefy-extra"
+        ):
+            _smoke.check_wheels(tmp_path)
+
+    def test_rejects_two_versions_of_one_member(self, tmp_path: Path) -> None:
+        _write_wheels(
+            tmp_path, [*_COMPLETE_WHEELS, "pipefy_cli-0.4.0b2-py3-none-any.whl"]
+        )
+        with pytest.raises(
+            _smoke.SmokeError, match="more than one wheel for: pipefy-cli"
+        ):
+            _smoke.check_wheels(tmp_path)
+
+
 class TestLaunch:
     def test_runs_help_for_each_script_from_the_venv_bin(self, tmp_path: Path) -> None:
         for name in ("pipefy", "pipefy-mcp-server"):
@@ -210,13 +280,47 @@ class TestMain:
     ) -> None:
         for name in ("pipefy", "pipefy-mcp-server"):
             (tmp_path / name).touch()
+        runner = FakeRunner()
         monkeypatch.setattr(_smoke, "distributions", _full_install)
         monkeypatch.setattr(_smoke.sysconfig, "get_path", lambda _name: str(tmp_path))
-        monkeypatch.setattr(_smoke.subprocess, "run", FakeRunner())
+        monkeypatch.setattr(_smoke.subprocess, "run", runner)
         assert _smoke.main() == 0
         assert (
             "Every published console entry point launched." in capsys.readouterr().out
         )
+        # Asserted explicitly: without this, removing the launch() call from main
+        # leaves both the exit code and the banner intact.
+        assert runner.calls == [
+            [str(tmp_path / "pipefy"), "--help"],
+            [str(tmp_path / "pipefy-mcp-server"), "--help"],
+        ]
+
+    def test_check_wheels_mode_passes_on_a_complete_directory(
+        self, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    ) -> None:
+        _write_wheels(tmp_path, _COMPLETE_WHEELS)
+        assert _smoke.main(["--check-wheels", str(tmp_path)]) == 0
+        assert "holds one wheel per published member" in capsys.readouterr().out
+
+    def test_check_wheels_mode_fails_on_an_incomplete_directory(
+        self, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    ) -> None:
+        _write_wheels(tmp_path, [w for w in _COMPLETE_WHEELS if "infra" not in w])
+        assert _smoke.main(["--check-wheels", str(tmp_path)]) == 1
+        assert "has no wheel for: pipefy-infra" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("argv", [["--check-wheels"], ["--check-wheels", "a", "b"]])
+    def test_rejects_a_malformed_invocation(
+        self, argv: list[str], capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert _smoke.main(argv) == 1
+        assert "usage:" in capsys.readouterr().err
+
+    def test_rejects_an_unknown_argument(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert _smoke.main(["--launch-everything"]) == 1
+        assert "usage:" in capsys.readouterr().err
 
 
 class TestConstantsTrackTheWorkspace:

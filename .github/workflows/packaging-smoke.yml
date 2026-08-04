@@ -11,8 +11,9 @@ name: Packaging smoke
 # `mcp` 2.0.0 was found by the release workflow, the last possible moment. On a
 # timer, upstream breakage surfaces on its own schedule instead of the release's.
 #
-# Dormant until this file reaches the default branch: GitHub fires `schedule`,
-# and offers `workflow_dispatch`, only for workflows present on `main`.
+# The timer is dormant until this file reaches the default branch: GitHub fires
+# `schedule`, and offers `workflow_dispatch`, only for workflows present on
+# `main`. The path-filtered `pull_request` trigger below is unaffected.
 
 on:
   schedule:
@@ -59,6 +60,11 @@ jobs:
       - name: Install into a clean venv and launch every entry point
         run: |
           set -euo pipefail
+          # Membership is checked before the install, not after: an incomplete set
+          # is not an error for pip, which satisfies the absent member from the
+          # index through the sibling `==` pins. The smoke would then pass against
+          # a wheel this build never produced.
+          python scripts/smoke_entry_points.py --check-wheels dist-packaging-smoke
           python -m venv .venv-built-smoke
           .venv-built-smoke/bin/python -m pip install --upgrade pip
           # Every wheel on one command line, so the sibling `==` pins resolve
@@ -127,7 +133,7 @@ jobs:
           # rename cannot leave this step failing on a missing label.
           gh label create "$label" \
             --color b60205 \
-            --description "A scheduled packaging smoke install failed" \
+            --description "A packaging smoke install failed" \
             --force
           # Written to a file rather than a $(cat <<EOF) capture: an apostrophe
           # inside a heredoc inside a command substitution is a parse error on
@@ -135,7 +141,7 @@ jobs:
           # edited wrong later.
           body="$RUNNER_TEMP/packaging-smoke-body.md"
           cat > "$body" <<EOF
-          A scheduled packaging smoke install failed. This gate resolves dependencies from PyPI instead of \`uv.lock\`, so it is the only one that sees a fresh install — a green test suite does not contradict it.
+          A packaging smoke install failed. This gate resolves dependencies from PyPI instead of \`uv.lock\`, which is the only way to see a fresh install — a green test suite does not contradict it.
 
           | Job | Result |
           | --- | --- |
@@ -153,7 +159,7 @@ jobs:
             gh issue comment "$existing" --body-file "$body"
           else
             gh issue create \
-              --title "Scheduled packaging smoke install is failing" \
+              --title "The packaging smoke install is failing" \
               --label "$label" \
               --body-file "$body"
           fi

@@ -1,16 +1,26 @@
 #!/usr/bin/env python3
-"""Launch every console entry point a fresh install of this workspace exposes.
+"""Guard the packaging smoke install: check the wheels, then launch every command.
 
-Run this with the **smoke virtualenv's** interpreter, not the repository's::
+Two modes, both keyed off one list of published members
+(``PUBLISHED_DISTRIBUTIONS``):
 
-    .venv-smoke/bin/python scripts/smoke_entry_points.py
+``--check-wheels <directory>``
+    Run with any interpreter, **before** the install. Asserts the directory holds
+    exactly one wheel per published member. An incomplete set must not reach
+    ``pip``: the sibling ``==`` pins let pip resolve the absent member from the
+    index, so the smoke would pass against an artifact this build never produced.
 
-It reads installed distribution metadata rather than the checkout's
-``pyproject.toml`` files, so it reports what an install actually exposes: a wheel
-that ships without its entry point, or a package missing from the install
-altogether, fails here.
+no arguments
+    Run with the **smoke virtualenv's** interpreter, after the install::
 
-Three workflows share it -- ``ci.yml``, ``release.yml``, and
+        .venv-smoke/bin/python scripts/smoke_entry_points.py
+
+    Launches every console entry point. It reads installed distribution metadata
+    rather than the checkout's ``pyproject.toml`` files, so it reports what an
+    install actually exposes: a wheel that ships without its entry point, or a
+    member missing from the install, fails here.
+
+Three workflows share this script -- ``ci.yml``, ``release.yml``, and
 ``packaging-smoke.yml`` -- so "every published entry point" has one definition
 instead of a launch list copied into each job, where a newly added script would
 have to be remembered three times.
@@ -39,6 +49,8 @@ PUBLISHED_DISTRIBUTIONS = frozenset(
 REQUIRED_SCRIPTS = frozenset({"pipefy", "pipefy-mcp-server"})
 
 LAUNCH_TIMEOUT_SECONDS = 120
+
+USAGE = "usage: smoke_entry_points.py [--check-wheels <directory>]"
 
 Runner = Callable[..., "subprocess.CompletedProcess[str]"]
 
@@ -85,6 +97,48 @@ def resolve_scripts(found: Mapping[str, Distribution]) -> list[str]:
     return sorted(scripts)
 
 
+def wheel_distribution(filename: str) -> str:
+    """Read the distribution name out of a wheel filename (PEP 427 name-version-...)."""
+    return canonical_name(filename.split("-")[0])
+
+
+def check_wheels(directory: str | Path) -> list[str]:
+    """Assert the directory holds exactly one wheel per published member.
+
+    Installing an incomplete set is not a hard error for pip: it satisfies the
+    absent member from the index through the sibling ``==`` pins, and the smoke
+    then passes against a wheel this build never produced. So the membership
+    check has to happen before the install, not after it.
+    """
+    wheels = sorted(path.name for path in Path(directory).glob("*.whl"))
+    by_distribution: dict[str, list[str]] = {}
+    for name in wheels:
+        by_distribution.setdefault(wheel_distribution(name), []).append(name)
+
+    missing = sorted(PUBLISHED_DISTRIBUTIONS - set(by_distribution))
+    if missing:
+        raise SmokeError(
+            f"{directory} has no wheel for: {', '.join(missing)}. "
+            "pip would resolve that member from the index instead, so the smoke "
+            "would test an artifact this build did not produce."
+        )
+    unexpected = sorted(set(by_distribution) - PUBLISHED_DISTRIBUTIONS)
+    if unexpected:
+        raise SmokeError(
+            f"{directory} holds an unexpected wheel for: {', '.join(unexpected)}. "
+            "Add the member to PUBLISHED_DISTRIBUTIONS, or remove the wheel."
+        )
+    duplicated = sorted(
+        name for name, built in by_distribution.items() if len(built) > 1
+    )
+    if duplicated:
+        raise SmokeError(
+            f"{directory} holds more than one wheel for: {', '.join(duplicated)}. "
+            "A wheel left over from an earlier version makes the install ambiguous."
+        )
+    return wheels
+
+
 def launch(
     scripts: Sequence[str],
     script_dir: str | Path,
@@ -119,9 +173,23 @@ def launch(
         print(f"  {script} --help -> ok")
 
 
-def main() -> int:
-    script_dir = sysconfig.get_path("scripts")
+def main(argv: Sequence[str] | None = None) -> int:
+    # sys.argv is read at the entry point below, never here: a default that
+    # reached for it would pick up the arguments of whatever runs this module.
+    args = [] if argv is None else list(argv)
     try:
+        if args[:1] == ["--check-wheels"]:
+            if len(args) != 2:
+                raise SmokeError(USAGE)
+            directory = args[1]
+            wheels = check_wheels(directory)
+            print(f"{directory} holds one wheel per published member:")
+            for name in wheels:
+                print(f"  {name}")
+            return 0
+        if args:
+            raise SmokeError(USAGE)
+        script_dir = sysconfig.get_path("scripts")
         scripts = resolve_scripts(index_published(distributions()))
         print(f"Launching {len(scripts)} console entry point(s) from {script_dir}")
         launch(scripts, script_dir)
@@ -133,4 +201,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

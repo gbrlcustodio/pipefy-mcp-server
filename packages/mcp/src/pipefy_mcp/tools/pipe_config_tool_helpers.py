@@ -107,7 +107,10 @@ def build_pipe_mutation_success_payload(
 
 
 def build_pipe_tool_error_payload(
-    *, message: str, code: str | None = None
+    *,
+    message: str,
+    code: str | None = None,
+    details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """``success: False`` with ``error`` text.
 
@@ -117,8 +120,9 @@ def build_pipe_tool_error_payload(
             ``"INVALID_ARGUMENTS"`` for pre-API argument-shape failures so
             the envelope matches the shape of arg-coercion errors
             emitted by :class:`pipefy_mcp.tools.validation_envelope.PipefyValidationTool`.
+        details: Optional structured context (ids, verify outcome, etc.).
     """
-    return tool_error(message, code=code)
+    return tool_error(message, code=code, details=details)
 
 
 def build_field_condition_success_payload(

@@ -12,6 +12,10 @@ uvx pipefy-mcp-server
 
 For per-client wiring (Claude Code / Cursor / Claude Desktop / Codex), see [root `README.md#installation`](../../README.md#installation).
 
+## Uninstall
+
+`./uninstall.sh --scan` (repository root) reports every Pipefy MCP registration on the machine, matched on what each one runs rather than on its name, plus the tools, credentials, skills, and plugin state behind them. A bare run removes what you approve, in tiers. Teardown reference and the hosted / local / plugin switching recipes: [`docs/uninstall.md`](../../docs/uninstall.md).
+
 ## Configuration
 
 Set the following environment variables (or add them to a `.env` file in the working directory, or pin them in `~/.config/pipefy/config.toml`):

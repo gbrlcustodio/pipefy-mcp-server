@@ -63,7 +63,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
    | Claude Code plugin | [Claude Code plugin](../../../README.md#2-claude-code-plugin) | Marketplace + slash install/login |
    | CLI only | [CLI](../../../README.md#4-cli-only) | `pipefy` on PATH; no MCP |
 
-   **Never** register both hosted HTTP and local stdio/plugin under the MCP server name `pipefy`.
+   **Never** register both a hosted HTTP and a local stdio/plugin Pipefy server, whatever they are named: a second registration shadows the one you meant to use. Switching between paths is remove-then-add — [`docs/uninstall.md`](../../../docs/uninstall.md#switching-channels).
 
 2. **Execute the chosen README block** — run it in the shell, or print it for the user to paste (required for Claude slash commands). Do not reorder the plugin sequence: marketplace → `/plugin install pipefy` → `/pipefy:install` → `/pipefy:pipefy-login`.
 
@@ -73,11 +73,11 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 
    - Shell (local / plugin / CLI): `pipefy --version`
    - MCP: call `list_organizations` (needs no id — the natural first read; confirms the credential works and surfaces the org ids other tools need) or another read-only tool the user allows
-   - Confirm exactly one `pipefy` MCP registration for the path you chose (hosted vs plugin)
+   - Run `./uninstall.sh --scan` (repository root; reports only, removes nothing) and confirm it reports exactly one registration, for the path you chose. It matches on what an entry **runs** — the `pipefy-mcp-server` command, a known runner invoking it, or the host `mcp.pipefy.com` — so a server registered under any other name is still found. Exit `0` nothing found, `1` findings remain, `2` a source could not be inspected.
 
 ## Success criteria
 
-- One active Pipefy MCP registration for the chosen path (or CLI-only with no MCP).
+- `./uninstall.sh --scan` reports one registration, for the chosen path (or CLI-only with no MCP).
 - Auth completed.
 - Read-only MCP call or `pipefy --version` succeeds.
 
@@ -86,7 +86,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
 | Slash commands missing | Plugin not installed | README [Claude Code plugin](../../../README.md#2-claude-code-plugin) — marketplace + install first |
-| Two `pipefy` MCP entries | Hosted + plugin both registered | `claude mcp remove <name> -s user` (or client settings) |
+| More than one Pipefy MCP registration | Hosted + local/plugin both registered, possibly under different names | `./uninstall.sh --scan` names each one and where it lives; remove-then-add recipes in [`docs/uninstall.md`](../../../docs/uninstall.md#switching-channels). A plugin-provided server ranks below user scope, so removing the user entry alone falls through to it |
 | `Needs authentication` after hosted add | OAuth not finished | `claude mcp login <name>` + browser |
 | `pipefy: command not found` | CLI not on PATH | `/pipefy:install` or README [CLI](../../../README.md#4-cli-only); check `$HOME/.local/bin` |
 | MCP tools empty / auth errors | Login not done | Re-run login; service accounts → `docs/config.md` |
@@ -95,4 +95,5 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 ## See also
 
 - [`README.md#installation`](../../../README.md#installation)
+- [`docs/uninstall.md`](../../../docs/uninstall.md) — `uninstall.sh --scan`, teardown, and switching between hosted, local, and plugin
 - [`skills/README.md`](../../README.md)

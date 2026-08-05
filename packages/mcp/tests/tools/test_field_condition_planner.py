@@ -156,6 +156,21 @@ def test_find_required_hidden_fields_matches_phase_field_id_against_id():
 
 
 @pytest.mark.unit
+def test_find_required_hidden_fields_matches_phase_field_id_against_uuid():
+    field_uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    fields = [
+        {
+            "id": "slug-a",
+            "internal_id": "123",
+            "uuid": field_uuid,
+            "required": True,
+        },
+    ]
+    actions = [{"phaseFieldId": field_uuid, "actionId": "hide"}]
+    assert find_required_hidden_fields(fields, actions) == [field_uuid]
+
+
+@pytest.mark.unit
 def test_find_required_hidden_fields_dedupes_stable_action_order():
     fields = [
         {"internal_id": "123", "required": True},

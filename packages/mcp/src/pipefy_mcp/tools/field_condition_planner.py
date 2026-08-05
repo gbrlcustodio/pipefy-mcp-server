@@ -87,9 +87,9 @@ def find_required_hidden_fields(
 
     Treats ``actionId`` values ``hide`` and legacy ``hidden`` the same (the SDK
     maps ``hidden`` → ``hide`` after this lint runs). Matches each action's
-    ``phaseFieldId`` against both ``internal_id`` and ``id`` on field
-    definitions (the API may store either). Non-dict entries are ignored.
-    Results are deduplicated in first-seen action order.
+    ``phaseFieldId`` against ``internal_id``, ``id``, and ``uuid`` on field
+    definitions (any of those is a valid ``phaseFieldId``). Non-dict entries
+    are ignored. Results are deduplicated in first-seen action order.
 
     The toolkit rejects this combination even when the Pipefy API would accept it.
     """
@@ -99,7 +99,7 @@ def find_required_hidden_fields(
             continue
         if not field.get("required"):
             continue
-        for key in ("internal_id", "id"):
+        for key in ("internal_id", "id", "uuid"):
             value = field.get(key)
             if value is not None and str(value).strip() != "":
                 required_tokens.add(str(value))

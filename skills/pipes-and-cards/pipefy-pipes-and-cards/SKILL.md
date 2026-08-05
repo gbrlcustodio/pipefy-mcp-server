@@ -212,9 +212,11 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 |------------|-----|---------|
 | `get_field_conditions` | `pipefy field-condition list --phase <id>` | List all field conditions on a phase. |
 | `get_field_condition` | `pipefy field-condition get` | Load one field condition by ID. |
-| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. |
+| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. After create, verifies the rule on the requested phase (`verified: true`); if both verify reads fail, may return success with a warning (verification unavailable). |
 | `update_field_condition` | `pipefy field-condition update` | Update condition action or rule. |
 | `delete_field_condition` | `pipefy field-condition delete` | **Two-step destructive.** |
+
+Do not hide a required field — the tool rejects `hide`/`hidden` on `required=true`; clear `required` first.
 
 ---
 

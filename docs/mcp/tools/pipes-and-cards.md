@@ -63,7 +63,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | `add_card_comment` | Add a comment to a card. |
 | `update_comment` | Update an existing comment. |
 | `delete_comment` | Delete a comment (two-step: preview with `confirm=false`, then `confirm=true` after approval; `destructiveHint=True`). |
-| `move_card_to_phase` | Move card to another phase. |
+| `move_card_to_phase` | Move card to another phase. On failure for a required empty field, may return `success: false` naming that field; when a hide condition on the same required field is detected, the error includes a hide hint. |
 | `update_card_field` | Single-field update (`updateCardField`). |
 | `update_card` | Metadata (title, assignees, labels, due date) and/or multiple custom fields via `field_updates`. |
 | `delete_card` | Two-step: default preview; `confirm=true` after explicit user confirmation. `card_id` is a **string** in the API; pass `"…"` or a coerced positive integer (see [Pipefy IDs](#pipefy-ids-type-safety)). |
@@ -151,8 +151,8 @@ Five tools read and configure conditional visibility on phase fields.
 |------|-----------|------|
 | `get_field_conditions` | Yes | Lists conditions for a phase (expressions, actions). |
 | `get_field_condition` | Yes | Loads one condition by ID. |
-| `create_field_condition` | No | Creates a rule: `phase_id`, `condition` (dict), `actions` (list of dicts), optional `extra_input`. |
-| `update_field_condition` | No | Patches an existing rule: `condition_id` and at least one of `condition`, `actions`, or `extra_input`. |
+| `create_field_condition` | No | Creates a rule: `phase_id`, `condition` (dict), `actions` (list of dicts), optional `extra_input`. Re-reads after create and sets `verified: true` when the rule exists on the requested phase; if both verify reads fail, may return success with a warning (verification unavailable). Rejects `hide`/`hidden` on a `required=true` field before the mutation. |
+| `update_field_condition` | No | Patches an existing rule: `condition_id` and at least one of `condition`, `actions`, or `extra_input`. When `actions` is provided, rejects `hide`/`hidden` on a `required=true` field before the mutation (best-effort if phase fields cannot be loaded). |
 | `delete_field_condition` | No | Deletes a rule (`destructiveHint=True` — confirm with the user first). |
 
 - `create_field_condition` maps to `createFieldConditionInput`: `phase_id`, `condition`, `actions`.

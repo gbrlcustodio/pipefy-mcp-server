@@ -354,3 +354,64 @@ def test_a_case_label_is_not_read_as_a_deletion():
     assert "        rmdir) act_rmdir" in body
     assert _guard.check(_UNINSTALL) == []
 
+
+# ------------------------------------------------------- the receipt alphabet
+
+
+def _reader_key_pattern() -> re.Pattern[str]:
+    """The awk key check `uninstall.sh` applies to every receipt line."""
+    body = _UNINSTALL.read_text(encoding="utf-8")
+    match = re.search(r"if \(k !~ /(\S+)/\)", body)
+    assert match, "no receipt key check in uninstall.sh"
+    return re.compile(match.group(1))
+
+
+def _writer_keys() -> set[str]:
+    body = _INSTALL.read_text(encoding="utf-8")
+    return {
+        match.group(1) for match in re.finditer(r'receipt_put\s+"?([^"\s(]+)"?', body)
+    }
+
+
+def test_every_receipt_key_the_writer_emits_survives_the_reader(tmp_path):
+    """A key outside the reader's alphabet is dropped as junk, silently.
+
+    `entry_created.<client>` is the one that matters: it is the bit that says a
+    registration was already there, and losing it turns a preserved entry into
+    a deleted one.
+    """
+    pattern = _reader_key_pattern()
+    clients = _client_ids(_help(_INSTALL)) - {"none"}
+    assert "claude-desktop" in clients
+    keys = set()
+    for key in _writer_keys():
+        if key.endswith(".$1"):
+            keys.update(f"{key[:-3]}.{client}" for client in clients)
+        else:
+            keys.add(key)
+    unreadable = sorted(key for key in keys if not pattern.fullmatch(key))
+    assert unreadable == [], unreadable
+
+
+# --------------------------------------------------------- the onboarding skill
+
+_ONBOARDING = (
+    Path(__file__).resolve().parents[1]
+    / "skills"
+    / "onboarding"
+    / "pipefy-toolkit-setup"
+    / "SKILL.md"
+)
+
+
+def test_the_onboarding_skill_verifies_without_a_repository_checkout():
+    """Hosted MCP and the plugin give the agent no clone to run a script from."""
+    body = _ONBOARDING.read_text(encoding="utf-8")
+    verify = body.split("4. **Verify**", 1)[1].split("## Failure modes", 1)[0]
+    assert "curl -LsSf" in verify
+    assert "uninstall.sh | sh -s -- --scan" in verify
+    for line in body.splitlines():
+        # A bare `./uninstall.sh` as the instruction is the dead command; naming
+        # it as the checkout alternative beside the curl form is not.
+        if "./uninstall.sh" in line:
+            assert "curl -LsSf" in line, line

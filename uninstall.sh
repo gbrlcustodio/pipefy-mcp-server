@@ -497,7 +497,11 @@ receipt_records() {
             if (p == 0) { junk++; next }
             k = substr($0, 1, p - 1)
             v = substr($0, p + 1)
-            if (k !~ /^[a-z][a-z0-9_.]*$/) { junk++; next }
+            # The hyphen is in the alphabet because client ids carry one:
+            # entry_created.claude-desktop is a key the writer emits, and a
+            # reader that drops it silently loses the bit that says an entry
+            # was already there when install.sh ran.
+            if (k !~ /^[a-z][a-z0-9_.-]*$/) { junk++; next }
             if (k == "record" && v == "begin") {
                 endrec()
                 started = 1; expect = 1; ok = 0; complete = 0; newer = 0
@@ -2826,7 +2830,9 @@ fd, tmp = tempfile.mkstemp(
 )
 try:
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+        # ensure_ascii=False: another server's UTF-8 value is not this run's to
+        # rewrite into escapes.
+        json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, path)
 except BaseException:
@@ -2881,7 +2887,9 @@ fd, tmp = tempfile.mkstemp(
 )
 try:
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+        # ensure_ascii=False: another server's UTF-8 value is not this run's to
+        # rewrite into escapes.
+        json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, path)
 except BaseException:

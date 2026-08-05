@@ -11,7 +11,7 @@ tags: [pipefy, onboarding, install, mcp, setup, claude, cursor]
 
 # Pipefy toolkit setup (first-time onboarding)
 
-**Canonical install snippets** live only in the root [`README.md#installation`](../../../README.md#installation) (#246: no second god-doc of commands). This skill is the agent **checklist** — print or run the README blocks verbatim; do not invent alternate commands.
+**Canonical install snippets** live only in the root [`README.md#installation`](../../../README.md#installation) — there is no second copy of the commands. This skill is the agent **checklist** — print or run the README blocks verbatim; do not invent alternate commands.
 
 Edge cases: [`packages/mcp/README.md`](../../../packages/mcp/README.md). Auth: [`docs/cli/auth.md`](../../../docs/cli/auth.md). Env: [`docs/config.md`](../../../docs/config.md).
 
@@ -73,11 +73,11 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 
    - Shell (local / plugin / CLI): `pipefy --version`
    - MCP: call `list_organizations` (needs no id — the natural first read; confirms the credential works and surfaces the org ids other tools need) or another read-only tool the user allows
-   - Run `./uninstall.sh --scan` (repository root; reports only, removes nothing) and confirm it reports exactly one registration, for the path you chose. It matches on what an entry **runs** — the `pipefy-mcp-server` command, a known runner invoking it, or the host `mcp.pipefy.com` — so a server registered under any other name is still found. Exit `0` nothing found, `1` findings remain, `2` a source could not be inspected.
+   - Run `curl -LsSf https://raw.githubusercontent.com/pipefy/ai-toolkit/main/uninstall.sh | sh -s -- --scan` (reports only, removes nothing; `./uninstall.sh --scan` from a checkout does the same) and confirm it reports exactly one registration, for the path you chose. It matches on what an entry **runs** — the `pipefy-mcp-server` command, a known runner invoking it, or the host `mcp.pipefy.com` — so a server registered under any other name is still found. Exit `0` nothing found, `1` findings remain, `2` a source could not be inspected.
 
 ## Success criteria
 
-- `./uninstall.sh --scan` reports one registration, for the chosen path (or CLI-only with no MCP).
+- The `--scan` above reports one registration, for the chosen path (or CLI-only with no MCP).
 - Auth completed.
 - Read-only MCP call or `pipefy --version` succeeds.
 
@@ -86,7 +86,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
 | Slash commands missing | Plugin not installed | README [Claude Code plugin](../../../README.md#2-claude-code-plugin) — marketplace + install first |
-| More than one Pipefy MCP registration | Hosted + local/plugin both registered, possibly under different names | `./uninstall.sh --scan` names each one and where it lives; remove-then-add recipes in [`docs/uninstall.md`](../../../docs/uninstall.md#switching-channels). A plugin-provided server ranks below user scope, so removing the user entry alone falls through to it |
+| More than one Pipefy MCP registration | Hosted + local/plugin both registered, possibly under different names | The `--scan` above names each one and where it lives; remove-then-add recipes in [`docs/uninstall.md`](../../../docs/uninstall.md#switching-channels). A plugin-provided server ranks below user scope, so removing the user entry alone falls through to it |
 | `Needs authentication` after hosted add | OAuth not finished | `claude mcp login <name>` + browser |
 | `pipefy: command not found` | CLI not on PATH | `/pipefy:install` or README [CLI](../../../README.md#4-cli-only); check `$HOME/.local/bin` |
 | MCP tools empty / auth errors | Login not done | Re-run login; service accounts → `docs/config.md` |

@@ -635,6 +635,32 @@ def test_a_codex_env_subtable_keeps_the_whole_section_report_only(tmp_path):
     assert run.returncode != 0
 
 
+# ---------------------------------------------------------- JSON rewrites
+
+
+def test_a_registration_removal_leaves_utf8_siblings_literal(tmp_path):
+    home = _home(tmp_path)
+    config = home / ".cursor" / "mcp.json"
+    _write_json(
+        config,
+        {
+            "mcpServers": {
+                "pipefy": {"command": "pipefy-mcp-server"},
+                "café": {"command": "other", "args": ["--naïve", "ção"]},
+            }
+        },
+    )
+
+    _run(home, _stub_path(tmp_path))
+
+    raw = config.read_text(encoding="utf-8")
+    assert "café" in raw and "naïve" in raw
+    assert "\\u" not in raw
+    assert json.loads(raw)["mcpServers"] == {
+        "café": {"command": "other", "args": ["--naïve", "ção"]}
+    }
+
+
 # ----------------------------------------------------------- the exit contract
 
 

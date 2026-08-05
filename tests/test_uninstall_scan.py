@@ -1051,33 +1051,54 @@ def test_dry_run_is_accepted_and_changes_nothing(tmp_path):
     assert sorted(p.name for p in home.iterdir()) == before
 
 
-def test_script_contains_no_removal_verbs():
-    """Detection only: the phase guarantee is that a scan cannot damage anything."""
-    body = _SCRIPT.read_text(encoding="utf-8")
-    forbidden = (
-        "rm -",
-        "rmdir",
-        "mv ",
-        "uv tool uninstall",
-        "claude mcp remove",
-        "security delete",
-        "secret-tool clear",
-        "os.replace",
-        "os.remove",
-        "shutil.rmtree",
-        "truncate",
+def test_a_scan_reaches_no_removal_verb(tmp_path):
+    """A scan cannot damage anything, and the proof is behavioural.
+
+    The script does remove things in its other modes, so the guarantee is no
+    longer a grep for `rm`. It is that `--scan` leaves the tree byte-identical
+    and never calls a command that could change it.
+    """
+    home = _home(tmp_path)
+    _write_json(
+        home / ".claude.json",
+        {"mcpServers": {"pipefy": {"command": "pipefy-mcp-server"}}},
     )
-    for token in forbidden:
-        occurrences = [
-            line
-            for line in body.splitlines()
-            if token in line
-            and not line.lstrip().startswith(("#", "say "))
-            and "trap" not in line
-        ]
-        assert not occurrences, f"{token!r} appears in uninstall.sh: {occurrences}"
-    # The one exception is the tempfile the script owns.
-    assert "trap 'rm -f \"$RECORDS\"' EXIT INT TERM" in body
+    _write_json(
+        home / ".cursor" / "mcp.json",
+        {"mcpServers": {"pipefy": {"command": "pipefy-mcp-server"}}},
+    )
+    codex = home / ".codex" / "config.toml"
+    codex.parent.mkdir(parents=True)
+    codex.write_text(
+        '[mcp_servers.pipefy]\ncommand = "pipefy-mcp-server"\n', encoding="utf-8"
+    )
+    (home / ".zshrc").write_text('export PIPEFY_TOKEN="x"\n', encoding="utf-8")
+    config = home / ".config" / "pipefy"
+    config.mkdir(parents=True)
+    (config / "refresh.lock").write_text("", encoding="utf-8")
+    stub = _stub_path(tmp_path, uv_tools=("pipefy-cli",))
+    log = tmp_path / "verbs.log"
+    for name in ("claude", "security", "secret-tool", "pipefy"):
+        _write_exec(
+            stub / name,
+            f'#!/bin/sh\nprintf "{name} %s\\n" "$*" >> "{log}"\nexit 0\n',
+        )
+
+    before = {
+        str(p.relative_to(home)): p.read_bytes() for p in home.rglob("*") if p.is_file()
+    }
+    result = _run(home, stub)
+    after = {
+        str(p.relative_to(home)): p.read_bytes() for p in home.rglob("*") if p.is_file()
+    }
+
+    assert result.returncode == 1
+    assert after == before
+    # `run` echoes every command it executes; a scan executes none.
+    assert "\n+ " not in "\n" + result.stderr
+    # The keychain is read, never written, and no client CLI is called at all.
+    invocations = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    assert invocations == ["secret-tool search service pipefy"], invocations
 
 
 # ------------------------------------------------------------- name lists

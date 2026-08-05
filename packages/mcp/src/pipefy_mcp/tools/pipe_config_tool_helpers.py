@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, Literal, cast
 
 from pipefy_sdk import PipefyClient
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from pipefy_mcp.core.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
@@ -52,6 +52,8 @@ class FieldConditionMutationSuccessPayload(TypedDict):
     condition_id: str
     action: str
     message: str
+    verified: NotRequired[bool]
+    warning: NotRequired[str]
 
 
 class FieldConditionDeleteSuccessPayload(TypedDict):
@@ -120,20 +122,32 @@ def build_pipe_tool_error_payload(
 
 
 def build_field_condition_success_payload(
-    condition_id: str, action: str
+    condition_id: str,
+    action: str,
+    *,
+    verified: bool | None = None,
+    warning: str | None = None,
 ) -> FieldConditionMutationSuccessPayload:
     """Field condition mutation envelope with canned ``message``.
 
     Args:
         condition_id: ID returned by the API.
         action: ``created`` or ``updated`` (echoed to clients).
+        verified: When True, post-create read-back confirmed the rule on the
+            requested phase.
+        warning: Optional note (e.g. verify reads unavailable).
     """
-    return {
+    payload: FieldConditionMutationSuccessPayload = {
         "success": True,
         "condition_id": condition_id,
         "action": action,
         "message": f"Field condition {action} (ID: {condition_id}).",
     }
+    if verified is not None:
+        payload["verified"] = verified
+    if warning is not None:
+        payload["warning"] = warning
+    return payload
 
 
 def build_field_condition_delete_payload(

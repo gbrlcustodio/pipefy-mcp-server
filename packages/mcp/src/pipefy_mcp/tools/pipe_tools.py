@@ -46,6 +46,7 @@ from pipefy_mcp.tools.pagination_helpers import (
 )
 from pipefy_mcp.tools.phase_transition_helpers import (
     try_enrich_move_card_to_phase_failure,
+    try_enrich_required_field_move_failure,
 )
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
@@ -911,6 +912,8 @@ class PipeTools:
             Use this when the workflow should advance or regress a card. On failure, if the
             destination is not among allowed targets for the card's current phase, the tool may
             return ``success: false`` with ``valid_destinations`` instead of only the raw API error.
+            On required-field failures, it may return ``success: false`` naming the field (and a
+            hide hint when a field condition hides that still-required field).
 
             Args:
                 card_id: The card to move.
@@ -922,7 +925,8 @@ class PipeTools:
             Returns:
                 dict: Pipefy move mutation response on success. On some validation failures,
                 a structured payload with ``success: false`` and ``valid_destinations`` when the
-                destination phase is not allowed from the current phase.
+                destination phase is not allowed from the current phase, or ``success: false``
+                naming a blocking required field when that pattern is detected.
             """
             client = get_pipefy_client(ctx)
             try:
@@ -935,6 +939,13 @@ class PipeTools:
                 )
                 if enriched is not None:
                     return enriched
+                required_enriched = await try_enrich_required_field_move_failure(
+                    client,
+                    card_id,
+                    str(exc),
+                )
+                if required_enriched is not None:
+                    return required_enriched
                 raise exc
 
         @mcp.tool(

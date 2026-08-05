@@ -10,6 +10,11 @@ from pipefy_sdk import PipefyId
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.field_condition_planner import (
+    evaluate_condition_persistence,
+    find_required_hidden_fields,
+    phase_fields_from_payload,
+)
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_field_condition_delete_payload,
     build_field_condition_success_payload,
@@ -37,6 +42,102 @@ _CREATE_FIELD_CONDITION_EXTRA_RESERVED = frozenset(
     }
 )
 _UPDATE_FIELD_CONDITION_EXTRA_RESERVED = frozenset({"id"})
+
+_VERIFY_UNAVAILABLE_WARNING = (
+    "Field condition created but could not verify it persisted on the requested phase."
+)
+
+
+def _required_hidden_error_payload(field_ids: list[str]) -> dict[str, Any]:
+    ids = ", ".join(field_ids)
+    return build_pipe_tool_error_payload(
+        message=(
+            f"Cannot hide required field(s): {ids}. Clear required on the "
+            f"field(s) first, or use show instead of hide."
+        ),
+        code="INVALID_ARGUMENTS",
+    )
+
+
+async def _lint_required_hidden_actions(
+    client: Any,
+    phase_id: str,
+    actions: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Block when actions hide a required field; best-effort if fields cannot be read.
+
+    Returns an error payload, or ``None`` when the mutation may proceed. The toolkit
+    rejects required+hide even when the Pipefy API would accept it.
+    """
+    try:
+        raw = await client.get_phase_fields(phase_id)
+    except Exception:  # noqa: BLE001
+        return None
+    conflicts = find_required_hidden_fields(phase_fields_from_payload(raw), actions)
+    if not conflicts:
+        return None
+    return _required_hidden_error_payload(conflicts)
+
+
+async def _verify_created_field_condition(
+    client: Any,
+    phase_id: str,
+    condition_id: str,
+) -> dict[str, Any]:
+    """Re-read after create; succeed only when the rule exists on ``phase_id``."""
+    fetched: dict[str, Any] | None = None
+    fetch_raised = False
+    try:
+        raw = await client.get_field_condition(condition_id)
+        fc = raw.get("fieldCondition") if isinstance(raw, dict) else None
+        if isinstance(fc, dict) and fc:
+            fetched = fc
+    except Exception:  # noqa: BLE001
+        fetch_raised = True
+
+    listed_ids: list[str] | None = None
+    if fetched is None:
+        try:
+            list_raw = await client.get_field_conditions(phase_id)
+            phase = list_raw.get("phase") if isinstance(list_raw, dict) else None
+            rows = phase.get("fieldConditions") if isinstance(phase, dict) else None
+            if not isinstance(rows, list):
+                rows = []
+            listed_ids = [
+                str(row["id"])
+                for row in rows
+                if isinstance(row, dict) and row.get("id") is not None
+            ]
+        except Exception:  # noqa: BLE001
+            if fetch_raised:
+                return build_field_condition_success_payload(
+                    condition_id,
+                    "created",
+                    warning=_VERIFY_UNAVAILABLE_WARNING,
+                )
+
+    verdict = evaluate_condition_persistence(
+        phase_id, condition_id, fetched, listed_ids
+    )
+    if verdict.status == "verified":
+        return build_field_condition_success_payload(
+            condition_id, "created", verified=True
+        )
+    if verdict.status == "wrong_phase":
+        actual = verdict.actual_phase_id
+        actual_note = f"; found on phase {actual}" if actual is not None else ""
+        return build_pipe_tool_error_payload(
+            message=(
+                f"Field condition {condition_id} did not land on requested "
+                f"phase {phase_id}{actual_note}."
+            ),
+        )
+    return build_pipe_tool_error_payload(
+        message=(
+            f"Field condition {condition_id} did not persist on requested "
+            f"phase {phase_id}."
+        ),
+    )
 
 
 class FieldConditionTools:
@@ -173,6 +274,16 @@ class FieldConditionTools:
             ``name`` argument; for backwards compatibility it is also accepted inside
             ``extra_input={"name": ...}`` (top-level wins when both are set).
 
+            After create, the tool re-reads the condition and only reports success
+            when it exists on the requested phase (``verified: true``). Missing or
+            wrong phase -> ``success: false``. If both verify reads fail -> success
+            with a warning that verification was unavailable.
+
+            The toolkit **rejects** ``hide`` on a ``required=true`` field before
+            calling the API (``success: false`` listing field ids), even though the
+            Pipefy API may accept that combo. Clear ``required`` first or do not
+            use ``hide``.
+
             **Working example** — hide field ``425848637`` when field ``425848636``
             equals ``"Option A"``::
 
@@ -284,6 +395,9 @@ class FieldConditionTools:
                     ),
                     code="INVALID_ARGUMENTS",
                 )
+            lint_err = await _lint_required_hidden_actions(client, pid, actions)
+            if lint_err is not None:
+                return lint_err
             try:
                 raw = await client.create_field_condition(
                     pid,
@@ -312,7 +426,8 @@ class FieldConditionTools:
                     ),
                     code="INVALID_ARGUMENTS",
                 )
-            return build_field_condition_success_payload(str(cid), "created")
+            cid_str = str(cid)
+            return await _verify_created_field_condition(client, pid, cid_str)
 
         @mcp.tool(
             annotations=ToolAnnotations(
@@ -336,6 +451,12 @@ class FieldConditionTools:
             ``extra_input`` still carries other ``UpdateFieldConditionInput`` keys
             (e.g. ``index``). ``name`` in ``extra_input`` is also accepted for
             back-compat (top-level wins when both are set).
+
+            When ``actions`` is provided, the toolkit rejects ``hide`` on a
+            ``required=true`` field before calling the API (``success: false``
+            listing field ids), even though the Pipefy API may accept that combo.
+            Phase is discovered via get-by-id; lint is best-effort if phase fields
+            cannot be loaded. Clear ``required`` first or do not use ``hide``.
 
             Args:
                 ctx: MCP context for debug logging.
@@ -407,6 +528,24 @@ class FieldConditionTools:
                     ),
                     code="INVALID_ARGUMENTS",
                 )
+            if actions is not None:
+                try:
+                    cond_raw = await client.get_field_condition(cid_str)
+                    fc_obj = (
+                        cond_raw.get("fieldCondition")
+                        if isinstance(cond_raw, dict)
+                        else None
+                    )
+                    phase = fc_obj.get("phase") if isinstance(fc_obj, dict) else None
+                    phase_id = phase.get("id") if isinstance(phase, dict) else None
+                    if phase_id is not None:
+                        lint_err = await _lint_required_hidden_actions(
+                            client, str(phase_id), actions
+                        )
+                        if lint_err is not None:
+                            return lint_err
+                except Exception:  # noqa: BLE001
+                    pass
             try:
                 raw = await client.update_field_condition(cid_str, **update_attrs)
             except Exception as exc:  # noqa: BLE001

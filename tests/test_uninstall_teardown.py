@@ -222,6 +222,14 @@ def _run(
     return Run(proc, log)
 
 
+def _no_uv_tools(stub: Path) -> Path:
+    """A `uv` that reports an empty tool directory, so a plan can be empty."""
+    _write_exec(
+        stub / "uv", '#!/bin/sh\nprintf \'%s\\n\' "uv $*" >> "$STUBLOG"\nexit 0\n'
+    )
+    return stub
+
+
 def _keychain_entry(stub: Path) -> None:
     state = stub.parent / "stubstate"
     state.mkdir(exist_ok=True)
@@ -475,7 +483,7 @@ def test_a_hand_edited_codex_section_degrades_to_report_only(tmp_path):
 
     assert codex.read_text(encoding="utf-8") == before
     assert "holds more than the single line the installer appends" in run.stdout
-    assert "excise the section yourself" in run.stdout
+    assert "excise the section and any sub-table of it yourself" in run.stdout
 
 
 def test_a_codex_section_that_ends_the_file_takes_its_blank_line_with_it(tmp_path):
@@ -602,6 +610,62 @@ def test_the_canonical_marketplace_clone_is_deleted_and_disclosed(tmp_path):
 
     assert f"delete its clone at {clone}" in run.stdout
     assert not clone.exists()
+
+
+# ----------------------------------------------------- codex sub-tables
+
+
+def test_a_codex_env_subtable_keeps_the_whole_section_report_only(tmp_path):
+    """A sibling `[mcp_servers.<name>.env]` is invisible to a scan that stops
+    at the next `[`, so excising the parent would strand its secrets."""
+    home = _home(tmp_path)
+    codex = _codex(
+        home,
+        '[mcp_servers.pipefy]\ncommand = "pipefy-mcp-server"\n\n'
+        '[mcp_servers.pipefy.env]\nPIPEFY_TOKEN = "sentinel-token"\n',
+    )
+    before = codex.read_text(encoding="utf-8")
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert codex.read_text(encoding="utf-8") == before
+    assert "sub-table" in run.stdout
+    assert "sentinel-token" not in run.stdout
+    # A run that leaves credential material behind cannot report success.
+    assert run.returncode != 0
+
+
+# ----------------------------------------------------------- the exit contract
+
+
+def test_an_empty_plan_with_findings_left_does_not_read_as_clean(tmp_path):
+    """`--scan` exits 1 on this tree; a teardown that removed nothing must too."""
+    home = _home(tmp_path)
+    _codex(
+        home,
+        '[mcp_servers.pipefy]\ncommand = "pipefy-mcp-server"\n'
+        'args = ["--profile", "mine"]\n',
+    )
+    stub = _no_uv_tools(_stub_path(tmp_path))
+
+    scan = _run(home, stub, args=("--scan",))
+    run = _run(home, stub)
+
+    assert scan.returncode == 1
+    assert "Nothing to remove." in run.stdout
+    assert run.returncode == scan.returncode
+    # The notes that explain why nothing was planned are printed, not swallowed
+    # with the teardown report this path skips.
+    assert "Left alone:" in run.stdout
+    assert "excise the section and any sub-table of it yourself" in run.stdout
+
+
+def test_an_empty_plan_on_a_clean_machine_still_exits_zero(tmp_path):
+    stub = _no_uv_tools(_stub_path(tmp_path, pipefy=False))
+
+    run = _run(_home(tmp_path), stub)
+    assert "Nothing to remove." in run.stdout
+    assert run.returncode == 0, run.stdout
 
 
 # ------------------------------------------------------------------- skills

@@ -48,6 +48,12 @@ def _write_exec(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
+# An empty Secret Service. A Linux run with no `secret-tool` at all reports the
+# store as uninspected and exits 2, exactly as a Darwin run with no `security`
+# does, so every test that is not about that asymmetry gets a working one.
+_EMPTY_SECRET_TOOL = "#!/bin/sh\nexit 1\n"
+
+
 def _stub_path(
     tmp_path: Path,
     *,
@@ -58,6 +64,7 @@ def _stub_path(
     uv_tools: tuple[str, ...] | None = None,
     security: str | None = None,
     secret_tool: str | None = None,
+    no_secret_tool: bool = False,
 ) -> Path:
     """Build a bin directory holding exactly the commands a test wants visible."""
     stub = tmp_path / name
@@ -87,6 +94,8 @@ def _stub_path(
         )
     if security is not None:
         _write_exec(stub / "security", security)
+    if secret_tool is None and not no_secret_tool:
+        secret_tool = _EMPTY_SECRET_TOOL
     if secret_tool is not None:
         _write_exec(stub / "secret-tool", secret_tool)
     return stub
@@ -791,6 +800,17 @@ def test_a_skill_installed_from_another_repository_is_left_alone(tmp_path):
 
     assert result.returncode == 0, result.stdout
     assert "came from someone-else/their-skills, not this toolkit" in result.stdout
+
+
+def test_a_missing_secret_tool_is_uninspected_rather_than_clean(tmp_path):
+    """The same call as a missing `security` on Darwin: unreadable is not clean."""
+    home = _home(tmp_path)
+
+    result = _run(home, _stub_path(tmp_path, no_secret_tool=True))
+
+    assert result.returncode == 2, result.stdout
+    assert "keychain not inspected — 'secret-tool' not on PATH" in result.stdout
+    assert "sources could not be inspected" in result.stdout
 
 
 # --------------------------------------------------------------- keychain

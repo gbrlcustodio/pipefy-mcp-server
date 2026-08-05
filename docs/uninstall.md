@@ -32,7 +32,7 @@ Out of scope: your git checkouts. Uninstalling is about tooling, not source.
 | `1` | findings remain |
 | `2` | the run itself failed, or a source could not be inspected |
 
-Exit `2` is the one worth reading carefully. Every JSON source — the client configs, the plugin registry, each project `.mcp.json`, the skills lock file — is read by a single `python3` program, and without `python3` those sources report `not inspected` rather than `clean`. A partial scan can therefore never be mistaken for a clean machine. The non-JSON sources (`PATH`, the keychain, `~/.config/pipefy`, completions, and the Codex TOML) are inspected with POSIX text tools alone.
+Exit `2` is the one worth reading carefully. Every JSON source — the client configs, the plugin registry, each project `.mcp.json`, the skills lock file — is read by a single `python3` program, and without `python3` those sources report `not inspected` rather than `clean`. A partial scan can therefore never be mistaken for a clean machine. The non-JSON sources (`PATH`, the keychain, `~/.config/pipefy`, completions, and the Codex TOML) are inspected with POSIX text tools alone. A credential store that cannot be enumerated counts the same way whatever the reason: no `security` on macOS and no `secret-tool` on Linux both report the keychain as uninspected and exit `2`.
 
 Removal needs `python3`. Without it, a teardown planned from a partial scan would leave exactly the state that causes duplicate-registration conflicts, so the run refuses and points at `--scan`.
 
@@ -94,6 +94,10 @@ The order is load-bearing, not cosmetic:
 
 `~/.config/pipefy` is removed only if it ends up empty. Its presence after a later `pipefy` invocation is not a failed removal.
 
+### The exit code means the same thing either way
+
+A teardown uses the exit codes `--scan` uses, judged by the closing re-scan rather than by how many actions ran. A plan can be empty and the machine still not clean — a hand-edited Codex section, a registration a receipt records as pre-existing, anything a `--keep-*` flag held back — so `Nothing to remove.` exits `1` on exactly the tree where `--scan` exits `1`, and prints the *Left alone* and *Do this yourself* notes that say why nothing was planned.
+
 ### Skills are removed only where something records installing them
 
 `pipefy-` is a namespace anyone may write in, and the directory name is not evidence of who wrote it. A skill is removed when the install receipt records this toolkit's installer adding it, or when the lock file `skills add` keeps records its source as this repository; anything else under the same prefix is reported and left where it is. A skill directory is often a link into a shared store, so the store content and the lock entry go with the link rather than being stranded behind it.
@@ -116,6 +120,7 @@ Without a receipt the run is in **heuristic mode**, which is permanent rather th
 - **A git-tracked `.mcp.json`.** Editing it is not durable — the next checkout, branch switch, or stash pop restores it from the index — so the entry is disabled through `disabledMcpjsonServers` instead.
 - **A `pipefy` binary inside a project virtualenv.** It is reported for shadowing purposes and classified as belonging to that checkout.
 - **A `pipefy-*` skill nothing records this toolkit installing.** See above.
+- **A Codex `[mcp_servers.<name>]` section with anything beyond the single line the installer appends**, including a `[mcp_servers.<name>.env]` sub-table beside it. The section and the sub-table are separate headers, so excising one would strand the other and whatever it holds; both are reported instead.
 - **A marketplace clone recorded outside the client's own plugin directory.** `installLocation` is data this script did not write, so it is checked against the canonical clone path and reported when it does not match.
 - **Your git checkouts.**
 

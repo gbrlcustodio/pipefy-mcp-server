@@ -1605,20 +1605,28 @@ toml_sections() {
 # install.sh appends exactly a header and one `command = "<binary>"` line. A
 # section holding anything else — extra keys, a sub-table, a comment — was
 # written or edited by hand, and is reported rather than excised.
+#
+# A sub-table counts wherever it sits in the file. `[mcp_servers.<name>.env]` is
+# a separate header, so a scan that reads only up to the next `[` never sees it,
+# and an excision that stops there leaves it behind holding whatever the hand
+# that wrote it put in — a token, most usefully. Treating the parent as
+# hand-edited keeps the pair together, reported and intact.
 toml_section_is_pristine() {
     AW_KEY="$2" AW_NAME="$3" AW_BIN="$SERVER_BINARY" awk '
         function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
         BEGIN {
             sec = "[" ENVIRON["AW_KEY"] "." ENVIRON["AW_NAME"] "]"
+            child = "[" ENVIRON["AW_KEY"] "." ENVIRON["AW_NAME"] "."
             want = "command = \"" ENVIRON["AW_BIN"] "\""
         }
         {
             t = trim($0)
+            if (inside && substr(t, 1, 1) == "[") inside = 0
+            if (substr(t, 1, length(child)) == child) { other++; next }
             if (inside) {
-                if (substr(t, 1, 1) == "[") { inside = 0 }
-                else if (t == "") { next }
-                else if (t == want) { seen++; next }
-                else { other++; next }
+                if (t == "") next
+                if (t == want) { seen++; next }
+                other++; next
             }
             if (t == sec) inside = 1
         }
@@ -1947,7 +1955,12 @@ keychain_accounts() {
 
 scan_keychain_linux() {
     if ! command -v secret-tool >/dev/null 2>&1; then
-        note "keychain: 'secret-tool' not on PATH; no Secret Service to query"
+        # Uninspected, not clean, and the same call as the missing `security`
+        # on Darwin: a credential store nothing could read is a source this run
+        # has no answer for, whatever the reason it could not read it.
+        uninspected "keychain not inspected — 'secret-tool' not on PATH"
+        detail "install libsecret-tools (or the Secret Service client for your desktop)"
+        detail "to have this run enumerate the store, or check it yourself"
         return 0
     fi
     # No --unlock, and the output is reduced to the username attribute, so no
@@ -2544,7 +2557,7 @@ plan_toml_section() {
         return 0
     fi
     if ! toml_section_is_pristine "$2" "$3" "$4"; then
-        note_left "[$3.$4] in $2 holds more than the single line the installer appends, so it was edited by hand; excise the section yourself"
+        note_left "[$3.$4] in $2 holds more than the single line the installer appends, or has a [$3.$4.*] sub-table beside it, so it was edited by hand; excise the section and any sub-table of it yourself"
         return 0
     fi
     # The pristine test above is already the shape test heuristic mode relies
@@ -3371,6 +3384,19 @@ main() {
     if [ "$(count_lines "$PLAN")" -eq 0 ]; then
         say ""
         say "Nothing to remove."
+        # An empty plan is not a clean machine: a hand-edited Codex section, a
+        # registration the receipt says was already there, a --keep-* filter —
+        # each leaves a finding this run deliberately will not touch. The same
+        # tree under --scan exits 1, and automation reading exit 0 as clean has
+        # to be wrong in only one of the two.
+        print_note_group left "Left alone:"
+        print_note_group manual "Do this yourself:"
+        if [ "$SCAN_ERRORS" -gt 0 ]; then
+            exit 2
+        fi
+        if [ "$FINDINGS" -gt 0 ]; then
+            exit 1
+        fi
         exit 0
     fi
     if [ "$DRY_RUN" -eq 1 ]; then

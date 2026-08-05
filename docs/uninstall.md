@@ -74,10 +74,12 @@ Declining a tier leaves everything in it untouched; the run continues with the o
 | `--yes`, `-y` | approve every tier; required when there is no terminal |
 | `--keep-credentials` | skip tier 2 — stored credentials stay where they are |
 | `--keep-config` | keep your own configuration: `config.toml`, `.env`, and non-credential `PIPEFY_*` settings in files you wrote |
-| `--client <id>` | limit **registration edits** to one client's config (`claude-code`, `claude-desktop`, `codex`, `cursor`, or `none` for no client at all) |
+| `--client <id>` | limit **registration edits** to one client's config (`claude-code`, `claude-desktop`, `codex`, `cursor`) |
 | `--allow-root` | run as root, refused by default |
 
 `--client` narrows what is edited, never what is looked at: detection always sweeps every client, since the point is finding state you forgot about, and tools, credentials, skills and the plugin are not narrowed by it.
+
+`install.sh` also takes `--client none`, meaning *install without registering*. Teardown refuses that word. Because `--client` narrows registration edits and nothing else, `none` would edit no client config while still removing the binaries every config found points at, which is the stranding the phase order exists to prevent. Omit the flag to sweep every client.
 
 ### Order
 
@@ -97,6 +99,10 @@ The order is load-bearing, not cosmetic:
 ### The exit code means the same thing either way
 
 A teardown uses the exit codes `--scan` uses, judged by the closing re-scan rather than by how many actions ran. A plan can be empty and the machine still not clean — a hand-edited Codex section, a registration a receipt records as pre-existing, anything a `--keep-*` flag held back — so `Nothing to remove.` exits `1` on exactly the tree where `--scan` exits `1`, and prints the *Left alone* and *Do this yourself* notes that say why nothing was planned.
+
+### Removed means observed removed
+
+`Removed:` is a verified word. Every action whose result the closing re-scan can check earns it by being checked. The hosted OAuth token cannot be: it lives in the client's own store, which is not readable from here, so `claude mcp logout` exiting `0` is the only signal and a no-op exits `0` too. That clear is reported under *Asked for, result not observable from here*, is never counted as a deleted credential, and makes the run exit `1` rather than `0` — the machine is not one this run can call clean. Confirm it with `/mcp`, pick the server, and read its authentication state.
 
 ### Skills are removed only where something records installing them
 

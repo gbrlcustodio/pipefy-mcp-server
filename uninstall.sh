@@ -124,6 +124,7 @@ BACKUPS=0
 DONE_COUNT=0
 FAIL_COUNT=0
 SKIP_COUNT=0
+UNVERIFIED=0
 REVOKED=0
 CRED_DELETED=0
 TIER1_OK=0
@@ -317,7 +318,7 @@ client_choice_list() {
 }
 
 print_help() {
-    _choices="$(client_choice_list)|none"
+    _choices="$(client_choice_list)"
     cat <<EOF
 Usage: uninstall.sh [OPTIONS]
 
@@ -378,10 +379,18 @@ parse_args() {
         esac
     done
     case "$CLIENT" in
-        ""|none) ;;
+        "") ;;
+        # install.sh takes `none` and means "install without registering".
+        # Teardown has no such mode: --client narrows registration edits and
+        # nothing else, so `none` would edit no config while still removing the
+        # binaries every config found points at. That is the stranding the
+        # phase order exists to prevent, so the word is refused rather than
+        # given a second meaning.
+        none)
+            err "--client none belongs to install.sh, where it means \"install without registering\". Teardown has no equivalent: it would remove the tools while leaving every registration pointing at a missing command. Omit --client to sweep every client, or name one of $(client_choice_list)." ;;
         *)
             [ -n "$(client_row "$CLIENT")" ] \
-                || err "Invalid --client: $CLIENT (use $(client_choice_list)|none)" ;;
+                || err "Invalid --client: $CLIENT (use $(client_choice_list))" ;;
     esac
 }
 
@@ -2412,6 +2421,7 @@ note_done() { record_note 'done' "$*"; }
 note_fail() { record_note fail "$*"; }
 note_left() { record_note left "$*"; }
 note_manual() { record_note manual "$*"; }
+note_unverified() { record_note unverified "$*"; }
 note_backup() { record_note backup "$*"; }
 notes_of() { awk -F"$TAB" -v k="$1" '$1 == k { print $2 }' "$NOTES"; }
 
@@ -3076,11 +3086,15 @@ act_keychain() {
 act_mcplogout() {
     _ml_cli=$(removal_cli) || _ml_cli="-"
     if cli_verb_exists "$_ml_cli" logout mcp; then
-        run "$_ml_cli" mcp logout "$1" && return 0
+        # 4, not 0: the client's OAuth store is not readable from here, so the
+        # only thing this run can observe is that the verb was invoked. The
+        # re-scan cannot contradict a silent no-op, and an exit status is not
+        # proof of a deleted credential — the rule the local credential path
+        # already follows.
+        run "$_ml_cli" mcp logout "$1" && return 4
         # The verb resolves the name across scopes and takes no scope flag, so
         # it can bind to an entry other than the one the token belongs to and
-        # refuse. Nothing observable contradicts a silent no-op, which is why
-        # the failure is carried through rather than smoothed over.
+        # refuse. Reported as a failure rather than smoothed over.
         note_manual "'$_ml_cli mcp logout $1' failed, so the hosted token is still stored; run /mcp, pick '$1', then Clear authentication"
         return 1
     fi
@@ -3151,7 +3165,8 @@ execute_plan() {
             do_action "$_cls" "$_knd" \
                 "$_p1" "$_p2" "$_p3" "$_p4" "$_p5" "$_p6" "$_p7" || _rc=$?
             # 3 means the action decided there was nothing to do and said why
-            # in a note of its own; anything else non-zero is a failure.
+            # in a note of its own; 4 means it ran but the result is not
+            # observable from here; anything else non-zero is a failure.
             if [ "$_rc" -eq 0 ]; then
                 DONE_COUNT=$((DONE_COUNT + 1))
                 note_done "$_dsc"
@@ -3160,6 +3175,11 @@ execute_plan() {
                 fi
             elif [ "$_rc" -eq 3 ]; then
                 SKIP_COUNT=$((SKIP_COUNT + 1))
+            elif [ "$_rc" -eq 4 ]; then
+                # Not counted as done and not a credential this run can claim
+                # to have deleted: "Removed:" is a verified word.
+                UNVERIFIED=$((UNVERIFIED + 1))
+                note_unverified "$_dsc"
             else
                 FAIL_COUNT=$((FAIL_COUNT + 1))
                 note_fail "$_dsc"
@@ -3215,8 +3235,16 @@ EOF
 
 print_teardown_report() {
     section "What happened"
-    say "  $DONE_COUNT completed, $SKIP_COUNT skipped, $FAIL_COUNT failed, $BACKUPS backed up"
+    say "  $DONE_COUNT completed, $UNVERIFIED unverifiable, $SKIP_COUNT skipped, $FAIL_COUNT failed, $BACKUPS backed up"
     print_note_group 'done' "Removed:"
+    print_note_group 'unverified' "Asked for, result not observable from here:"
+    if [ "$UNVERIFIED" -gt 0 ]; then
+        say "    The store these live in is the client's own and is not readable here, so"
+        say "    the command exiting 0 is the only signal and it is not proof: a no-op"
+        say "    exits 0 too, and the re-scan cannot tell the two apart. Treat them as"
+        say "    still stored until you have checked: run /mcp, pick the server, and"
+        say "    read its authentication state."
+    fi
     print_note_group 'fail' "Failed — these are still here:"
     print_note_group 'backup' "Backed up before editing:"
     print_note_group 'left' "Left alone:"
@@ -3435,7 +3463,11 @@ main() {
     if [ "$FAIL_COUNT" -gt 0 ] || [ "$SCAN_ERRORS" -gt 0 ]; then
         exit 2
     fi
-    if [ "$FINDINGS" -gt 0 ]; then
+    # An action whose result this run cannot observe leaves the machine in a
+    # state it cannot call clean, so the exit says findings remain rather than
+    # success. Otherwise a hosted teardown would report 0 on the strength of a
+    # command that may have done nothing at all.
+    if [ "$FINDINGS" -gt 0 ] || [ "$UNVERIFIED" -gt 0 ]; then
         exit 1
     fi
     exit 0

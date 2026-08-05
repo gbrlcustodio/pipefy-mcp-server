@@ -178,7 +178,8 @@ def test_every_client_the_installer_writes_for_has_a_row_in_the_teardown_table()
     uninstall_ids = _client_ids(_help(_UNINSTALL))
 
     # `none` is an installer-only choice: it writes no config, so the teardown
-    # table has nothing to hold for it.
+    # table has nothing to hold for it and uninstall.sh refuses the word
+    # outright rather than reading it as "edit no client config".
     assert install_ids - {"none"} <= uninstall_ids, sorted(install_ids - uninstall_ids)
     # And the round trip above covers all of them.
     assert install_ids == {client for client, _, _ in _CLIENTS}
@@ -200,6 +201,13 @@ def test_the_advertised_client_values_are_the_accepted_ones(
     assert "Invalid --client" not in installed.stderr
 
     if client == "none":
+        # "Install without registering" has no teardown counterpart: --client
+        # narrows registration edits only, so honouring the word would remove
+        # the tools and leave every registration pointing at a missing command.
+        # uninstall.sh refuses it rather than accepting it and doing that.
+        refused = _uninstall(tmp_path, home, stub, args=("--scan", "--client", client))
+        assert refused.returncode == 2
+        assert "--client none belongs to install.sh" in refused.stderr
         return
     scanned = _uninstall(tmp_path, home, stub, args=("--scan", "--client", client))
     assert "Invalid --client" not in scanned.stderr

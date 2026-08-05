@@ -89,6 +89,20 @@ esac
 exit 0
 """
 
+# Like `_CLAUDE`, but `mcp remove` really does edit the config, so a teardown
+# can reach a state the re-scan calls clean. That is what isolates the OAuth
+# store: it is the one clear the re-scan cannot check either way.
+_CLAUDE_THAT_REMOVES = """#!/bin/sh
+printf '%s\\n' "claude $*" >> "$STUBLOG"
+case "$*" in
+    "mcp --help") printf '  list\\n  add\\n  remove\\n  logout\\n' ;;
+    "plugin --help") printf '  install\\n  uninstall\\n  marketplace\\n' ;;
+    "plugin marketplace --help") printf '  add\\n  remove\\n  list\\n' ;;
+    "mcp remove"*) printf '{"mcpServers": {}}\\n' > "$HOME/.claude.json" ;;
+esac
+exit 0
+"""
+
 _PIPEFY = """#!/bin/sh
 printf '%s\\n' "pipefy $*" >> "$STUBLOG"
 mkdir -p "$HOME/.config/pipefy"
@@ -779,6 +793,40 @@ def test_the_hosted_logout_runs_after_the_shadowing_entry_and_before_its_own(
     assert project < logout < user
 
 
+def test_a_hosted_logout_that_exits_zero_is_not_reported_as_a_removal(tmp_path):
+    """The client's OAuth store is opaque here, so exit 0 is not proof.
+
+    A stub that logs the call and does nothing is indistinguishable from one
+    that cleared the token, and the re-scan cannot tell them apart either.
+    """
+    home = _home(tmp_path)
+    _write_json(
+        home / ".claude.json",
+        {
+            "mcpServers": {
+                "pipefy": {"type": "http", "url": "https://mcp.pipefy.com/mcp"}
+            }
+        },
+    )
+    stub = _no_uv_tools(_stub_path(tmp_path, pipefy=False, claude=_CLAUDE_THAT_REMOVES))
+
+    run = _run(home, stub)
+
+    assert "claude mcp logout pipefy" in run.stubs
+    # Everything the re-scan can check came back clean, so the token is the only
+    # thing left in question — and it is the one thing nothing can check.
+    assert "no registration in any JSON client config runs this toolkit" in run.stdout
+    assert "Asked for, result not observable from here:" in run.stdout
+    assert "1 unverifiable" in run.stdout
+    assert "it is not proof" in run.stdout
+    removed = run.stdout.split("Removed:", 1)[1].split("\n\n", 1)[0]
+    assert "OAuth" not in removed, removed
+    # No "deleted but not revoked" story either: nothing was observed deleted.
+    assert "A credential was deleted from this machine" not in run.stdout
+    # And a clean re-scan plus an unverifiable clear is not full success.
+    assert run.returncode == 1, run.stdout
+
+
 def test_a_failing_hosted_logout_is_reported_rather_than_counted_as_done(tmp_path):
     home = _home(tmp_path)
     _write_json(
@@ -1129,7 +1177,9 @@ def test_the_client_allowlist_in_help_comes_from_the_table(tmp_path):
     assert run.returncode == 0
     listed = re.search(r"One of: (\S+)\.", run.stdout)
     assert listed
-    assert listed.group(1).split("|") == [row[0] for row in _table_rows()] + ["none"]
+    # Every row and nothing else. `none` is install.sh's word and is refused
+    # here, so advertising it would be help text that disagrees with behaviour.
+    assert listed.group(1).split("|") == [row[0] for row in _table_rows()]
 
 
 def test_an_unknown_client_is_rejected_against_the_table(tmp_path):
@@ -1210,3 +1260,34 @@ def test_every_planned_action_carries_a_full_row():
                 break
         fields = re.findall(r"'[^']*'|\"[^\"]*\"|\S+", flat)
         assert len(fields) - 1 == 11, call
+
+
+# -------------------------------------------------------------- --client none
+
+
+def test_client_none_is_refused_rather_than_stranding_registrations(tmp_path):
+    """`none` means "install without registering" to install.sh.
+
+    Teardown narrows registration edits and nothing else, so honouring the word
+    would remove the tools and leave every registration pointing at a missing
+    command — the stranding the phase order exists to prevent.
+    """
+    home = _home(tmp_path)
+    _write_json(
+        home / ".cursor" / "mcp.json",
+        {"mcpServers": {"pipefy": {"command": "pipefy-mcp-server"}}},
+    )
+    stub = _stub_path(tmp_path)
+
+    refused = _run(home, stub, args=("--dry-run", "--yes", "--client", "none"))
+    bare = _run(home, stub, args=("--dry-run", "--yes"))
+
+    assert refused.returncode == 2
+    assert "--client none belongs to install.sh" in refused.stderr
+    assert "PLAN" not in refused.stdout
+    # Bare plans both halves, which is what `none` would have split apart.
+    assert bare.returncode == 0
+    assert "remove the 'pipefy' registration" in bare.stdout
+    assert "uv tool uninstall pipefy-cli" in bare.stdout
+    # Nothing was touched on either run.
+    assert json.loads((home / ".cursor" / "mcp.json").read_text())["mcpServers"]

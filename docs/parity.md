@@ -38,7 +38,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_automation` | `pipefy automation create` | shipped | (`--pipe`, `--name`, `--trigger-id`, `--action-id`, optional `--condition` / `--extra` JSON). First-class typed `condition` (expressions + AND-of-ORs `expressions_structure`; `field_address` = internal_id). |
 | `create_card` | `pipefy card create` | shipped | (`--fields` JSON, optional `--title`, optional `--phase-id` for `CreateCardInput.phase_id`). |
 | `create_card_relation` | `pipefy relation card create` | shipped | — |
-| `create_field_condition` | `pipefy field-condition create` | shipped | (`--phase`, `--name`, `--condition`, `--actions` JSON). MCP create re-reads the condition and reports success with `verified: true` when it exists on the requested phase; if both post-create verify reads fail, MCP may still return success with a warning (verification unavailable). Also rejects `hide`/`hidden` on a `required=true` field before the mutation. CLI still returns the raw SDK response without those honesty checks (known MCP-ahead behavior). |
+| `create_field_condition` | `pipefy field-condition create` | shipped | (`--phase`, `--name`, `--condition`, `--actions` JSON). MCP create re-reads the condition and reports success with `verified: true` when it exists on the requested phase; missing/wrong phase → `success: false` (delete the condition before recreating). If both post-create verify reads fail, MCP may still return success with a warning (verification unavailable). Also rejects `hide`/`hidden` on a `required=true` field before the mutation. CLI still returns the raw SDK response without those honesty checks (known MCP-ahead behavior). |
 | `create_ipaas_connection` | — | deferred | iPaaS (Advanced Automations) connection creation; MCP-first surface, CLI twin considered with the other iPaaS tools. |
 | `create_label` | `pipefy label create` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
 | `create_llm_provider` | `pipefy ai-provider create` | shipped | Custom (BYOM) provider; configuration via local JSON file only (`--config-file`), never returned; probe-gated. |
@@ -162,7 +162,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `invite_members` | `pipefy member invite` | shipped | — |
 | `list_organizations` | `pipefy org list` | shipped | Lists organizations the caller can access; no id required. |
 | `list_portals` | `pipefy portal list` | shipped | `--organization-uuid`; at most one main portal per org. |
-| `move_card_to_phase` | `pipefy card move` | shipped | (`--phase`). |
+| `move_card_to_phase` | `pipefy card move` | shipped | (`--phase`). On required-field failures MCP may return `success: false` naming the field (and an optional hide hint); CLI still returns the raw SDK / GraphQL error (known MCP-ahead behavior). |
 | `publish_sub_portal` | `pipefy portal sub-portal publish` | shipped | internal_api `updateSubPortalElement` on a templated `forms` element; check `subPortals[].published` via `get_portal`. |
 | `remove_member_from_pipe` | `pipefy member remove` | shipped | — |
 | `reset_default_llm_provider` | `pipefy ai-provider default reset` | shipped | Organization-scoped; clears the org default (`--org-id`). |
@@ -188,7 +188,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_card` | `pipefy card update` | shipped | (`--field-updates` JSON, optional title/labels/assignees/due-date). |
 | `update_card_field` | `pipefy card update` | shipped | Use `--field-updates` JSON array (). |
 | `update_comment` | `pipefy card comment update` | shipped | — |
-| `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). When `actions` is provided, MCP rejects `hide`/`hidden` on a `required=true` field before the mutation (phase discovered via get-by-id; best-effort if phase fields cannot be loaded). CLI still returns the raw SDK response without that honesty check (known MCP-ahead behavior). |
+| `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). When `actions` is provided (top-level; not via `extra_input`), MCP rejects `hide`/`hidden` on a `required=true` field before the mutation (phase discovered via get-by-id; best-effort if phase fields cannot be loaded). CLI still returns the raw SDK response without that honesty check (known MCP-ahead behavior). |
 | `update_label` | `pipefy label update` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
 | `update_llm_provider` | `pipefy ai-provider update` | shipped | Custom (BYOM) provider; full configuration replacement via local JSON file; redacted placeholders preserve stored secrets; probe-gated. |
 | `update_organization_report` | `pipefy report-org update` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |

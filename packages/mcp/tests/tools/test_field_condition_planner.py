@@ -37,6 +37,29 @@ def test_evaluate_condition_persistence_wrong_phase_when_fetched_phase_differs()
 
 
 @pytest.mark.unit
+def test_evaluate_condition_persistence_incomplete_phase_uses_list_fallback():
+    result = evaluate_condition_persistence(
+        requested_phase_id="10",
+        condition_id="fc-1",
+        fetched={"id": "fc-1", "phase": None},
+        listed_ids=["fc-other", "fc-1"],
+    )
+    assert result.status == "verified"
+    assert result.actual_phase_id is None
+
+
+@pytest.mark.unit
+def test_evaluate_condition_persistence_incomplete_phase_missing_when_list_lacks_id():
+    result = evaluate_condition_persistence(
+        requested_phase_id="10",
+        condition_id="fc-1",
+        fetched={"id": "fc-1", "phase": {}},
+        listed_ids=["fc-other"],
+    )
+    assert result.status == "missing"
+
+
+@pytest.mark.unit
 def test_evaluate_condition_persistence_missing_when_not_in_list():
     result = evaluate_condition_persistence(
         requested_phase_id="10",
@@ -203,5 +226,5 @@ def test_enrich_required_field_move_message_appends_hint_when_hidden():
     api = 'Field "Foo" is required! Please fill it and you\'ll be ready to go!'
     enriched = enrich_required_field_move_message(api, hidden_by_condition=True)
     assert enriched.startswith(api)
-    assert "hidden by a field condition while still required" in enriched
+    assert "may be hidden by a field condition while still required" in enriched
     assert enrich_required_field_move_message(api, hidden_by_condition=False) == api

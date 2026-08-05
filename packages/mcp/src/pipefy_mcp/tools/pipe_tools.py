@@ -913,7 +913,7 @@ class PipeTools:
             destination is not among allowed targets for the card's current phase, the tool may
             return ``success: false`` with ``valid_destinations`` instead of only the raw API error.
             On required-field failures, it may return ``success: false`` naming the field (and a
-            hide hint when a field condition hides that still-required field).
+            hint when a field condition may hide that still-required field).
 
             Args:
                 card_id: The card to move.

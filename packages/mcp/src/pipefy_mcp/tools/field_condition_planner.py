@@ -13,8 +13,9 @@ _HIDE_ACTION_IDS = frozenset({"hide", "hidden"})
 _REQUIRED_FIELD_LABEL_RE = re.compile(r'Field "([^"]+)" is required')
 
 _REQUIRED_HIDDEN_MOVE_HINT = (
-    " This field is hidden by a field condition while still required; "
-    "clear required or remove the hide action before moving."
+    " This field may be hidden by a field condition while still required; "
+    "clear required or remove the hide action before moving, or fill the "
+    "field if it is visible."
 )
 
 
@@ -35,8 +36,10 @@ def evaluate_condition_persistence(
     """Decide whether a created condition exists on the requested phase.
 
     Prefer ``fetched`` (single-condition read with ``phase.id``). When that is
-    absent, fall back to whether ``condition_id`` appears in ``listed_ids`` from
-    the phase's condition list.
+    absent, or when ``fetched`` has no usable ``phase.id`` (null/missing phase),
+    fall back to whether ``condition_id`` appears in ``listed_ids`` from the
+    phase's condition list. Hard ``wrong_phase`` only when ``phase.id`` is
+    present and differs from the requested phase.
 
     Args:
         requested_phase_id: Phase the caller asked to own the rule.
@@ -54,9 +57,13 @@ def evaluate_condition_persistence(
         actual = None
         if isinstance(phase, dict) and phase.get("id") is not None:
             actual = str(phase["id"])
-        if actual == requested:
-            return ConditionPersistenceResult(status="verified")
-        return ConditionPersistenceResult(status="wrong_phase", actual_phase_id=actual)
+        if actual is not None:
+            if actual == requested:
+                return ConditionPersistenceResult(status="verified")
+            return ConditionPersistenceResult(
+                status="wrong_phase", actual_phase_id=actual
+            )
+        # Incomplete fetch (phase missing or phase.id null): consult listed_ids.
 
     listed = {str(item) for item in (listed_ids or [])}
     if cid in listed:

@@ -41,11 +41,22 @@ _CREATE_FIELD_CONDITION_EXTRA_RESERVED = frozenset(
         "condition_expression",
     }
 )
-_UPDATE_FIELD_CONDITION_EXTRA_RESERVED = frozenset({"id"})
+_UPDATE_FIELD_CONDITION_EXTRA_RESERVED = frozenset({"id", "actions"})
 
 _VERIFY_UNAVAILABLE_WARNING = (
     "Field condition created but could not verify it persisted on the requested phase."
 )
+
+_CREATE_VERIFY_FAIL_RECOVERY = (
+    " Delete this condition with delete_field_condition using that condition_id "
+    "before recreating; do not retry create on the same requested phase while "
+    "that id exists."
+)
+
+
+def _field_condition_has_usable_phase_id(fetched: dict[str, Any]) -> bool:
+    phase = fetched.get("phase")
+    return isinstance(phase, dict) and phase.get("id") is not None
 
 
 def _required_hidden_error_payload(field_ids: list[str]) -> dict[str, Any]:
@@ -96,7 +107,8 @@ async def _verify_created_field_condition(
         fetch_raised = True
 
     listed_ids: list[str] | None = None
-    if fetched is None:
+    needs_list = fetched is None or not _field_condition_has_usable_phase_id(fetched)
+    if needs_list:
         try:
             list_raw = await client.get_field_conditions(phase_id)
             phase = list_raw.get("phase") if isinstance(list_raw, dict) else None
@@ -129,13 +141,13 @@ async def _verify_created_field_condition(
         return build_pipe_tool_error_payload(
             message=(
                 f"Field condition {condition_id} did not land on requested "
-                f"phase {phase_id}{actual_note}."
+                f"phase {phase_id}{actual_note}.{_CREATE_VERIFY_FAIL_RECOVERY}"
             ),
         )
     return build_pipe_tool_error_payload(
         message=(
             f"Field condition {condition_id} did not persist on requested "
-            f"phase {phase_id}."
+            f"phase {phase_id}.{_CREATE_VERIFY_FAIL_RECOVERY}"
         ),
     )
 
@@ -274,10 +286,12 @@ class FieldConditionTools:
             ``name`` argument; for backwards compatibility it is also accepted inside
             ``extra_input={"name": ...}`` (top-level wins when both are set).
 
-            After create, the tool re-reads the condition and only reports success
-            when it exists on the requested phase (``verified: true``). Missing or
-            wrong phase -> ``success: false``. If both verify reads fail -> success
-            with a warning that verification was unavailable.
+            After create, the tool re-reads the condition. Confirmed on the requested
+            phase -> success with ``verified: true``. Missing or wrong phase ->
+            ``success: false`` (delete the returned condition_id before recreating;
+            do not blind-retry create on the same phase). If both verify reads fail
+            -> success with a warning that verification was unavailable (no
+            ``verified`` key).
 
             The toolkit **rejects** ``hide`` on a ``required=true`` field before
             calling the API (``success: false`` listing field ids), even though the
@@ -450,7 +464,8 @@ class FieldConditionTools:
             (same shapes as ``create_field_condition``) when changing rule logic.
             ``extra_input`` still carries other ``UpdateFieldConditionInput`` keys
             (e.g. ``index``). ``name`` in ``extra_input`` is also accepted for
-            back-compat (top-level wins when both are set).
+            back-compat (top-level wins when both are set). ``actions`` in
+            ``extra_input`` is ignored (use the top-level ``actions`` argument).
 
             When ``actions`` is provided, the toolkit rejects ``hide`` on a
             ``required=true`` field before calling the API (``success: false``
@@ -528,7 +543,21 @@ class FieldConditionTools:
                     ),
                     code="INVALID_ARGUMENTS",
                 )
-            if actions is not None:
+            actions_to_lint = update_attrs.get("actions")
+            if actions_to_lint is not None:
+                if not isinstance(actions_to_lint, list):
+                    return build_pipe_tool_error_payload(
+                        message=(
+                            "Invalid 'actions': provide a non-empty list of action "
+                            "objects (each with phaseFieldId and actionId)."
+                        ),
+                        code="INVALID_ARGUMENTS",
+                    )
+                act_err = field_condition_actions_error_message(actions_to_lint)
+                if act_err:
+                    return build_pipe_tool_error_payload(
+                        message=act_err, code="INVALID_ARGUMENTS"
+                    )
                 try:
                     cond_raw = await client.get_field_condition(cid_str)
                     fc_obj = (
@@ -540,7 +569,7 @@ class FieldConditionTools:
                     phase_id = phase.get("id") if isinstance(phase, dict) else None
                     if phase_id is not None:
                         lint_err = await _lint_required_hidden_actions(
-                            client, str(phase_id), actions
+                            client, str(phase_id), actions_to_lint
                         )
                         if lint_err is not None:
                             return lint_err

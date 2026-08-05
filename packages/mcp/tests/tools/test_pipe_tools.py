@@ -1002,7 +1002,7 @@ class TestDirectToolCalls:
         assert payload.get("success") is False
         message = tool_error_message(payload)
         assert "Foo" in message
-        assert "hidden by a field condition while still required" in message
+        assert "may be hidden by a field condition while still required" in message
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_required_field_without_hide_still_tool_error(

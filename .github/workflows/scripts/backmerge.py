@@ -164,18 +164,30 @@ def attempt_merge(branch: str, message: str) -> list[str]:
     return conflicts
 
 
+def is_ancestry_only() -> bool:
+    """Whether the merge on ``HEAD`` changes no files relative to ``dev``.
+
+    True when ``main``'s content already reached ``dev`` by another route, which
+    makes the pull request purely a history reconciliation. Worth saying in the
+    body: it is the one fact that tells a reviewer the merge is safe to take.
+    """
+    return try_run(["git", "diff", "--quiet", f"origin/{DEV_BRANCH}", "HEAD"]) == 0
+
+
 def remote_branch_exists(branch: str) -> bool:
     """Whether ``branch`` is already on the remote."""
     return bool(capture(["git", "ls-remote", "--heads", "origin", branch]))
 
 
-def existing_pr(branch: str) -> str:
-    """The number of any pull request already opened for ``branch``, or ``""``.
+def existing_pr(branch: str) -> tuple[str, str]:
+    """The number and state of any pull request for ``branch``, or ``("", "")``.
 
-    Searched across every state: a closed back-merge pull request was closed by
-    a human decision, and reopening it would be this workflow overruling them.
+    Searched across every state, because the two answers differ. An open one is
+    the finished outcome. A closed one was closed by a human decision, which
+    this must not overrule by reopening it or re-pushing the branch -- but the
+    drift it left behind still has to surface somewhere.
     """
-    return capture(
+    found = capture(
         [
             "gh",
             "pr",
@@ -187,11 +199,13 @@ def existing_pr(branch: str) -> str:
             "--limit",
             "1",
             "--json",
-            "number",
+            "number,state",
             "--jq",
-            ".[0].number // empty",
+            r'.[0] // empty | "\(.number) \(.state)"',
         ]
     )
+    number, _, state = found.partition(" ")
+    return number, state
 
 
 def open_tracking_issue() -> str:
@@ -267,10 +281,18 @@ def already_reported(issue: str, marker: str) -> bool:
     return marker in seen
 
 
-def pr_body(commits: list[str], behind: int, has_ci: bool) -> str:
+def pr_body(
+    commits: list[str], behind: int, has_ci: bool, ancestry_only: bool = False
+) -> str:
     """The back-merge pull request body."""
     plural = "" if behind == 1 else "s"
     listing = "\n".join(f"- `{line}`" for line in commits)
+    ancestry = (
+        "\nThis merge changes no files. `main`'s content already reached `dev` by "
+        "another route, so what is left to reconcile is history alone.\n"
+        if ancestry_only
+        else ""
+    )
     checks = (
         "This pull request was opened by a token that triggers workflows, so its checks run normally."
         if has_ci
@@ -286,6 +308,10 @@ def pr_body(commits: list[str], behind: int, has_ci: bool) -> str:
 `origin/{MAIN_BRANCH}` carries {behind} commit{plural} that `origin/{DEV_BRANCH}` does not. Until they are back-merged, `{DEV_BRANCH}` is missing work that has already shipped, and `release.py release-pr` refuses to cut a release at all.
 
 These commits reached `{MAIN_BRANCH}` outside the release flow — a hotfix, a docs fix, or anything else merged straight into the default branch.
+{ancestry}
+## Merge this with a merge commit, not a squash
+
+**Use "Create a merge commit".** A squash or a rebase discards the second parent, so `{DEV_BRANCH}` gains the *content* of these commits but never their *ancestry*. `git rev-list --count origin/{DEV_BRANCH}..origin/{MAIN_BRANCH}` would still report {behind}, `release-pr` would still refuse to cut, and the next run of this workflow would open this same pull request again. A squash merge here does not converge.
 
 ## Commits being carried over
 
@@ -329,9 +355,7 @@ Nothing was pushed. Resolving a conflict is a human decision — `-X ours` and `
 `CHANGELOG.md` conflicts are the expected shape of *release* drift: `main` carries the stamped `## [X.Y.Z]` heading while `dev` still has those entries under `## [Unreleased]`. The resolution is stable — keep `main`'s stamped heading and reopen an empty `## [Unreleased]` above it.
 """
     else:
-        detail = f"""\
-The merge itself was clean. What failed was opening the pull request: {reason}
-"""
+        detail = f"{reason}\n"
 
     return f"""\
 `origin/{MAIN_BRANCH}` is {behind} commit{plural} ahead of `origin/{DEV_BRANCH}`, and the back-merge could not be opened automatically.
@@ -371,38 +395,74 @@ def track(
     commits: list[str],
     run_url: str,
     reason: str,
-) -> None:
-    """Open the tracking issue, or comment on the open one when the state changed."""
+) -> bool:
+    """Open the tracking issue, or comment on the open one when the state changed.
+
+    Returns whether the drift is now recorded where a human will see it. The
+    caller turns a ``False`` into a failed run: exiting zero on a conflict is
+    only defensible while this issue is the compensating signal, so a run that
+    produces neither a pull request nor an issue must not stay green.
+    """
     ensure_label()
     marker = state_marker(sha, behind, conflicts)
     body = issue_body(sha, behind, branch, conflicts, commits, marker, run_url, reason)
     title = issue_title(behind)
     issue = open_tracking_issue()
     if not issue:
-        mutate(
-            [
-                "gh",
-                "issue",
-                "create",
-                "--title",
-                title,
-                "--label",
-                LABEL,
-                "--body",
-                body,
-            ]
+        return (
+            mutate(
+                [
+                    "gh",
+                    "issue",
+                    "create",
+                    "--title",
+                    title,
+                    "--label",
+                    LABEL,
+                    "--body",
+                    body,
+                ]
+            )
+            == 0
         )
-        return
     if already_reported(issue, marker):
         print(f"Issue #{issue} already describes this exact state; nothing to add.")
-        return
-    mutate(["gh", "issue", "comment", issue, "--body", body])
+        return True
+    recorded = mutate(["gh", "issue", "comment", issue, "--body", body]) == 0
     # The title carries the live count, which is why the issue is found by label
     # rather than by title. A stale count in the title reads as a stale issue.
+    # Cosmetic, so a failure here does not make the drift unrecorded.
     mutate(["gh", "issue", "edit", issue, "--title", title])
+    return recorded
 
 
-def open_pr(branch: str, commits: list[str], behind: int, has_ci: bool) -> int:
+def close_tracking_issue(comment: str) -> None:
+    """Close the open tracking issue, if there is one."""
+    issue = open_tracking_issue()
+    if issue:
+        mutate(["gh", "issue", "close", issue, "--comment", comment])
+
+
+def supersede_tracking_issue(branch: str) -> None:
+    """Close a tracking issue that a freshly-opened pull request has answered.
+
+    An issue filed for an earlier, conflicting ``main`` head otherwise stays open
+    beside the pull request that fixed it, telling a reader the back-merge could
+    not be opened while it demonstrably was. One thread means one live answer.
+    """
+    close_tracking_issue(
+        f"A back-merge pull request is open for `{branch}`, which supersedes this "
+        "issue. A new one is filed if the divergence outlives that pull request."
+    )
+
+
+def open_pr(
+    branch: str,
+    commits: list[str],
+    behind: int,
+    has_ci: bool,
+    ancestry_only: bool = False,
+) -> int:
     """Open the back-merge pull request. Returns the ``gh`` exit code."""
     plural = "" if behind == 1 else "s"
     return mutate(
@@ -417,7 +477,7 @@ def open_pr(branch: str, commits: list[str], behind: int, has_ci: bool) -> int:
             "--title",
             f"chore: back-merge {MAIN_BRANCH} into {DEV_BRANCH} ({behind} commit{plural})",
             "--body",
-            pr_body(commits, behind, has_ci),
+            pr_body(commits, behind, has_ci, ancestry_only),
         ]
     )
 
@@ -448,18 +508,10 @@ def main() -> int:
     has_ci = os.environ.get("BACKMERGE_HAS_CI", "").lower() == "true"
 
     if behind == 0:
-        issue = open_tracking_issue()
-        if issue:
-            mutate(
-                [
-                    "gh",
-                    "issue",
-                    "close",
-                    issue,
-                    "--comment",
-                    f"`origin/{MAIN_BRANCH}` and `origin/{DEV_BRANCH}` are back in sync. Closing automatically.",
-                ]
-            )
+        close_tracking_issue(
+            f"`origin/{MAIN_BRANCH}` and `origin/{DEV_BRANCH}` are back in sync. "
+            "Closing automatically."
+        )
         print(
             f"origin/{DEV_BRANCH} contains every commit on origin/{MAIN_BRANCH}; "
             "nothing to back-merge."
@@ -471,13 +523,51 @@ def main() -> int:
     commits = carried_commits()
     print(f"origin/{MAIN_BRANCH} is {behind} commit(s) ahead at {sha}.")
 
-    # Idempotency, in the order the states can occur. A pull request that already
-    # covers this exact `main` head is the finished outcome -- including a closed
-    # one, which a human closed on purpose.
-    pr = existing_pr(branch)
-    if pr:
+    # Idempotency, in the order the states can occur.
+    pr, pr_state = existing_pr(branch)
+    if pr and pr_state == "OPEN":
         print(f"Pull request #{pr} already covers {sha}; leaving it alone.")
         return 0
+
+    if pr:
+        # A pull request exists for this head but is not open, and the drift is
+        # still here. Reopening it or re-pushing its branch would overrule a
+        # human decision, so neither happens -- but going quiet is the exact
+        # failure this workflow exists to end, so the drift is recorded either
+        # way. The two states need different diagnoses.
+        print(f"Pull request #{pr} for {sha} is {pr_state}; recording the drift.")
+        if pr_state == "MERGED":
+            # Merged, yet `dev` still does not contain `main`. That only happens
+            # when the pull request was squashed or rebased: the second parent is
+            # discarded, so the content lands but the ancestry never does.
+            reason = (
+                f"Pull request #{pr} for this `{MAIN_BRANCH}` head is already "
+                f"merged, yet `origin/{MAIN_BRANCH}` is still {behind} commit(s) "
+                f"ahead of `origin/{DEV_BRANCH}`.\n\n"
+                "That is what a **squash or rebase merge** does to a back-merge: "
+                "it discards the second parent, so `dev` gained the content of "
+                "those commits but never their ancestry. The count cannot reach "
+                "zero this way, `release-pr` stays blocked, and this repeats.\n\n"
+                "The fix is to redo the back-merge and land it with a merge "
+                "commit:\n\n"
+                "```bash\n"
+                f"git fetch origin {MAIN_BRANCH} {DEV_BRANCH}\n"
+                f"git checkout -b rc-dev/chore/back-merge-main-{sha}-merge "
+                f"origin/{DEV_BRANCH}\n"
+                f"git merge --no-ff origin/{MAIN_BRANCH}\n"
+                f"git push -u origin rc-dev/chore/back-merge-main-{sha}-merge\n"
+                "```\n\n"
+                'Then use **"Create a merge commit"**, not squash.'
+            )
+        else:
+            reason = (
+                f"Pull request #{pr} for this `{MAIN_BRANCH}` head was closed "
+                "without merging. Reopening it, or re-pushing its branch, would "
+                "overrule that decision, so this workflow does neither. The "
+                "divergence is still unresolved and still blocks a release."
+            )
+        recorded = track(sha, behind, branch, [], commits, run_url, reason)
+        return 0 if recorded else 1
 
     if remote_branch_exists(branch):
         # A previous run pushed the branch but did not get as far as the pull
@@ -486,28 +576,59 @@ def main() -> int:
         # destroys the incremental diff a reviewer is working through.
         print(f"Branch {branch} is already pushed; opening its pull request.")
         if open_pr(branch, commits, behind, has_ci) != 0:
-            track(sha, behind, branch, [], commits, run_url, "`gh pr create` failed.")
+            recorded = track(
+                sha,
+                behind,
+                branch,
+                [],
+                commits,
+                run_url,
+                f"The branch `{branch}` is already pushed, but opening its pull "
+                "request failed.",
+            )
+            return 0 if recorded else 1
+        supersede_tracking_issue(branch)
         return 0
 
     conflicts = attempt_merge(branch, merge_message(behind, signoff_trailer()))
+    ancestry_only = not conflicts and is_ancestry_only()
     if conflicts:
         print(f"Merge conflicts in {len(conflicts)} path(s); pushing nothing.")
-        track(sha, behind, branch, conflicts, commits, run_url, "")
-        return 0
+        recorded = track(sha, behind, branch, conflicts, commits, run_url, "")
+        return 0 if recorded else 1
 
-    mutate(["git", "push", "origin", branch])
-    if open_pr(branch, commits, behind, has_ci) != 0:
-        track(
+    if mutate(["git", "push", "origin", branch]) != 0:
+        # Without this check the tracking issue below would claim the branch is
+        # pushed and ready while nothing reached the remote.
+        print("Pushing the branch failed; there is nothing to propose.")
+        recorded = track(
             sha,
             behind,
             branch,
             [],
             commits,
             run_url,
-            "`gh pr create` was rejected. The usual cause is the repository "
-            "forbidding GitHub Actions from creating pull requests "
-            "(Settings -> Actions -> General). The branch is pushed and ready.",
+            "The merge was clean, but pushing the branch failed. Nothing reached "
+            "the remote, so there is no branch to open a pull request against.",
         )
+        return 0 if recorded else 1
+
+    if open_pr(branch, commits, behind, has_ci, ancestry_only) != 0:
+        recorded = track(
+            sha,
+            behind,
+            branch,
+            [],
+            commits,
+            run_url,
+            "The merge was clean and the branch is pushed, but `gh pr create` was "
+            "rejected. The usual cause is the repository forbidding GitHub Actions "
+            "from creating pull requests (Settings -> Actions -> General). Opening "
+            "the pull request by hand is all that is left.",
+        )
+        return 0 if recorded else 1
+
+    supersede_tracking_issue(branch)
     return 0
 
 

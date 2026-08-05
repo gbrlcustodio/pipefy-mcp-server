@@ -146,6 +146,34 @@ def test_pr_body_states_plainly_when_there_are_no_checks() -> None:
     assert "`abc1234 docs: fix`" in body
 
 
+def test_pr_body_demands_a_merge_commit() -> None:
+    # A squash or rebase drops the second parent, so `dev` gains the content but
+    # never the ancestry: the count stays put, `release-pr` stays blocked, and the
+    # next run reopens the same pull request. #577 was squash-merged and the drift
+    # did not move, which is how this was found.
+    body = _backmerge.pr_body(["abc1234 docs: fix"], 9, has_ci=False)
+    assert "Create a merge commit" in body
+    assert "does not converge" in body
+
+
+def test_pr_body_flags_an_ancestry_only_merge() -> None:
+    listing = ["abc1234 docs: fix"]
+    assert "changes no files" in _backmerge.pr_body(
+        listing, 9, has_ci=False, ancestry_only=True
+    )
+    assert "changes no files" not in _backmerge.pr_body(listing, 9, has_ci=False)
+
+
+def test_ancestry_only_compares_the_merge_against_dev(monkeypatch) -> None:
+    seen: list[list[str]] = []
+    monkeypatch.setattr(_backmerge, "try_run", lambda cmd: (seen.append(cmd), 0)[1])
+    assert _backmerge.is_ancestry_only()
+    assert seen == [["git", "diff", "--quiet", "origin/dev", "HEAD"]]
+
+    monkeypatch.setattr(_backmerge, "try_run", lambda cmd: 1)
+    assert not _backmerge.is_ancestry_only()
+
+
 def test_pr_body_does_not_claim_missing_checks_when_a_token_is_set() -> None:
     body = _backmerge.pr_body(["abc1234 docs: fix"], 1, has_ci=True)
     assert "carries no CI checks" not in body
@@ -194,10 +222,12 @@ def test_issue_body_explains_a_clean_merge_that_could_not_be_proposed() -> None:
         ["abc1234 docs: fix"],
         "<!-- marker -->",
         "https://example.test/run/1",
-        "`gh pr create` was rejected.",
+        "The merge was clean, but `gh pr create` was rejected.",
     )
-    assert "The merge itself was clean" in body
-    assert "`gh pr create` was rejected." in body
+    # With no conflicts the reason stands on its own, so each caller can say what
+    # actually happened -- a rejected pull request, a failed push, or a closed
+    # one -- instead of inheriting one hardcoded explanation that fits only some.
+    assert "The merge was clean, but `gh pr create` was rejected." in body
     assert "Conflicting paths" not in body
 
 
@@ -235,23 +265,91 @@ def test_in_sync_with_no_open_issue_does_nothing(monkeypatch) -> None:
     ]
 
 
-def test_an_existing_pull_request_stops_the_run(monkeypatch) -> None:
+def test_an_open_pull_request_stops_the_run(monkeypatch) -> None:
     # Re-running against an unchanged main head must not open a second pull
     # request, push over the branch, or file a duplicate issue.
     monkeypatch.setattr(_backmerge, "run", lambda cmd, **kw: None)
     monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
     monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
     monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
-    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: "77")
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("77", "OPEN"))
 
     def _explode(*args, **kwargs):
-        raise AssertionError("must not act while a pull request already exists")
+        raise AssertionError("must not act while a pull request is already open")
 
     monkeypatch.setattr(_backmerge, "attempt_merge", _explode)
     monkeypatch.setattr(_backmerge, "open_pr", _explode)
     monkeypatch.setattr(_backmerge, "track", _explode)
 
     assert _backmerge.main() == 0
+
+
+def test_a_closed_pull_request_still_surfaces_the_drift(monkeypatch) -> None:
+    # #564 and #565 were both closed without merging, and the divergence then sat
+    # unnoticed for days. Treating a closed pull request as "handled" reproduces
+    # exactly that: no pull request, no issue, and a green run.
+    monkeypatch.setattr(_backmerge, "run", lambda cmd, **kw: None)
+    monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
+    monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
+    monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("77", "CLOSED"))
+
+    def _explode(*args, **kwargs):
+        raise AssertionError("must not reopen or re-push a closed pull request")
+
+    monkeypatch.setattr(_backmerge, "attempt_merge", _explode)
+    monkeypatch.setattr(_backmerge, "open_pr", _explode)
+
+    reasons: list[str] = []
+    monkeypatch.setattr(
+        _backmerge,
+        "track",
+        lambda sha, behind, branch, conflicts, commits, url, reason: (
+            reasons.append(reason),
+            True,
+        )[1],
+    )
+
+    assert _backmerge.main() == 0
+    assert reasons and "#77" in reasons[0]
+    assert "closed without" in reasons[0]
+
+
+def test_a_merged_pull_request_with_drift_left_diagnoses_the_squash(
+    monkeypatch,
+) -> None:
+    # Merged, yet dev still does not contain main. That only happens when the
+    # pull request was squashed or rebased: the second parent is discarded, so
+    # the content lands but the ancestry never does and the count cannot reach
+    # zero. #577 was squash-merged and the drift stayed at 9.
+    monkeypatch.setattr(_backmerge, "run", lambda cmd, **kw: None)
+    monkeypatch.setattr(_backmerge, "main_only_count", lambda: 9)
+    monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
+    monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("577", "MERGED"))
+
+    def _explode(*args, **kwargs):
+        raise AssertionError("must not re-merge or re-push behind a merged PR")
+
+    monkeypatch.setattr(_backmerge, "attempt_merge", _explode)
+    monkeypatch.setattr(_backmerge, "open_pr", _explode)
+
+    reasons: list[str] = []
+    monkeypatch.setattr(
+        _backmerge,
+        "track",
+        lambda sha, behind, branch, conflicts, commits, url, reason: (
+            reasons.append(reason),
+            True,
+        )[1],
+    )
+
+    assert _backmerge.main() == 0
+    assert reasons
+    assert "squash or rebase merge" in reasons[0]
+    assert "--no-ff" in reasons[0]
+    # The closed-without-merging copy would be false here.
+    assert "closed without" not in reasons[0]
 
 
 def test_a_pushed_branch_without_a_pull_request_is_not_pushed_again(
@@ -264,8 +362,9 @@ def test_a_pushed_branch_without_a_pull_request_is_not_pushed_again(
     monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
     monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
     monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
-    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: "")
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("", ""))
     monkeypatch.setattr(_backmerge, "remote_branch_exists", lambda branch: True)
+    monkeypatch.setattr(_backmerge, "open_tracking_issue", lambda: "")
 
     def _explode(*args, **kwargs):
         raise AssertionError("must not re-merge or re-push an existing branch")
@@ -273,7 +372,7 @@ def test_a_pushed_branch_without_a_pull_request_is_not_pushed_again(
     monkeypatch.setattr(_backmerge, "attempt_merge", _explode)
     opened: list[str] = []
     monkeypatch.setattr(
-        _backmerge, "open_pr", lambda b, c, n, ci: (opened.append(b), 0)[1]
+        _backmerge, "open_pr", lambda b, c, n, ci, ao=False: (opened.append(b), 0)[1]
     )
 
     assert _backmerge.main() == 0
@@ -287,7 +386,7 @@ def test_a_conflict_pushes_nothing_and_tracks(monkeypatch) -> None:
     monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
     monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
     monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
-    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: "")
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("", ""))
     monkeypatch.setattr(_backmerge, "remote_branch_exists", lambda branch: False)
     monkeypatch.setattr(_backmerge, "signoff_trailer", lambda: "Signed-off-by: b <b@e>")
     monkeypatch.setattr(_backmerge, "attempt_merge", lambda b, m: ["CHANGELOG.md"])
@@ -296,9 +395,10 @@ def test_a_conflict_pushes_nothing_and_tracks(monkeypatch) -> None:
     monkeypatch.setattr(
         _backmerge,
         "track",
-        lambda sha, behind, branch, conflicts, commits, url, reason: tracked.append(
-            conflicts
-        ),
+        lambda sha, behind, branch, conflicts, commits, url, reason: (
+            tracked.append(conflicts),
+            True,
+        )[1],
     )
 
     def _explode(*args, **kwargs):
@@ -319,23 +419,161 @@ def test_a_rejected_pull_request_falls_through_to_the_issue(monkeypatch) -> None
     monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
     monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
     monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
-    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: "")
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("", ""))
     monkeypatch.setattr(_backmerge, "remote_branch_exists", lambda branch: False)
     monkeypatch.setattr(_backmerge, "signoff_trailer", lambda: "Signed-off-by: b <b@e>")
     monkeypatch.setattr(_backmerge, "attempt_merge", lambda b, m: [])
-    monkeypatch.setattr(_backmerge, "open_pr", lambda b, c, n, ci: 1)
+    monkeypatch.setattr(_backmerge, "is_ancestry_only", lambda: False)
+    monkeypatch.setattr(_backmerge, "open_pr", lambda b, c, n, ci, ao=False: 1)
 
     reasons: list[str] = []
     monkeypatch.setattr(
         _backmerge,
         "track",
-        lambda sha, behind, branch, conflicts, commits, url, reason: reasons.append(
-            reason
-        ),
+        lambda sha, behind, branch, conflicts, commits, url, reason: (
+            reasons.append(reason),
+            True,
+        )[1],
     )
 
     assert _backmerge.main() == 0
     assert reasons and "gh pr create" in reasons[0]
+
+
+def test_a_failed_tracking_issue_write_fails_the_run(monkeypatch) -> None:
+    # Exiting zero on a conflict is only defensible while the tracking issue is
+    # the compensating signal. If that write also fails, Actions would otherwise
+    # stay green with no pull request and no issue -- the silent drift this
+    # workflow exists to end.
+    monkeypatch.setattr(_backmerge, "run", lambda cmd, **kw: None)
+    monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
+    monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
+    monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("", ""))
+    monkeypatch.setattr(_backmerge, "remote_branch_exists", lambda branch: False)
+    monkeypatch.setattr(_backmerge, "signoff_trailer", lambda: "Signed-off-by: b <b@e>")
+    monkeypatch.setattr(_backmerge, "attempt_merge", lambda b, m: ["CHANGELOG.md"])
+    monkeypatch.setattr(_backmerge, "ensure_label", lambda: None)
+    monkeypatch.setattr(_backmerge, "open_tracking_issue", lambda: "")
+    # `gh issue create` rejected.
+    monkeypatch.setattr(_backmerge, "mutate", lambda cmd: 1)
+
+    assert _backmerge.main() == 1
+
+
+def test_a_failed_issue_comment_fails_the_run(monkeypatch) -> None:
+    monkeypatch.setattr(_backmerge, "ensure_label", lambda: None)
+    monkeypatch.setattr(_backmerge, "open_tracking_issue", lambda: "42")
+    monkeypatch.setattr(_backmerge, "already_reported", lambda issue, marker: False)
+    monkeypatch.setattr(_backmerge, "mutate", lambda cmd: 1)
+
+    assert not _backmerge.track(
+        "abc1234", 2, "branch", ["a.md"], ["abc1234 x"], "url", ""
+    )
+
+
+def test_a_title_edit_failure_does_not_fail_the_run(monkeypatch) -> None:
+    # The title only carries the live count. The drift is recorded either way, so
+    # a cosmetic failure must not turn the run red.
+    monkeypatch.setattr(_backmerge, "ensure_label", lambda: None)
+    monkeypatch.setattr(_backmerge, "open_tracking_issue", lambda: "42")
+    monkeypatch.setattr(_backmerge, "already_reported", lambda issue, marker: False)
+    monkeypatch.setattr(
+        _backmerge, "mutate", lambda cmd: 1 if cmd[:3] == ["gh", "issue", "edit"] else 0
+    )
+
+    assert _backmerge.track("abc1234", 2, "branch", ["a.md"], ["abc1234 x"], "url", "")
+
+
+def test_a_failed_push_does_not_claim_the_branch_is_ready(monkeypatch) -> None:
+    # A failed push followed by a failed `gh pr create` used to file an issue
+    # saying the branch was pushed and ready to propose.
+    monkeypatch.setattr(_backmerge, "run", lambda cmd, **kw: None)
+    monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
+    monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
+    monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("", ""))
+    monkeypatch.setattr(_backmerge, "remote_branch_exists", lambda branch: False)
+    monkeypatch.setattr(_backmerge, "signoff_trailer", lambda: "Signed-off-by: b <b@e>")
+    monkeypatch.setattr(_backmerge, "attempt_merge", lambda b, m: [])
+    monkeypatch.setattr(_backmerge, "is_ancestry_only", lambda: False)
+    monkeypatch.setattr(_backmerge, "mutate", lambda cmd: 1 if "push" in cmd else 0)
+
+    def _explode(*args, **kwargs):
+        raise AssertionError("must not propose a branch that never reached the remote")
+
+    monkeypatch.setattr(_backmerge, "open_pr", _explode)
+
+    reasons: list[str] = []
+    monkeypatch.setattr(
+        _backmerge,
+        "track",
+        lambda sha, behind, branch, conflicts, commits, url, reason: (
+            reasons.append(reason),
+            True,
+        )[1],
+    )
+
+    assert _backmerge.main() == 0
+    assert reasons and "pushing the branch failed" in reasons[0]
+    assert "pushed and ready" not in reasons[0]
+
+
+def test_a_clean_merge_pushes_then_opens_the_pull_request(monkeypatch) -> None:
+    # The primary happy path: pin the push argv and the ordering.
+    monkeypatch.setattr(_backmerge, "run", lambda cmd, **kw: None)
+    monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
+    monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
+    monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("", ""))
+    monkeypatch.setattr(_backmerge, "remote_branch_exists", lambda branch: False)
+    monkeypatch.setattr(_backmerge, "signoff_trailer", lambda: "Signed-off-by: b <b@e>")
+    monkeypatch.setattr(_backmerge, "attempt_merge", lambda b, m: [])
+    monkeypatch.setattr(_backmerge, "is_ancestry_only", lambda: False)
+    monkeypatch.setattr(_backmerge, "open_tracking_issue", lambda: "")
+
+    order: list[str] = []
+    monkeypatch.setattr(
+        _backmerge, "mutate", lambda cmd: (order.append(" ".join(cmd)), 0)[1]
+    )
+    monkeypatch.setattr(
+        _backmerge,
+        "open_pr",
+        lambda b, c, n, ci, ao=False: (order.append(f"open_pr {b}"), 0)[1],
+    )
+
+    def _explode(*args, **kwargs):
+        raise AssertionError("must not track a successful back-merge")
+
+    monkeypatch.setattr(_backmerge, "track", _explode)
+
+    assert _backmerge.main() == 0
+    branch = "rc-dev/chore/back-merge-main-abc1234"
+    assert order[0] == f"git push origin {branch}"
+    assert order[1] == f"open_pr {branch}"
+
+
+def test_a_new_pull_request_supersedes_a_stale_tracking_issue(monkeypatch) -> None:
+    # An issue filed for an earlier conflicting head otherwise stays open beside
+    # the pull request that fixed it, saying the back-merge could not be opened.
+    monkeypatch.setattr(_backmerge, "run", lambda cmd, **kw: None)
+    monkeypatch.setattr(_backmerge, "main_only_count", lambda: 2)
+    monkeypatch.setattr(_backmerge, "main_head", lambda: "abc1234")
+    monkeypatch.setattr(_backmerge, "carried_commits", lambda: ["abc1234 docs: fix"])
+    monkeypatch.setattr(_backmerge, "existing_pr", lambda branch: ("", ""))
+    monkeypatch.setattr(_backmerge, "remote_branch_exists", lambda branch: False)
+    monkeypatch.setattr(_backmerge, "signoff_trailer", lambda: "Signed-off-by: b <b@e>")
+    monkeypatch.setattr(_backmerge, "attempt_merge", lambda b, m: [])
+    monkeypatch.setattr(_backmerge, "is_ancestry_only", lambda: False)
+    monkeypatch.setattr(_backmerge, "open_pr", lambda b, c, n, ci, ao=False: 0)
+    monkeypatch.setattr(_backmerge, "open_tracking_issue", lambda: "42")
+
+    closed: list[list[str]] = []
+    monkeypatch.setattr(_backmerge, "mutate", lambda cmd: (closed.append(cmd), 0)[1])
+
+    assert _backmerge.main() == 0
+    close = [c for c in closed if c[:3] == ["gh", "issue", "close"]]
+    assert close and close[0][3] == "42"
 
 
 def test_track_stays_silent_when_the_state_is_unchanged(monkeypatch) -> None:

@@ -21,6 +21,16 @@
 # and directory names, and `env | grep -i pipefy` matches PWD for anyone
 # working inside a directory named after it.
 #
+# An entry matches when *either* half of that rule fires: what it runs is this
+# toolkit's server, or where it points is the hosted host. The two fields are
+# read independently and a declared transport type is not a precondition for
+# either, because which field a client honours differs between clients — Cursor
+# and Codex read a `url` with no `type` as a remote server, Claude Code reads an
+# entry with no `type` as stdio and skips it. Judging the shape by one client's
+# rule leaves a registration the others do run invisible to the scan and alive
+# after a teardown, so the shape is matched as written and the *report* carries
+# the per-client caveat, driven off the `typed-remote` capability below.
+#
 # Removal uses what the scan found, including the name a registration was
 # actually registered under, and every deletion goes through remove_path().
 #
@@ -62,10 +72,14 @@ RECEIPT_SCHEMA_MAX=1           # the newest install-receipt schema this can read
 #   plugin-system  ships a plugin and marketplace registry under statedir
 #   removal-cli    ships a CLI that can remove registrations, tokens and
 #                  plugins; each verb is still probed for before it is used
+#   typed-remote   requires an explicit `type` on a remote entry: a `url` with
+#                  no `type` is read as stdio and the server never starts. The
+#                  entry is still found and still removed — this only adds a
+#                  line to the report saying it was not running here
 #
 # Direct file editing is the baseline for every row. Delegation is the
 # exception one row happens to enable.
-CLIENT_TABLE="claude-code|*|json|~/.claude.json|mcpServers|user|~/.claude|scopes,plugin-system,removal-cli|claude
+CLIENT_TABLE="claude-code|*|json|~/.claude.json|mcpServers|user|~/.claude|scopes,plugin-system,removal-cli,typed-remote|claude
 claude-desktop|Darwin|json|~/Library/Application Support/Claude/claude_desktop_config.json|mcpServers|client:claude-desktop|-|-|-
 codex|*|toml|~/.codex/config.toml|mcp_servers|client:codex|-|-|-
 cursor|*|json|~/.cursor/mcp.json|mcpServers|client:cursor|-|-|-"
@@ -278,6 +292,15 @@ client_row_with_cap() {
 # Which client owns a config path, for --client narrowing and for reports.
 client_id_for_file() {
     client_rows | awk -F'|' -v f="$1" '$4 == f { print $1; exit }'
+}
+
+# Which client reads a config file. A project .mcp.json and a plugin's own
+# .mcp.json are in no client's row; the client that resolves scopes is the one
+# that reads them.
+client_id_reading() {
+    _cir=$(client_id_for_file "$1")
+    [ -n "$_cir" ] || _cir=$(client_field "$(client_row_with_cap scopes)" 1)
+    printf '%s\n' "$_cir"
 }
 
 # --client narrows *registration edits* only; detection always sweeps every
@@ -640,6 +663,16 @@ url_host() {
     printf '%s\n' "$_uh" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz'
 }
 
+# The kinds the probe reports for an entry reached over the network.
+# `untyped-url` is a url with no usable transport declaration, which Cursor and
+# Codex serve over HTTP and Claude Code does not serve at all.
+kind_is_remote() {
+    case "$1" in
+        http|streamable-http|sse|ws|untyped-url) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # A stdio entry runs our server when its command is the server binary, or a
 # known runner with the server binary as an exact argument.
 stdio_matches() {
@@ -754,36 +787,62 @@ def url_host(url):
     return text.lower()
 
 
+DECLARED_REMOTE = ("http", "streamable-http", "sse", "ws")
+
+
+def entry_args(entry):
+    raw = entry.get("args")
+    return [str(a) for a in raw] if isinstance(raw, list) else []
+
+
+def runs_our_server(entry):
+    """One half of the rule: the command is the binary, or a runner invoking it."""
+    command = entry.get("command")
+    if command is None:
+        return False
+    base = posixpath.basename(str(command))
+    return base == BINARY or (base in RUNNERS and BINARY in entry_args(entry))
+
+
+def points_at_hosted(entry):
+    """The other half: an exact host comparison, never a substring search."""
+    url = entry.get("url")
+    return url is not None and url_host(url) == HOSTED_HOST
+
+
 def describe(entry):
-    """(kind, endpoint, command, args) for one entry. Values are never read."""
+    """(kind, endpoint, command, args) for one entry. Values are never read.
+
+    `kind` names the shape as written rather than a transport this decided on.
+    A `url` with no usable `type` is reported as `untyped-url` and matched on
+    its host, because whether it starts depends on the client reading it and
+    the registration is there either way.
+
+    An entry carrying both a `command` and a `url` is described by whichever
+    half identifies this toolkit, since that is the half a report and a plan
+    act on. Neither field is discarded before the match.
+    """
     if not isinstance(entry, dict):
         return ("malformed", "<entry is not an object>", "", [])
-    kind = entry.get("type")
+    declared = entry.get("type")
     url = entry.get("url")
     command = entry.get("command")
-    if kind in ("http", "streamable-http", "sse", "ws"):
-        return (kind, str(url) if url else "<missing url>", "", [])
-    if command is not None:
-        raw = entry.get("args")
-        args = [str(a) for a in raw] if isinstance(raw, list) else []
+    if declared in DECLARED_REMOTE:
+        return (declared, str(url) if url else "<missing url>", "", [])
+    remote_half = url is not None and not runs_our_server(entry)
+    if command is not None and not remote_half:
+        args = entry_args(entry)
         return ("stdio", " ".join([str(command)] + args), str(command), args)
     if url is not None:
-        # Claude Code reads a type-less entry as stdio, so it never starts.
-        return ("malformed", "%s (url with no type)" % url, "", [])
+        return ("untyped-url", str(url), "", [])
     return ("malformed", "<neither command nor url>", "", [])
 
 
 def classify(name, entry):
     """definite / possible / no, from what the entry runs rather than its name."""
-    kind, endpoint, command, args = describe(entry)
-    if kind == "stdio":
-        if posixpath.basename(command) == BINARY:
-            return kind, endpoint, command, "definite"
-        if posixpath.basename(command) in RUNNERS and BINARY in args:
-            return kind, endpoint, command, "definite"
-    elif kind in ("http", "streamable-http", "sse", "ws"):
-        if url_host(endpoint) == HOSTED_HOST:
-            return kind, endpoint, command, "definite"
+    kind, endpoint, command, _ = describe(entry)
+    if isinstance(entry, dict) and (runs_our_server(entry) or points_at_hosted(entry)):
+        return kind, endpoint, command, "definite"
     # Weak signals only ever produce an unverified report, never a match: the
     # key name is free text and an env block is the user's own.
     named_for_us = name == CANON or name.startswith((CANON + "-", CANON + "_"))
@@ -1291,11 +1350,26 @@ scan_uv_cache() {
     detail "only while no server is running."
 }
 
+# Whether a `url` with no `type` starts is the reader's business, not this
+# script's, so the caveat comes from the capability of the client whose file
+# the entry sits in rather than from any client id.
+report_untyped_url() {
+    [ "$1" = "untyped-url" ] || return 0
+    _ru_id=$(client_id_reading "$2")
+    [ -n "$_ru_id" ] || return 0
+    client_has_cap "$(client_row "$_ru_id")" typed-remote || return 0
+    detail "no \"type\" key: $_ru_id reads such an entry as stdio and skips the"
+    detail "server, so this one is registered but never starts there. It is still"
+    detail "a registration and is still removed."
+}
+
 scan_registrations() {
     section "MCP registrations"
     detail "matched on what an entry runs: the $SERVER_BINARY command, a known"
-    detail "runner invoking it, or the host $HOSTED_HOST. The registration"
-    detail "key is reported as data, never used as the matching criterion."
+    detail "runner invoking it, or the host $HOSTED_HOST. Either half is"
+    detail "enough, and a declared transport type is required for neither, since"
+    detail "clients disagree about how to read an entry that omits one. The"
+    detail "registration key is reported as data, never a matching criterion."
     if [ -z "$PYTHON3" ]; then
         uninspected "JSON client configs not inspected — python3 unavailable"
         detail "affects the Claude Code, Cursor and Claude Desktop configs, the plugin"
@@ -1320,6 +1394,7 @@ scan_registrations() {
         for _place in "$_s1" "$_s2" "$_s3"; do
             is_set "$_place" || continue
             detail "in $_place"
+            report_untyped_url "$_kind" "$_place"
         done
         if [ "$_count" -gt 3 ]; then
             detail "and $((_count - 3)) more"
@@ -1353,12 +1428,11 @@ EOF
 scan_possible_registrations() {
     while IFS="$TAB" read -r _ _match _name _scope _kind _endpoint _command _count _s1 _s2 _s3; do
         [ "${_match:-}" = "possible" ] || continue
-        case "$_kind" in
-            http|streamable-http|sse|ws)
-                finding "unverified: '$_name' at $_scope scope is an HTTP registration that is not the documented hosted endpoint" ;;
-            *)
-                finding "unverified: '$_name' at $_scope scope does not run $SERVER_BINARY" ;;
-        esac
+        if kind_is_remote "$_kind"; then
+            finding "unverified: '$_name' at $_scope scope is an HTTP registration that is not the documented hosted endpoint"
+        else
+            finding "unverified: '$_name' at $_scope scope does not run $SERVER_BINARY"
+        fi
         detail "$_kind  $_endpoint"
         for _place in "$_s1" "$_s2" "$_s3"; do
             is_set "$_place" || continue
@@ -1418,16 +1492,25 @@ scan_toml_client() {
     _hit=0
     while IFS="$TAB" read -r _name _command _url _args; do
         [ -n "${_name:-}" ] || continue
-        if is_set "$_url"; then
-            [ "$(url_host "$_url")" = "$HOSTED_HOST" ] || continue
-            _hit=$((_hit + 1))
+        # Both halves of the rule, read independently: a section carrying a
+        # command and a url matches on either, so neither a local nor a hosted
+        # registration hides behind the other field.
+        _hosted=0
+        if is_set "$_url" && [ "$(url_host "$_url")" = "$HOSTED_HOST" ]; then
+            _hosted=1
+        fi
+        _ours=0
+        # Word splitting is how the flattened argument list is re-read.
+        # shellcheck disable=SC2086
+        if is_set "$_command" && stdio_matches "$_command" $_args; then
+            _ours=1
+        fi
+        [ "$_hosted" -eq 1 ] || [ "$_ours" -eq 1 ] || continue
+        _hit=$((_hit + 1))
+        # Described by the half that identifies this toolkit.
+        if [ "$_ours" -eq 0 ]; then
             finding "$_tcl_id, section [$_tcl_key.$_name]: $_url"
         else
-            is_set "$_command" || continue
-            # Word splitting is how the flattened argument list is re-read.
-            # shellcheck disable=SC2086
-            stdio_matches "$_command" $_args || continue
-            _hit=$((_hit + 1))
             if is_set "$_args"; then
                 finding "$_tcl_id, section [$_tcl_key.$_name]: $_command $_args"
             else
@@ -2203,19 +2286,15 @@ tier_approved() {
 plan_registrations() {
     [ "$COLLECTING" -eq 1 ] || return 0
     [ -n "$PYTHON3" ] || return 0
-    _scoped_id=$(client_field "$(client_row_with_cap scopes)" 1)
     _hosted_seen=""
     while IFS="$TAB" read -r _ _match _name _scope _pdir _file _kind _endpoint _command _shape; do
         [ "${_match:-}" = "definite" ] || continue
-        _cid=$(client_id_for_file "$_file")
-        [ -n "$_cid" ] || _cid="$_scoped_id"
+        _cid=$(client_id_reading "$_file")
         _crow=$(client_row "$_cid")
-        case "$_kind" in
-            http|streamable-http|sse|ws)
-                if [ "$(url_host "$_endpoint")" = "$HOSTED_HOST" ]; then
-                    plan_hosted_token "$_cid" "$_crow" "$_name"
-                fi ;;
-        esac
+        if kind_is_remote "$_kind" \
+            && [ "$(url_host "$_endpoint")" = "$HOSTED_HOST" ]; then
+            plan_hosted_token "$_cid" "$_crow" "$_name"
+        fi
         # A plugin's own MCP config goes with the plugin, never on its own.
         [ "$_scope" != "plugin" ] || continue
         if ! client_selected "$_cid"; then

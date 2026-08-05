@@ -454,6 +454,63 @@ def test_hosted_endpoint_matched_by_host_under_any_name(tmp_path):
     assert "unverified" not in result.stdout
 
 
+def test_a_url_with_no_type_is_matched_and_the_caveat_names_the_reader(tmp_path):
+    """Whether a type-less url starts is the reader's business, not the rule's.
+
+    Cursor and Codex serve a bare ``url`` over HTTP; Claude Code reads an entry
+    with no ``type`` as stdio and skips it. Judging the shape by one client's
+    rule would leave the registration invisible in the others, so it is matched
+    everywhere and the caveat is attached where it applies.
+    """
+    home = _home(tmp_path)
+    _write_json(
+        home / ".claude.json",
+        {"mcpServers": {"work": {"url": "https://mcp.pipefy.com/mcp"}}},
+    )
+    _write_json(
+        home / ".cursor" / "mcp.json",
+        {"mcpServers": {"remote": {"url": "https://mcp.pipefy.com/mcp"}}},
+    )
+
+    result = _run(home, _stub_path(tmp_path))
+    out = result.stdout
+
+    assert result.returncode == 1
+    assert "user scope, named 'work': untyped-url" in out
+    assert "client:cursor scope, named 'remote': untyped-url" in out
+    assert "unverified" not in out
+    # The caveat belongs to the config Claude Code reads, and to no other.
+    claude_block = out.split("named 'work'", 1)[1].split("named 'remote'", 1)[0]
+    cursor_block = out.split("named 'remote'", 1)[1]
+    assert "claude-code reads such an entry as stdio" in claude_block
+    assert "reads such an entry as stdio" not in cursor_block
+
+
+def test_a_registration_hides_behind_neither_of_its_two_fields(tmp_path):
+    """Both halves of the rule are read, so one field cannot mask the other."""
+    home = _home(tmp_path)
+    _write_json(
+        home / ".cursor" / "mcp.json",
+        {
+            "mcpServers": {
+                "a": {
+                    "command": "pipefy-mcp-server",
+                    "url": "https://other.example/mcp",
+                },
+                "b": {"command": "some-proxy", "url": "https://mcp.pipefy.com/mcp"},
+                "c": {"command": "some-proxy", "url": "https://other.example/mcp"},
+            }
+        },
+    )
+
+    result = _run(home, _stub_path(tmp_path))
+    out = result.stdout
+
+    assert "named 'a': stdio" in out
+    assert "named 'b': untyped-url" in out
+    assert "named 'c'" not in out
+
+
 def test_two_differently_named_servers_both_active_is_a_conflict(tmp_path):
     """The one-server invariant, made checkable now that names are data."""
     home = _home(tmp_path)

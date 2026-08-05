@@ -831,7 +831,13 @@ def test_every_row_has_the_same_shape():
         assert row[2] in {"json", "toml"}, row
         assert row[1] == "*" or row[1] in {"Darwin", "Linux"}, row
         for capability in row[7].split(","):
-            assert capability in {"-", "scopes", "plugin-system", "removal-cli"}, row
+            assert capability in {
+                "-",
+                "scopes",
+                "plugin-system",
+                "removal-cli",
+                "typed-remote",
+            }, row
 
 
 def test_the_client_allowlist_in_help_comes_from_the_table(tmp_path):

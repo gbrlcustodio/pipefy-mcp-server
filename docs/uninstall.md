@@ -40,10 +40,12 @@ Removal needs `python3`. Without it, a teardown planned from a partial scan woul
 
 The registration key is free text. A real environment had the server registered as `pipefy-dev`, so keying on the name misses exactly the entries that shadow a working one.
 
-Detection is structural and exact — never a substring search for "pipefy", which turns up unrelated hostnames and directory names:
+Detection is structural and exact — never a substring search for "pipefy", which turns up unrelated hostnames and directory names. An entry matches when **either** of these fires:
 
-- a stdio entry whose command is `pipefy-mcp-server`, or a known runner (`uvx`, `uv`, `npx`, `python`, `python3`, `pipx`) with `pipefy-mcp-server` as an exact argument
-- an HTTP, SSE, or WebSocket entry whose URL **host** is exactly `mcp.pipefy.com`
+- its `command` is `pipefy-mcp-server`, or a known runner (`uvx`, `uv`, `npx`, `python`, `python3`, `pipx`) with `pipefy-mcp-server` as an exact argument
+- its URL **host** is exactly `mcp.pipefy.com`
+
+The two fields are read independently, and a declared transport `type` is required for neither. Clients disagree about what a `type`-less entry is: Cursor and Codex read a bare `url` as a remote server, while Claude Code reads an entry with no `type` as stdio and skips it with `has a "url" but no "type"`. Judging the shape by one client's rule would leave a registration the others do run invisible to the scan and alive after a teardown, so the entry is matched as written and the report adds the caveat where it applies — such an entry in Claude Code's config is reported as registered but not running, and is still removed.
 
 Everything else that carries a weak signal — a name in this toolkit's namespace, one of its environment variables, some other Pipefy-shaped HTTP endpoint — is reported as unverified for you to judge, and never removed. The name an entry was really registered under is reported as data, and removal uses that name.
 

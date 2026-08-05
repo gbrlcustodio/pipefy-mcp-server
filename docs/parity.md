@@ -188,7 +188,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_card` | `pipefy card update` | shipped | (`--field-updates` JSON, optional title/labels/assignees/due-date). |
 | `update_card_field` | `pipefy card update` | shipped | Use `--field-updates` JSON array (). |
 | `update_comment` | `pipefy card comment update` | shipped | — |
-| `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). When `actions` is provided (top-level; not via `extra_input`), MCP rejects `hide`/`hidden` on a `required=true` field before the mutation (phase discovered via get-by-id; best-effort if phase fields cannot be loaded). CLI still returns the raw SDK response without that honesty check (known MCP-ahead behavior). |
+| `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). When `actions` is provided (top-level; `actions` in `extra_input` → `INVALID_ARGUMENTS`), MCP rejects `hide`/`hidden` on a `required=true` field before the mutation (phase discovered via get-by-id; best-effort if phase fields cannot be loaded). CLI still returns the raw SDK response without that honesty check (known MCP-ahead behavior). |
 | `update_label` | `pipefy label update` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
 | `update_llm_provider` | `pipefy ai-provider update` | shipped | Custom (BYOM) provider; full configuration replacement via local JSON file; redacted placeholders preserve stored secrets; probe-gated. |
 | `update_organization_report` | `pipefy report-org update` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |

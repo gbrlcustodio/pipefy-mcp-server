@@ -214,8 +214,8 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 |------------|-----|---------|
 | `get_field_conditions` | `pipefy field-condition list --phase <id>` | List all field conditions on a phase. |
 | `get_field_condition` | `pipefy field-condition get` | Load one field condition by ID. |
-| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. After create, verifies the rule on the requested phase (`verified: true`); missing/wrong phase → `success: false` (delete the condition_id before recreating); if both verify reads fail, may return success with a warning (verification unavailable). |
-| `update_field_condition` | `pipefy field-condition update` | Update condition action or rule (MCP rejects required+hide when top-level `actions` is set; CLI still raw). |
+| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. After create, verifies the rule on the requested phase (`verified: true`); missing/wrong phase → `success: false` with `error.details.condition_id` (delete via `delete_field_condition` with `confirm=true` before recreating); if verify reads are inconclusive, may return success with a warning (verification unavailable). |
+| `update_field_condition` | `pipefy field-condition update` | Update condition action or rule (MCP rejects required+hide when top-level `actions` is set; `actions` in `extra_input` → `INVALID_ARGUMENTS`; CLI still raw). |
 | `delete_field_condition` | `pipefy field-condition delete` | **Two-step destructive.** |
 
 Do not hide a required field — MCP rejects `hide`/`hidden` on `required=true` (CLI still raw SDK; see `docs/parity.md`); clear `required` first.
@@ -230,7 +230,7 @@ Do not hide a required field — MCP rejects `hide`/`hidden` on `required=true` 
 
 ## Failure modes
 
-- **`create_field_condition` fails with missing/wrong phase:** delete the returned `condition_id` via `delete_field_condition` before recreating; do not blind-retry create on the same requested phase.
+- **`create_field_condition` fails with missing/wrong phase:** use `error.details.condition_id` (or the id in the message) with `delete_field_condition` and `confirm=true` before recreating; do not blind-retry create on the same requested phase.
 - **`create_card` fails with missing required fields:** call `get_start_form_fields` first to discover required `field_id` values.
 - **`create_phase_field` rejects type:** call `introspect_type type_name="CreatePhaseFieldInput"` to get valid values.
 - **Delete fails with preview error:** expected — call without `confirm=true` first, show user the preview, then call with `confirm=true`.

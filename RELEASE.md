@@ -95,9 +95,11 @@ It reads the current version and `## [Unreleased]` from `origin/dev` (not your c
    uv run python scripts/release.py publish
    ```
 
-   `publish` asks for one confirmation before the irreversible tag push (pass `--yes` to skip it in automation). It refuses unless the checked-out branch matches the version's track and is in sync with its remote, so a release PR that has not merged yet is reported as such rather than surfacing as a rejected branch push.
+   `publish` first refuses unless the checked-out branch matches the version's track and is in sync with its remote, so a release PR that has not merged yet is reported as such rather than surfacing as a rejected branch push.
 
-   Then, still before the prompt, it runs the **artifact check**: `uv build --all-packages --wheel` into a temporary directory (never `dist/`, so a stale local build cannot be mistaken for this one), one wheel per published member asserted before anything is installed, `pip install` of those wheels into a clean virtualenv, and `smoke_entry_points.py` under that virtualenv's interpreter to launch every console entry point. It is the same sequence `release.yml` runs from the same script, moved to the side of the boundary where a failure costs nothing — so the operator reads the real error locally, with no tag, no GitHub Release, and no manual withdrawal. The confirmation prompt then states that the built wheels install and launch, so what was checked is in front of you when you answer it.
+   It then runs the **artifact check**: `uv build --all-packages --wheel` into a temporary directory (never `dist/`, so a stale local build cannot be mistaken for this one), one wheel per published member asserted before anything is installed, `pip install` of those wheels into a clean virtualenv, and `smoke_entry_points.py` under that virtualenv's interpreter to launch every console entry point. It is the same sequence `release.yml` runs from the same script, moved to the side of the boundary where a failure costs nothing — so the operator reads the real error locally, with no tag, no GitHub Release, and no manual withdrawal.
+
+   Only then does it ask for the one confirmation before the irreversible tag push (pass `--yes` to skip the prompt in automation). The prompt states that the built wheels install and launch, so what was checked is in front of you when you answer it.
 
    The check resolves third-party dependencies from PyPI rather than `uv.lock`, and will occasionally pick a newer permitted version than the lock pins — that divergence is what it exists to expose. It therefore needs the index: while PyPI is unreachable, a cut cannot be made.
 

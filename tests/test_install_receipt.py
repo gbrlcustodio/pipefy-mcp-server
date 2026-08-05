@@ -505,6 +505,7 @@ def test_the_receipt_vocabulary_is_closed(tmp_path):
         "release_tag",
         "uv_tool",
         "skills_dir",
+        "skill",
         "entry_created.$1",
     }, sorted(keys)
 
@@ -712,12 +713,15 @@ def test_a_recorded_skills_directory_is_swept(tmp_path):
     (elsewhere / "pipefy-tasks").mkdir(parents=True)
     (elsewhere / "pipefy-tasks" / "SKILL.md").write_text("---\n", encoding="utf-8")
     _write_receipt(
-        home, _COMPLETE.replace("schema=1\n", f"schema=1\nskills_dir={elsewhere}\n")
+        home,
+        _COMPLETE.replace(
+            "schema=1\n", f"schema=1\nskills_dir={elsewhere}\nskill=pipefy-tasks\n"
+        ),
     )
 
     run = _uninstall(tmp_path, home, stub)
 
-    assert f"1 pipefy-* skills installed under {elsewhere}" in run.stdout
+    assert f"1 pipefy-* skills from this toolkit under {elsewhere}" in run.stdout
     assert not (elsewhere / "pipefy-tasks").exists()
 
 
@@ -923,3 +927,30 @@ def test_install_then_uninstall_removes_what_the_install_created(tmp_path):
     assert not _receipt(home).exists()
     assert "uv tool uninstall pipefy-cli" in _stubs(tmp_path)
     assert "uv tool uninstall pipefy-mcp-server" in _stubs(tmp_path)
+
+
+def test_the_receipt_records_only_the_skills_this_run_added(tmp_path):
+    """A skill under the same name prefix that was already here is not the
+    installer's, and teardown reads these names to decide what it may delete."""
+    home = _home(tmp_path)
+    stub = _stub_path(tmp_path, home)
+    mine = home / ".claude" / "skills" / "pipefy-mine"
+    mine.mkdir(parents=True)
+    (mine / "SKILL.md").write_text("---\nname: mine\n---\n", encoding="utf-8")
+
+    result = _install(tmp_path, home, stub, args=("--yes", "--client", "none"))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    lines = _lines(home)
+    # Exactly what the `npx skills add` stub writes, and nothing else here.
+    assert sorted(line for line in lines if line.startswith("skill=")) == [
+        "skill=pipefy-reports",
+        "skill=pipefy-tasks",
+    ]
+
+    removed = _uninstall(tmp_path, home, stub)
+
+    assert (mine / "SKILL.md").exists()
+    assert not (home / ".claude" / "skills" / "pipefy-tasks").exists()
+    assert "nothing records where it came from" in removed.stdout
+

@@ -715,10 +715,7 @@ def test_completions_and_skills(tmp_path):
     (home / ".zfunc").mkdir()
     (home / ".zfunc" / "_pipefy").write_text("#compdef pipefy\n", encoding="utf-8")
     (home / ".zshrc").write_text("fpath+=~/.zfunc\n", encoding="utf-8")
-    for skill in ("pipefy-tasks", "pipefy-reports"):
-        directory = home / ".claude" / "skills" / skill
-        directory.mkdir(parents=True)
-        (directory / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    _install_skills(home, "pipefy-reports", "pipefy-pipes-and-cards")
 
     result = _run(home, _stub_path(tmp_path))
 
@@ -728,7 +725,72 @@ def test_completions_and_skills(tmp_path):
     assert f"{home}/.zfunc/_pipefy" in out
     assert "sources the completion script (line 1)" in out
     assert "adds ~/.zfunc to fpath; shared with other tools" in out
-    assert "2 pipefy-* skills installed" in out
+    assert "2 pipefy-* skills from this toolkit" in out
+
+
+# `npx skills add` is the only thing that records where a skill came from, in a
+# lock file beside the shared store it writes into. Nothing else on disk carries
+# provenance, so these helpers reproduce the two halves it leaves behind.
+_SKILL_LOCK = ".agents/.skill-lock.json"
+
+
+def _lock_entry(source: str, skill_path: str) -> dict:
+    return {
+        "installedAt": "2026-01-01T00:00:00.000Z",
+        "skillPath": skill_path,
+        "source": source,
+        "sourceType": "github",
+        "sourceUrl": f"https://github.com/{source}.git",
+    }
+
+
+def _install_skills(home: Path, *names: str, source: str = "pipefy/ai-toolkit") -> None:
+    """A skill directory plus the lock entry that says where it came from."""
+    lock_path = home / _SKILL_LOCK
+    lock = (
+        json.loads(lock_path.read_text(encoding="utf-8"))
+        if lock_path.exists()
+        else {"version": 3, "skills": {}}
+    )
+    for name in names:
+        directory = home / ".claude" / "skills" / name
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+        lock["skills"][name] = _lock_entry(source, f"skills/{name}/SKILL.md")
+    _write_json(lock_path, lock)
+
+
+def _hand_written_skill(home: Path, name: str) -> Path:
+    """A skill under the same name prefix that no installer put there."""
+    directory = home / ".claude" / "skills" / name
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "SKILL.md").write_text("---\nname: mine\n---\n", encoding="utf-8")
+    return directory
+
+
+def test_a_skill_with_no_recorded_source_is_reported_and_never_claimed(tmp_path):
+    home = _home(tmp_path)
+    _hand_written_skill(home, "pipefy-tasks")
+
+    result = _run(home, _stub_path(tmp_path))
+
+    out = result.stdout
+    assert "pipefy-tasks" in out
+    assert "nothing records where it came from, so it is left alone" in out
+    assert "no pipefy-* skills from this toolkit" in out
+    # Someone else's directory is not this toolkit's state, so it is not a
+    # finding either.
+    assert result.returncode == 0, out
+
+
+def test_a_skill_installed_from_another_repository_is_left_alone(tmp_path):
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-tasks", source="someone-else/their-skills")
+
+    result = _run(home, _stub_path(tmp_path))
+
+    assert result.returncode == 0, result.stdout
+    assert "came from someone-else/their-skills, not this toolkit" in result.stdout
 
 
 # --------------------------------------------------------------- keychain

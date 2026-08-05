@@ -331,7 +331,10 @@ def test_every_deletion_routes_through_the_guard():
         # A deletion that skipped the guard entirely.
         ("act_rmdir() {\n", 'act_rmdir() {\n    rm -rf "$1"\n'),
         # A guard that stopped refusing the argument that matters most.
-        ('[ "$_rp" != "$HOME" ] || err "refusing to remove \\$HOME ($HOME)"', ""),
+        (
+            '[ "$_rp" != "$_rp_home" ] || err "refusing to remove \\$HOME ($HOME)"',
+            "",
+        ),
     ],
     ids=["unguarded-rm", "dropped-refusal"],
 )
@@ -350,3 +353,4 @@ def test_a_case_label_is_not_read_as_a_deletion():
     body = _UNINSTALL.read_text(encoding="utf-8")
     assert "        rmdir) act_rmdir" in body
     assert _guard.check(_UNINSTALL) == []
+

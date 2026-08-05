@@ -32,7 +32,7 @@ Out of scope: your git checkouts. Uninstalling is about tooling, not source.
 | `1` | findings remain |
 | `2` | the run itself failed, or a source could not be inspected |
 
-Exit `2` is the one worth reading carefully. Every JSON source — the client configs, the plugin registry, each project `.mcp.json` — is read by a single `python3` program, and without `python3` those sources report `not inspected` rather than `clean`. A partial scan can therefore never be mistaken for a clean machine. The non-JSON sources (`PATH`, the keychain, `~/.config/pipefy`, completions, skills, and the Codex TOML) are inspected with POSIX text tools alone.
+Exit `2` is the one worth reading carefully. Every JSON source — the client configs, the plugin registry, each project `.mcp.json`, the skills lock file — is read by a single `python3` program, and without `python3` those sources report `not inspected` rather than `clean`. A partial scan can therefore never be mistaken for a clean machine. The non-JSON sources (`PATH`, the keychain, `~/.config/pipefy`, completions, and the Codex TOML) are inspected with POSIX text tools alone.
 
 Removal needs `python3`. Without it, a teardown planned from a partial scan would leave exactly the state that causes duplicate-registration conflicts, so the run refuses and points at `--scan`.
 
@@ -59,7 +59,7 @@ Around twenty individual prompts pushes everyone to `--yes` and loses the safety
 
 | Tier | Contents | Undo |
 |------|----------|------|
-| `[1]` | what this toolkit installed | reinstalling restores it |
+| `[1]` | what this toolkit installed, where a record says so | reinstalling restores it |
 | `[2]` | stored credentials | cannot be undone |
 | `[3]` | your own files | each is copied to `<file>.bak.<timestamp>` before editing |
 
@@ -85,12 +85,18 @@ The order is load-bearing, not cosmetic:
 
 1. **Revoke.** Only `pipefy auth logout` reaches the identity provider, and that ability disappears with the tool environment, so it leads. A credential deleted locally but never revoked stays valid at the provider until it expires, and the report says so when that happens.
 2. **Credentials.** The local stores, once revocation has had its chance.
-3. **Client configs.** Before the tools, so no registration is left pointing at a binary that no longer exists.
-4. **Tools.**
-5. **Skills.**
-6. **Runtime state**, last: `pipefy auth logout` and `pipefy auth status` both recreate `~/.config/pipefy` with a lock file, so clearing it any earlier clears nothing.
+3. **Shadowing registrations.** A local- or project-scope entry outranks the user-scope entry of the same name, and the next step has to be able to resolve that name.
+4. **The hosted OAuth token.** `claude mcp logout <name>` resolves the name across scopes and takes no scope flag, so it runs after the entries that outrank the hosted one are gone and before the hosted entry itself is removed. It is a credential and belongs with step 2 by class; it sits here because it is the only credential whose store is reached through a registration. A run that cannot clear it says so and exits non-zero rather than reporting it cleared.
+5. **Client configs.** Before the tools, so no registration is left pointing at a binary that no longer exists.
+6. **Tools.**
+7. **Skills.**
+8. **Runtime state**, last: `pipefy auth logout` and `pipefy auth status` both recreate `~/.config/pipefy` with a lock file, so clearing it any earlier clears nothing.
 
 `~/.config/pipefy` is removed only if it ends up empty. Its presence after a later `pipefy` invocation is not a failed removal.
+
+### Skills are removed only where something records installing them
+
+`pipefy-` is a namespace anyone may write in, and the directory name is not evidence of who wrote it. A skill is removed when the install receipt records this toolkit's installer adding it, or when the lock file `skills add` keeps records its source as this repository; anything else under the same prefix is reported and left where it is. A skill directory is often a link into a shared store, so the store content and the lock entry go with the link rather than being stranded behind it.
 
 ## The install receipt, and heuristic mode
 
@@ -109,6 +115,8 @@ Without a receipt the run is in **heuristic mode**, which is permanent rather th
 - **Editable-install entries in the uv cache** (`archive-v0/*_editable_impl_*.pth`). They belong to other repositories' virtualenvs; removing one breaks that checkout until its next sync.
 - **A git-tracked `.mcp.json`.** Editing it is not durable — the next checkout, branch switch, or stash pop restores it from the index — so the entry is disabled through `disabledMcpjsonServers` instead.
 - **A `pipefy` binary inside a project virtualenv.** It is reported for shadowing purposes and classified as belonging to that checkout.
+- **A `pipefy-*` skill nothing records this toolkit installing.** See above.
+- **A marketplace clone recorded outside the client's own plugin directory.** `installLocation` is data this script did not write, so it is checked against the canonical clone path and reported when it does not match.
 - **Your git checkouts.**
 
 ## Two things that come back

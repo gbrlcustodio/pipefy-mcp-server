@@ -276,9 +276,32 @@ def _full_fixture(home: Path) -> None:
         '[mcp_servers.pipefy]\ncommand = "pipefy-mcp-server"\n',
         encoding="utf-8",
     )
-    skill = home / ".claude" / "skills" / "pipefy-tasks"
-    skill.mkdir(parents=True)
-    (skill / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    _install_skills(home, "pipefy-reports")
+
+
+# `npx skills add` records the source of every skill it writes in a lock file.
+# That record is the only provenance a skill has: the `pipefy-` prefix is a
+# namespace anyone may write in, and reading it as ownership is how a teardown
+# deletes work it never created.
+def _install_skills(home: Path, *names: str, source: str = "pipefy/ai-toolkit") -> None:
+    lock_path = home / ".agents" / ".skill-lock.json"
+    lock = (
+        json.loads(lock_path.read_text(encoding="utf-8"))
+        if lock_path.exists()
+        else {"version": 3, "skills": {}}
+    )
+    for name in names:
+        directory = home / ".claude" / "skills" / name
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+        lock["skills"][name] = {
+            "installedAt": "2026-01-01T00:00:00.000Z",
+            "skillPath": f"skills/{name}/SKILL.md",
+            "source": source,
+            "sourceType": "github",
+            "sourceUrl": f"https://github.com/{source}.git",
+        }
+    _write_json(lock_path, lock)
 
 
 # ------------------------------------------------------------ the sequence
@@ -299,7 +322,7 @@ def test_the_command_sequence_is_credentials_configs_tools_skills_state(tmp_path
     registration = run.index("claude mcp remove pipefy-dev")
     cursor = run.index("mcpServers pipefy from")
     tool = run.index("uv tool uninstall pipefy-cli")
-    skill = run.index("skills/pipefy-tasks")
+    skill = run.index("skills/pipefy-reports")
     lock = run.index("refresh.lock")
 
     # Only `pipefy auth logout` revokes server-side, and that ability goes away
@@ -502,6 +525,13 @@ def _guard_run(tmp_path, snippet: str, home: Path) -> subprocess.CompletedProces
         ('remove_path "$HOME/"', "refusing to remove $HOME"),
         ('remove_path "relative/path"', "refusing to remove a relative path"),
         ('remove_path "$HOME" empty-dir', "refusing to remove $HOME"),
+        # Traversal: an absolute path is not a resolved one, and a guard that
+        # compares text lets `..` walk straight past both refusals.
+        ('remove_path "$HOME/."', "refusing to remove $HOME"),
+        ('remove_path "$HOME/.."', "it contains $HOME"),
+        ('remove_path "$HOME/x/../.."', "it contains $HOME"),
+        ('remove_path "$HOME/../.." empty-dir', "it contains $HOME"),
+        ('remove_path "/tmp/../.."', "refusing to remove /"),
     ],
 )
 def test_the_deletion_guard_refuses(tmp_path, snippet, message):
@@ -519,6 +549,170 @@ def test_the_deletion_guard_allows_a_path_below_home(tmp_path):
     result = _guard_run(tmp_path, 'touch "$HOME/x"\nremove_path "$HOME/x"\n', home)
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"+ rm -rf -- {home}/x" in result.stderr
+
+
+def test_the_deletion_guard_does_not_follow_a_symlink_out(tmp_path):
+    """What is removed is the link, so the link's own path is what is judged."""
+    home = _home(tmp_path)
+    (home / "link").symlink_to(home.parent)
+    result = _guard_run(tmp_path, 'remove_path "$HOME/link"\n', home)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"+ rm -rf -- {home}/link" in result.stderr
+
+
+# ------------------------------------------------------- marketplace clone
+
+
+def test_a_marketplace_clone_outside_the_plugin_tree_is_never_deleted(tmp_path):
+    """`installLocation` is data this script did not write. It is a claim."""
+    home = _home(tmp_path)
+    canary = tmp_path / "canary"
+    canary.mkdir()
+    (canary / "keep.txt").write_text("mine\n", encoding="utf-8")
+    _write_json(
+        home / ".claude" / "plugins" / "known_marketplaces.json",
+        {"pipefy": {"installLocation": str(canary)}},
+    )
+    # No client CLI, so teardown falls back to editing the registry itself —
+    # the path on which the recorded location becomes a deletion target.
+    stub = _stub_path(tmp_path, claude=None)
+
+    run = _run(home, stub)
+
+    assert canary.is_dir() and (canary / "keep.txt").exists()
+    assert "which is outside" in run.stdout
+    assert run.missing(f"rm -rf -- {canary}")
+    registry = json.loads(
+        (home / ".claude" / "plugins" / "known_marketplaces.json").read_text()
+    )
+    assert "pipefy" not in registry
+
+
+def test_the_canonical_marketplace_clone_is_deleted_and_disclosed(tmp_path):
+    home = _home(tmp_path)
+    clone = home / ".claude" / "plugins" / "marketplaces" / "pipefy"
+    clone.mkdir(parents=True)
+    (clone / "marketplace.json").write_text("{}", encoding="utf-8")
+    _write_json(
+        home / ".claude" / "plugins" / "known_marketplaces.json",
+        {"pipefy": {"installLocation": str(clone)}},
+    )
+
+    run = _run(home, _stub_path(tmp_path, claude=None))
+
+    assert f"delete its clone at {clone}" in run.stdout
+    assert not clone.exists()
+
+
+# ------------------------------------------------------------------- skills
+
+
+def test_a_skill_the_toolkit_did_not_install_survives_teardown(tmp_path):
+    """The `pipefy-` prefix is a namespace, not a claim of ownership."""
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-reports")
+    mine = home / ".claude" / "skills" / "pipefy-tasks"
+    mine.mkdir(parents=True)
+    (mine / "SKILL.md").write_text("---\nname: mine\n---\n", encoding="utf-8")
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert (mine / "SKILL.md").read_text(encoding="utf-8") == "---\nname: mine\n---\n"
+    assert "nothing records where it came from" in run.stdout
+    assert not (home / ".claude" / "skills" / "pipefy-reports").exists()
+    assert run.missing("skills/pipefy-tasks")
+
+
+def test_a_skill_from_another_repository_survives_teardown(tmp_path):
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-tasks", source="someone-else/their-skills")
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert (home / ".claude" / "skills" / "pipefy-tasks").is_dir()
+    assert "not this toolkit" in run.stdout
+
+
+def test_a_skill_linked_into_a_shared_store_takes_its_content_with_it(tmp_path):
+    """`skills add` writes a store and links agents at it; the link is not the
+    skill, and removing only the link leaves the content and the lock entry."""
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-reports")
+    store = home / ".agents" / "skills" / "pipefy-reports"
+    store.mkdir(parents=True)
+    (store / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    link = home / ".claude" / "skills" / "pipefy-reports"
+    shutil.rmtree(link)
+    link.symlink_to(store)
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert not link.exists() and not link.is_symlink()
+    assert not store.exists()
+    lock = json.loads((home / ".agents" / ".skill-lock.json").read_text("utf-8"))
+    assert lock["skills"] == {}
+    assert "content at" in run.stdout
+
+
+# ------------------------------------------------------------- hosted token
+
+
+def test_the_hosted_logout_runs_after_the_shadowing_entry_and_before_its_own(
+    tmp_path,
+):
+    """`mcp logout` resolves a name across scopes and takes no scope flag.
+
+    Run while a higher-precedence entry of the same name is still registered,
+    it binds to that one and the hosted token is never cleared.
+    """
+    home = _home(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_json(
+        repo / ".mcp.json",
+        {"mcpServers": {"pipefy": {"command": "uvx", "args": ["pipefy-mcp-server"]}}},
+    )
+    _write_json(
+        home / ".claude.json",
+        {
+            "mcpServers": {
+                "pipefy": {"type": "http", "url": "https://mcp.pipefy.com/mcp"}
+            }
+        },
+    )
+
+    run = _run(home, _stub_path(tmp_path, git=True), cwd=repo)
+
+    project = run.index("mcpServers pipefy from")
+    logout = run.index("claude mcp logout pipefy")
+    user = run.index("claude mcp remove pipefy -s user")
+    assert project < logout < user
+
+
+def test_a_failing_hosted_logout_is_reported_rather_than_counted_as_done(tmp_path):
+    home = _home(tmp_path)
+    _write_json(
+        home / ".claude.json",
+        {
+            "mcpServers": {
+                "pipefy": {"type": "http", "url": "https://mcp.pipefy.com/mcp"}
+            }
+        },
+    )
+    failing = _CLAUDE.replace(
+        "exit 0\n",
+        'case "$*" in "mcp logout"*) exit 1 ;; esac\nexit 0\n',
+        1,
+    )
+    stub = _stub_path(tmp_path, claude=failing)
+
+    run = _run(home, stub)
+
+    assert "claude mcp logout pipefy" in run.stubs
+    assert "Failed — these are still here:" in run.stdout
+    assert "clear the stored OAuth token for 'pipefy'" in run.stdout
+    assert "Clear authentication" in run.stdout
+    assert run.returncode == 2
 
 
 # ----------------------------------------------------------------- approval

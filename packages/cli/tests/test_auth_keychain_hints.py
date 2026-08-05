@@ -15,7 +15,6 @@ from pipefy_cli.commands import _auth_keychain_hints as hints
             [
                 "errSecInvalidOwnerEdit",
                 "pipefy auth logout",
-                "Not signed in. Nothing to do.",
                 "security delete-generic-password -s pipefy",
                 "Terminal.app",
                 "Always Allow",

@@ -758,6 +758,59 @@ def test_a_skill_linked_into_a_shared_store_takes_its_content_with_it(tmp_path):
     assert "content at" in run.stdout
 
 
+def test_a_skill_linked_outside_the_store_keeps_its_content(tmp_path):
+    """Following a link is unbounded reach, so the target is confined.
+
+    The parallel of the marketplace `installLocation` case: the link goes, the
+    directory it pointed at does not, and the report says which.
+    """
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-reports")
+    canary = tmp_path / "canary"
+    canary.mkdir()
+    (canary / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    (canary / "keep.txt").write_text("mine\n", encoding="utf-8")
+    link = home / ".claude" / "skills" / "pipefy-reports"
+    shutil.rmtree(link)
+    link.symlink_to(canary)
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert canary.is_dir() and (canary / "keep.txt").exists()
+    assert run.missing(f"rm -rf -- {canary}")
+    # The link itself is still this toolkit's and still goes.
+    assert not link.is_symlink() and not link.exists()
+    assert "outside the skills store" in run.stdout
+    assert str(canary) in run.stdout
+    assert "left exactly as it is" in run.stdout
+
+
+def test_a_skill_link_with_no_lock_file_to_derive_a_store_from_keeps_its_content(
+    tmp_path,
+):
+    """No lock file, no derived store, no permitted deletion target."""
+    home = _home(tmp_path)
+    store = home / ".agents" / "skills" / "pipefy-reports"
+    store.mkdir(parents=True)
+    (store / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    link = home / ".claude" / "skills" / "pipefy-reports"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(store)
+    # The receipt says the installer added it, so provenance passes; nothing
+    # says where the content legitimately lives.
+    receipt = home / ".local" / "state" / "pipefy" / "install-receipt"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text(
+        "record=begin\nschema=1\nskill=pipefy-reports\nrecord=end\n", encoding="utf-8"
+    )
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert store.is_dir()
+    assert not link.is_symlink()
+    assert "outside the skills store" in run.stdout
+
+
 # ------------------------------------------------------------- hosted token
 
 

@@ -2257,6 +2257,9 @@ EOF
         | awk -F"$TAB" -v n="$1" '$3 == n { print $4 "\t" $5; exit }'
 }
 
+# The lock file that describes a skill. The path is one the probe built from
+# $HOME and the project directories it already sweeps, never a string read out
+# of a file, and it is only ever edited as JSON with a backup taken first.
 skill_lock_file() {
     records skilllock | awk -F"$TAB" -v n="$1" '$3 == n { print $2; exit }'
 }
@@ -2304,20 +2307,52 @@ scan_skills_dir() {
     fi
 }
 
+# The store `skills add` writes its content into, derived from the lock file it
+# keeps beside that store rather than assumed: global and per-project installs
+# each get their own, and neither path is one this script may hardcode.
+skill_store_root() {
+    [ -n "${1:-}" ] || return 1
+    printf '%s\n' "$(dirname "$1")/skills"
+}
+
+# Is a link target inside that store? Strictly inside: the store root holds
+# every agent's skills, and no single skill is ever the root itself.
+skill_store_confines() {
+    _ssc_root=$(skill_store_root "${2:-}") || return 1
+    _ssc_root=$(canonical_path "$_ssc_root")
+    _ssc_have=$(canonical_path "$1")
+    case "$_ssc_have" in
+        "$_ssc_root"/*) return 0 ;;
+    esac
+    return 1
+}
+
 # What the entry in the skills directory points at, and the lock entry that
 # describes it. A skill directory is often a link into a shared store, so
 # removing only the link leaves the content and the record of it behind, and a
 # run that says the skill is gone would be wrong.
+#
+# Following a link is unbounded reach, so the target is confined the way the
+# marketplace clone is: it is deleted only when it sits inside the store the
+# lock file names, and a link pointing anywhere else — a checkout of the user's
+# own, most likely — costs the link and nothing more. The report says so and
+# names what stayed, because "deleted the skill" would otherwise be false.
 plan_skill_store() {
+    _pss_lock=$(skill_lock_file "$2")
     if [ -L "$1" ]; then
         _pss_target=$(canonical_path "$(resolve_link "$1")")
         if [ -d "$_pss_target" ] && [ "$_pss_target" != "$(canonical_path "$1")" ]; then
-            detail "content at $_pss_target"
-            plan_add 7 ours rmpath "$_pss_target" - - - - - - \
-                "delete the $2 skill content at $_pss_target"
+            if skill_store_confines "$_pss_target" "$_pss_lock"; then
+                detail "content at $_pss_target"
+                plan_add 7 ours rmpath "$_pss_target" - - - - - - \
+                    "delete the $2 skill content at $_pss_target"
+            else
+                detail "links out to $_pss_target, which is outside the skills store"
+                detail "this toolkit's skills are written to; only the link is removed"
+                note_left "the $2 entry is a link to $_pss_target, outside the skills store: the link is removed and that directory is left exactly as it is"
+            fi
         fi
     fi
-    _pss_lock=$(skill_lock_file "$2")
     [ -n "$_pss_lock" ] || return 0
     plan_add 7 ours jsonkey "$_pss_lock" skills "$2" - - - - \
         "drop the $2 entry from $_pss_lock"

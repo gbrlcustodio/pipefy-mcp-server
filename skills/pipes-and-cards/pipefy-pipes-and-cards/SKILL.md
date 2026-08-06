@@ -232,6 +232,7 @@ Do not hide a required field — MCP rejects `hide`/`hidden` on `required=true` 
 
 - **`create_field_condition` fails with missing/wrong phase:** use `error.details.condition_id` (or the id in the message) with `delete_field_condition` and `confirm=true` before recreating; do not blind-retry create on the same requested phase.
 - **`create_card` fails with missing required fields:** call `get_start_form_fields` first to discover required `field_id` values.
+- **`create_card` / write reports failure (empty or unclear message):** do not blind-retry. Re-read `get_cards` / `get_phase_cards_count` (or pipe `cards_count`) before any retry — see [Ambiguous write failure](../../api-troubleshoot/pipefy-api-fallback/SKILL.md#ambiguous-write-failure-re-read-before-retry).
 - **`create_phase_field` rejects type:** call `introspect_type type_name="CreatePhaseFieldInput"` to get valid values.
 - **Delete fails with preview error:** expected — call without `confirm=true` first, show user the preview, then call with `confirm=true`.
 

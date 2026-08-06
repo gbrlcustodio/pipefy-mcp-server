@@ -6,7 +6,10 @@ import pytest
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 import pipefy_mcp.settings as settings_mod
-from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
+from pipefy_mcp.tools.graphql_error_helpers import (
+    enrich_permission_denied_error,
+    ensure_non_empty_error_message,
+)
 
 
 def _make_permission_denied_exc(message="forbidden"):
@@ -44,6 +47,21 @@ def _mock_settings(monkeypatch):
     mock_settings = MagicMock()
     mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
     monkeypatch.setattr(settings_mod, "settings", mock_settings)
+
+
+@pytest.mark.unit
+def test_ensure_non_empty_error_message_empty_uses_fallback():
+    assert ensure_non_empty_error_message("", "fallback") == "fallback"
+
+
+@pytest.mark.unit
+def test_ensure_non_empty_error_message_whitespace_uses_fallback():
+    assert ensure_non_empty_error_message("   ", "fallback") == "fallback"
+
+
+@pytest.mark.unit
+def test_ensure_non_empty_error_message_preserves_non_blank():
+    assert ensure_non_empty_error_message("boom", "fallback") == "boom"
 
 
 @pytest.mark.anyio

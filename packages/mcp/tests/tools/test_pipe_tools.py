@@ -492,6 +492,52 @@ class TestCreateCardTool:
         assert "invite_members" in tool_error_message(payload)
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_create_card_empty_exception_message_uses_fallback(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.side_effect = RuntimeError("")
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "skip_elicitation": True},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        message = tool_error_message(payload)
+        assert message.strip()
+        assert message == "Failed to create card."
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_create_card_preserves_non_empty_exception_message(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.side_effect = RuntimeError("boom")
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "skip_elicitation": True},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "boom" in tool_error_message(payload)
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
     @pytest.mark.parametrize("invalid_phase_id", [0, -1])
     async def test_create_card_rejects_invalid_phase_id(
         self,

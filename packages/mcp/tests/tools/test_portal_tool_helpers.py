@@ -27,6 +27,22 @@ def test_map_portal_error_returns_portal_permission_message() -> None:
 
 
 @pytest.mark.unit
+def test_map_portal_error_blank_permission_message_uses_fallback():
+    assert (
+        map_portal_error_to_message(PortalPermissionError("  "))
+        == "Portal operation failed. Try again or contact support."
+    )
+
+
+@pytest.mark.unit
+def test_map_portal_error_preserves_non_blank_permission_message():
+    assert (
+        map_portal_error_to_message(PortalPermissionError("real permission text"))
+        == "real permission text"
+    )
+
+
+@pytest.mark.unit
 def test_map_portal_error_permission_denied_transport_query_error() -> None:
     """GraphQL PERMISSION_DENIED codes map to portal permission guidance."""
     exc = PipefyGraphQLError([{"message": "forbidden"}])

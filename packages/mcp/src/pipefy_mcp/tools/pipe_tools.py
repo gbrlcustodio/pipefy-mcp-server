@@ -34,6 +34,7 @@ from pipefy_mcp.core.tool_error_envelope import (
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
+    ensure_non_empty_error_message,
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
     handle_tool_graphql_error,
@@ -288,7 +289,9 @@ class PipeTools:
                 error_text = str(exc)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
-                return tool_error(error_text)
+                return tool_error(
+                    ensure_non_empty_error_message(error_text, "Failed to create card.")
+                )
             card_data_node = (result.get("createCard") or {}).get("card")
             card_id = (
                 card_data_node.get("id") if isinstance(card_data_node, dict) else None

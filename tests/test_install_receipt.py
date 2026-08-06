@@ -924,6 +924,7 @@ def test_install_then_uninstall_removes_what_the_install_created(tmp_path):
     assert "uv tool uninstall pipefy-cli" in _stubs(tmp_path)
     assert "uv tool uninstall pipefy-mcp-server" in _stubs(tmp_path)
 
+
 def test_a_claude_desktop_entry_the_installer_found_is_not_removed(tmp_path):
     """The receipt key carries a hyphen, so the reader's alphabet has to.
 
@@ -959,6 +960,7 @@ def test_a_claude_desktop_entry_the_installer_found_is_not_removed(tmp_path):
     assert "was already registered when install.sh ran" in run.stdout
     # A junked key would also have been counted as a malformed line.
     assert "lines are malformed" not in run.stdout
+
 
 def test_the_merge_leaves_utf8_siblings_literal(tmp_path):
     """Adding one server is not licence to rewrite another server's bytes."""

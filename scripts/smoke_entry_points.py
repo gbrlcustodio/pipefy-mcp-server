@@ -21,9 +21,10 @@ no arguments
     member missing from the install, fails here.
 
 Three workflows share this script -- ``ci.yml``, ``release.yml``, and
-``packaging-smoke.yml`` -- so "every published entry point" has one definition
-instead of a launch list copied into each job, where a newly added script would
-have to be remembered three times.
+``packaging-smoke.yml`` -- as does ``release.py``, which runs both modes before
+the tag push so the same check happens while it is still free. "Every published
+entry point" therefore has one definition instead of a launch list copied into
+each job, where a newly added script would have to be remembered four times.
 """
 
 from __future__ import annotations
@@ -100,6 +101,19 @@ def resolve_scripts(found: Mapping[str, Distribution]) -> list[str]:
 def wheel_distribution(filename: str) -> str:
     """Read the distribution name out of a wheel filename (PEP 427 name-version-...)."""
     return canonical_name(filename.split("-")[0])
+
+
+def wheel_stem(distribution: str) -> str:
+    """The filename prefix wheels of ``distribution`` carry, up to the version dash.
+
+    The inverse of ``wheel_distribution``: a wheel filename escapes the
+    distribution name (``pipefy-mcp-server`` builds as
+    ``pipefy_mcp_server-<version>-...whl``), so a caller matching wheels by name
+    cannot use the distribution name as written. ``release.py`` derives what a
+    GitHub Release must attach through this, so the published-member list stays
+    one definition rather than a hand-escaped copy.
+    """
+    return f"{canonical_name(distribution).replace('-', '_')}-"
 
 
 def check_wheels(directory: str | Path) -> list[str]:

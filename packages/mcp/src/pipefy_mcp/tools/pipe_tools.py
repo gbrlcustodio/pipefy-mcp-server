@@ -115,6 +115,10 @@ class PipeTools:
             elicitation, an interactive form is presented even if ``fields``
             carries pre-filled values — the human can review and adjust them.
 
+            On ambiguous failure (empty or unclear ``error.message``), re-read
+            ``get_cards`` / ``get_phase_cards_count`` before retrying; do not
+            blind-retry creates (``CreateCardInput`` has no ``idempotency_key``).
+
             A form is only possible when the connection can carry a
             server-to-client request. It cannot on protocol revision 2026-07-28,
             on a stateless HTTP transport, or on a deployment serving
@@ -290,7 +294,11 @@ class PipeTools:
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return tool_error(
-                    ensure_non_empty_error_message(error_text, "Failed to create card.")
+                    ensure_non_empty_error_message(
+                        error_text,
+                        "Failed to create card. Re-read get_cards or "
+                        "get_phase_cards_count before retrying; do not blind-retry.",
+                    )
                 )
             card_data_node = (result.get("createCard") or {}).get("card")
             card_id = (

@@ -28,10 +28,10 @@ def test_map_portal_error_returns_portal_permission_message() -> None:
 
 @pytest.mark.unit
 def test_map_portal_error_blank_permission_message_uses_fallback():
-    assert (
-        map_portal_error_to_message(PortalPermissionError("  "))
-        == "Portal operation failed. Try again or contact support."
-    )
+    message = map_portal_error_to_message(PortalPermissionError("  "))
+    assert "create_portal" in message
+    assert "manage_portals" in message
+    assert "Try again" not in message
 
 
 @pytest.mark.unit

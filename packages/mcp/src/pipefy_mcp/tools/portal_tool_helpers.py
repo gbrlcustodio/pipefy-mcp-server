@@ -46,7 +46,7 @@ def map_portal_error_to_message(exc: BaseException) -> str:
     """
     if isinstance(exc, PortalPermissionError):
         return ensure_non_empty_error_message(
-            str(exc).strip(), _PORTAL_OPERATION_FAILED
+            str(exc).strip(), _PORTAL_PERMISSION_GUIDANCE
         )
 
     text = str(exc).strip()
@@ -71,7 +71,7 @@ def map_portal_error_to_message(exc: BaseException) -> str:
         if messages:
             return "; ".join(messages)
 
-    return text or _PORTAL_OPERATION_FAILED
+    return ensure_non_empty_error_message(text, _PORTAL_OPERATION_FAILED)
 
 
 def validate_tool_ids(

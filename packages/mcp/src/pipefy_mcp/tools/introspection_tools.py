@@ -16,6 +16,21 @@ from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 _GRAPHQL_TOOL_REQUEST_FAILED = "GraphQL request failed."
+_EXECUTE_GRAPHQL_FAILED = (
+    "GraphQL request failed. If this was a write, re-read counts/ids "
+    "before retrying; do not blind-retry."
+)
+_GRAPHQL_RETURNED_ERRORS = "GraphQL returned errors."
+
+
+def _exception_error_payload(exc: BaseException, fallback: str) -> dict:
+    return build_error_payload(ensure_non_empty_error_message(str(exc), fallback))
+
+
+def _soft_result_error_payload(err: str) -> dict:
+    return build_error_payload(
+        ensure_non_empty_error_message(err, _GRAPHQL_RETURNED_ERRORS)
+    )
 
 
 class IntrospectionTools:
@@ -50,14 +65,10 @@ class IntrospectionTools:
             try:
                 result = await client.introspect_type(type_name, max_depth=max_depth)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(
-                    ensure_non_empty_error_message(
-                        str(exc), _GRAPHQL_TOOL_REQUEST_FAILED
-                    )
-                )
+                return _exception_error_payload(exc, _GRAPHQL_TOOL_REQUEST_FAILED)
             err = result.get("error")
-            if isinstance(err, str) and err:
-                return build_error_payload(err)
+            if isinstance(err, str):
+                return _soft_result_error_payload(err)
             return build_success_payload(result, include_parsed=include_parsed)
 
         @mcp.tool(
@@ -87,14 +98,10 @@ class IntrospectionTools:
                     mutation_name, max_depth=max_depth
                 )
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(
-                    ensure_non_empty_error_message(
-                        str(exc), _GRAPHQL_TOOL_REQUEST_FAILED
-                    )
-                )
+                return _exception_error_payload(exc, _GRAPHQL_TOOL_REQUEST_FAILED)
             err = result.get("error")
-            if isinstance(err, str) and err:
-                return build_error_payload(err)
+            if isinstance(err, str):
+                return _soft_result_error_payload(err)
             return build_success_payload(result, include_parsed=include_parsed)
 
         @mcp.tool(
@@ -122,14 +129,10 @@ class IntrospectionTools:
             try:
                 result = await client.introspect_query(query_name, max_depth=max_depth)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(
-                    ensure_non_empty_error_message(
-                        str(exc), _GRAPHQL_TOOL_REQUEST_FAILED
-                    )
-                )
+                return _exception_error_payload(exc, _GRAPHQL_TOOL_REQUEST_FAILED)
             err = result.get("error")
-            if isinstance(err, str) and err:
-                return build_error_payload(err)
+            if isinstance(err, str):
+                return _soft_result_error_payload(err)
             return build_success_payload(result, include_parsed=include_parsed)
 
         @mcp.tool(
@@ -157,14 +160,10 @@ class IntrospectionTools:
             try:
                 result = await client.search_schema(keyword, kind=kind)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(
-                    ensure_non_empty_error_message(
-                        str(exc), _GRAPHQL_TOOL_REQUEST_FAILED
-                    )
-                )
+                return _exception_error_payload(exc, _GRAPHQL_TOOL_REQUEST_FAILED)
             err = result.get("error")
-            if isinstance(err, str) and err:
-                return build_error_payload(err)
+            if isinstance(err, str):
+                return _soft_result_error_payload(err)
             return build_success_payload(result, include_parsed=include_parsed)
 
         @mcp.tool(
@@ -181,6 +180,8 @@ class IntrospectionTools:
 
             Prefer dedicated tools when available. Use this as a fallback when no specific
             tool exists. Always introspect the mutation's input shape before executing.
+            On ambiguous write failure (``success: false`` with empty or unclear message),
+            re-read counts/ids before retrying; do not blind-retry creates.
             Returns ``result`` (pretty-printed JSON string).  Set ``include_parsed=True``
             to also get a ``data`` dict for programmatic access.
 
@@ -193,22 +194,20 @@ class IntrospectionTools:
             try:
                 result = await client.execute_graphql(query, variables)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(
-                    ensure_non_empty_error_message(
-                        str(exc), _GRAPHQL_TOOL_REQUEST_FAILED
-                    )
-                )
+                return _exception_error_payload(exc, _EXECUTE_GRAPHQL_FAILED)
             gql_errors = result.get("errors")
             if isinstance(gql_errors, list) and gql_errors:
                 messages: list[str] = []
                 for item in gql_errors:
                     if isinstance(item, dict):
                         msg = item.get("message")
-                        if isinstance(msg, str) and msg:
-                            messages.append(msg)
-                text = "; ".join(messages) if messages else "GraphQL returned errors."
+                        if isinstance(msg, str):
+                            stripped = msg.strip()
+                            if stripped:
+                                messages.append(stripped)
+                text = "; ".join(messages) if messages else _GRAPHQL_RETURNED_ERRORS
                 return build_error_payload(text)
             err = result.get("error")
-            if isinstance(err, str) and err:
-                return build_error_payload(err)
+            if isinstance(err, str):
+                return _soft_result_error_payload(err)
             return build_success_payload(result, include_parsed=include_parsed)

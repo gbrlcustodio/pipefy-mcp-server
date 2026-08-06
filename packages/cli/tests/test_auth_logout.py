@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import httpx
+import keyring
 import pytest
 from conftest import InMemoryKeyring
+from keyring.errors import KeyringError
 from pipefy_auth import revoke, storage
 from pipefy_auth.responses import TokenResponse
 
@@ -17,6 +19,8 @@ from pipefy_cli.main import app as cli_app
 
 _ISSUER = "https://example.test/realms/foo"
 _LOGOUT_URL = f"{_ISSUER}/protocol/openid-connect/logout"
+_SERVICE = "pipefy"
+_CLIENT_ID = "pipefy-cli"
 
 
 def _discovery_payload(*, include_end_session: bool = True) -> dict:
@@ -299,3 +303,153 @@ class TestAuthLogoutCommand:
         assert f"Signed out of Pipefy ({_ISSUER})." in result.stdout
         assert "does not advertise a logout endpoint" in result.stderr
         assert storage.load_session(issuer=_ISSUER, client_id="pipefy-cli") is None
+
+
+# --------------------------------------------------------------------------- #
+# Command — an entry that exists but cannot be read                           #
+# --------------------------------------------------------------------------- #
+
+_KEY = storage.keychain_key(_ISSUER, _CLIENT_ID)
+
+
+def _store_unreadable_entry(blob: str = "{not json") -> None:
+    keyring.set_password(_SERVICE, _KEY, blob)
+
+
+def _forbid_revoke(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Revocation needs a readable refresh token; an unreadable entry must not try."""
+
+    def _never(**_kwargs: object) -> None:
+        raise AssertionError("revoke_session must not be called without a session")
+
+    monkeypatch.setattr(auth_module, "revoke_session", _never)
+
+
+def _break_keychain_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(service: str, username: str) -> str | None:
+        raise KeyringError("keychain is locked")
+
+    monkeypatch.setattr(keyring, "get_password", _boom)
+
+
+class TestAuthLogoutUnreadableEntry:
+    def test_unreadable_entry_is_deleted_without_revocation(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_unreadable_entry()
+        _forbid_revoke(monkeypatch)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0, result.stderr
+        assert f"Removed an unreadable Pipefy session entry ({_ISSUER})." in (
+            result.stdout
+        )
+        assert "could not be read" in result.stderr
+        assert "remains valid at the server until natural expiry" in result.stderr
+        assert fake_keyring.get_password(_SERVICE, _KEY) is None
+
+    def test_schema_drifted_entry_is_deleted(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """Valid JSON that no longer validates is still a credential to remove."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_unreadable_entry('{"issuer": "x", "unexpected": 1}')
+        _forbid_revoke(monkeypatch)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0, result.stderr
+        assert "Removed an unreadable Pipefy session entry" in result.stdout
+        assert fake_keyring.get_password(_SERVICE, _KEY) is None
+
+    def test_unreadable_entry_delete_failure_exits_1(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_unreadable_entry()
+        _forbid_revoke(monkeypatch)
+
+        def _delete_boom(*, issuer: str, client_id: str) -> bool:
+            raise storage.SessionDeleteError("Keychain is locked")
+
+        monkeypatch.setattr(auth_module, "delete_session", _delete_boom)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 1
+        assert "Removed an unreadable" not in result.stdout
+        assert "Could not delete local session from the keychain" in result.stderr
+        assert "remove it manually" in result.stderr
+
+    def test_probe_failure_still_deletes_and_reports_removal(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """Presence unknown, delete succeeded: the entry existed and is gone."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_unreadable_entry()
+        _forbid_revoke(monkeypatch)
+        _break_keychain_reads(monkeypatch)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0, result.stderr
+        assert "Removed an unreadable Pipefy session entry" in result.stdout
+        assert fake_keyring.get_password(_SERVICE, _KEY) is None
+
+    def test_probe_failure_with_no_delete_exits_1_without_claiming_clean(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """Presence unknown and nothing removed: never report a clean machine."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _forbid_revoke(monkeypatch)
+        _break_keychain_reads(monkeypatch)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 1
+        assert result.stdout == ""
+        assert "Could not read the keychain" in result.stderr
+        assert "A credential may still be present" in result.stderr
+
+    def test_entry_vanishing_between_probe_and_delete_is_nothing_to_do(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_unreadable_entry()
+        _forbid_revoke(monkeypatch)
+
+        def _already_gone(*, issuer: str, client_id: str) -> bool:
+            return False
+
+        monkeypatch.setattr(auth_module, "delete_session", _already_gone)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0, result.stderr
+        assert "Not signed in. Nothing to do." in result.stdout

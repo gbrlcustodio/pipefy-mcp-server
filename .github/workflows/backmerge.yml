@@ -1,0 +1,82 @@
+name: Back-merge
+
+# Anything merged straight into `main` leaves `dev` behind until a human
+# remembers to reconcile it. `release.py release-pr` refuses to cut while that
+# is true, so forgotten drift does not corrupt a release -- it blocks one, at
+# the least convenient moment, for whoever happens to be cutting. This opens the
+# back-merge pull request itself so the fix is waiting for review instead of
+# waiting to be remembered.
+#
+# All the logic is in `scripts/backmerge.py` rather than inline shell: the
+# idempotency rules (an existing branch, an existing pull request, an unchanged
+# tracking issue) are decisions worth unit-testing, and `tests/test_backmerge.py`
+# does exactly that. This file only supplies credentials and a checkout.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Daily, off the hour -- GitHub drops scheduled runs queued at popular
+    # times. This is the backstop for drift the push event missed (a failed
+    # run, a merge during an Actions outage) and for re-checking a divergence
+    # that is still unresolved.
+    - cron: "37 6 * * *"
+  workflow_dispatch:
+  # This workflow's own changes are exercised by the pull request that makes
+  # them. `schedule` and `workflow_dispatch` stay dormant until the file
+  # reaches `main`, since GitHub reads both from the default branch alone.
+  pull_request:
+    paths:
+      - .github/workflows/backmerge.yml
+      - .github/workflows/scripts/backmerge.py
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  # Every real trigger shares one group: two at once would race each other
+  # between "does the branch exist" and "push the branch". Pull request dry
+  # runs write nothing, so they get their own per-ref group rather than queuing
+  # behind a real run.
+  group: backmerge-${{ github.event_name == 'pull_request' && github.ref || 'default' }}
+  cancel-in-progress: false
+
+jobs:
+  backmerge:
+    name: Open the main to dev back-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The merge needs real history, not the default depth-1 cone.
+          fetch-depth: 0
+          # A pull request opened with GITHUB_TOKEN does not trigger
+          # `on: pull_request` workflows, so the back-merge pull request shows
+          # no checks and its body says so plainly. Set a BACKMERGE_TOKEN
+          # secret -- a GitHub App token or a fine-grained PAT scoped to this
+          # repository with contents:write, pull-requests:write and
+          # issues:write -- and checks start running with no change here.
+          token: ${{ secrets.BACKMERGE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Configure the committer
+        # Identity for the merge commit, and the DCO sign-off derives from it.
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Open the pull request, or track why it could not be opened
+        env:
+          GH_TOKEN: ${{ secrets.BACKMERGE_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BACKMERGE_HAS_CI: ${{ secrets.BACKMERGE_TOKEN != '' }}
+          # On the pull request that edits this workflow, run every real step --
+          # fetch, count, merge, conflict detection -- but announce the writes
+          # instead of performing them. Otherwise testing a change here would
+          # open a genuine back-merge pull request off the branch under review.
+          BACKMERGE_DRY_RUN: ${{ github.event_name == 'pull_request' }}
+        run: python .github/workflows/scripts/backmerge.py

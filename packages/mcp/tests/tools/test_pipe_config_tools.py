@@ -32,9 +32,21 @@ def test_build_field_condition_payload_helpers__no_integration():
     assert created["condition_id"] == "c1"
     assert created["action"] == "created"
     assert "c1" in created["message"]
+    assert "verified" not in created
+    assert "warning" not in created
 
     updated = build_field_condition_success_payload("c2", "updated")
     assert updated["action"] == "updated"
+
+    verified = build_field_condition_success_payload("c3", "created", verified=True)
+    assert verified["verified"] is True
+    assert "warning" not in verified
+
+    warned = build_field_condition_success_payload(
+        "c4", "created", warning="could not verify"
+    )
+    assert warned["warning"] == "could not verify"
+    assert "verified" not in warned
 
     ok_del = build_field_condition_delete_payload(True)
     assert ok_del["success"] is True
@@ -74,7 +86,7 @@ def mock_pipe_config_client():
     client.create_phase = AsyncMock()
     client.update_phase = AsyncMock()
     client.delete_phase = AsyncMock()
-    client.get_phase_fields = AsyncMock()
+    client.get_phase_fields = AsyncMock(return_value={"fields": []})
     client.create_phase_field = AsyncMock()
     client.update_phase_field = AsyncMock()
     client.delete_phase_field = AsyncMock()
@@ -1904,6 +1916,9 @@ async def test_create_field_condition_success(
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-new"}},
     }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-new", "phase": {"id": "pf-99"}},
+    }
 
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1928,6 +1943,7 @@ async def test_create_field_condition_success(
     assert payload["success"] is True
     assert payload["condition_id"] == "cond-new"
     assert payload["action"] == "created"
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
@@ -1978,6 +1994,9 @@ async def test_create_field_condition_top_level_name__no_integration(
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-top"}},
     }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-top", "phase": {"id": "pf-99"}},
+    }
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_field_condition",
@@ -1995,7 +2014,9 @@ async def test_create_field_condition_top_level_name__no_integration(
         actions,
         name="Top-level name",
     )
-    assert extract_payload(result)["success"] is True
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
@@ -2009,6 +2030,9 @@ async def test_create_field_condition_top_level_name_wins_over_extra_input__no_i
     actions = [{"phaseFieldId": "308821043", "actionId": "hide"}]
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-win"}},
+    }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-win", "phase": {"id": "pf-99"}},
     }
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -2029,6 +2053,7 @@ async def test_create_field_condition_top_level_name_wins_over_extra_input__no_i
         index=3,
         name="Top wins",
     )
+    assert extract_payload(result)["verified"] is True
 
 
 @pytest.mark.anyio
@@ -2154,6 +2179,9 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-uuid"}},
     }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-uuid", "phase": {"id": "1"}},
+    }
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_field_condition",
@@ -2171,7 +2199,9 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
         actions,
         name="R",
     )
-    assert extract_payload(result)["success"] is True
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
@@ -2189,6 +2219,9 @@ async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-x"}},
     }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-x", "phase": {"id": "1"}},
+    }
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_field_condition",
@@ -2201,7 +2234,9 @@ async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
         actions_in,
         name="R",
     )
-    assert extract_payload(result)["success"] is True
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
@@ -2226,6 +2261,9 @@ async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-stripped"}},
     }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-stripped", "phase": {"id": "1"}},
+    }
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_field_condition",
@@ -2243,8 +2281,10 @@ async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
         actions,
         name="R",
     )
-    assert extract_payload(result)["success"] is True
-    assert extract_payload(result)["condition_id"] == "cond-stripped"
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["condition_id"] == "cond-stripped"
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio

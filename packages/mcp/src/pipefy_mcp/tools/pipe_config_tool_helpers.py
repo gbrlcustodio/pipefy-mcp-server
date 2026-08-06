@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, Literal, cast
 
 from pipefy_sdk import PipefyClient
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from pipefy_mcp.core.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
@@ -52,6 +52,8 @@ class FieldConditionMutationSuccessPayload(TypedDict):
     condition_id: str
     action: str
     message: str
+    verified: NotRequired[bool]
+    warning: NotRequired[str]
 
 
 class FieldConditionDeleteSuccessPayload(TypedDict):
@@ -105,7 +107,10 @@ def build_pipe_mutation_success_payload(
 
 
 def build_pipe_tool_error_payload(
-    *, message: str, code: str | None = None
+    *,
+    message: str,
+    code: str | None = None,
+    details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """``success: False`` with ``error`` text.
 
@@ -115,25 +120,38 @@ def build_pipe_tool_error_payload(
             ``"INVALID_ARGUMENTS"`` for pre-API argument-shape failures so
             the envelope matches the shape of arg-coercion errors
             emitted by :class:`pipefy_mcp.tools.validation_envelope.PipefyValidationTool`.
+        details: Optional structured context (ids, verify outcome, etc.).
     """
-    return tool_error(message, code=code)
+    return tool_error(message, code=code, details=details)
 
 
 def build_field_condition_success_payload(
-    condition_id: str, action: str
+    condition_id: str,
+    action: str,
+    *,
+    verified: bool | None = None,
+    warning: str | None = None,
 ) -> FieldConditionMutationSuccessPayload:
     """Field condition mutation envelope with canned ``message``.
 
     Args:
         condition_id: ID returned by the API.
         action: ``created`` or ``updated`` (echoed to clients).
+        verified: When True, post-create read-back confirmed the rule on the
+            requested phase.
+        warning: Optional note (e.g. verify reads unavailable).
     """
-    return {
+    payload: FieldConditionMutationSuccessPayload = {
         "success": True,
         "condition_id": condition_id,
         "action": action,
         "message": f"Field condition {action} (ID: {condition_id}).",
     }
+    if verified is not None:
+        payload["verified"] = verified
+    if warning is not None:
+        payload["warning"] = warning
+    return payload
 
 
 def build_field_condition_delete_payload(

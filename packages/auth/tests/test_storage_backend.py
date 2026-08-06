@@ -11,6 +11,7 @@ from pathlib import Path
 import keyring
 import pytest
 from conftest import InMemoryKeyring
+from keyring.errors import KeyringError
 from keyrings.alt.file import PlaintextKeyring
 from pydantic import ValidationError
 
@@ -20,6 +21,7 @@ from pipefy_auth.storage import (
     configure_keychain_backend,
     keychain_key,
     load_session,
+    session_entry_presence,
     store_session,
 )
 
@@ -207,6 +209,61 @@ def test_load_session_returns_none_when_required_field_missing(
         json.dumps({"issuer": _ISSUER, "client_id": _CLIENT_ID, "obtained_at": 1}),
     )
     assert load_session(issuer=_ISSUER, client_id=_CLIENT_ID) is None
+
+
+# --------------------------------------------------------------------------- #
+# session_entry_presence                                                      #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.unit
+def test_presence_is_absent_when_nothing_stored(
+    fake_keyring: InMemoryKeyring,
+) -> None:
+    assert session_entry_presence(issuer=_ISSUER, client_id=_CLIENT_ID) == "absent"
+
+
+@pytest.mark.unit
+def test_presence_is_present_for_a_readable_entry(
+    fake_keyring: InMemoryKeyring,
+) -> None:
+    store_session(issuer=_ISSUER, client_id=_CLIENT_ID, token=_token())
+    assert session_entry_presence(issuer=_ISSUER, client_id=_CLIENT_ID) == "present"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "blob",
+    [
+        pytest.param("{not json", id="corrupt-json"),
+        pytest.param(
+            json.dumps({"issuer": _ISSUER, "client_id": _CLIENT_ID, "obtained_at": 1}),
+            id="schema-drift",
+        ),
+        pytest.param("", id="empty-string"),
+    ],
+)
+@pytest.mark.usefixtures("fake_keyring")
+def test_presence_is_present_for_an_unparseable_entry(blob: str) -> None:
+    """The whole point: an entry ``load_session`` cannot parse still exists."""
+    keyring.set_password(_SERVICE, keychain_key(_ISSUER, _CLIENT_ID), blob)
+
+    assert load_session(issuer=_ISSUER, client_id=_CLIENT_ID) is None
+    assert session_entry_presence(issuer=_ISSUER, client_id=_CLIENT_ID) == "present"
+
+
+@pytest.mark.unit
+def test_presence_is_unknown_when_the_backend_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A backend that refuses the read leaves presence unestablished."""
+
+    def _boom(service: str, username: str) -> str | None:
+        raise KeyringError("keychain is locked")
+
+    monkeypatch.setattr(keyring, "get_password", _boom)
+
+    assert session_entry_presence(issuer=_ISSUER, client_id=_CLIENT_ID) == "unknown"
 
 
 @pytest.mark.unit

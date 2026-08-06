@@ -79,6 +79,8 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 | `get_phase_allowed_move_targets` | `pipefy phase targets <phase_id>` | Yes |
 | `move_card_to_phase` | `pipefy card move <card_id> --phase <id>` | No |
 
+Before `move_card_to_phase`, call `get_phase_allowed_move_targets`. On a required empty field, MCP may return `success: false` naming the field (optional hide hint); CLI stays raw GraphQL.
+
 ### Steps
 
 1. **Load phase IDs** — `get_pipe(pipe_id)` → collect `phases[].id` for workflow phases. Omit `phase_id` on `create_card` for start-form intake.
@@ -156,7 +158,7 @@ This returns valid `type` enum values and their descriptions.
 | `fill_card_phase_fields` | `pipefy card fill <id> --phase <id>` | No | Fill phase fields non-interactively; filters to editable IDs. Uses `--fields` JSON object; for ad-hoc updates use `card update --field-updates` (JSON array). |
 | `update_card` | `pipefy card update <id>` | No | Update title, assignee, due date, fields. |
 | `update_card_field` | `pipefy card update <id> --field-updates` | No | Single-field update (`updateCardField`); for several fields prefer `update_card` + `field_updates`. |
-| `move_card_to_phase` | `pipefy card move <id> --phase <id>` | No | Call `get_phase_allowed_move_targets` on the source phase first. |
+| `move_card_to_phase` | `pipefy card move <card_id> --phase <id>` | No | Call `get_phase_allowed_move_targets` first. On required empty field, MCP may return `success: false` naming the field (optional hide hint). |
 | `delete_card` | `pipefy card delete <id>` | No | **Two-step destructive.** |
 | `add_card_comment` | `pipefy card comment add <id>` | No | Add a text comment to a card. |
 | `update_comment` | `pipefy card comment update` | No | Update an existing card comment. |
@@ -212,9 +214,11 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 |------------|-----|---------|
 | `get_field_conditions` | `pipefy field-condition list --phase <id>` | List all field conditions on a phase. |
 | `get_field_condition` | `pipefy field-condition get` | Load one field condition by ID. |
-| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. |
-| `update_field_condition` | `pipefy field-condition update` | Update condition action or rule. |
+| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. After create, verifies the rule on the requested phase (`verified: true`); missing/wrong phase → `success: false` with `error.details.condition_id` (delete via `delete_field_condition` with `confirm=true` before recreating); if verify reads are inconclusive, may return success with a warning (verification unavailable). |
+| `update_field_condition` | `pipefy field-condition update` | Update condition action or rule (MCP rejects required+hide when top-level `actions` is set; `actions` in `extra_input` → `INVALID_ARGUMENTS`; CLI still raw). |
 | `delete_field_condition` | `pipefy field-condition delete` | **Two-step destructive.** |
+
+Do not hide a required field — MCP rejects `hide`/`hidden` on `required=true` (CLI still raw SDK; see `docs/parity.md`); clear `required` first.
 
 ---
 
@@ -226,6 +230,7 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 
 ## Failure modes
 
+- **`create_field_condition` fails with missing/wrong phase:** use `error.details.condition_id` (or the id in the message) with `delete_field_condition` and `confirm=true` before recreating; do not blind-retry create on the same requested phase.
 - **`create_card` fails with missing required fields:** call `get_start_form_fields` first to discover required `field_id` values.
 - **`create_phase_field` rejects type:** call `introspect_type type_name="CreatePhaseFieldInput"` to get valid values.
 - **Delete fails with preview error:** expected — call without `confirm=true` first, show user the preview, then call with `confirm=true`.

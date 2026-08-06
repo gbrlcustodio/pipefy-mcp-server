@@ -473,7 +473,7 @@ receipt_records() {
             if (p == 0) { junk++; next }
             k = substr($0, 1, p - 1)
             v = substr($0, p + 1)
-            if (k !~ /^[a-z][a-z0-9_.]*$/) { junk++; next }
+            if (k !~ /^[a-z][a-z0-9_.-]*$/) { junk++; next }
             if (k == "record" && v == "begin") {
                 endrec()
                 started = 1; expect = 1; ok = 0; complete = 0; newer = 0

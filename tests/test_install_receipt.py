@@ -923,3 +923,53 @@ def test_install_then_uninstall_removes_what_the_install_created(tmp_path):
     assert not _receipt(home).exists()
     assert "uv tool uninstall pipefy-cli" in _stubs(tmp_path)
     assert "uv tool uninstall pipefy-mcp-server" in _stubs(tmp_path)
+
+def test_a_claude_desktop_entry_the_installer_found_is_not_removed(tmp_path):
+    """The receipt key carries a hyphen, so the reader's alphabet has to.
+
+    A key the reader junks takes the whole "this was already here" bit with it,
+    and an installer-shaped entry the user wrote first is then deleted.
+    """
+    home = _home(tmp_path)
+    stub = _stub_path(tmp_path, home)
+    _write_exec(stub / "uname", '#!/bin/sh\nprintf "%s\\n" "Darwin"\n')
+    _write_exec(
+        stub / "security",
+        '#!/bin/sh\n[ "$1" = find-generic-password ] && exit 44\nexit 0\n',
+    )
+    config = (
+        home
+        / "Library"
+        / "Application Support"
+        / "Claude"
+        / "claude_desktop_config.json"
+    )
+    before = {"mcpServers": {"pipefy": {"command": "pipefy-mcp-server"}}}
+    _write_json(config, before)
+    _write_receipt(
+        home,
+        _COMPLETE.replace(
+            "entry_created.cursor=true", "entry_created.claude-desktop=false"
+        ),
+    )
+
+    run = _uninstall(tmp_path, home, stub)
+
+    assert json.loads(config.read_text(encoding="utf-8")) == before
+    assert "was already registered when install.sh ran" in run.stdout
+    # A junked key would also have been counted as a malformed line.
+    assert "lines are malformed" not in run.stdout
+
+def test_the_merge_leaves_utf8_siblings_literal(tmp_path):
+    """Adding one server is not licence to rewrite another server's bytes."""
+    home = _home(tmp_path)
+    stub = _stub_path(tmp_path, home)
+    config = home / ".cursor" / "mcp.json"
+    _write_json(config, {"mcpServers": {"café": {"command": "naïve-server"}}})
+
+    result = _install(tmp_path, home, stub, args=("--yes", "--client", "cursor"))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    raw = config.read_text(encoding="utf-8")
+    assert "café" in raw and "naïve-server" in raw
+    assert "\\u" not in raw

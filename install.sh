@@ -493,7 +493,9 @@ servers["pipefy"] = {"command": "pipefy-mcp-server"}
 fd, tmp_path = tempfile.mkstemp(prefix=p.name + ".", dir=str(p.parent))
 try:
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+        # ensure_ascii=False: another server's UTF-8 value is not this run's to
+        # rewrite into escapes.
+        json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp_path, p)
 except BaseException:

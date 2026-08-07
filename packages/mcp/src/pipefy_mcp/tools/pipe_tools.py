@@ -975,14 +975,15 @@ class PipeTools:
             Use this tool for simple, single-field updates. The entire field value
             will be replaced with the new value provided.
 
-            **Connector / connection (multi-value):** ``new_value`` replaces the **entire**
-            related-card list — never assume append. Recipe: ``get_card(include_fields=true)`` →
-            merge the item into the current list → write the full list back. Concurrent writes
-            between read and write can drop connections. For incremental add/remove on connection
-            fields, use ``update_card`` with ``field_updates`` and ``operation`` ``"ADD"``
-            or ``"REMOVE"`` (``updateFieldsValues``). To link cards through a pipe
-            relation (not a connector field), use ``create_card_relation`` /
-            ``delete_card_relation``.
+            **Connector / connection (multi-value):** never assume append. Prefer
+            ``update_card`` with ``field_updates`` and ``operation`` ``"ADD"`` or ``"REMOVE"``
+            (``updateFieldsValues``) so you only send the related **card id(s)** to add or
+            remove. This tool's ``new_value`` replaces the **entire** related-card list and
+            must be related card **ids**, not display titles. ``get_card(include_fields=true)``
+            returns connector ``value`` as display titles only (not ids), so do not rebuild a
+            full list from that ``value``. Concurrent full-list rewrites can still drop
+            connections. To link cards through a pipe relation (not a connector field), use
+            ``create_card_relation`` / ``delete_card_relation``.
 
             **Not for automations:** if/then rules that stamp or copy dynamic values on cards
             (``%{id}``, ``%{created_at}``, ``%{automation_event_execution_datetime}``, etc.) belong in

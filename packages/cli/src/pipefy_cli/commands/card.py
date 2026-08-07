@@ -307,7 +307,9 @@ def card_update(
         "--field-updates",
         help=(
             "JSON array of field update objects for updateFieldsValues. "
-            'Each object: {"field_id" (or "fieldId"): "<slug>", "value": <v>}.'
+            'Each object: {"field_id" (or "fieldId"): "<slug>", "value": <v>, '
+            '"operation": "ADD"|"REMOVE"|"REPLACE" (optional, default REPLACE)}. '
+            "For connector/connection fields, prefer ADD/REMOVE with related card ids."
         ),
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),

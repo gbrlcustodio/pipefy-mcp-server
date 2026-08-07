@@ -88,7 +88,7 @@ def client_session(mcp_server, request):
         mcp_server,
         read_timeout_seconds=timedelta(seconds=10),
         raise_exceptions=True,
-        elicitation_callback=request.param,
+        elicitation_callback=getattr(request, "param", None),
     )
 
 

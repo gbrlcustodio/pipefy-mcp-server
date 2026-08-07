@@ -43,7 +43,6 @@ def org_session(org_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_get_organization_success(org_session, mock_org_client, extract_payload):
     mock_org_client.get_organization = AsyncMock(
         return_value={
@@ -65,7 +64,6 @@ async def test_get_organization_success(org_session, mock_org_client, extract_pa
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_get_organization_not_found_returns_error(
     org_session, mock_org_client, extract_payload
 ):
@@ -81,7 +79,6 @@ async def test_get_organization_not_found_returns_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_get_organization_transport_error(
     org_session, mock_org_client, extract_payload
 ):
@@ -98,7 +95,6 @@ async def test_get_organization_transport_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_list_organizations_success(
     org_session, mock_org_client, extract_payload
 ):
@@ -122,7 +118,6 @@ async def test_list_organizations_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_list_organizations_empty(org_session, mock_org_client, extract_payload):
     mock_org_client.list_organizations = AsyncMock(return_value=[])
     async with org_session as session:
@@ -134,7 +129,6 @@ async def test_list_organizations_empty(org_session, mock_org_client, extract_pa
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_list_organizations_transport_error(
     org_session, mock_org_client, extract_payload
 ):
@@ -156,7 +150,6 @@ async def test_list_organizations_transport_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_get_organization_coerces_int_organization_id(
     org_session, mock_org_client, extract_payload
 ):

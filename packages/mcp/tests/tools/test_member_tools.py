@@ -44,7 +44,6 @@ def member_session(member_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_rejects_empty_members(member_session, extract_payload):
     async with member_session as session:
         result = await session.call_tool(
@@ -78,7 +77,6 @@ def _members_payload(*emails: str) -> dict:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_verified_member(
     member_session, mock_member_client, extract_payload
 ):
@@ -106,7 +104,6 @@ async def test_add_service_account_verified_member(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_matches_email_case_insensitively(
     member_session, mock_member_client, extract_payload
 ):
@@ -127,7 +124,6 @@ async def test_add_service_account_matches_email_case_insensitively(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_errors_when_not_a_member(
     member_session, mock_member_client, extract_payload
 ):
@@ -149,7 +145,6 @@ async def test_add_service_account_errors_when_not_a_member(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_surfaces_invite_errors_when_absent(
     member_session, mock_member_client, extract_payload
 ):
@@ -174,7 +169,6 @@ async def test_add_service_account_surfaces_invite_errors_when_absent(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_ignores_invite_errors_when_member_present(
     member_session, mock_member_client, extract_payload
 ):
@@ -199,7 +193,6 @@ async def test_add_service_account_ignores_invite_errors_when_member_present(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_handles_null_pipe_members(
     member_session, mock_member_client, extract_payload
 ):
@@ -223,7 +216,6 @@ async def test_add_service_account_handles_null_pipe_members(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_skips_verification_for_non_numeric_pipe_id(
     member_session, mock_member_client, extract_payload
 ):
@@ -244,7 +236,6 @@ async def test_add_service_account_skips_verification_for_non_numeric_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_rejects_blank_email(
     member_session, mock_member_client, extract_payload
 ):
@@ -260,7 +251,6 @@ async def test_add_service_account_rejects_blank_email(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_maps_value_error_to_invalid_arguments(
     member_session, mock_member_client, extract_payload
 ):
@@ -278,7 +268,6 @@ async def test_add_service_account_maps_value_error_to_invalid_arguments(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
@@ -297,7 +286,6 @@ async def test_add_service_account_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_rejects_empty_user_ids(
     member_session, extract_payload
 ):
@@ -314,7 +302,6 @@ async def test_remove_member_from_pipe_rejects_empty_user_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_success(
     member_session, mock_member_client, extract_payload
 ):
@@ -344,7 +331,6 @@ async def test_invite_members_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_maps_sdk_value_error_to_invalid_arguments(
     member_session, mock_member_client, extract_payload
 ):
@@ -368,7 +354,6 @@ async def test_invite_members_maps_sdk_value_error_to_invalid_arguments(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
@@ -392,7 +377,6 @@ async def test_invite_members_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_value_error_from_client(
     member_session, mock_member_client, extract_payload
 ):
@@ -413,7 +397,6 @@ async def test_remove_member_from_pipe_value_error_from_client(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_verified_all_removed(
     member_session, mock_member_client, extract_payload
 ):
@@ -453,7 +436,6 @@ async def test_remove_member_verified_all_removed(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_warns_when_member_still_present(
     member_session, mock_member_client, extract_payload
 ):
@@ -499,7 +481,6 @@ async def test_remove_member_warns_when_member_still_present(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_warns_when_uuid_still_present(
     member_session, mock_member_client, extract_payload
 ):
@@ -536,7 +517,6 @@ async def test_remove_member_warns_when_uuid_still_present(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_skips_verification_for_non_numeric_pipe_id(
     member_session, mock_member_client, extract_payload
 ):
@@ -557,7 +537,6 @@ async def test_remove_member_skips_verification_for_non_numeric_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_returns_success_when_verification_fails(
     member_session, mock_member_client, extract_payload
 ):
@@ -578,7 +557,6 @@ async def test_remove_member_returns_success_when_verification_fails(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_coerces_int_user_ids_to_str(
     member_session, mock_member_client, extract_payload
 ):
@@ -602,7 +580,6 @@ async def test_remove_member_coerces_int_user_ids_to_str(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
@@ -623,7 +600,6 @@ async def test_remove_member_from_pipe_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_has_destructive_hint(member_session):
     async with member_session as session:
         listed = await session.list_tools()
@@ -634,7 +610,6 @@ async def test_remove_member_from_pipe_has_destructive_hint(member_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_set_role_success(member_session, mock_member_client, extract_payload):
     mock_member_client.set_role.return_value = {
         "setRole": {
@@ -664,7 +639,6 @@ async def test_set_role_success(member_session, mock_member_client, extract_payl
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_rejects_missing_email_or_role(
     member_session, mock_member_client, extract_payload
 ):
@@ -681,7 +655,6 @@ async def test_invite_members_rejects_missing_email_or_role(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_preview_does_not_call_mutation(
     member_session, mock_member_client, extract_payload
 ):
@@ -700,7 +673,6 @@ async def test_remove_member_preview_does_not_call_mutation(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_set_role_rejects_blank_role_name(
     member_session, mock_member_client, extract_payload
 ):
@@ -716,7 +688,6 @@ async def test_set_role_rejects_blank_role_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_set_role_graphql_error(
     member_session, mock_member_client, extract_payload
 ):

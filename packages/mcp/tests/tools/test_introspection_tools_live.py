@@ -51,7 +51,6 @@ def live_introspection_session(live_introspection_mcp, request):
 
 @pytest.mark.integration
 @pytest.mark.anyio
-@pytest.mark.parametrize("live_introspection_session", [None], indirect=True)
 async def test_live_mcp_introspect_type_query(
     live_introspection_session, extract_payload
 ):
@@ -66,7 +65,6 @@ async def test_live_mcp_introspect_type_query(
 
 @pytest.mark.integration
 @pytest.mark.anyio
-@pytest.mark.parametrize("live_introspection_session", [None], indirect=True)
 async def test_live_mcp_introspect_mutation_create_card(
     live_introspection_session, extract_payload
 ):
@@ -84,7 +82,6 @@ async def test_live_mcp_introspect_mutation_create_card(
 
 @pytest.mark.integration
 @pytest.mark.anyio
-@pytest.mark.parametrize("live_introspection_session", [None], indirect=True)
 async def test_live_mcp_search_schema_card(live_introspection_session, extract_payload):
     async with live_introspection_session as session:
         result = await session.call_tool("search_schema", {"keyword": "Card"})
@@ -96,7 +93,6 @@ async def test_live_mcp_search_schema_card(live_introspection_session, extract_p
 
 @pytest.mark.integration
 @pytest.mark.anyio
-@pytest.mark.parametrize("live_introspection_session", [None], indirect=True)
 async def test_live_mcp_execute_graphql_typename(
     live_introspection_session, extract_payload
 ):

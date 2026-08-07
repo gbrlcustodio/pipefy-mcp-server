@@ -10,6 +10,40 @@ This tree summarizes how to work with **`pipefy`**: the vendor GraphQL client, s
 
 For a short in-repo overview and dev commands, see **[`../../packages/sdk/README.md`](../../packages/sdk/README.md)**.
 
+## Errors
+
+`PipefyError` is the root. Catch it to handle any failure the SDK raises:
+
+```python
+from pipefy_sdk import PipefyError, PipefyGraphQLError
+
+try:
+    await client.get_pipe(pipe_id)
+except PipefyGraphQLError as exc:
+    # exc.errors is the raw per-node error dict list, each with its own
+    # message and extensions; read codes off that rather than the message text.
+    codes = [(e.get("extensions") or {}).get("code") for e in exc.errors]
+except PipefyError:
+    # anything else the SDK owns
+    ...
+```
+
+The hierarchy:
+
+- **`PipefyError`** — root of every error the SDK raises.
+- **`PipefyAPIError`** — the API returned an error payload.
+- **`PipefyGraphQLError`** — a GraphQL response carried `errors`. Subclasses `PipefyAPIError`, and carries the raw list on `.errors`. This is what most failures arrive as.
+
+Catch the specific type before the root, since `except PipefyError` also catches
+`PipefyGraphQLError` and would otherwise shadow it.
+
+`PortalPermissionError` sits deliberately outside this hierarchy: it subclasses
+`ValueError`, which is what maps a portal permission denial to CLI exit code 2
+rather than 1. Catch it by name.
+
+Transport-level failures (connection refused, timeouts) surface as `gql`'s
+`TransportError`, which the SDK does not wrap.
+
 ## Configuration
 
 OAuth and endpoint variables are documented in **[`../config.md`](../config.md)** and **[`../../.env.example`](../../.env.example)**. Integration tests use `@pytest.mark.integration` and the same `PIPEFY_*` keys from local **`.env`** (e.g. `PIPEFY_PORTAL_ORG_UUID` for portal live tests). Unit tests use fictional ids in **[`../../packages/sdk/tests/_shared/fixture_ids.py`](../../packages/sdk/tests/_shared/fixture_ids.py)** — not production org UUIDs.

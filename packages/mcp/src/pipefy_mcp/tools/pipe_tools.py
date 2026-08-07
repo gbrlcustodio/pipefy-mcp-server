@@ -83,6 +83,11 @@ from pipefy_mcp.tools.validation_helpers import validate_tool_id
 # Key for findCards response; used when reading edges and adding empty message.
 FIND_CARDS_RESPONSE_KEY = "findCards"
 
+_MALFORMED_FIELD_DEFINITION_FAILED = (
+    "Invalid field definition. Fix the pipe field configuration and retry; "
+    "do not blind-retry."
+)
+
 
 class PipeTools:
     """Declares tools to be used in the Pipe context."""
@@ -191,7 +196,11 @@ class PipeTools:
                         phase_id, required_fields_only
                     )
                 except MalformedFieldDefinitionError as exc:
-                    return tool_error(str(exc))
+                    return tool_error(
+                        ensure_non_empty_error_message(
+                            str(exc), _MALFORMED_FIELD_DEFINITION_FAILED
+                        )
+                    )
                 phase_field_defs = _filter_editable_field_definitions(
                     phase_fields_result.get("fields", [])
                 )
@@ -200,7 +209,11 @@ class PipeTools:
                         pipe_id, required_fields_only
                     )
                 except MalformedFieldDefinitionError as exc:
-                    return tool_error(str(exc))
+                    return tool_error(
+                        ensure_non_empty_error_message(
+                            str(exc), _MALFORMED_FIELD_DEFINITION_FAILED
+                        )
+                    )
                 start_form_field_defs = _filter_editable_field_definitions(
                     form_fields.get("start_form_fields", [])
                 )
@@ -224,7 +237,11 @@ class PipeTools:
                             ctx=ctx,
                         )
                     except MalformedFieldDefinitionError as exc:
-                        return tool_error(str(exc))
+                        return tool_error(
+                            ensure_non_empty_error_message(
+                                str(exc), _MALFORMED_FIELD_DEFINITION_FAILED
+                            )
+                        )
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
 
@@ -247,7 +264,11 @@ class PipeTools:
                         pipe_id, required_fields_only
                     )
                 except MalformedFieldDefinitionError as exc:
-                    return tool_error(str(exc))
+                    return tool_error(
+                        ensure_non_empty_error_message(
+                            str(exc), _MALFORMED_FIELD_DEFINITION_FAILED
+                        )
+                    )
 
                 expected_fields = _filter_editable_field_definitions(
                     form_fields.get("start_form_fields", [])
@@ -267,7 +288,11 @@ class PipeTools:
                             ctx=ctx,
                         )
                     except MalformedFieldDefinitionError as exc:
-                        return tool_error(str(exc))
+                        return tool_error(
+                            ensure_non_empty_error_message(
+                                str(exc), _MALFORMED_FIELD_DEFINITION_FAILED
+                            )
+                        )
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
 
@@ -1191,7 +1216,11 @@ class PipeTools:
                     phase_id, required_fields_only
                 )
             except MalformedFieldDefinitionError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(
+                        str(exc), _MALFORMED_FIELD_DEFINITION_FAILED
+                    )
+                )
             expected_fields = _filter_editable_field_definitions(
                 phase_fields_result.get("fields", [])
             )
@@ -1221,7 +1250,11 @@ class PipeTools:
                         ctx=ctx,
                     )
                 except MalformedFieldDefinitionError as exc:
-                    return tool_error(str(exc))
+                    return tool_error(
+                        ensure_non_empty_error_message(
+                            str(exc), _MALFORMED_FIELD_DEFINITION_FAILED
+                        )
+                    )
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
 

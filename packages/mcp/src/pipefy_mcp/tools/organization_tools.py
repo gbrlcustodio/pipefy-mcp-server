@@ -6,12 +6,18 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
+from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
 )
 from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
+
+_ORGANIZATION_REQUEST_FAILED = (
+    "Organization request failed. Re-read organization state "
+    "before retrying; do not blind-retry."
+)
 
 
 class OrganizationTools:
@@ -39,7 +45,11 @@ class OrganizationTools:
             try:
                 result = await client.get_organization(organization_id)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(
+                    ensure_non_empty_error_message(
+                        str(exc), _ORGANIZATION_REQUEST_FAILED
+                    )
+                )
             return build_success_payload(result, include_parsed=True)
 
         @mcp.tool(
@@ -63,5 +73,9 @@ class OrganizationTools:
             try:
                 result = await client.list_organizations()
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(
+                    ensure_non_empty_error_message(
+                        str(exc), _ORGANIZATION_REQUEST_FAILED
+                    )
+                )
             return build_success_payload({"organizations": result}, include_parsed=True)

@@ -144,6 +144,36 @@ async def test_list_organizations_transport_error(
     assert isinstance(err, dict) and "message" in err
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_list_organizations_empty_exception_message_uses_fallback(
+    org_session, mock_org_client, extract_payload, exc_message
+):
+    mock_org_client.list_organizations = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    async with org_session as session:
+        result = await session.call_tool("list_organizations", {})
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "Organization request failed." in message
+    assert "do not blind-retry" in message
+
+
+@pytest.mark.anyio
+async def test_list_organizations_preserves_non_empty_exception_message(
+    org_session, mock_org_client, extract_payload
+):
+    mock_org_client.list_organizations = AsyncMock(side_effect=RuntimeError("org boom"))
+    async with org_session as session:
+        result = await session.call_tool("list_organizations", {})
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "org boom" in tool_error_message(payload)
+
+
 ## ---------------------------------------------------------------------------
 ## PipefyId coercion: int → str through MCP transport (mcporter mitigation)
 ## ---------------------------------------------------------------------------

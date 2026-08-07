@@ -2747,6 +2747,34 @@ class TestSkipElicitation:
         assert "return start form fields" in tool_error_message(payload).lower()
         mock_pipefy_client.create_card.assert_not_called()
 
+    @pytest.mark.parametrize("exc_message", ["", "   "])
+    async def test_create_card_malformed_fields_empty_message_uses_fallback(
+        self, client_session, mock_pipefy_client, pipe_id, extract_payload, exc_message
+    ):
+        from pipefy_sdk.models.field_definition import MalformedFieldDefinitionError
+
+        mock_pipefy_client.get_start_form_fields.side_effect = (
+            MalformedFieldDefinitionError(exc_message)
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {
+                    "pipe_id": pipe_id,
+                    "fields": {"status": "open"},
+                    "skip_elicitation": True,
+                },
+            )
+
+        payload = extract_payload(result)
+        assert payload.get("success") is False
+        message = tool_error_message(payload)
+        assert message.strip()
+        assert "Invalid field definition." in message
+        assert "do not blind-retry" in message
+        mock_pipefy_client.create_card.assert_not_called()
+
     @pytest.mark.parametrize(
         "client_session",
         [elicitation_callback_for(action="accept", content={"f1": "overridden"})],

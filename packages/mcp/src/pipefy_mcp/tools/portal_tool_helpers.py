@@ -31,14 +31,23 @@ _PORTAL_PERMISSION_GUIDANCE = (
     "Permission denied. Request organization permissions such as "
     "`create_portal` or `manage_portals` from your admin."
 )
-_PORTAL_OPERATION_FAILED = "Portal operation failed. Try again or contact support."
+_PORTAL_OPERATION_FAILED = (
+    "Portal operation failed. Re-read portal state before retrying; do not blind-retry."
+)
 
 
-def map_portal_error_to_message(exc: BaseException) -> str:
+def map_portal_error_to_message(
+    exc: BaseException,
+    *,
+    empty_fallback: str = _PORTAL_OPERATION_FAILED,
+) -> str:
     """Map portal SDK/GraphQL failures to agent-friendly messages.
 
     Args:
         exc: Exception raised by ``PipefyClient`` portal methods or GraphQL transport.
+        empty_fallback: Non-empty message when ``str(exc)`` is blank after strip.
+            Writes keep the default write-style fallback; reads pass a plain
+            read-domain string.
 
     Returns:
         User-visible error string; permission failures mention ``create_portal``
@@ -71,7 +80,7 @@ def map_portal_error_to_message(exc: BaseException) -> str:
         if messages:
             return "; ".join(messages)
 
-    return ensure_non_empty_error_message(text, _PORTAL_OPERATION_FAILED)
+    return ensure_non_empty_error_message(text, empty_fallback)
 
 
 def validate_tool_ids(

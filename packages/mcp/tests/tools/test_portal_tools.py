@@ -334,9 +334,37 @@ async def test_list_portals_empty_exception_message_uses_fallback(
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload)
-    assert message.strip()
-    assert "Portal request failed." in message
-    assert "do not blind-retry" in message
+    assert message == "Portal request failed."
+    assert "do not blind-retry" not in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_list_portals_whitespace_permission_denied_uses_guidance(
+    portal_session, mock_portal_client, extract_payload, exc_message
+):
+    mock_portal_client.list_portals = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {
+                    "message": exc_message,
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ]
+        )
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "list_portals", {"organization_uuid": "org-abc-123"}
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert "create_portal" in message
+    assert "manage_portals" in message
+    assert "do not blind-retry" not in message
 
 
 @pytest.mark.anyio

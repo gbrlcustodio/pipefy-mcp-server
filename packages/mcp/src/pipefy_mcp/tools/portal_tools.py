@@ -17,7 +17,6 @@ from pydantic import ValidationError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
-from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
@@ -36,9 +35,7 @@ from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
-_PORTAL_READ_FAILED = (
-    "Portal request failed. Re-read portal state before retrying; do not blind-retry."
-)
+_PORTAL_READ_FAILED = "Portal request failed."
 
 
 class PortalTools:
@@ -86,7 +83,7 @@ class PortalTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(
-                    ensure_non_empty_error_message(str(exc), _PORTAL_READ_FAILED)
+                    map_portal_error_to_message(exc, empty_fallback=_PORTAL_READ_FAILED)
                 )
             return build_success_payload({"portals": portals}, include_parsed=True)
 
@@ -125,7 +122,7 @@ class PortalTools:
                 portal = await client.get_portal(portal_uuid)
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(
-                    ensure_non_empty_error_message(str(exc), _PORTAL_READ_FAILED)
+                    map_portal_error_to_message(exc, empty_fallback=_PORTAL_READ_FAILED)
                 )
             return build_success_payload(portal, include_parsed=True)
 

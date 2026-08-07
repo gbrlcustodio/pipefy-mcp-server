@@ -1404,6 +1404,26 @@ class TestGetAiAgentsErrorPaths:
         assert payload["success"] is False
         assert "boom" in tool_error_message(payload)
 
+    @pytest.mark.parametrize("exc_message", ["", "   "])
+    async def test_empty_exception_message_uses_fallback(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        exc_message,
+    ):
+        mock_pipefy_client.get_ai_agents.side_effect = RuntimeError(exc_message)
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_ai_agents", {"repo_uuid": "pipe-uuid"}
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        message = tool_error_message(payload)
+        assert message.strip()
+        assert "AI request failed." in message
+        assert "do not blind-retry" in message
+
 
 @pytest.mark.anyio
 class TestToggleAiAgentStatusErrorPaths:

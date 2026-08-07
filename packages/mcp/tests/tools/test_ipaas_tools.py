@@ -166,6 +166,43 @@ async def test_token_permission_error_becomes_error_payload(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_empty_exception_message_uses_fallback(
+    mock_client, mock_gateway, extract_payload, exc_message
+):
+    mock_client.get_advanced_automations_token = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool("get_ipaas_tools", {"pipe_id": "303088927"})
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "iPaaS request failed." in message
+    assert "do not blind-retry" in message
+    mock_gateway.list_tools.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_non_empty_exception_message_preserved(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_client.get_advanced_automations_token = AsyncMock(
+        side_effect=RuntimeError("token mint failed")
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool("get_ipaas_tools", {"pipe_id": "303088927"})
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "token mint failed" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
 async def test_gateway_error_becomes_error_payload(
     mock_client, mock_gateway, extract_payload
 ):

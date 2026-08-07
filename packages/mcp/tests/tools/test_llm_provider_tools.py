@@ -359,6 +359,26 @@ async def test_transport_failure_without_graphql_errors_falls_back_to_str(
     assert "socket closed" in tool_error_message(payload)
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_empty_exception_message_uses_fallback(
+    provider_session, mock_provider_client, extract_payload, exc_message
+):
+    mock_provider_client.get_llm_providers = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "get_llm_providers", {"organization_uuid": "org-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "LLM provider request failed." in message
+    assert "do not blind-retry" in message
+
+
 # --- Write tools ---------------------------------------------------------
 
 

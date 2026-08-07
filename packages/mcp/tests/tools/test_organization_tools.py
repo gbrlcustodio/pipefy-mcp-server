@@ -157,9 +157,8 @@ async def test_list_organizations_empty_exception_message_uses_fallback(
     payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload)
-    assert message.strip()
-    assert "Organization request failed." in message
-    assert "do not blind-retry" in message
+    assert message == "Organization request failed."
+    assert "do not blind-retry" not in message
 
 
 @pytest.mark.anyio

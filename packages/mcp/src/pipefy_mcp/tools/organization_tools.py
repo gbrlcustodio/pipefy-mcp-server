@@ -14,10 +14,7 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
 from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 
-_ORGANIZATION_REQUEST_FAILED = (
-    "Organization request failed. Re-read organization state "
-    "before retrying; do not blind-retry."
-)
+_ORGANIZATION_REQUEST_FAILED = "Organization request failed."
 
 
 class OrganizationTools:

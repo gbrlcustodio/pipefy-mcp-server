@@ -799,6 +799,36 @@ async def test_empty_exception_message_uses_fallback(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_classified_whitespace_permission_denied_keeps_unknown_error(
+    kb_session, mock_kb_client, extract_payload, exc_message
+):
+    mock_kb_client.get_ai_knowledge_bases = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {
+                    "message": exc_message,
+                    "extensions": {
+                        "code": "PERMISSION_DENIED",
+                        "correlation_id": "corr-ws",
+                    },
+                }
+            ]
+        )
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_bases", {"pipe_uuid": "pipe-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert tool_error_message(payload) == "Unknown error"
+    assert payload["error"]["code"] == "PERMISSION_DENIED"
+    assert payload["error"]["details"]["kind"] == "permission_denied"
+    assert "do not blind-retry" not in tool_error_message(payload)
+
+
+@pytest.mark.anyio
 async def test_non_empty_exception_message_preserved(
     kb_session, mock_kb_client, extract_payload
 ):

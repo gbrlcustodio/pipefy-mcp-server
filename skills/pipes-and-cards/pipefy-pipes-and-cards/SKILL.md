@@ -157,7 +157,7 @@ This returns valid `type` enum values and their descriptions.
 | `create_card` | `pipefy card create <pipe_id>` | No | Default: start form. Optional `--phase-id` / `phase_id` creates in that phase; interactive clients may elicit start-form fields unless `skip_elicitation=true`. |
 | `fill_card_phase_fields` | `pipefy card fill <id> --phase <id>` | No | Fill phase fields non-interactively; filters to editable IDs. Uses `--fields` JSON object; for ad-hoc updates use `card update --field-updates` (JSON array). |
 | `update_card` | `pipefy card update <id>` | No | Update title, assignee, due date, fields. |
-| `update_card_field` | `pipefy card update <id> --field-updates` | No | Single-field update (`updateCardField`); for several fields prefer `update_card` + `field_updates`. |
+| `update_card_field` | `pipefy card update <id> --field-updates` | No | Single-field update (`updateCardField`); connector/multi-value is **replace-all** — `get_card(include_fields=true)`, merge, write the full list (or use `update_card` + `field_updates` with `operation` ADD/REMOVE). For several fields prefer `update_card` + `field_updates`. |
 | `move_card_to_phase` | `pipefy card move <card_id> --phase <id>` | No | Call `get_phase_allowed_move_targets` first. On required empty field, MCP may return `success: false` naming the field (optional hide hint). |
 | `delete_card` | `pipefy card delete <id>` | No | **Two-step destructive.** |
 | `add_card_comment` | `pipefy card comment add <id>` | No | Add a text comment to a card. |
@@ -233,6 +233,7 @@ Do not hide a required field — MCP rejects `hide`/`hidden` on `required=true` 
 - **`create_field_condition` fails with missing/wrong phase:** use `error.details.condition_id` (or the id in the message) with `delete_field_condition` and `confirm=true` before recreating; do not blind-retry create on the same requested phase.
 - **`create_card` fails with missing required fields:** call `get_start_form_fields` first to discover required `field_id` values.
 - **`create_card` / write reports failure (empty or unclear message):** do not blind-retry. Re-read `get_cards` / `get_phase_cards_count` (or pipe `cards_count`) before any retry — see [Ambiguous write failure](../../api-troubleshoot/pipefy-api-fallback/SKILL.md#ambiguous-write-failure-re-read-before-retry).
+- **Connections missing after a connector field update:** `update_card_field` is replace-all — writing one related card id drops the rest. Fix: `get_card(include_fields=true)` → merge → write the full list, or `update_card` with `field_updates` and `operation` ADD/REMOVE. For links via a pipe relation (not a connector field), use `create_card_relation` / `delete_card_relation` — see `skills/relations/`.
 - **`create_phase_field` rejects type:** call `introspect_type type_name="CreatePhaseFieldInput"` to get valid values.
 - **Delete fails with preview error:** expected — call without `confirm=true` first, show user the preview, then call with `confirm=true`.
 

@@ -404,3 +404,155 @@ async def test_execute_graphql_transport_error_returns_error_payload(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "Connection refused" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_execute_graphql_empty_exception_message_uses_fallback(
+    introspection_session, mock_introspection_client, extract_payload, exc_message
+):
+    mock_introspection_client.execute_graphql = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "execute_graphql",
+            {"query": "query Q { __typename }"},
+        )
+    assert result.is_error is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "GraphQL request failed." in message
+    assert "re-read counts/ids" in message
+    assert "do not blind-retry" in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_execute_graphql_preserves_non_empty_exception_message(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.execute_graphql = AsyncMock(
+        side_effect=RuntimeError("boom")
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "execute_graphql",
+            {"query": "query Q { __typename }"},
+        )
+    assert result.is_error is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "boom" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    ("tool_name", "client_attr", "arguments"),
+    [
+        ("introspect_type", "introspect_type", {"type_name": "Card"}),
+        ("introspect_mutation", "introspect_mutation", {"mutation_name": "createCard"}),
+        ("introspect_query", "introspect_query", {"query_name": "card"}),
+        ("search_schema", "search_schema", {"keyword": "card"}),
+    ],
+)
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_introspection_tools_empty_exception_message_uses_fallback(
+    introspection_session,
+    mock_introspection_client,
+    extract_payload,
+    tool_name,
+    client_attr,
+    arguments,
+    exc_message,
+):
+    setattr(
+        mock_introspection_client,
+        client_attr,
+        AsyncMock(side_effect=RuntimeError(exc_message)),
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(tool_name, arguments)
+    assert result.is_error is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "GraphQL request failed." in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    ("tool_name", "client_attr", "arguments"),
+    [
+        ("introspect_type", "introspect_type", {"type_name": "Card"}),
+        ("introspect_mutation", "introspect_mutation", {"mutation_name": "createCard"}),
+        ("introspect_query", "introspect_query", {"query_name": "card"}),
+        ("search_schema", "search_schema", {"keyword": "card"}),
+    ],
+)
+async def test_introspection_tools_preserves_non_empty_exception_message(
+    introspection_session,
+    mock_introspection_client,
+    extract_payload,
+    tool_name,
+    client_attr,
+    arguments,
+):
+    setattr(
+        mock_introspection_client,
+        client_attr,
+        AsyncMock(side_effect=RuntimeError("boom")),
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(tool_name, arguments)
+    assert result.is_error is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "boom" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+@pytest.mark.parametrize("soft_error", ["", "   "])
+async def test_execute_graphql_soft_error_field_empty_or_whitespace_uses_fallback(
+    introspection_session, mock_introspection_client, extract_payload, soft_error
+):
+    mock_introspection_client.execute_graphql = AsyncMock(
+        return_value={"error": soft_error}
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "execute_graphql",
+            {"query": "query Q { __typename }"},
+        )
+    assert result.is_error is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "GraphQL returned errors." in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_execute_graphql_soft_errors_whitespace_messages_use_fallback(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.execute_graphql = AsyncMock(
+        return_value={"errors": [{"message": "   "}]}
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "execute_graphql",
+            {"query": "query Q { __typename }"},
+        )
+    assert result.is_error is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert tool_error_message(payload) == "GraphQL returned errors."

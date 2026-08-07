@@ -34,6 +34,7 @@ from pipefy_mcp.core.tool_error_envelope import (
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
+    ensure_non_empty_error_message,
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
     handle_tool_graphql_error,
@@ -113,6 +114,10 @@ class PipeTools:
             When ``skip_elicitation`` is False (default) and the client supports
             elicitation, an interactive form is presented even if ``fields``
             carries pre-filled values — the human can review and adjust them.
+
+            On ambiguous failure (empty or unclear ``error.message``), re-read
+            ``get_cards`` / ``get_phase_cards_count`` before retrying; do not
+            blind-retry creates (``CreateCardInput`` has no ``idempotency_key``).
 
             A form is only possible when the connection can carry a
             server-to-client request. It cannot on protocol revision 2026-07-28,
@@ -288,7 +293,13 @@ class PipeTools:
                 error_text = str(exc)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
-                return tool_error(error_text)
+                return tool_error(
+                    ensure_non_empty_error_message(
+                        error_text,
+                        "Failed to create card. Re-read get_cards or "
+                        "get_phase_cards_count before retrying; do not blind-retry.",
+                    )
+                )
             card_data_node = (result.get("createCard") or {}).get("card")
             card_id = (
                 card_data_node.get("id") if isinstance(card_data_node, dict) else None

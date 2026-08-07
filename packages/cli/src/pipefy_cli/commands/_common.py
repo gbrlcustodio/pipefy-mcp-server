@@ -216,6 +216,11 @@ def run_pipefy_client_coroutine(
 
     try:
         return asyncio.run(_run())
+    # PipefyGraphQLError is a PipefyError, so it must be caught first or the
+    # generic branch below swallows it and the code suffix is lost.
+    except PipefyGraphQLError as exc:
+        typer.echo(_format_transport_query_error(exc), err=True)
+        raise typer.Exit(1) from exc
     except PipefyError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
@@ -226,9 +231,6 @@ def run_pipefy_client_coroutine(
         raise typer.Exit(value_error_exit_code) from exc
     except BrokenPipeError:
         raise typer.Exit(0) from None
-    except PipefyGraphQLError as exc:
-        typer.echo(_format_transport_query_error(exc), err=True)
-        raise typer.Exit(1) from exc
     except TransportError as exc:
         typer.echo(f"Pipefy transport error: {exc}", err=True)
         raise typer.Exit(1) from exc
@@ -378,11 +380,13 @@ def run_cli_command(
 
     try:
         data = asyncio.run(_run())
-    except PipefyError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
+    # PipefyGraphQLError is a PipefyError, so it must be caught first or the
+    # generic branch below swallows it and transport_fmt never runs.
     except PipefyGraphQLError as exc:
         typer.echo(transport_fmt(exc), err=True)
+        raise typer.Exit(1) from exc
+    except PipefyError as exc:
+        typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
     except TransportError as exc:
         typer.echo(f"Pipefy transport error: {exc}", err=True)

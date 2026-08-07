@@ -44,7 +44,6 @@ def scenario_session(scenario_mcp, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("scenario_session", [None], indirect=True)
 async def test_scenario_discover_input_shape_then_execute_mutation_path(
     scenario_session, scenario_client, extract_payload
 ):
@@ -130,7 +129,6 @@ async def test_scenario_discover_input_shape_then_execute_mutation_path(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("scenario_session", [None], indirect=True)
 async def test_scenario_search_then_introspect_type(
     scenario_session, scenario_client, extract_payload
 ):
@@ -156,7 +154,6 @@ async def test_scenario_search_then_introspect_type(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("scenario_session", [None], indirect=True)
 async def test_scenario_execute_graphql_error_surfaces_to_agent(
     scenario_session, scenario_client, extract_payload
 ):

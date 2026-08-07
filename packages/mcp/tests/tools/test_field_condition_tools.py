@@ -54,7 +54,7 @@ def client_session(mcp_server, request):
         mcp_server,
         read_timeout_seconds=timedelta(seconds=10),
         raise_exceptions=True,
-        elicitation_callback=request.param,
+        elicitation_callback=getattr(request, "param", None),
     )
 
 
@@ -67,7 +67,6 @@ def phase_id() -> int:
 class TestGetFieldConditions:
     """Tests for get_field_conditions tool."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_conditions_success_returns_list(
         self,
         client_session,
@@ -99,7 +98,6 @@ class TestGetFieldConditions:
             "field_conditions": rows,
         }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_conditions_empty_returns_empty_list(
         self,
         client_session,
@@ -116,7 +114,6 @@ class TestGetFieldConditions:
         assert payload["success"] is True
         assert payload["field_conditions"] == []
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_conditions_graphql_error_returns_error_payload(
         self,
         client_session,
@@ -142,7 +139,6 @@ class TestGetFieldConditions:
 class TestGetFieldCondition:
     """Tests for get_field_condition tool."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_condition_success_returns_object(
         self,
         client_session,
@@ -172,7 +168,6 @@ class TestGetFieldCondition:
             "field_condition": fc,
         }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_condition_not_found_returns_error(
         self,
         client_session,
@@ -191,7 +186,6 @@ class TestGetFieldCondition:
         assert payload["success"] is False
         assert "access denied" in tool_error_message(payload).lower()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_condition_graphql_error_returns_error_payload(
         self,
         client_session,
@@ -217,7 +211,6 @@ class TestGetFieldCondition:
 class TestCreateFieldConditionVerify:
     """Post-create read-back honesty for create_field_condition."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_field_condition_verified_when_phase_matches(
         self,
         client_session,
@@ -254,7 +247,6 @@ class TestCreateFieldConditionVerify:
         assert payload["verified"] is True
         mock_pipefy_client.get_field_conditions.assert_not_called()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_field_condition_wrong_phase_returns_failure(
         self,
         client_session,
@@ -301,7 +293,6 @@ class TestCreateFieldConditionVerify:
             "actual_phase_id": "999000111",
         }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_field_condition_null_phase_verifies_via_list(
         self,
         client_session,
@@ -345,7 +336,6 @@ class TestCreateFieldConditionVerify:
         assert payload["verified"] is True
         mock_pipefy_client.get_field_conditions.assert_awaited_once_with(phase_id)
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_field_condition_verified_via_list_when_get_raises(
         self,
         client_session,
@@ -383,7 +373,6 @@ class TestCreateFieldConditionVerify:
         assert payload["success"] is True
         assert payload["verified"] is True
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_field_condition_missing_when_list_lacks_id(
         self,
         client_session,
@@ -432,7 +421,6 @@ class TestCreateFieldConditionVerify:
             "phase_id": phase_id,
         }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_field_condition_verify_unavailable_returns_warning(
         self,
         client_session,
@@ -467,7 +455,6 @@ class TestCreateFieldConditionVerify:
         assert "verified" not in payload
         assert "could not verify" in payload["warning"].lower()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_field_condition_null_phase_list_fail_returns_warning(
         self,
         client_session,
@@ -514,7 +501,6 @@ class TestCreateFieldConditionVerify:
 class TestRequiredHiddenLint:
     """Block create/update when hide targets a required field."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_required_hidden_blocks_before_mutation(
         self,
         client_session,
@@ -554,7 +540,6 @@ class TestRequiredHiddenLint:
         mock_pipefy_client.create_field_condition.assert_not_called()
         mock_pipefy_client.get_phase_fields.assert_awaited_once_with(phase_id)
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_required_hidden_legacy_action_id_blocks_before_mutation(
         self,
         client_session,
@@ -591,7 +576,6 @@ class TestRequiredHiddenLint:
         assert field_id in tool_error_message(payload)
         mock_pipefy_client.create_field_condition.assert_not_called()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_required_hidden_blocks_before_mutation(
         self,
         client_session,
@@ -637,7 +621,6 @@ class TestRequiredHiddenLint:
         mock_pipefy_client.get_field_condition.assert_awaited_once_with(condition_id)
         mock_pipefy_client.get_phase_fields.assert_awaited_once_with(phase_id)
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_extra_input_actions_rejected(
         self,
         client_session,
@@ -673,7 +656,6 @@ class TestRequiredHiddenLint:
         mock_pipefy_client.update_field_condition.assert_not_called()
         mock_pipefy_client.get_phase_fields.assert_not_called()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_required_hidden_legacy_action_id_blocks_before_mutation(
         self,
         client_session,
@@ -717,7 +699,6 @@ class TestRequiredHiddenLint:
         assert field_id in tool_error_message(payload)
         mock_pipefy_client.update_field_condition.assert_not_called()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_no_required_hidden_conflict_proceeds(
         self,
         client_session,
@@ -765,7 +746,6 @@ class TestRequiredHiddenLint:
         assert payload["verified"] is True
         mock_pipefy_client.create_field_condition.assert_awaited_once()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_phase_fields_error_proceeds_best_effort(
         self,
         client_session,
@@ -803,7 +783,6 @@ class TestRequiredHiddenLint:
         assert payload["success"] is True
         mock_pipefy_client.create_field_condition.assert_awaited_once()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_phase_fields_error_proceeds_best_effort(
         self,
         client_session,

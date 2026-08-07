@@ -46,7 +46,6 @@ def introspection_session(introspection_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_type_success(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -66,7 +65,6 @@ async def test_introspect_type_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_type_with_max_depth_passes_through(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -84,7 +82,6 @@ async def test_introspect_type_with_max_depth_passes_through(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_type_not_found_returns_error_payload(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -100,7 +97,6 @@ async def test_introspect_type_not_found_returns_error_payload(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_type_transport_error_returns_structured_error(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -117,7 +113,6 @@ async def test_introspect_type_transport_error_returns_structured_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_mutation_success(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -143,7 +138,6 @@ async def test_introspect_mutation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_mutation_with_max_depth_passes_through(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -166,7 +160,6 @@ async def test_introspect_mutation_with_max_depth_passes_through(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_query_with_max_depth_passes_through(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -189,7 +182,6 @@ async def test_introspect_query_with_max_depth_passes_through(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_mutation_not_found_returns_error_payload(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -207,7 +199,6 @@ async def test_introspect_mutation_not_found_returns_error_payload(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_query_success(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -241,7 +232,6 @@ async def test_introspect_query_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_introspect_query_not_found_returns_error_payload(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -257,7 +247,6 @@ async def test_introspect_query_not_found_returns_error_payload(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_search_schema_returns_matching_types(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -282,7 +271,6 @@ async def test_search_schema_returns_matching_types(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_search_schema_empty_returns_success_with_empty_types(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -296,7 +284,6 @@ async def test_search_schema_empty_returns_success_with_empty_types(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_search_schema_with_kind_passes_through(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -321,7 +308,6 @@ async def test_search_schema_with_kind_passes_through(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_execute_graphql_success(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -343,7 +329,6 @@ async def test_execute_graphql_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_execute_graphql_graphql_errors_surface_as_failure(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -367,7 +352,6 @@ async def test_execute_graphql_graphql_errors_surface_as_failure(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_execute_graphql_syntax_error_returns_error_payload(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -388,7 +372,6 @@ async def test_execute_graphql_syntax_error_returns_error_payload(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_execute_graphql_transport_error_returns_error_payload(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -407,7 +390,6 @@ async def test_execute_graphql_transport_error_returns_error_payload(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 @pytest.mark.parametrize("exc_message", ["", "   "])
 async def test_execute_graphql_empty_exception_message_uses_fallback(
     introspection_session, mock_introspection_client, extract_payload, exc_message
@@ -431,7 +413,6 @@ async def test_execute_graphql_empty_exception_message_uses_fallback(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_execute_graphql_preserves_non_empty_exception_message(
     introspection_session, mock_introspection_client, extract_payload
 ):
@@ -450,7 +431,6 @@ async def test_execute_graphql_preserves_non_empty_exception_message(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 @pytest.mark.parametrize(
     ("tool_name", "client_attr", "arguments"),
     [
@@ -486,7 +466,6 @@ async def test_introspection_tools_empty_exception_message_uses_fallback(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 @pytest.mark.parametrize(
     ("tool_name", "client_attr", "arguments"),
     [
@@ -518,7 +497,6 @@ async def test_introspection_tools_preserves_non_empty_exception_message(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 @pytest.mark.parametrize("soft_error", ["", "   "])
 async def test_execute_graphql_soft_error_field_empty_or_whitespace_uses_fallback(
     introspection_session, mock_introspection_client, extract_payload, soft_error
@@ -540,7 +518,6 @@ async def test_execute_graphql_soft_error_field_empty_or_whitespace_uses_fallbac
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("introspection_session", [None], indirect=True)
 async def test_execute_graphql_soft_errors_whitespace_messages_use_fallback(
     introspection_session, mock_introspection_client, extract_payload
 ):

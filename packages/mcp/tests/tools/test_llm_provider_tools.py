@@ -107,7 +107,6 @@ def provider_session(provider_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_success_with_pagination(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -136,7 +135,6 @@ async def test_get_llm_providers_success_with_pagination(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_blank_org_uuid_rejected(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -151,7 +149,6 @@ async def test_get_llm_providers_blank_org_uuid_rejected(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_invalid_page_size_rejected(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -165,7 +162,6 @@ async def test_get_llm_providers_invalid_page_size_rejected(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_permission_denied_classified(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -184,7 +180,6 @@ async def test_get_llm_providers_permission_denied_classified(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_available_ai_models_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -202,7 +197,6 @@ async def test_get_available_ai_models_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_available_ai_models_invalid_enum_surfaces_api_error(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -226,7 +220,6 @@ async def test_get_available_ai_models_invalid_enum_surfaces_api_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_default_llm_provider_defaults_to_organization(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -244,7 +237,6 @@ async def test_get_default_llm_provider_defaults_to_organization(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_provider_dependencies_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -268,7 +260,6 @@ async def test_get_llm_provider_dependencies_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_validate_llm_provider_access_green(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -292,7 +283,6 @@ async def test_validate_llm_provider_access_green(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_validate_llm_provider_access_failure_maps_problem(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -319,7 +309,6 @@ async def test_validate_llm_provider_access_failure_maps_problem(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_not_found_has_no_self_referential_hint(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -336,7 +325,6 @@ async def test_get_llm_providers_not_found_has_no_self_referential_hint(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_provider_dependencies_not_found_adds_discovery_hint(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -356,7 +344,6 @@ async def test_get_llm_provider_dependencies_not_found_adds_discovery_hint(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_transport_failure_without_graphql_errors_falls_back_to_str(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -376,7 +363,6 @@ async def test_transport_failure_without_graphql_errors_falls_back_to_str(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_create_and_update_take_file_path_not_inline_configuration(
     provider_session,
 ):
@@ -390,7 +376,6 @@ async def test_create_and_update_take_file_path_not_inline_configuration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_create_llm_provider_success_returns_no_configuration(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -415,7 +400,6 @@ async def test_create_llm_provider_success_returns_no_configuration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_create_llm_provider_value_error_becomes_tool_error(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -439,7 +423,6 @@ async def test_create_llm_provider_value_error_becomes_tool_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_update_llm_provider_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -465,7 +448,6 @@ async def test_update_llm_provider_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_delete_preview_without_confirm_does_not_delete(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -480,7 +462,6 @@ async def test_delete_preview_without_confirm_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_delete_with_confirm_executes(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -498,7 +479,6 @@ async def test_delete_with_confirm_executes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_delete_unconfirmed_by_api_is_tool_error(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -516,7 +496,6 @@ async def test_delete_unconfirmed_by_api_is_tool_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_set_active_status_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -536,7 +515,6 @@ async def test_set_active_status_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_set_default_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -555,7 +533,6 @@ async def test_set_default_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_set_default_xor_violation_is_tool_error(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -579,7 +556,6 @@ async def test_set_default_xor_violation_is_tool_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_reset_default_success(
     provider_session, mock_provider_client, extract_payload
 ):

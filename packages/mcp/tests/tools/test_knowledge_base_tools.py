@@ -117,7 +117,6 @@ def kb_session(kb_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_knowledge_bases_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -134,7 +133,6 @@ async def test_get_knowledge_bases_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_knowledge_bases_blank_pipe_uuid_rejected(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -147,7 +145,6 @@ async def test_get_knowledge_bases_blank_pipe_uuid_rejected(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_plain_text_not_found(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -163,7 +160,6 @@ async def test_get_plain_text_not_found(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_plain_text_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -187,7 +183,6 @@ async def test_create_plain_text_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_plain_text_limit_value_error_mapped(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -210,7 +205,6 @@ async def test_create_plain_text_limit_value_error_mapped(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_update_plain_text_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -233,7 +227,6 @@ async def test_update_plain_text_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_preview_without_confirm_does_not_delete(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -249,7 +242,6 @@ async def test_delete_preview_without_confirm_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_with_confirm_executes(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -270,7 +262,6 @@ async def test_delete_with_confirm_executes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_validate_access_green(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -292,7 +283,6 @@ async def test_validate_access_green(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_validate_access_failure_classified(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -319,7 +309,6 @@ async def test_validate_access_failure_classified(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_knowledge_bases_permission_denied_classified(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -337,7 +326,6 @@ async def test_get_knowledge_bases_permission_denied_classified(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_plain_text_not_found_error_adds_discovery_hint(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -356,7 +344,6 @@ async def test_get_plain_text_not_found_error_adds_discovery_hint(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_knowledge_bases_not_found_has_no_self_referential_hint(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -393,7 +380,6 @@ async def test_get_document_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_document_not_found(kb_session, mock_kb_client, extract_payload):
     mock_kb_client.get_ai_knowledge_base_document = AsyncMock(return_value={})
     async with kb_session as session:
@@ -407,7 +393,6 @@ async def test_get_document_not_found(kb_session, mock_kb_client, extract_payloa
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -437,7 +422,6 @@ async def test_create_document_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_blank_file_path_rejected(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -458,7 +442,6 @@ async def test_create_document_blank_file_path_rejected(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_non_pdf_maps_file_read_step(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -484,7 +467,6 @@ async def test_create_document_non_pdf_maps_file_read_step(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_s3_failure_carries_step_and_snippet(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -513,7 +495,6 @@ async def test_create_document_s3_failure_carries_step_and_snippet(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_kb_create_failure_classified(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -543,7 +524,6 @@ async def test_create_document_kb_create_failure_classified(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_update_document_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -562,7 +542,6 @@ async def test_update_document_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_document_preview_without_confirm(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -578,7 +557,6 @@ async def test_delete_document_preview_without_confirm(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_document_with_confirm_executes(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -599,7 +577,6 @@ async def test_delete_document_with_confirm_executes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_data_lookup_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -621,7 +598,6 @@ async def test_get_data_lookup_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_data_lookup_not_found(kb_session, mock_kb_client, extract_payload):
     mock_kb_client.get_ai_knowledge_base_data_lookup = AsyncMock(return_value={})
     async with kb_session as session:
@@ -637,7 +613,6 @@ async def test_get_data_lookup_not_found(kb_session, mock_kb_client, extract_pay
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_data_lookup_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -672,7 +647,6 @@ async def test_create_data_lookup_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_data_lookup_definition_value_error_mapped(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -700,7 +674,6 @@ async def test_create_data_lookup_definition_value_error_mapped(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_update_data_lookup_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -735,7 +708,6 @@ async def test_update_data_lookup_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_update_data_lookup_requires_full_definition_in_schema(kb_session):
     """The tool schema itself enforces the full-definition contract."""
     async with kb_session as session:
@@ -753,7 +725,6 @@ async def test_update_data_lookup_requires_full_definition_in_schema(kb_session)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_data_lookup_preview_without_confirm(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -769,7 +740,6 @@ async def test_delete_data_lookup_preview_without_confirm(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_data_lookup_with_confirm_executes(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -790,7 +760,6 @@ async def test_delete_data_lookup_with_confirm_executes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_data_lookup_permission_denied_classified(
     kb_session, mock_kb_client, extract_payload
 ):

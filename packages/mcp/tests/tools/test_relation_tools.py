@@ -45,7 +45,6 @@ def relation_session(relation_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_pipe_relations_success(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -68,7 +67,6 @@ async def test_get_pipe_relations_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_pipe_relations_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -86,7 +84,6 @@ async def test_get_pipe_relations_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_pipe_relations_invalid_pipe_id(
     relation_session, mock_relation_client
 ):
@@ -98,7 +95,6 @@ async def test_get_pipe_relations_invalid_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_pipe_relations_rejects_pipe_id_zero(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -113,7 +109,6 @@ async def test_get_pipe_relations_rejects_pipe_id_zero(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_table_relations_success(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -134,7 +129,6 @@ async def test_get_table_relations_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_table_relations_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -150,7 +144,6 @@ async def test_get_table_relations_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_table_relations_invalid_relation_ids(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -163,7 +156,6 @@ async def test_get_table_relations_invalid_relation_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_pipe_relation_success(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -187,7 +179,6 @@ async def test_create_pipe_relation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_pipe_relation_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -206,7 +197,6 @@ async def test_create_pipe_relation_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_pipe_relation_invalid_name(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -221,7 +211,6 @@ async def test_create_pipe_relation_invalid_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_update_pipe_relation_success(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -243,7 +232,6 @@ async def test_update_pipe_relation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_update_pipe_relation_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -261,7 +249,6 @@ async def test_update_pipe_relation_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_delete_pipe_relation_success(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -281,7 +268,6 @@ async def test_delete_pipe_relation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_delete_pipe_relation_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -300,7 +286,6 @@ async def test_delete_pipe_relation_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_delete_pipe_relation_has_destructive_hint(relation_session):
     async with relation_session as session:
         listed = await session.list_tools()
@@ -311,7 +296,6 @@ async def test_delete_pipe_relation_has_destructive_hint(relation_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_card_relation_success(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -335,7 +319,6 @@ async def test_create_card_relation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_card_relation_graphql_error(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -355,7 +338,6 @@ async def test_create_card_relation_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_card_relation_invalid_source_id(
     relation_session, mock_relation_client
 ):
@@ -370,7 +352,6 @@ async def test_create_card_relation_invalid_source_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_pipe_relation_rejects_non_dict_extra_input(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -393,7 +374,6 @@ async def test_create_pipe_relation_rejects_non_dict_extra_input(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_update_pipe_relation_rejects_non_dict_extra_input(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -410,7 +390,6 @@ async def test_update_pipe_relation_rejects_non_dict_extra_input(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_card_relation_rejects_non_dict_extra_input(
     relation_session, mock_relation_client, extract_payload
 ):

@@ -34,11 +34,6 @@ _KB_REQUEST_FAILED = (
 )
 
 
-def _classified_problem_message(message: str) -> str:
-    """Normalize classifier text so whitespace matches the empty-message path."""
-    return message.strip() or "Unknown error"
-
-
 def _kb_document_upload_error(
     exc: KnowledgeBaseDocumentUploadError,
 ) -> dict[str, Any]:
@@ -73,9 +68,7 @@ def _kb_document_upload_error(
     if problem.correlation_id:
         details["correlation_id"] = problem.correlation_id
     return tool_error(
-        ensure_non_empty_error_message(
-            _classified_problem_message(problem.message), _KB_REQUEST_FAILED
-        ),
+        ensure_non_empty_error_message(problem.message, _KB_REQUEST_FAILED),
         code=problem.code,
         details=details,
     )
@@ -96,7 +89,7 @@ def _kb_tool_error_from_exception(
     problem = classify_exception(exc)
     if problem is None:
         return tool_error(ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED))
-    message = _classified_problem_message(problem.message)
+    message = problem.message
     if not_found_hint and problem.kind.value == "not_found":
         message = f"{message} {_KB_ID_DISCOVERY_HINT}"
     details: dict[str, Any] = {"kind": problem.kind.value}

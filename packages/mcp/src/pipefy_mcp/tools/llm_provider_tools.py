@@ -42,11 +42,6 @@ _PROVIDER_REQUEST_FAILED = (
 )
 
 
-def _classified_problem_message(message: str) -> str:
-    """Normalize classifier text so whitespace matches the empty-message path."""
-    return message.strip() or "Unknown error"
-
-
 def _provider_tool_error_from_exception(
     exc: BaseException, *, not_found_hint: bool = True
 ) -> dict[str, Any]:
@@ -64,7 +59,7 @@ def _provider_tool_error_from_exception(
         return tool_error(
             ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
         )
-    message = _classified_problem_message(problem.message)
+    message = problem.message
     if not_found_hint and problem.kind.value == "not_found":
         message = f"{message} {_PROVIDER_ID_DISCOVERY_HINT}"
     details: dict[str, Any] = {"kind": problem.kind.value}

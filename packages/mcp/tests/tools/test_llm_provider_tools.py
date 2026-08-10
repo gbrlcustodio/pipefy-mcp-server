@@ -381,9 +381,10 @@ async def test_empty_exception_message_uses_fallback(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("exc_message", ["", "   "])
-async def test_classified_whitespace_permission_denied_keeps_unknown_error(
+async def test_classified_blank_or_whitespace_message_becomes_unknown_error(
     provider_session, mock_provider_client, extract_payload, exc_message
 ):
+    """SDK classifier normalizes blank messages; MCP keeps the classified envelope."""
     mock_provider_client.get_llm_providers = AsyncMock(
         side_effect=PipefyGraphQLError(
             [

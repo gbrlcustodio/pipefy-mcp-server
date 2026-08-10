@@ -161,20 +161,25 @@ The shape is stable across all sources (fields you don't have are `null` rather 
 
 POSTs the stored refresh token to the IdP's `end_session_endpoint` (advertised in the OIDC discovery document) and removes the keychain entry. Without server-side revocation the refresh token would remain valid at the IdP until natural expiry — anyone who recovered it from a backup could still mint new access tokens.
 
-The command always clears the local keychain entry once it runs, even when the IdP round-trip fails. The two non-happy paths surface a stderr warning so the user knows whether server-side revocation succeeded:
+Whether there is anything to clear is decided by the **presence** of a keychain entry, not by whether that entry parses: a stale, corrupt, or schema-drifted entry is still a credential on disk and is removed. The command always clears the local entry once it runs, even when the IdP round-trip fails. The non-happy paths surface a stderr warning so the user knows whether server-side revocation succeeded:
 
 - **Revocation network / non-2xx failure** — stderr `Could not revoke refresh token at the IdP: <reason>. Clearing local session anyway; the refresh token may remain valid at the server until natural expiry.`
 - **IdP doesn't advertise `end_session_endpoint`** — stderr `Pipefy auth server does not advertise a logout endpoint; the refresh token could not be revoked server-side. Clearing local session only.` (OIDC Discovery 1.0 makes the field optional; Keycloak ships it.)
+- **Entry present but unreadable** — revocation needs a readable refresh token, so the entry is delete-only: stdout `Removed an unreadable Pipefy session entry (<issuer>).` and stderr `The stored session entry could not be read, so its refresh token could not be revoked at the IdP; that token remains valid at the server until natural expiry.` Nothing was revoked server-side, so the unrevoked refresh token stays usable at the IdP until it expires on its own.
+- **Keychain read failed and nothing was deleted** — presence could not be established, so the command claims neither removal nor a clean machine: stderr `Could not read the keychain to check for a stored session (<issuer>), and no entry was removed. A credential may still be present; check for it manually via your OS keychain (service: 'pipefy').` and exit 1.
 
-When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing to do.` and exits 0 — idempotent, matching `gh auth logout` and similar CLIs.
+When no entry is stored, `pipefy auth logout` prints `Not signed in. Nothing to do.` and exits 0 — idempotent, matching `gh auth logout` and similar CLIs.
 
 ##### Exit codes
 
 | Case | Exit |
 |------|------|
 | `PIPEFY_AUTH_URL=""` (or any other `PIPEFY_*` env var set to empty) | **2** — pydantic rejects empty values at settings load. Unset the var to fall back to the prod default. |
-| No session stored (no-op) | **0** |
+| No entry stored (no-op) | **0** |
 | Session cleared (revoke succeeded, failed, or unsupported) | **0** |
+| Unreadable entry cleared (no server-side revoke) | **0** |
+| Keychain rejected the delete | **1** — the credential may survive; the message names the manual removal step. |
+| Keychain read failed and no entry was deleted | **1** — presence unknown, so neither removal nor "nothing to do" can be claimed. |
 
 ### Pipefy issuer URLs
 
@@ -220,7 +225,7 @@ The login worked but `keyring` couldn't write the entry.
 
 **macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecInvalidOwnerEdit` from Security.framework ("Invalid attempt to change the owner of this item") — not `errSecParam` (`-50`). The `keyring` macOS backend deletes any existing item and re-adds it on every write, so a stale entry created by another Python binary (for example a previous `uvx` cache path, or a login from Terminal.app followed by a write from an IDE/agent host) can surface this error. The root cause is not fully pinned; treat the steps below as remediation, not a proven mechanism.
 
-1. Clear the entry with `pipefy auth logout`. If it reports `Not signed in. Nothing to do.` (or fails), remove it directly with `security delete-generic-password -s pipefy` — today logout early-returns when `load_session` cannot read the item, so a stale/unreadable entry can look like "already clean" without deleting anything.
+1. Clear the entry with `pipefy auth logout`, which removes a stored entry even when that entry can no longer be parsed. If it fails, remove the entry directly with `security delete-generic-password -s pipefy`.
 2. Run `pipefy auth login` again.
 3. Prefer running that login from a regular **Terminal.app** session; if macOS prompts for keychain access, click **Always Allow**.
 4. If the OS keychain remains unusable, set `PIPEFY_KEYCHAIN_BACKEND=file` (plaintext under the Pipefy config directory) or use a static `PIPEFY_TOKEN`.

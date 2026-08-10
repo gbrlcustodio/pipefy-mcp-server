@@ -816,8 +816,8 @@ Usage: pipefy auth [OPTIONS] COMMAND [ARGS]...
 │          keychain.                                                           │
 │ status   Print which auth source is active, the authenticated identity, and  │
 │          session expiry.                                                     │
-│ logout   Revoke the stored refresh token at the IdP and clear the local      │
-│          session.                                                            │
+│ logout   Clear the local session, revoking the refresh token when it can be  │
+│          read.                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP auth/login
@@ -839,7 +839,7 @@ Usage: pipefy auth login [OPTIONS]
 ### HELP auth/logout
 Usage: pipefy auth logout [OPTIONS]
 
- Revoke the stored refresh token at the IdP and clear the local session.
+ Clear the local session, revoking the refresh token when it can be read.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │

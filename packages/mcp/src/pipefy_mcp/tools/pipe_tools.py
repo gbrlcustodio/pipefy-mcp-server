@@ -34,6 +34,7 @@ from pipefy_mcp.core.tool_error_envelope import (
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
+    ensure_non_empty_error_message,
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
     handle_tool_graphql_error,
@@ -46,6 +47,7 @@ from pipefy_mcp.tools.pagination_helpers import (
 )
 from pipefy_mcp.tools.phase_transition_helpers import (
     try_enrich_move_card_to_phase_failure,
+    try_enrich_required_field_move_failure,
 )
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
@@ -112,6 +114,10 @@ class PipeTools:
             When ``skip_elicitation`` is False (default) and the client supports
             elicitation, an interactive form is presented even if ``fields``
             carries pre-filled values — the human can review and adjust them.
+
+            On ambiguous failure (empty or unclear ``error.message``), re-read
+            ``get_cards`` / ``get_phase_cards_count`` before retrying; do not
+            blind-retry creates (``CreateCardInput`` has no ``idempotency_key``).
 
             A form is only possible when the connection can carry a
             server-to-client request. It cannot on protocol revision 2026-07-28,
@@ -287,7 +293,13 @@ class PipeTools:
                 error_text = str(exc)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
-                return tool_error(error_text)
+                return tool_error(
+                    ensure_non_empty_error_message(
+                        error_text,
+                        "Failed to create card. Re-read get_cards or "
+                        "get_phase_cards_count before retrying; do not blind-retry.",
+                    )
+                )
             card_data_node = (result.get("createCard") or {}).get("card")
             card_id = (
                 card_data_node.get("id") if isinstance(card_data_node, dict) else None
@@ -911,6 +923,8 @@ class PipeTools:
             Use this when the workflow should advance or regress a card. On failure, if the
             destination is not among allowed targets for the card's current phase, the tool may
             return ``success: false`` with ``valid_destinations`` instead of only the raw API error.
+            On required-field failures, it may return ``success: false`` naming the field (and a
+            hint when a field condition may hide that still-required field).
 
             Args:
                 card_id: The card to move.
@@ -922,7 +936,8 @@ class PipeTools:
             Returns:
                 dict: Pipefy move mutation response on success. On some validation failures,
                 a structured payload with ``success: false`` and ``valid_destinations`` when the
-                destination phase is not allowed from the current phase.
+                destination phase is not allowed from the current phase, or ``success: false``
+                naming a blocking required field when that pattern is detected.
             """
             client = get_pipefy_client(ctx)
             try:
@@ -935,6 +950,13 @@ class PipeTools:
                 )
                 if enriched is not None:
                     return enriched
+                required_enriched = await try_enrich_required_field_move_failure(
+                    client,
+                    card_id,
+                    str(exc),
+                )
+                if required_enriched is not None:
+                    return required_enriched
                 raise exc
 
         @mcp.tool(

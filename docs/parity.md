@@ -186,7 +186,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | shipped | Knowledge bases; partial update (`--id`, `--pipe-uuid`, optional `--name`/`--content`/`--description`, at least one). CLI gates on the read-access probe; limits fail fast client-side. |
 | `update_automation` | `pipefy automation update` | shipped | (`--condition` and/or `--extra` JSON; at least one required). First-class typed `condition` replaces the rule's condition. |
 | `update_card` | `pipefy card update` | shipped | (`--field-updates` JSON, optional title/labels/assignees/due-date). |
-| `update_card_field` | `pipefy card update` | shipped | Use `--field-updates` JSON array (). |
+| `update_card_field` | `pipefy card update` | shipped | MCP-only `updateCardField` (no CLI twin). Workaround: `card update --field-updates` (`updateFieldsValues`; optional `operation` ADD/REMOVE/REPLACE). |
 | `update_comment` | `pipefy card comment update` | shipped | — |
 | `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). When `actions` is provided (top-level; `actions` in `extra_input` → `INVALID_ARGUMENTS`), MCP rejects `hide`/`hidden` on a `required=true` field before the mutation (phase discovered via get-by-id; best-effort if phase fields cannot be loaded). CLI still returns the raw SDK response without that honesty check (known MCP-ahead behavior). |
 | `update_label` | `pipefy label update` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |

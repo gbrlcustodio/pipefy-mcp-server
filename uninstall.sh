@@ -1966,29 +1966,11 @@ keychain_accounts() {
     '
 }
 
-# A Secret Service is reached over the session bus, and so is the keyring
-# backend the CLI stores sessions with. Without a bus there is no service, so
-# no login could have written there — which is a different answer from "this
-# run could not look", and only one of the two is a source left uninspected.
-session_bus_present() {
-    [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && return 0
-    [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/bus" ] && return 0
-    return 1
-}
-
 scan_keychain_linux() {
     if ! command -v secret-tool >/dev/null 2>&1; then
-        if ! session_bus_present; then
-            # Headless boxes, containers and CI runners land here. Nothing was
-            # skipped, so this must not read as a source that failed.
-            note "no Secret Service on this machine, so no session is stored in one"
-            detail "reaching one needs a session bus and this has none, so a login"
-            detail "could not have written there. A file-backend store is checked below."
-            return 0
-        fi
-        # A bus is present, so a service may hold a session this run cannot
-        # read. Same call as a missing `security` on Darwin: uninspected, not
-        # clean, whatever the reason it could not be read.
+        # Uninspected, not clean, and the same call as the missing `security`
+        # on Darwin: a credential store nothing could read is a source this run
+        # has no answer for, whatever the reason it could not read it.
         uninspected "keychain not inspected — 'secret-tool' not on PATH"
         detail "install libsecret-tools (or the Secret Service client for your desktop)"
         detail "to have this run enumerate the store, or check it yourself"

@@ -114,8 +114,6 @@ A teardown uses the exit codes `--scan` uses, judged by the closing re-scan rath
 
 Without a receipt the run is in **heuristic mode**, which is permanent rather than transitional: every install made before the receipt existed has none, and only a version of `install.sh` that writes one produces one. Heuristic mode removes less. In a config the installer writes, it deletes a registration only where the value is exactly the single command the installer writes, reports everything else for you to judge, and never treats uv as this toolkit's.
 
-On Linux the OS keychain is a Secret Service, reached over the session bus — the same bus the CLI's keyring backend needs. A machine with no session bus has no service, so no login could have written a session to one: the scan says so and moves on. Where a bus is present but `secret-tool` is not installed, the store is real and unreadable from here, so it is reported as not inspected and the run exits `2` rather than implying the machine is clean. Headless servers, containers and CI runners are the first case, not the second.
-
 ## The stored session lives in one of two places
 
 `PIPEFY_KEYCHAIN_BACKEND=file` puts the session in `~/.config/pipefy/keyring.cfg`; without it, the session is in the OS keychain. Removing that line from a shell rc **moves the store** rather than clearing it: the next login writes to the keychain while anything already in `keyring.cfg` stays there, still signed in and invisible to a keychain-only sweep. The scan resolves and reports the effective backend and checks both stores regardless of which one is active.

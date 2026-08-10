@@ -802,37 +802,15 @@ def test_a_skill_installed_from_another_repository_is_left_alone(tmp_path):
     assert "came from someone-else/their-skills, not this toolkit" in result.stdout
 
 
-def test_a_missing_secret_tool_with_a_session_bus_is_uninspected(tmp_path):
-    """A bus means a service may hold a session this run cannot read."""
-    home = _home(tmp_path)
-
-    result = _run(
-        home,
-        _stub_path(tmp_path, no_secret_tool=True),
-        env_extra={"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus"},
-    )
-
-    assert result.returncode == 2, result.stdout
-    assert "keychain not inspected — 'secret-tool' not on PATH" in result.stdout
-    assert "sources could not be inspected" in result.stdout
-
-
-def test_a_missing_secret_tool_with_no_session_bus_is_not_a_failed_source(tmp_path):
-    """Headless boxes, containers and CI runners: nothing was skipped.
-
-    The keyring backend reaches a Secret Service over the session bus, so with
-    no bus there is no service and a login could not have written to one. That
-    is a different answer from "this run could not look", and treating it as an
-    uninspected source made every container exit 2 forever.
-    """
+def test_a_missing_secret_tool_is_uninspected_rather_than_clean(tmp_path):
+    """The same call as a missing `security` on Darwin: unreadable is not clean."""
     home = _home(tmp_path)
 
     result = _run(home, _stub_path(tmp_path, no_secret_tool=True))
 
-    assert result.returncode == 0, result.stdout
-    assert "no Secret Service on this machine" in result.stdout
-    assert "not inspected" not in result.stdout
-    assert "sources could not be inspected" not in result.stdout
+    assert result.returncode == 2, result.stdout
+    assert "keychain not inspected — 'secret-tool' not on PATH" in result.stdout
+    assert "sources could not be inspected" in result.stdout
 
 
 def test_a_scan_writes_nothing_to_stderr(tmp_path):

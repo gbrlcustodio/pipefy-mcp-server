@@ -89,6 +89,20 @@ esac
 exit 0
 """
 
+# Like `_CLAUDE`, but `mcp remove` really does edit the config, so a teardown
+# can reach a state the re-scan calls clean. That is what isolates the OAuth
+# store: it is the one clear the re-scan cannot check either way.
+_CLAUDE_THAT_REMOVES = """#!/bin/sh
+printf '%s\\n' "claude $*" >> "$STUBLOG"
+case "$*" in
+    "mcp --help") printf '  list\\n  add\\n  remove\\n  logout\\n' ;;
+    "plugin --help") printf '  install\\n  uninstall\\n  marketplace\\n' ;;
+    "plugin marketplace --help") printf '  add\\n  remove\\n  list\\n' ;;
+    "mcp remove"*) printf '{"mcpServers": {}}\\n' > "$HOME/.claude.json" ;;
+esac
+exit 0
+"""
+
 _PIPEFY = """#!/bin/sh
 printf '%s\\n' "pipefy $*" >> "$STUBLOG"
 mkdir -p "$HOME/.config/pipefy"
@@ -222,6 +236,14 @@ def _run(
     return Run(proc, log)
 
 
+def _no_uv_tools(stub: Path) -> Path:
+    """A `uv` that reports an empty tool directory, so a plan can be empty."""
+    _write_exec(
+        stub / "uv", '#!/bin/sh\nprintf \'%s\\n\' "uv $*" >> "$STUBLOG"\nexit 0\n'
+    )
+    return stub
+
+
 def _keychain_entry(stub: Path) -> None:
     state = stub.parent / "stubstate"
     state.mkdir(exist_ok=True)
@@ -276,9 +298,32 @@ def _full_fixture(home: Path) -> None:
         '[mcp_servers.pipefy]\ncommand = "pipefy-mcp-server"\n',
         encoding="utf-8",
     )
-    skill = home / ".claude" / "skills" / "pipefy-tasks"
-    skill.mkdir(parents=True)
-    (skill / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    _install_skills(home, "pipefy-reports")
+
+
+# `npx skills add` records the source of every skill it writes in a lock file.
+# That record is the only provenance a skill has: the `pipefy-` prefix is a
+# namespace anyone may write in, and reading it as ownership is how a teardown
+# deletes work it never created.
+def _install_skills(home: Path, *names: str, source: str = "pipefy/ai-toolkit") -> None:
+    lock_path = home / ".agents" / ".skill-lock.json"
+    lock = (
+        json.loads(lock_path.read_text(encoding="utf-8"))
+        if lock_path.exists()
+        else {"version": 3, "skills": {}}
+    )
+    for name in names:
+        directory = home / ".claude" / "skills" / name
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+        lock["skills"][name] = {
+            "installedAt": "2026-01-01T00:00:00.000Z",
+            "skillPath": f"skills/{name}/SKILL.md",
+            "source": source,
+            "sourceType": "github",
+            "sourceUrl": f"https://github.com/{source}.git",
+        }
+    _write_json(lock_path, lock)
 
 
 # ------------------------------------------------------------ the sequence
@@ -299,7 +344,7 @@ def test_the_command_sequence_is_credentials_configs_tools_skills_state(tmp_path
     registration = run.index("claude mcp remove pipefy-dev")
     cursor = run.index("mcpServers pipefy from")
     tool = run.index("uv tool uninstall pipefy-cli")
-    skill = run.index("skills/pipefy-tasks")
+    skill = run.index("skills/pipefy-reports")
     lock = run.index("refresh.lock")
 
     # Only `pipefy auth logout` revokes server-side, and that ability goes away
@@ -452,7 +497,7 @@ def test_a_hand_edited_codex_section_degrades_to_report_only(tmp_path):
 
     assert codex.read_text(encoding="utf-8") == before
     assert "holds more than the single line the installer appends" in run.stdout
-    assert "excise the section yourself" in run.stdout
+    assert "excise the section and any sub-table of it yourself" in run.stdout
 
 
 def test_a_codex_section_that_ends_the_file_takes_its_blank_line_with_it(tmp_path):
@@ -502,6 +547,13 @@ def _guard_run(tmp_path, snippet: str, home: Path) -> subprocess.CompletedProces
         ('remove_path "$HOME/"', "refusing to remove $HOME"),
         ('remove_path "relative/path"', "refusing to remove a relative path"),
         ('remove_path "$HOME" empty-dir', "refusing to remove $HOME"),
+        # Traversal: an absolute path is not a resolved one, and a guard that
+        # compares text lets `..` walk straight past both refusals.
+        ('remove_path "$HOME/."', "refusing to remove $HOME"),
+        ('remove_path "$HOME/.."', "it contains $HOME"),
+        ('remove_path "$HOME/x/../.."', "it contains $HOME"),
+        ('remove_path "$HOME/../.." empty-dir', "it contains $HOME"),
+        ('remove_path "/tmp/../.."', "refusing to remove /"),
     ],
 )
 def test_the_deletion_guard_refuses(tmp_path, snippet, message):
@@ -519,6 +571,339 @@ def test_the_deletion_guard_allows_a_path_below_home(tmp_path):
     result = _guard_run(tmp_path, 'touch "$HOME/x"\nremove_path "$HOME/x"\n', home)
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"+ rm -rf -- {home}/x" in result.stderr
+
+
+def test_the_deletion_guard_does_not_follow_a_symlink_out(tmp_path):
+    """What is removed is the link, so the link's own path is what is judged."""
+    home = _home(tmp_path)
+    (home / "link").symlink_to(home.parent)
+    result = _guard_run(tmp_path, 'remove_path "$HOME/link"\n', home)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"+ rm -rf -- {home}/link" in result.stderr
+
+
+# ------------------------------------------------------- marketplace clone
+
+
+def test_a_marketplace_clone_outside_the_plugin_tree_is_never_deleted(tmp_path):
+    """`installLocation` is data this script did not write. It is a claim."""
+    home = _home(tmp_path)
+    canary = tmp_path / "canary"
+    canary.mkdir()
+    (canary / "keep.txt").write_text("mine\n", encoding="utf-8")
+    _write_json(
+        home / ".claude" / "plugins" / "known_marketplaces.json",
+        {"pipefy": {"installLocation": str(canary)}},
+    )
+    # No client CLI, so teardown falls back to editing the registry itself —
+    # the path on which the recorded location becomes a deletion target.
+    stub = _stub_path(tmp_path, claude=None)
+
+    run = _run(home, stub)
+
+    assert canary.is_dir() and (canary / "keep.txt").exists()
+    assert "which is outside" in run.stdout
+    assert run.missing(f"rm -rf -- {canary}")
+    registry = json.loads(
+        (home / ".claude" / "plugins" / "known_marketplaces.json").read_text()
+    )
+    assert "pipefy" not in registry
+
+
+def test_the_canonical_marketplace_clone_is_deleted_and_disclosed(tmp_path):
+    home = _home(tmp_path)
+    clone = home / ".claude" / "plugins" / "marketplaces" / "pipefy"
+    clone.mkdir(parents=True)
+    (clone / "marketplace.json").write_text("{}", encoding="utf-8")
+    _write_json(
+        home / ".claude" / "plugins" / "known_marketplaces.json",
+        {"pipefy": {"installLocation": str(clone)}},
+    )
+
+    run = _run(home, _stub_path(tmp_path, claude=None))
+
+    assert f"delete its clone at {clone}" in run.stdout
+    assert not clone.exists()
+
+
+# ----------------------------------------------------- codex sub-tables
+
+
+def test_a_codex_env_subtable_keeps_the_whole_section_report_only(tmp_path):
+    """A sibling `[mcp_servers.<name>.env]` is invisible to a scan that stops
+    at the next `[`, so excising the parent would strand its secrets."""
+    home = _home(tmp_path)
+    codex = _codex(
+        home,
+        '[mcp_servers.pipefy]\ncommand = "pipefy-mcp-server"\n\n'
+        '[mcp_servers.pipefy.env]\nPIPEFY_TOKEN = "sentinel-token"\n',
+    )
+    before = codex.read_text(encoding="utf-8")
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert codex.read_text(encoding="utf-8") == before
+    assert "sub-table" in run.stdout
+    assert "sentinel-token" not in run.stdout
+    # A run that leaves credential material behind cannot report success.
+    assert run.returncode != 0
+
+
+# ---------------------------------------------------------- JSON rewrites
+
+
+def test_a_registration_removal_leaves_utf8_siblings_literal(tmp_path):
+    home = _home(tmp_path)
+    config = home / ".cursor" / "mcp.json"
+    _write_json(
+        config,
+        {
+            "mcpServers": {
+                "pipefy": {"command": "pipefy-mcp-server"},
+                "café": {"command": "other", "args": ["--naïve", "ção"]},
+            }
+        },
+    )
+
+    _run(home, _stub_path(tmp_path))
+
+    raw = config.read_text(encoding="utf-8")
+    assert "café" in raw and "naïve" in raw
+    assert "\\u" not in raw
+    assert json.loads(raw)["mcpServers"] == {
+        "café": {"command": "other", "args": ["--naïve", "ção"]}
+    }
+
+
+# ----------------------------------------------------------- the exit contract
+
+
+def test_an_empty_plan_with_findings_left_does_not_read_as_clean(tmp_path):
+    """`--scan` exits 1 on this tree; a teardown that removed nothing must too."""
+    home = _home(tmp_path)
+    _codex(
+        home,
+        '[mcp_servers.pipefy]\ncommand = "pipefy-mcp-server"\n'
+        'args = ["--profile", "mine"]\n',
+    )
+    stub = _no_uv_tools(_stub_path(tmp_path))
+
+    scan = _run(home, stub, args=("--scan",))
+    run = _run(home, stub)
+
+    assert scan.returncode == 1
+    assert "Nothing to remove." in run.stdout
+    assert run.returncode == scan.returncode
+    # The notes that explain why nothing was planned are printed, not swallowed
+    # with the teardown report this path skips.
+    assert "Left alone:" in run.stdout
+    assert "excise the section and any sub-table of it yourself" in run.stdout
+
+
+def test_an_empty_plan_on_a_clean_machine_still_exits_zero(tmp_path):
+    stub = _no_uv_tools(_stub_path(tmp_path, pipefy=False))
+
+    run = _run(_home(tmp_path), stub)
+    assert "Nothing to remove." in run.stdout
+    assert run.returncode == 0, run.stdout
+
+
+# ------------------------------------------------------------------- skills
+
+
+def test_a_skill_the_toolkit_did_not_install_survives_teardown(tmp_path):
+    """The `pipefy-` prefix is a namespace, not a claim of ownership."""
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-reports")
+    mine = home / ".claude" / "skills" / "pipefy-tasks"
+    mine.mkdir(parents=True)
+    (mine / "SKILL.md").write_text("---\nname: mine\n---\n", encoding="utf-8")
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert (mine / "SKILL.md").read_text(encoding="utf-8") == "---\nname: mine\n---\n"
+    assert "nothing records where it came from" in run.stdout
+    assert not (home / ".claude" / "skills" / "pipefy-reports").exists()
+    assert run.missing("skills/pipefy-tasks")
+
+
+def test_a_skill_from_another_repository_survives_teardown(tmp_path):
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-tasks", source="someone-else/their-skills")
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert (home / ".claude" / "skills" / "pipefy-tasks").is_dir()
+    assert "not this toolkit" in run.stdout
+
+
+def test_a_skill_linked_into_a_shared_store_takes_its_content_with_it(tmp_path):
+    """`skills add` writes a store and links agents at it; the link is not the
+    skill, and removing only the link leaves the content and the lock entry."""
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-reports")
+    store = home / ".agents" / "skills" / "pipefy-reports"
+    store.mkdir(parents=True)
+    (store / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    link = home / ".claude" / "skills" / "pipefy-reports"
+    shutil.rmtree(link)
+    link.symlink_to(store)
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert not link.exists() and not link.is_symlink()
+    assert not store.exists()
+    lock = json.loads((home / ".agents" / ".skill-lock.json").read_text("utf-8"))
+    assert lock["skills"] == {}
+    assert "content at" in run.stdout
+
+
+def test_a_skill_linked_outside_the_store_keeps_its_content(tmp_path):
+    """Following a link is unbounded reach, so the target is confined.
+
+    The parallel of the marketplace `installLocation` case: the link goes, the
+    directory it pointed at does not, and the report says which.
+    """
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-reports")
+    canary = tmp_path / "canary"
+    canary.mkdir()
+    (canary / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    (canary / "keep.txt").write_text("mine\n", encoding="utf-8")
+    link = home / ".claude" / "skills" / "pipefy-reports"
+    shutil.rmtree(link)
+    link.symlink_to(canary)
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert canary.is_dir() and (canary / "keep.txt").exists()
+    assert run.missing(f"rm -rf -- {canary}")
+    # The link itself is still this toolkit's and still goes.
+    assert not link.is_symlink() and not link.exists()
+    assert "outside the skills store" in run.stdout
+    assert str(canary) in run.stdout
+    assert "left exactly as it is" in run.stdout
+
+
+def test_a_skill_link_with_no_lock_file_to_derive_a_store_from_keeps_its_content(
+    tmp_path,
+):
+    """No lock file, no derived store, no permitted deletion target."""
+    home = _home(tmp_path)
+    store = home / ".agents" / "skills" / "pipefy-reports"
+    store.mkdir(parents=True)
+    (store / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    link = home / ".claude" / "skills" / "pipefy-reports"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(store)
+    # The receipt says the installer added it, so provenance passes; nothing
+    # says where the content legitimately lives.
+    receipt = home / ".local" / "state" / "pipefy" / "install-receipt"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text(
+        "record=begin\nschema=1\nskill=pipefy-reports\nrecord=end\n", encoding="utf-8"
+    )
+
+    run = _run(home, _stub_path(tmp_path))
+
+    assert store.is_dir()
+    assert not link.is_symlink()
+    assert "outside the skills store" in run.stdout
+
+
+# ------------------------------------------------------------- hosted token
+
+
+def test_the_hosted_logout_runs_after_the_shadowing_entry_and_before_its_own(
+    tmp_path,
+):
+    """`mcp logout` resolves a name across scopes and takes no scope flag.
+
+    Run while a higher-precedence entry of the same name is still registered,
+    it binds to that one and the hosted token is never cleared.
+    """
+    home = _home(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_json(
+        repo / ".mcp.json",
+        {"mcpServers": {"pipefy": {"command": "uvx", "args": ["pipefy-mcp-server"]}}},
+    )
+    _write_json(
+        home / ".claude.json",
+        {
+            "mcpServers": {
+                "pipefy": {"type": "http", "url": "https://mcp.pipefy.com/mcp"}
+            }
+        },
+    )
+
+    run = _run(home, _stub_path(tmp_path, git=True), cwd=repo)
+
+    project = run.index("mcpServers pipefy from")
+    logout = run.index("claude mcp logout pipefy")
+    user = run.index("claude mcp remove pipefy -s user")
+    assert project < logout < user
+
+
+def test_a_hosted_logout_that_exits_zero_is_not_reported_as_a_removal(tmp_path):
+    """The client's OAuth store is opaque here, so exit 0 is not proof.
+
+    A stub that logs the call and does nothing is indistinguishable from one
+    that cleared the token, and the re-scan cannot tell them apart either.
+    """
+    home = _home(tmp_path)
+    _write_json(
+        home / ".claude.json",
+        {
+            "mcpServers": {
+                "pipefy": {"type": "http", "url": "https://mcp.pipefy.com/mcp"}
+            }
+        },
+    )
+    stub = _no_uv_tools(_stub_path(tmp_path, pipefy=False, claude=_CLAUDE_THAT_REMOVES))
+
+    run = _run(home, stub)
+
+    assert "claude mcp logout pipefy" in run.stubs
+    # Everything the re-scan can check came back clean, so the token is the only
+    # thing left in question — and it is the one thing nothing can check.
+    assert "no registration in any JSON client config runs this toolkit" in run.stdout
+    assert "Asked for, result not observable from here:" in run.stdout
+    assert "1 unverifiable" in run.stdout
+    assert "it is not proof" in run.stdout
+    removed = run.stdout.split("Removed:", 1)[1].split("\n\n", 1)[0]
+    assert "OAuth" not in removed, removed
+    # No "deleted but not revoked" story either: nothing was observed deleted.
+    assert "A credential was deleted from this machine" not in run.stdout
+    # And a clean re-scan plus an unverifiable clear is not full success.
+    assert run.returncode == 1, run.stdout
+
+
+def test_a_failing_hosted_logout_is_reported_rather_than_counted_as_done(tmp_path):
+    home = _home(tmp_path)
+    _write_json(
+        home / ".claude.json",
+        {
+            "mcpServers": {
+                "pipefy": {"type": "http", "url": "https://mcp.pipefy.com/mcp"}
+            }
+        },
+    )
+    failing = _CLAUDE.replace(
+        "exit 0\n",
+        'case "$*" in "mcp logout"*) exit 1 ;; esac\nexit 0\n',
+        1,
+    )
+    stub = _stub_path(tmp_path, claude=failing)
+
+    run = _run(home, stub)
+
+    assert "claude mcp logout pipefy" in run.stubs
+    assert "Failed — these are still here:" in run.stdout
+    assert "clear the stored OAuth token for 'pipefy'" in run.stdout
+    assert "Clear authentication" in run.stdout
+    assert run.returncode == 2
 
 
 # ----------------------------------------------------------------- approval
@@ -831,7 +1216,13 @@ def test_every_row_has_the_same_shape():
         assert row[2] in {"json", "toml"}, row
         assert row[1] == "*" or row[1] in {"Darwin", "Linux"}, row
         for capability in row[7].split(","):
-            assert capability in {"-", "scopes", "plugin-system", "removal-cli"}, row
+            assert capability in {
+                "-",
+                "scopes",
+                "plugin-system",
+                "removal-cli",
+                "typed-remote",
+            }, row
 
 
 def test_the_client_allowlist_in_help_comes_from_the_table(tmp_path):
@@ -839,7 +1230,9 @@ def test_the_client_allowlist_in_help_comes_from_the_table(tmp_path):
     assert run.returncode == 0
     listed = re.search(r"One of: (\S+)\.", run.stdout)
     assert listed
-    assert listed.group(1).split("|") == [row[0] for row in _table_rows()] + ["none"]
+    # Every row and nothing else. `none` is install.sh's word and is refused
+    # here, so advertising it would be help text that disagrees with behaviour.
+    assert listed.group(1).split("|") == [row[0] for row in _table_rows()]
 
 
 def test_an_unknown_client_is_rejected_against_the_table(tmp_path):
@@ -920,3 +1313,34 @@ def test_every_planned_action_carries_a_full_row():
                 break
         fields = re.findall(r"'[^']*'|\"[^\"]*\"|\S+", flat)
         assert len(fields) - 1 == 11, call
+
+
+# -------------------------------------------------------------- --client none
+
+
+def test_client_none_is_refused_rather_than_stranding_registrations(tmp_path):
+    """`none` means "install without registering" to install.sh.
+
+    Teardown narrows registration edits and nothing else, so honouring the word
+    would remove the tools and leave every registration pointing at a missing
+    command — the stranding the phase order exists to prevent.
+    """
+    home = _home(tmp_path)
+    _write_json(
+        home / ".cursor" / "mcp.json",
+        {"mcpServers": {"pipefy": {"command": "pipefy-mcp-server"}}},
+    )
+    stub = _stub_path(tmp_path)
+
+    refused = _run(home, stub, args=("--dry-run", "--yes", "--client", "none"))
+    bare = _run(home, stub, args=("--dry-run", "--yes"))
+
+    assert refused.returncode == 2
+    assert "--client none belongs to install.sh" in refused.stderr
+    assert "PLAN" not in refused.stdout
+    # Bare plans both halves, which is what `none` would have split apart.
+    assert bare.returncode == 0
+    assert "remove the 'pipefy' registration" in bare.stdout
+    assert "uv tool uninstall pipefy-cli" in bare.stdout
+    # Nothing was touched on either run.
+    assert json.loads((home / ".cursor" / "mcp.json").read_text())["mcpServers"]

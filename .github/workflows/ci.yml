@@ -36,6 +36,87 @@ jobs:
       if: steps.changed-files.outputs.any_changed == 'true'
       run: uv run ruff format --check ${{ steps.changed-files.outputs.changed_files }}
 
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+    # Both, because they disagree: /bin/sh is dash on Debian-family images and
+    # rejects constructs bash in POSIX mode forgives, which is what a
+    # contributor on macOS is checking against.
+    - name: POSIX syntax
+      run: |
+        for script in install.sh uninstall.sh; do
+          sh -n "$script"
+          dash -n "$script"
+        done
+    # The same release the pre-commit hook pins, from the same package, so the
+    # hook and the build cannot disagree about what passes.
+    - name: ShellCheck
+      run: uvx --from shellcheck-py==0.11.0.1 shellcheck --shell=sh install.sh uninstall.sh
+    - name: Deletions route through remove_path
+      run: python3 .github/workflows/scripts/check_deletion_guard.py
+
+  # The only check that proves completeness rather than the correctness of a
+  # step someone thought to write: install for real, tear down for real, and
+  # compare the filesystem with what was there before.
+  roundtrip:
+    name: install.sh then uninstall.sh
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+    # `npx skills add` picks its target from the agents it finds. Creating
+    # Claude Code's directory pins the round trip to one location instead of
+    # whatever a bare runner resolves to.
+    - name: Give the skills installer a target
+      run: mkdir -p "$HOME/.claude"
+    - name: Snapshot HOME
+      run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/before.txt"
+    # Both scripts run from a scratch directory rather than the checkout: this
+    # repository's own git-tracked .mcp.json is a project-scope registration,
+    # and tearing down against one is a different scenario from a user's
+    # machine.
+    - name: Install
+      working-directory: ${{ runner.temp }}
+      run: sh "$GITHUB_WORKSPACE/install.sh" --yes --client cursor
+    - name: Snapshot HOME after the install
+      run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/installed.txt"
+    - name: The install is real
+      run: |
+        "$HOME/.local/bin/pipefy" --version
+        uv tool list | grep -q pipefy-cli
+        python3 -c "
+        import json, pathlib
+        config = json.loads(pathlib.Path.home().joinpath('.cursor/mcp.json').read_text())
+        assert config['mcpServers']['pipefy'] == {'command': 'pipefy-mcp-server'}, config
+        "
+    - name: Uninstall
+      working-directory: ${{ runner.temp }}
+      run: sh "$GITHUB_WORKSPACE/uninstall.sh" --yes
+    - name: Snapshot HOME after the teardown
+      run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/after.txt"
+    - name: Nothing the toolkit installed is still registered
+      run: |
+        if uv tool list | grep pipefy; then
+          echo "a uv tool survived the teardown" >&2
+          exit 1
+        fi
+        python3 -c "
+        import json, pathlib
+        config = json.loads(pathlib.Path.home().joinpath('.cursor/mcp.json').read_text())
+        assert 'pipefy' not in config.get('mcpServers', {}), config
+        "
+    - name: The filesystem is back where it started
+      run: |
+        python3 .github/workflows/scripts/check_roundtrip.py check \
+          "$RUNNER_TEMP/before.txt" "$RUNNER_TEMP/installed.txt" "$RUNNER_TEMP/after.txt"
+
   test:
     runs-on: ubuntu-latest
     env:

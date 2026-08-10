@@ -48,6 +48,12 @@ def _write_exec(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
+# An empty Secret Service. A Linux run with no `secret-tool` at all reports the
+# store as uninspected and exits 2, exactly as a Darwin run with no `security`
+# does, so every test that is not about that asymmetry gets a working one.
+_EMPTY_SECRET_TOOL = "#!/bin/sh\nexit 1\n"
+
+
 def _stub_path(
     tmp_path: Path,
     *,
@@ -58,6 +64,7 @@ def _stub_path(
     uv_tools: tuple[str, ...] | None = None,
     security: str | None = None,
     secret_tool: str | None = None,
+    no_secret_tool: bool = False,
 ) -> Path:
     """Build a bin directory holding exactly the commands a test wants visible."""
     stub = tmp_path / name
@@ -87,6 +94,8 @@ def _stub_path(
         )
     if security is not None:
         _write_exec(stub / "security", security)
+    if secret_tool is None and not no_secret_tool:
+        secret_tool = _EMPTY_SECRET_TOOL
     if secret_tool is not None:
         _write_exec(stub / "secret-tool", secret_tool)
     return stub
@@ -454,6 +463,63 @@ def test_hosted_endpoint_matched_by_host_under_any_name(tmp_path):
     assert "unverified" not in result.stdout
 
 
+def test_a_url_with_no_type_is_matched_and_the_caveat_names_the_reader(tmp_path):
+    """Whether a type-less url starts is the reader's business, not the rule's.
+
+    Cursor and Codex serve a bare ``url`` over HTTP; Claude Code reads an entry
+    with no ``type`` as stdio and skips it. Judging the shape by one client's
+    rule would leave the registration invisible in the others, so it is matched
+    everywhere and the caveat is attached where it applies.
+    """
+    home = _home(tmp_path)
+    _write_json(
+        home / ".claude.json",
+        {"mcpServers": {"work": {"url": "https://mcp.pipefy.com/mcp"}}},
+    )
+    _write_json(
+        home / ".cursor" / "mcp.json",
+        {"mcpServers": {"remote": {"url": "https://mcp.pipefy.com/mcp"}}},
+    )
+
+    result = _run(home, _stub_path(tmp_path))
+    out = result.stdout
+
+    assert result.returncode == 1
+    assert "user scope, named 'work': untyped-url" in out
+    assert "client:cursor scope, named 'remote': untyped-url" in out
+    assert "unverified" not in out
+    # The caveat belongs to the config Claude Code reads, and to no other.
+    claude_block = out.split("named 'work'", 1)[1].split("named 'remote'", 1)[0]
+    cursor_block = out.split("named 'remote'", 1)[1]
+    assert "claude-code reads such an entry as stdio" in claude_block
+    assert "reads such an entry as stdio" not in cursor_block
+
+
+def test_a_registration_hides_behind_neither_of_its_two_fields(tmp_path):
+    """Both halves of the rule are read, so one field cannot mask the other."""
+    home = _home(tmp_path)
+    _write_json(
+        home / ".cursor" / "mcp.json",
+        {
+            "mcpServers": {
+                "a": {
+                    "command": "pipefy-mcp-server",
+                    "url": "https://other.example/mcp",
+                },
+                "b": {"command": "some-proxy", "url": "https://mcp.pipefy.com/mcp"},
+                "c": {"command": "some-proxy", "url": "https://other.example/mcp"},
+            }
+        },
+    )
+
+    result = _run(home, _stub_path(tmp_path))
+    out = result.stdout
+
+    assert "named 'a': stdio" in out
+    assert "named 'b': untyped-url" in out
+    assert "named 'c'" not in out
+
+
 def test_two_differently_named_servers_both_active_is_a_conflict(tmp_path):
     """The one-server invariant, made checkable now that names are data."""
     home = _home(tmp_path)
@@ -658,10 +724,7 @@ def test_completions_and_skills(tmp_path):
     (home / ".zfunc").mkdir()
     (home / ".zfunc" / "_pipefy").write_text("#compdef pipefy\n", encoding="utf-8")
     (home / ".zshrc").write_text("fpath+=~/.zfunc\n", encoding="utf-8")
-    for skill in ("pipefy-tasks", "pipefy-reports"):
-        directory = home / ".claude" / "skills" / skill
-        directory.mkdir(parents=True)
-        (directory / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    _install_skills(home, "pipefy-reports", "pipefy-pipes-and-cards")
 
     result = _run(home, _stub_path(tmp_path))
 
@@ -671,7 +734,83 @@ def test_completions_and_skills(tmp_path):
     assert f"{home}/.zfunc/_pipefy" in out
     assert "sources the completion script (line 1)" in out
     assert "adds ~/.zfunc to fpath; shared with other tools" in out
-    assert "2 pipefy-* skills installed" in out
+    assert "2 pipefy-* skills from this toolkit" in out
+
+
+# `npx skills add` is the only thing that records where a skill came from, in a
+# lock file beside the shared store it writes into. Nothing else on disk carries
+# provenance, so these helpers reproduce the two halves it leaves behind.
+_SKILL_LOCK = ".agents/.skill-lock.json"
+
+
+def _lock_entry(source: str, skill_path: str) -> dict:
+    return {
+        "installedAt": "2026-01-01T00:00:00.000Z",
+        "skillPath": skill_path,
+        "source": source,
+        "sourceType": "github",
+        "sourceUrl": f"https://github.com/{source}.git",
+    }
+
+
+def _install_skills(home: Path, *names: str, source: str = "pipefy/ai-toolkit") -> None:
+    """A skill directory plus the lock entry that says where it came from."""
+    lock_path = home / _SKILL_LOCK
+    lock = (
+        json.loads(lock_path.read_text(encoding="utf-8"))
+        if lock_path.exists()
+        else {"version": 3, "skills": {}}
+    )
+    for name in names:
+        directory = home / ".claude" / "skills" / name
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+        lock["skills"][name] = _lock_entry(source, f"skills/{name}/SKILL.md")
+    _write_json(lock_path, lock)
+
+
+def _hand_written_skill(home: Path, name: str) -> Path:
+    """A skill under the same name prefix that no installer put there."""
+    directory = home / ".claude" / "skills" / name
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "SKILL.md").write_text("---\nname: mine\n---\n", encoding="utf-8")
+    return directory
+
+
+def test_a_skill_with_no_recorded_source_is_reported_and_never_claimed(tmp_path):
+    home = _home(tmp_path)
+    _hand_written_skill(home, "pipefy-tasks")
+
+    result = _run(home, _stub_path(tmp_path))
+
+    out = result.stdout
+    assert "pipefy-tasks" in out
+    assert "nothing records where it came from, so it is left alone" in out
+    assert "no pipefy-* skills from this toolkit" in out
+    # Someone else's directory is not this toolkit's state, so it is not a
+    # finding either.
+    assert result.returncode == 0, out
+
+
+def test_a_skill_installed_from_another_repository_is_left_alone(tmp_path):
+    home = _home(tmp_path)
+    _install_skills(home, "pipefy-tasks", source="someone-else/their-skills")
+
+    result = _run(home, _stub_path(tmp_path))
+
+    assert result.returncode == 0, result.stdout
+    assert "came from someone-else/their-skills, not this toolkit" in result.stdout
+
+
+def test_a_missing_secret_tool_is_uninspected_rather_than_clean(tmp_path):
+    """The same call as a missing `security` on Darwin: unreadable is not clean."""
+    home = _home(tmp_path)
+
+    result = _run(home, _stub_path(tmp_path, no_secret_tool=True))
+
+    assert result.returncode == 2, result.stdout
+    assert "keychain not inspected — 'secret-tool' not on PATH" in result.stdout
+    assert "sources could not be inspected" in result.stdout
 
 
 # --------------------------------------------------------------- keychain

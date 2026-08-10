@@ -68,7 +68,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 > curl -LsSf https://raw.githubusercontent.com/pipefy/ai-toolkit/main/uninstall.sh | sh -s -- --scan
 > ```
 >
-> That reports every registration and how each one is reached. It removes nothing, edits nothing, and exits `0` when it finds nothing, `1` when findings remain, `2` when a source could not be inspected. A registration is matched on what it **runs** — the `pipefy-mcp-server` command, a known runner invoking it, or the host `mcp.pipefy.com` — so one registered under any other name is still found. First-time setup checklist to hand your agent: [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](skills/onboarding/pipefy-toolkit-setup/SKILL.md).
+> That reports every registration and how each one is reached. It removes nothing, edits nothing, and exits `0` when it finds nothing, `1` when findings remain, `2` when a source could not be inspected. A registration is matched on what it **runs** — the `pipefy-mcp-server` command, a known runner invoking it, or the host `mcp.pipefy.com` — so one registered under any other name is still found. First-time setup checklist to hand your agent: [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](skills/onboarding/pipefy-toolkit-setup/SKILL.md). Removing a path, or moving between them: [Uninstalling](#uninstalling-and-switching-between-paths) and [`docs/uninstall.md`](docs/uninstall.md).
 
 > **Too many tools for your client?** The local paths can expose a subset instead of the whole catalog — by subject domain, by persona profile, or as four catalog meta-tools the agent searches on demand. See [Choosing a tool surface](#choosing-a-tool-surface).
 
@@ -89,7 +89,7 @@ Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/con
 claude mcp add --transport http --scope user --client-id pipefy-mcp pipefy https://mcp.pipefy.com/mcp
 ```
 
-Complete the browser login when prompted (`claude mcp login pipefy` if the client reports *Needs authentication*). If you already have a local/plugin MCP named `pipefy`, remove it first — `claude mcp remove pipefy -s user` — since the name must be unique. Need the CLI and slash commands too? Use the [Claude Code plugin](#2-claude-code-plugin) instead. Hand-wired local stdio: [`packages/mcp/README.md`](packages/mcp/README.md).
+Complete the browser login when prompted (`claude mcp login pipefy` if the client reports *Needs authentication*). If a local or plugin Pipefy MCP server is already registered, remove it first — under whatever name it carries, since a second registration shadows this one and a plugin-provided server ranks below user scope. `./uninstall.sh --scan` names them; the switch is in [`docs/uninstall.md`](docs/uninstall.md#to-hosted). Need the CLI and slash commands too? Use the [Claude Code plugin](#2-claude-code-plugin) instead. Hand-wired local stdio: [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ### 2. Claude Code plugin
 
@@ -141,6 +141,22 @@ npx skills add pipefy/ai-toolkit --skill pipefy-pipes-and-cards
 ```
 
 Catalog and authoring guide: [`skills/README.md`](skills/README.md).
+
+### Uninstalling, and switching between paths
+
+`uninstall.sh` sits beside `install.sh` and reverses any of the paths above, including one this repository never installed for you.
+
+```sh
+# Report only: what is on this machine, across every channel and client.
+curl -LsSf https://raw.githubusercontent.com/pipefy/ai-toolkit/main/uninstall.sh | sh -s -- --scan
+
+# Then remove what you approve. Approval is asked in three tiers.
+curl -LsSf https://raw.githubusercontent.com/pipefy/ai-toolkit/main/uninstall.sh | sh
+```
+
+`--scan` changes nothing and exits `0` clean / `1` findings remain / `2` a source could not be inspected. A registration is matched on what it **runs** — the `pipefy-mcp-server` command, a known runner invoking it, or the host `mcp.pipefy.com` — so an entry registered under any other name is still found, and removed under that name. Useful flags: `--dry-run`, `--yes`, `--keep-credentials`, `--keep-config`, `--client <id>`.
+
+**Switching paths is remove-then-add**: register exactly one Pipefy MCP server at a time, since a plugin-provided server ranks below user scope and a leftover entry silently wins. Full teardown reference, the per-channel switching recipes, and what is never removed by design: [`docs/uninstall.md`](docs/uninstall.md).
 
 ### Post-1.0 (PyPI, preview)
 
@@ -277,7 +293,7 @@ The [Claude Code plugin install](#2-claude-code-plugin) adds the marketplace fro
 
 Whatever is checked out in that clone — any branch — is what loads. Use the `plugin@marketplace` form (`pipefy@pipefy`) since the marketplace and the plugin share the name `pipefy`. After editing plugin files (skills, commands), run `/reload-plugins` to pick up changes without restarting.
 
-> **Already installed the GitHub version?** A marketplace named `pipefy` can be registered only once, and a marketplace declared in `~/.claude/settings.json` under `extraKnownMarketplaces` is locked — `/plugin marketplace add` becomes a no-op (`already on disk — declared in user settings`) and keeps pointing at GitHub. Run `/plugin marketplace remove pipefy` first (or delete that `extraKnownMarketplaces` entry), **then** add the local path.
+> **Already installed the GitHub version?** A marketplace named `pipefy` can be registered only once, and a marketplace declared in `~/.claude/settings.json` under `extraKnownMarketplaces` is locked — `/plugin marketplace add` becomes a no-op (`already on disk — declared in user settings`) and keeps pointing at GitHub. Run `/plugin marketplace remove pipefy` first (or delete that `extraKnownMarketplaces` entry), **then** add the local path. Why removing a marketplace does not always stick: [`docs/uninstall.md`](docs/uninstall.md#two-things-that-come-back).
 
 ---
 

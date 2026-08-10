@@ -21,6 +21,16 @@
 # and directory names, and `env | grep -i pipefy` matches PWD for anyone
 # working inside a directory named after it.
 #
+# An entry matches when *either* half of that rule fires: what it runs is this
+# toolkit's server, or where it points is the hosted host. The two fields are
+# read independently and a declared transport type is not a precondition for
+# either, because which field a client honours differs between clients — Cursor
+# and Codex read a `url` with no `type` as a remote server, Claude Code reads an
+# entry with no `type` as stdio and skips it. Judging the shape by one client's
+# rule leaves a registration the others do run invisible to the scan and alive
+# after a teardown, so the shape is matched as written and the *report* carries
+# the per-client caveat, driven off the `typed-remote` capability below.
+#
 # Removal uses what the scan found, including the name a registration was
 # actually registered under, and every deletion goes through remove_path().
 #
@@ -62,10 +72,14 @@ RECEIPT_SCHEMA_MAX=1           # the newest install-receipt schema this can read
 #   plugin-system  ships a plugin and marketplace registry under statedir
 #   removal-cli    ships a CLI that can remove registrations, tokens and
 #                  plugins; each verb is still probed for before it is used
+#   typed-remote   requires an explicit `type` on a remote entry: a `url` with
+#                  no `type` is read as stdio and the server never starts. The
+#                  entry is still found and still removed — this only adds a
+#                  line to the report saying it was not running here
 #
 # Direct file editing is the baseline for every row. Delegation is the
 # exception one row happens to enable.
-CLIENT_TABLE="claude-code|*|json|~/.claude.json|mcpServers|user|~/.claude|scopes,plugin-system,removal-cli|claude
+CLIENT_TABLE="claude-code|*|json|~/.claude.json|mcpServers|user|~/.claude|scopes,plugin-system,removal-cli,typed-remote|claude
 claude-desktop|Darwin|json|~/Library/Application Support/Claude/claude_desktop_config.json|mcpServers|client:claude-desktop|-|-|-
 codex|*|toml|~/.codex/config.toml|mcp_servers|client:codex|-|-|-
 cursor|*|json|~/.cursor/mcp.json|mcpServers|client:cursor|-|-|-"
@@ -88,6 +102,7 @@ RCPT_PRESENT=0
 RCPT_UNREADABLE=0
 RCPT_TOOL_DIRS=""
 RCPT_SKILL_DIRS=""
+RCPT_SKILLS=""
 RCPT_TOOLS=""
 RCPT_CREATED=""
 RCPT_TAG=""
@@ -109,6 +124,7 @@ BACKUPS=0
 DONE_COUNT=0
 FAIL_COUNT=0
 SKIP_COUNT=0
+UNVERIFIED=0
 REVOKED=0
 CRED_DELETED=0
 TIER1_OK=0
@@ -280,6 +296,15 @@ client_id_for_file() {
     client_rows | awk -F'|' -v f="$1" '$4 == f { print $1; exit }'
 }
 
+# Which client reads a config file. A project .mcp.json and a plugin's own
+# .mcp.json are in no client's row; the client that resolves scopes is the one
+# that reads them.
+client_id_reading() {
+    _cir=$(client_id_for_file "$1")
+    [ -n "$_cir" ] || _cir=$(client_field "$(client_row_with_cap scopes)" 1)
+    printf '%s\n' "$_cir"
+}
+
 # --client narrows *registration edits* only; detection always sweeps every
 # client, and tools, credentials, skills and the plugin are unaffected.
 client_selected() {
@@ -293,7 +318,7 @@ client_choice_list() {
 }
 
 print_help() {
-    _choices="$(client_choice_list)|none"
+    _choices="$(client_choice_list)"
     cat <<EOF
 Usage: uninstall.sh [OPTIONS]
 
@@ -354,10 +379,18 @@ parse_args() {
         esac
     done
     case "$CLIENT" in
-        ""|none) ;;
+        "") ;;
+        # install.sh takes `none` and means "install without registering".
+        # Teardown has no such mode: --client narrows registration edits and
+        # nothing else, so `none` would edit no config while still removing the
+        # binaries every config found points at. That is the stranding the
+        # phase order exists to prevent, so the word is refused rather than
+        # given a second meaning.
+        none)
+            err "--client none belongs to install.sh, where it means \"install without registering\". Teardown has no equivalent: it would remove the tools while leaving every registration pointing at a missing command. Omit --client to sweep every client, or name one of $(client_choice_list)." ;;
         *)
             [ -n "$(client_row "$CLIENT")" ] \
-                || err "Invalid --client: $CLIENT (use $(client_choice_list)|none)" ;;
+                || err "Invalid --client: $CLIENT (use $(client_choice_list))" ;;
     esac
 }
 
@@ -473,6 +506,10 @@ receipt_records() {
             if (p == 0) { junk++; next }
             k = substr($0, 1, p - 1)
             v = substr($0, p + 1)
+            # The hyphen is in the alphabet because client ids carry one:
+            # entry_created.claude-desktop is a key the writer emits, and a
+            # reader that drops it silently loses the bit that says an entry
+            # was already there when install.sh ran.
             if (k !~ /^[a-z][a-z0-9_.-]*$/) { junk++; next }
             if (k == "record" && v == "begin") {
                 endrec()
@@ -496,6 +533,7 @@ receipt_records() {
             if (!okesc(v)) { junk++; next }
             if (k == "uv_tool_dir") { addset("uv_tool_dir", v); next }
             if (k == "skills_dir") { addset("skills_dir", v); next }
+            if (k == "skill") { addset("skill", v); next }
             if (k == "uv_tool") { addset("uv_tool", v); next }
             if (k == "uv_installed_by_us") { if (v == "true") uvours = 1; next }
             if (k == "release_tag") { tag = v; next }
@@ -530,6 +568,7 @@ read_receipt() {
     RCPT_UNREADABLE=0
     RCPT_TOOL_DIRS=""
     RCPT_SKILL_DIRS=""
+    RCPT_SKILLS=""
     RCPT_TOOLS=""
     RCPT_CREATED=""
     RCPT_TAG=""
@@ -549,6 +588,7 @@ read_receipt() {
         case "${_rr_kind:-}" in
             uv_tool_dir) RCPT_TOOL_DIRS="$RCPT_TOOL_DIRS$_rr_a$NL" ;;
             skills_dir) RCPT_SKILL_DIRS="$RCPT_SKILL_DIRS$_rr_a$NL" ;;
+            skill) RCPT_SKILLS="$RCPT_SKILLS$_rr_a$NL" ;;
             uv_tool) RCPT_TOOLS="$RCPT_TOOLS$_rr_a$NL" ;;
             release_tag) RCPT_TAG="$_rr_a" ;;
             entry_created) RCPT_CREATED="$RCPT_CREATED$_rr_a$TAB$_rr_b$NL" ;;
@@ -640,6 +680,16 @@ url_host() {
     printf '%s\n' "$_uh" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz'
 }
 
+# The kinds the probe reports for an entry reached over the network.
+# `untyped-url` is a url with no usable transport declaration, which Cursor and
+# Codex serve over HTTP and Claude Code does not serve at all.
+kind_is_remote() {
+    case "$1" in
+        http|streamable-http|sse|ws|untyped-url) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # A stdio entry runs our server when its command is the server binary, or a
 # known runner with the server binary as an exact argument.
 stdio_matches() {
@@ -671,6 +721,7 @@ run_json_probe() {
     SCAN_RUNNERS="$RUNNERS" \
     SCAN_PLUGIN_ID="$PLUGIN_ID" \
     SCAN_MARKETPLACE_ID="$MARKETPLACE_ID" \
+    SCAN_REPO="$REPO" \
     SCAN_CLIENTS="$(client_rows)" \
     "$PYTHON3" - "$@" <<'PY' >>"$RECORDS"
 import json
@@ -684,6 +735,10 @@ HOSTED_HOST = os.environ["SCAN_HOSTED_HOST"]
 RUNNERS = set(os.environ["SCAN_RUNNERS"].split())
 PLUGIN = os.environ["SCAN_PLUGIN_ID"]
 MARKET = os.environ["SCAN_MARKETPLACE_ID"]
+REPO = os.environ["SCAN_REPO"]
+# The three spellings `skills add` records for one GitHub repository. Compared
+# for equality: a skill's source is either this repository or it is not.
+SKILL_SOURCES = {REPO, "https://github.com/%s" % REPO, "https://github.com/%s.git" % REPO}
 CRED = set(os.environ["SCAN_ENV_CRED"].split())
 CONFIG = set(os.environ["SCAN_ENV_CONFIG"].split())
 PIPEFY_ENV = CRED | CONFIG
@@ -754,36 +809,62 @@ def url_host(url):
     return text.lower()
 
 
+DECLARED_REMOTE = ("http", "streamable-http", "sse", "ws")
+
+
+def entry_args(entry):
+    raw = entry.get("args")
+    return [str(a) for a in raw] if isinstance(raw, list) else []
+
+
+def runs_our_server(entry):
+    """One half of the rule: the command is the binary, or a runner invoking it."""
+    command = entry.get("command")
+    if command is None:
+        return False
+    base = posixpath.basename(str(command))
+    return base == BINARY or (base in RUNNERS and BINARY in entry_args(entry))
+
+
+def points_at_hosted(entry):
+    """The other half: an exact host comparison, never a substring search."""
+    url = entry.get("url")
+    return url is not None and url_host(url) == HOSTED_HOST
+
+
 def describe(entry):
-    """(kind, endpoint, command, args) for one entry. Values are never read."""
+    """(kind, endpoint, command, args) for one entry. Values are never read.
+
+    `kind` names the shape as written rather than a transport this decided on.
+    A `url` with no usable `type` is reported as `untyped-url` and matched on
+    its host, because whether it starts depends on the client reading it and
+    the registration is there either way.
+
+    An entry carrying both a `command` and a `url` is described by whichever
+    half identifies this toolkit, since that is the half a report and a plan
+    act on. Neither field is discarded before the match.
+    """
     if not isinstance(entry, dict):
         return ("malformed", "<entry is not an object>", "", [])
-    kind = entry.get("type")
+    declared = entry.get("type")
     url = entry.get("url")
     command = entry.get("command")
-    if kind in ("http", "streamable-http", "sse", "ws"):
-        return (kind, str(url) if url else "<missing url>", "", [])
-    if command is not None:
-        raw = entry.get("args")
-        args = [str(a) for a in raw] if isinstance(raw, list) else []
+    if declared in DECLARED_REMOTE:
+        return (declared, str(url) if url else "<missing url>", "", [])
+    remote_half = url is not None and not runs_our_server(entry)
+    if command is not None and not remote_half:
+        args = entry_args(entry)
         return ("stdio", " ".join([str(command)] + args), str(command), args)
     if url is not None:
-        # Claude Code reads a type-less entry as stdio, so it never starts.
-        return ("malformed", "%s (url with no type)" % url, "", [])
+        return ("untyped-url", str(url), "", [])
     return ("malformed", "<neither command nor url>", "", [])
 
 
 def classify(name, entry):
     """definite / possible / no, from what the entry runs rather than its name."""
-    kind, endpoint, command, args = describe(entry)
-    if kind == "stdio":
-        if posixpath.basename(command) == BINARY:
-            return kind, endpoint, command, "definite"
-        if posixpath.basename(command) in RUNNERS and BINARY in args:
-            return kind, endpoint, command, "definite"
-    elif kind in ("http", "streamable-http", "sse", "ws"):
-        if url_host(endpoint) == HOSTED_HOST:
-            return kind, endpoint, command, "definite"
+    kind, endpoint, command, _ = describe(entry)
+    if isinstance(entry, dict) and (runs_our_server(entry) or points_at_hosted(entry)):
+        return kind, endpoint, command, "definite"
     # Weak signals only ever produce an unverified report, never a match: the
     # key name is free text and an env block is the user's own.
     named_for_us = name == CANON or name.startswith((CANON + "-", CANON + "_"))
@@ -983,6 +1064,35 @@ for pdir in project_dirs:
             os.path.join(pdir, os.path.basename(scoped["statedir"]), name), pdir
         )
 
+
+# --- where each installed skill came from. `skills add` keeps a lock file
+# recording the source of every skill it wrote; that record is the only
+# provenance a skill has, since a directory name is not evidence of anything.
+def scan_skill_lock(path):
+    data = load(path)
+    if not isinstance(data, dict):
+        return
+    skills = data.get("skills")
+    if not isinstance(skills, dict):
+        return
+    for name, meta in skills.items():
+        if not isinstance(meta, dict):
+            continue
+        source = str(meta.get("source") or "")
+        source_url = str(meta.get("sourceUrl") or "")
+        ours = source in SKILL_SOURCES or source_url in SKILL_SOURCES
+        emit("skilllock", path, name, "ours" if ours else "other",
+             source or source_url or "?")
+
+
+seen_locks = set()
+for base in [os.path.expanduser("~")] + project_dirs:
+    lock = os.path.join(base, ".agents", ".skill-lock.json")
+    if lock in seen_locks:
+        continue
+    seen_locks.add(lock)
+    scan_skill_lock(lock)
+
 # --- one group per distinct registration, so a repo with many worktrees does
 # not print the same stdio entry dozens of times
 groups = {}
@@ -1146,9 +1256,9 @@ EOF
         detail "uv was installed by one of those runs. It is still not removed: by now"
         detail "other tools depend on it, and a tool directory is not uv itself."
     fi
-    plan_add 6 ours rmpath "$RECEIPT_FILE" - - - - - - \
+    plan_add 8 ours rmpath "$RECEIPT_FILE" - - - - - - \
         "delete the install receipt $RECEIPT_FILE"
-    plan_add 6 ours rmdir "$RECEIPT_STATE" - - - - - - \
+    plan_add 8 ours rmdir "$RECEIPT_STATE" - - - - - - \
         "remove $RECEIPT_STATE if it ends up empty"
 }
 
@@ -1257,7 +1367,7 @@ scan_uv_tool_dir() {
                 finding "uv tool installed: $_tool"
                 _sud_desc="uv tool uninstall $_tool"
             fi
-            plan_add 4 ours uvtool "$_tool" "$_sud_dir" - - - - - "$_sud_desc"
+            plan_add 6 ours uvtool "$_tool" "$_sud_dir" - - - - - "$_sud_desc"
         elif ! is_set "$_sud_dir"; then
             note "uv tool not installed: $_tool"
         fi
@@ -1291,11 +1401,26 @@ scan_uv_cache() {
     detail "only while no server is running."
 }
 
+# Whether a `url` with no `type` starts is the reader's business, not this
+# script's, so the caveat comes from the capability of the client whose file
+# the entry sits in rather than from any client id.
+report_untyped_url() {
+    [ "$1" = "untyped-url" ] || return 0
+    _ru_id=$(client_id_reading "$2")
+    [ -n "$_ru_id" ] || return 0
+    client_has_cap "$(client_row "$_ru_id")" typed-remote || return 0
+    detail "no \"type\" key: $_ru_id reads such an entry as stdio and skips the"
+    detail "server, so this one is registered but never starts there. It is still"
+    detail "a registration and is still removed."
+}
+
 scan_registrations() {
     section "MCP registrations"
     detail "matched on what an entry runs: the $SERVER_BINARY command, a known"
-    detail "runner invoking it, or the host $HOSTED_HOST. The registration"
-    detail "key is reported as data, never used as the matching criterion."
+    detail "runner invoking it, or the host $HOSTED_HOST. Either half is"
+    detail "enough, and a declared transport type is required for neither, since"
+    detail "clients disagree about how to read an entry that omits one. The"
+    detail "registration key is reported as data, never a matching criterion."
     if [ -z "$PYTHON3" ]; then
         uninspected "JSON client configs not inspected — python3 unavailable"
         detail "affects the Claude Code, Cursor and Claude Desktop configs, the plugin"
@@ -1320,6 +1445,7 @@ scan_registrations() {
         for _place in "$_s1" "$_s2" "$_s3"; do
             is_set "$_place" || continue
             detail "in $_place"
+            report_untyped_url "$_kind" "$_place"
         done
         if [ "$_count" -gt 3 ]; then
             detail "and $((_count - 3)) more"
@@ -1353,12 +1479,11 @@ EOF
 scan_possible_registrations() {
     while IFS="$TAB" read -r _ _match _name _scope _kind _endpoint _command _count _s1 _s2 _s3; do
         [ "${_match:-}" = "possible" ] || continue
-        case "$_kind" in
-            http|streamable-http|sse|ws)
-                finding "unverified: '$_name' at $_scope scope is an HTTP registration that is not the documented hosted endpoint" ;;
-            *)
-                finding "unverified: '$_name' at $_scope scope does not run $SERVER_BINARY" ;;
-        esac
+        if kind_is_remote "$_kind"; then
+            finding "unverified: '$_name' at $_scope scope is an HTTP registration that is not the documented hosted endpoint"
+        else
+            finding "unverified: '$_name' at $_scope scope does not run $SERVER_BINARY"
+        fi
         detail "$_kind  $_endpoint"
         for _place in "$_s1" "$_s2" "$_s3"; do
             is_set "$_place" || continue
@@ -1418,16 +1543,25 @@ scan_toml_client() {
     _hit=0
     while IFS="$TAB" read -r _name _command _url _args; do
         [ -n "${_name:-}" ] || continue
-        if is_set "$_url"; then
-            [ "$(url_host "$_url")" = "$HOSTED_HOST" ] || continue
-            _hit=$((_hit + 1))
+        # Both halves of the rule, read independently: a section carrying a
+        # command and a url matches on either, so neither a local nor a hosted
+        # registration hides behind the other field.
+        _hosted=0
+        if is_set "$_url" && [ "$(url_host "$_url")" = "$HOSTED_HOST" ]; then
+            _hosted=1
+        fi
+        _ours=0
+        # Word splitting is how the flattened argument list is re-read.
+        # shellcheck disable=SC2086
+        if is_set "$_command" && stdio_matches "$_command" $_args; then
+            _ours=1
+        fi
+        [ "$_hosted" -eq 1 ] || [ "$_ours" -eq 1 ] || continue
+        _hit=$((_hit + 1))
+        # Described by the half that identifies this toolkit.
+        if [ "$_ours" -eq 0 ]; then
             finding "$_tcl_id, section [$_tcl_key.$_name]: $_url"
         else
-            is_set "$_command" || continue
-            # Word splitting is how the flattened argument list is re-read.
-            # shellcheck disable=SC2086
-            stdio_matches "$_command" $_args || continue
-            _hit=$((_hit + 1))
             if is_set "$_args"; then
                 finding "$_tcl_id, section [$_tcl_key.$_name]: $_command $_args"
             else
@@ -1484,20 +1618,28 @@ toml_sections() {
 # install.sh appends exactly a header and one `command = "<binary>"` line. A
 # section holding anything else — extra keys, a sub-table, a comment — was
 # written or edited by hand, and is reported rather than excised.
+#
+# A sub-table counts wherever it sits in the file. `[mcp_servers.<name>.env]` is
+# a separate header, so a scan that reads only up to the next `[` never sees it,
+# and an excision that stops there leaves it behind holding whatever the hand
+# that wrote it put in — a token, most usefully. Treating the parent as
+# hand-edited keeps the pair together, reported and intact.
 toml_section_is_pristine() {
     AW_KEY="$2" AW_NAME="$3" AW_BIN="$SERVER_BINARY" awk '
         function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
         BEGIN {
             sec = "[" ENVIRON["AW_KEY"] "." ENVIRON["AW_NAME"] "]"
+            child = "[" ENVIRON["AW_KEY"] "." ENVIRON["AW_NAME"] "."
             want = "command = \"" ENVIRON["AW_BIN"] "\""
         }
         {
             t = trim($0)
+            if (inside && substr(t, 1, 1) == "[") inside = 0
+            if (substr(t, 1, length(child)) == child) { other++; next }
             if (inside) {
-                if (substr(t, 1, 1) == "[") { inside = 0 }
-                else if (t == "") { next }
-                else if (t == want) { seen++; next }
-                else { other++; next }
+                if (t == "") next
+                if (t == want) { seen++; next }
+                other++; next
             }
             if (t == sec) inside = 1
         }
@@ -1553,6 +1695,27 @@ EOF
     fi
 }
 
+# Where the marketplace clone belongs, derived from the client table. The
+# registry's own `installLocation` is data this script did not write, so it is
+# a claim to check against this, never a deletion target on its own.
+marketplace_clone_path() {
+    _mcp_row=$(client_row_with_cap plugin-system)
+    [ -n "$_mcp_row" ] || return 1
+    printf '%s\n' "$(client_field "$_mcp_row" 7)/plugins/marketplaces/$MARKETPLACE_ID"
+}
+
+# Is a recorded clone location the canonical clone, or something inside it?
+marketplace_clone_confines() {
+    [ -n "${1:-}" ] && [ "$1" != "-" ] || return 1
+    _mcc_want=$(marketplace_clone_path) || return 1
+    _mcc_want=$(canonical_path "$_mcc_want")
+    _mcc_have=$(canonical_path "$1")
+    case "$_mcc_have" in
+        "$_mcc_want"|"$_mcc_want"/*) return 0 ;;
+    esac
+    return 1
+}
+
 scan_plugin() {
     _prow=$(client_row_with_cap plugin-system)
     [ -n "$_prow" ] || return 0
@@ -1574,15 +1737,24 @@ scan_plugin() {
         finding "marketplace registered: $_key in $_file"
         if is_set "$_location"; then
             detail "clone at $_location"
+            if ! marketplace_clone_confines "$_location"; then
+                detail "that is outside $_clone, so it is reported and never deleted:"
+                detail "this registry is not a file this script wrote, and a path read"
+                detail "out of it does not authorise a removal"
+            fi
         fi
         case "$_key" in
             extraKnownMarketplaces.*)
-                plan_add 3 ours jsonkey "$_file" extraKnownMarketplaces \
+                plan_add 5 ours jsonkey "$_file" extraKnownMarketplaces \
                     "$MARKETPLACE_ID" - - - - \
                     "drop extraKnownMarketplaces.$MARKETPLACE_ID from $_file" ;;
             *)
-                plan_add 3 ours market "$MARKETPLACE_ID" "$_file" "$_location" \
-                    - - - - "unregister the '$MARKETPLACE_ID' marketplace" ;;
+                _mk_desc="unregister the '$MARKETPLACE_ID' marketplace"
+                if marketplace_clone_confines "$_location" && [ -d "$_location" ]; then
+                    _mk_desc="$_mk_desc, and delete its clone at $_location"
+                fi
+                plan_add 5 ours market "$MARKETPLACE_ID" "$_file" "$_location" \
+                    - - - - "$_mk_desc" ;;
         esac
     done <<EOF
 $(records marketplace)
@@ -1596,7 +1768,7 @@ EOF
         if is_set "$_path"; then
             detail "files at $_path"
         fi
-        plan_add 3 ours plugin "$_id" "$_file" "$_scope" - - - - \
+        plan_add 5 ours plugin "$_id" "$_file" "$_scope" - - - - \
             "uninstall the $_id plugin ($_scope scope)"
     done <<EOF
 $(records plugin)
@@ -1604,7 +1776,7 @@ EOF
     while IFS="$TAB" read -r _ _file _key _state; do
         [ -n "${_file:-}" ] || continue
         finding "plugin flag: $_key = $_state in $_file"
-        plan_add 3 ours jsonkey "$_file" enabledPlugins "$PLUGIN_ID" - - - - \
+        plan_add 5 ours jsonkey "$_file" enabledPlugins "$PLUGIN_ID" - - - - \
             "drop enabledPlugins[$PLUGIN_ID] from $_file"
     done <<EOF
 $(records pluginflag)
@@ -1612,7 +1784,7 @@ EOF
     while IFS="$TAB" read -r _ _file _key; do
         [ -n "${_file:-}" ] || continue
         finding "plugin usage record: $_key in $_file"
-        plan_add 3 ours jsonkey "$_file" pluginUsage "$PLUGIN_ID" - - - - \
+        plan_add 5 ours jsonkey "$_file" pluginUsage "$PLUGIN_ID" - - - - \
             "drop pluginUsage[$PLUGIN_ID] from $_file"
     done <<EOF
 $(records pluginusage)
@@ -1620,7 +1792,7 @@ EOF
     if [ -d "$_clone" ]; then
         if [ "$_registered" -eq 0 ]; then
             finding "orphan clone: $_clone exists with no marketplace registration"
-            plan_add 3 ours rmpath "$_clone" - - - - - - \
+            plan_add 5 ours rmpath "$_clone" - - - - - - \
                 "delete the orphan marketplace clone $_clone"
         fi
     else
@@ -1796,7 +1968,12 @@ keychain_accounts() {
 
 scan_keychain_linux() {
     if ! command -v secret-tool >/dev/null 2>&1; then
-        note "keychain: 'secret-tool' not on PATH; no Secret Service to query"
+        # Uninspected, not clean, and the same call as the missing `security`
+        # on Darwin: a credential store nothing could read is a source this run
+        # has no answer for, whatever the reason it could not read it.
+        uninspected "keychain not inspected — 'secret-tool' not on PATH"
+        detail "install libsecret-tools (or the Secret Service client for your desktop)"
+        detail "to have this run enumerate the store, or check it yourself"
         return 0
     fi
     # No --unlock, and the output is reduced to the username attribute, so no
@@ -1830,9 +2007,9 @@ scan_config_dir() {
         # `pipefy auth logout` recreates it with a refresh.lock, so the cleanup
         # is planned now even though there is nothing here yet.
         if plan_has_kind logout; then
-            plan_add 6 ours rmpath "$CONFIG_DIR/refresh.lock" - - - - - - \
+            plan_add 8 ours rmpath "$CONFIG_DIR/refresh.lock" - - - - - - \
                 "delete $CONFIG_DIR/refresh.lock, which the logout above recreates"
-            plan_add 6 ours rmdir "$CONFIG_DIR" - - - - - - \
+            plan_add 8 ours rmdir "$CONFIG_DIR" - - - - - - \
                 "remove $CONFIG_DIR if it ends up empty"
         fi
         return 0
@@ -1844,7 +2021,7 @@ scan_config_dir() {
         case "$_name" in
             config.toml|.env|.env.*)
                 finding "$CONFIG_DIR/$_name (user-authored; never remove without consent)"
-                plan_add 6 userconfig rmpath "$CONFIG_DIR/$_name" - - - - - - \
+                plan_add 8 userconfig rmpath "$CONFIG_DIR/$_name" - - - - - - \
                     "delete your $CONFIG_DIR/$_name" ;;
             keyring.cfg)
                 note "$CONFIG_DIR/$_name (reported under stored credentials)" ;;
@@ -1852,7 +2029,7 @@ scan_config_dir() {
                 note "$CONFIG_DIR/$_name (a backup; kept on purpose)" ;;
             refresh.lock)
                 finding "$CONFIG_DIR/$_name"
-                plan_add 6 ours rmpath "$CONFIG_DIR/$_name" - - - - - - \
+                plan_add 8 ours rmpath "$CONFIG_DIR/$_name" - - - - - - \
                     "delete $CONFIG_DIR/$_name" ;;
             *)
                 finding "$CONFIG_DIR/$_name"
@@ -1865,7 +2042,7 @@ EOF
         note "exists but is empty"
     fi
     # Last action of the run, and only if nothing of the user's is left in it.
-    plan_add 6 ours rmdir "$CONFIG_DIR" - - - - - - \
+    plan_add 8 ours rmdir "$CONFIG_DIR" - - - - - - \
         "remove $CONFIG_DIR if it ends up empty"
     detail "the next CLI invocation recreates this directory, so removing it is not idempotent"
 }
@@ -1939,7 +2116,7 @@ scan_shell_rc() {
                 _phase=2
             else
                 _class=userconfig
-                _phase=6
+                _phase=8
             fi
             if [ "$_fish" -eq 1 ]; then
                 _ere=$(fish_assignment_ere "$_name")
@@ -1974,7 +2151,7 @@ scan_env_blocks() {
                 "$_s1" "$_s2" "$_s3" "$_s4" "$_s5" "$_s6" \
                 "delete $_keypath from $_file"
         else
-            plan_add 6 userconfig jsonkey "$_file" \
+            plan_add 8 userconfig jsonkey "$_file" \
                 "$_s1" "$_s2" "$_s3" "$_s4" "$_s5" "$_s6" \
                 "delete $_keypath from $_file"
         fi
@@ -1997,7 +2174,7 @@ scan_completions() {
         [ -f "$_f" ] || continue
         _hit=1
         finding "$_f"
-        plan_add 6 ours rmpath "$_f" - - - - - - "delete $_f"
+        plan_add 8 ours rmpath "$_f" - - - - - - "delete $_f"
     done
     if [ -f "$HOME/.bashrc" ]; then
         # A source directive naming our exact script, not a line mentioning it.
@@ -2006,7 +2183,7 @@ scan_completions() {
         if [ -n "$_lines" ]; then
             _hit=1
             finding "$HOME/.bashrc sources the completion script (line ${_lines% })"
-            plan_add 6 userfile rcline "$HOME/.bashrc" \
+            plan_add 8 userfile rcline "$HOME/.bashrc" \
                 '^[[:space:]]*(source|\.)[[:space:]]+.*/\.bash_completions/pipefy\.sh' \
                 - - - - - "delete the completion source line from $HOME/.bashrc"
         fi
@@ -2046,6 +2223,11 @@ scan_skills() {
     done <<EOF
 $RCPT_SKILL_DIRS
 EOF
+    if [ -z "$PYTHON3" ]; then
+        uninspected "skill provenance not inspected — python3 unavailable"
+        detail "the source of an installed skill is recorded in a JSON lock file, and"
+        detail "without it this run cannot tell one of ours from one of yours"
+    fi
     [ -n "$_dirs" ] || return 0
     while IFS= read -r _dir; do
         [ -n "$_dir" ] || continue
@@ -2055,6 +2237,33 @@ $_dirs
 EOF
 }
 
+# Where a skill came from, as recorded by the tool that installed it, or by the
+# install receipt. Both are records; neither is a guess.
+#
+# The name prefix is not evidence and is never treated as any. `pipefy-*` is a
+# namespace anyone may write in, and a teardown that reads it as ownership
+# deletes work it did not create and cannot restore. That is the whole reason
+# this function exists rather than a glob.
+skill_provenance() {
+    while IFS= read -r _sp_line; do
+        [ -n "$_sp_line" ] || continue
+        [ "$(receipt_unescape "$_sp_line")" = "$1" ] || continue
+        printf '%s\n' "receipt"
+        return 0
+    done <<EOF
+$RCPT_SKILLS
+EOF
+    records skilllock \
+        | awk -F"$TAB" -v n="$1" '$3 == n { print $4 "\t" $5; exit }'
+}
+
+# The lock file that describes a skill. The path is one the probe built from
+# $HOME and the project directories it already sweeps, never a string read out
+# of a file, and it is only ever edited as JSON with a backup taken first.
+skill_lock_file() {
+    records skilllock | awk -F"$TAB" -v n="$1" '$3 == n { print $2; exit }'
+}
+
 scan_skills_dir() {
     _sd_dir="$1"
     if [ ! -d "$_sd_dir" ]; then
@@ -2062,21 +2271,91 @@ scan_skills_dir() {
         return 0
     fi
     _hit=0
+    _theirs=0
     for _skill in "$_sd_dir"/pipefy-*; do
         # A directory holding a SKILL.md, under the name `npx skills add`
         # gives this catalog's skills.
         [ -f "$_skill/SKILL.md" ] || continue
-        _hit=$((_hit + 1))
         _sname=$(basename "$_skill")
+        _prov=$(skill_provenance "$_sname")
+        case "$_prov" in
+            receipt|ours*) ;;
+            other*)
+                _theirs=$((_theirs + 1))
+                note "$_sname in $_sd_dir came from $(printf '%s' "$_prov" | cut -f2-), not this toolkit; left alone"
+                continue ;;
+            *)
+                _theirs=$((_theirs + 1))
+                note "$_sname in $_sd_dir: nothing records where it came from, so it is left alone"
+                detail "the name prefix is not evidence of who wrote it; delete it yourself"
+                detail "if it is stale"
+                continue ;;
+        esac
+        _hit=$((_hit + 1))
         detail "$_sname"
-        plan_add 5 ours rmpath "$_skill" - - - - - - \
+        plan_add 7 ours rmpath "$_skill" - - - - - - \
             "delete the $_sname skill"
+        plan_skill_store "$_skill" "$_sname"
     done
     if [ "$_hit" -eq 0 ]; then
-        note "no pipefy-* skills in $_sd_dir"
+        note "no pipefy-* skills from this toolkit in $_sd_dir"
     else
-        finding "$_hit pipefy-* skills installed under $_sd_dir"
+        finding "$_hit pipefy-* skills from this toolkit under $_sd_dir"
     fi
+    if [ "$_theirs" -gt 0 ]; then
+        detail "$_theirs other pipefy-* skill(s) here are not this toolkit's and stay"
+    fi
+}
+
+# The store `skills add` writes its content into, derived from the lock file it
+# keeps beside that store rather than assumed: global and per-project installs
+# each get their own, and neither path is one this script may hardcode.
+skill_store_root() {
+    [ -n "${1:-}" ] || return 1
+    printf '%s\n' "$(dirname "$1")/skills"
+}
+
+# Is a link target inside that store? Strictly inside: the store root holds
+# every agent's skills, and no single skill is ever the root itself.
+skill_store_confines() {
+    _ssc_root=$(skill_store_root "${2:-}") || return 1
+    _ssc_root=$(canonical_path "$_ssc_root")
+    _ssc_have=$(canonical_path "$1")
+    case "$_ssc_have" in
+        "$_ssc_root"/*) return 0 ;;
+    esac
+    return 1
+}
+
+# What the entry in the skills directory points at, and the lock entry that
+# describes it. A skill directory is often a link into a shared store, so
+# removing only the link leaves the content and the record of it behind, and a
+# run that says the skill is gone would be wrong.
+#
+# Following a link is unbounded reach, so the target is confined the way the
+# marketplace clone is: it is deleted only when it sits inside the store the
+# lock file names, and a link pointing anywhere else — a checkout of the user's
+# own, most likely — costs the link and nothing more. The report says so and
+# names what stayed, because "deleted the skill" would otherwise be false.
+plan_skill_store() {
+    _pss_lock=$(skill_lock_file "$2")
+    if [ -L "$1" ]; then
+        _pss_target=$(canonical_path "$(resolve_link "$1")")
+        if [ -d "$_pss_target" ] && [ "$_pss_target" != "$(canonical_path "$1")" ]; then
+            if skill_store_confines "$_pss_target" "$_pss_lock"; then
+                detail "content at $_pss_target"
+                plan_add 7 ours rmpath "$_pss_target" - - - - - - \
+                    "delete the $2 skill content at $_pss_target"
+            else
+                detail "links out to $_pss_target, which is outside the skills store"
+                detail "this toolkit's skills are written to; only the link is removed"
+                note_left "the $2 entry is a link to $_pss_target, outside the skills store: the link is removed and that directory is left exactly as it is"
+            fi
+        fi
+    fi
+    [ -n "$_pss_lock" ] || return 0
+    plan_add 7 ours jsonkey "$_pss_lock" skills "$2" - - - - \
+        "drop the $2 entry from $_pss_lock"
 }
 
 report_probe_errors() {
@@ -2101,11 +2380,20 @@ EOF
 #   1 revoke     only `pipefy auth logout` reaches the identity provider, and
 #                that ability goes away with the tool environment
 #   2 credentials  local credential stores, once revocation has had its chance
-#   3 client configs  before the tools, so no registration is left pointing at
+#   3 shadowing registrations  a local- or project-scope entry outranks the
+#                user-scope one of the same name, and phase 4 has to be able to
+#                resolve that name
+#   4 hosted token  `<cli> mcp logout <name>` resolves the name across scopes
+#                with no way to say which, so it runs after the entries that
+#                outrank the hosted one are gone and before the hosted entry
+#                itself is. It is a credential and belongs with phase 2 by
+#                class; it sits here because it is the only credential whose
+#                store is reached through a registration
+#   5 client configs  before the tools, so no registration is left pointing at
 #                a binary that no longer exists
-#   4 tools
-#   5 skills
-#   6 runtime state  last, because `pipefy auth logout` and `auth status`
+#   6 tools
+#   7 skills
+#   8 runtime state  last, because `pipefy auth logout` and `auth status`
 #                recreate the config directory
 #
 # class picks the approval tier and the --keep-* filters:
@@ -2168,6 +2456,7 @@ note_done() { record_note 'done' "$*"; }
 note_fail() { record_note fail "$*"; }
 note_left() { record_note left "$*"; }
 note_manual() { record_note manual "$*"; }
+note_unverified() { record_note unverified "$*"; }
 note_backup() { record_note backup "$*"; }
 notes_of() { awk -F"$TAB" -v k="$1" '$1 == k { print $2 }' "$NOTES"; }
 
@@ -2203,36 +2492,43 @@ tier_approved() {
 plan_registrations() {
     [ "$COLLECTING" -eq 1 ] || return 0
     [ -n "$PYTHON3" ] || return 0
-    _scoped_id=$(client_field "$(client_row_with_cap scopes)" 1)
     _hosted_seen=""
     while IFS="$TAB" read -r _ _match _name _scope _pdir _file _kind _endpoint _command _shape; do
         [ "${_match:-}" = "definite" ] || continue
-        _cid=$(client_id_for_file "$_file")
-        [ -n "$_cid" ] || _cid="$_scoped_id"
+        _cid=$(client_id_reading "$_file")
         _crow=$(client_row "$_cid")
-        case "$_kind" in
-            http|streamable-http|sse|ws)
-                if [ "$(url_host "$_endpoint")" = "$HOSTED_HOST" ]; then
-                    plan_hosted_token "$_cid" "$_crow" "$_name"
-                fi ;;
-        esac
+        _hosted_row=0
+        if kind_is_remote "$_kind" \
+            && [ "$(url_host "$_endpoint")" = "$HOSTED_HOST" ]; then
+            _hosted_row=1
+            plan_hosted_token "$_cid" "$_crow" "$_name"
+        fi
         # A plugin's own MCP config goes with the plugin, never on its own.
         [ "$_scope" != "plugin" ] || continue
         if ! client_selected "$_cid"; then
             note_left "'$_name' in $_file — --client $CLIENT excludes $_cid"
             continue
         fi
+        # A local- or project-scope entry outranks the user-scope one the hosted
+        # token belongs to, so it goes in the unshadowing phase — unless it is
+        # itself the hosted entry, which has to outlive its own logout.
+        if [ "$_hosted_row" -eq 0 ]; then
+            _regphase=3
+        else
+            _regphase=5
+        fi
         case "$_scope" in
             user|local)
-                plan_add 3 ours mcpreg "$_name" "$_scope" "$_pdir" "$_file" - - - \
+                [ "$_scope" = local ] || _regphase=5
+                plan_add "$_regphase" ours mcpreg "$_name" "$_scope" "$_pdir" "$_file" - - - \
                     "remove the '$_name' registration ($_scope scope) from $_file" ;;
             project)
-                plan_project_registration "$_name" "$_pdir" "$_file" ;;
+                plan_project_registration "$_name" "$_pdir" "$_file" "$_regphase" ;;
             *)
                 # Every remaining scope is a client whose config install.sh
                 # writes itself, so provenance is answerable and is asked.
                 registration_is_ours "$_cid" "$_name" "$_shape" "$_file" || continue
-                plan_add 3 ours jsonkey "$_file" "$(client_field "$_crow" 5)" \
+                plan_add 5 ours jsonkey "$_file" "$(client_field "$_crow" 5)" \
                     "$_name" - - - - \
                     "remove the '$_name' registration from $_file" ;;
         esac
@@ -2280,7 +2576,7 @@ plan_hosted_token() {
     esac
     _hosted_seen="$_hosted_seen $3"
     if client_has_cap "$2" removal-cli; then
-        plan_add 1 credential mcplogout "$3" - - - - - - \
+        plan_add 4 credential mcplogout "$3" - - - - - - \
             "clear the stored OAuth token for '$3'"
     else
         note_manual "clear the OAuth token for '$3' in $1 yourself; it has no CLI for it"
@@ -2295,11 +2591,11 @@ plan_project_registration() {
         return 0
     fi
     if git -C "$2" ls-files --error-unmatch .mcp.json >/dev/null 2>&1; then
-        plan_add 3 userfile mcpdisable "$1" "$2" - - - - - \
+        plan_add "$4" userfile mcpdisable "$1" "$2" - - - - - \
             "disable '$1' for $2 through disabledMcpjsonServers ($3 is git-tracked)"
         return 0
     fi
-    plan_add 3 ours jsonkey "$3" mcpServers "$1" - - - - \
+    plan_add "$4" ours jsonkey "$3" mcpServers "$1" - - - - \
         "remove the '$1' registration from $3"
 }
 
@@ -2310,7 +2606,7 @@ plan_toml_section() {
         return 0
     fi
     if ! toml_section_is_pristine "$2" "$3" "$4"; then
-        note_left "[$3.$4] in $2 holds more than the single line the installer appends, so it was edited by hand; excise the section yourself"
+        note_left "[$3.$4] in $2 holds more than the single line the installer appends, or has a [$3.$4.*] sub-table beside it, so it was edited by hand; excise the section and any sub-table of it yourself"
         return 0
     fi
     # The pristine test above is already the shape test heuristic mode relies
@@ -2321,7 +2617,7 @@ plan_toml_section() {
         note_left "[$3.$4] in $2 was already there when install.sh ran, which recorded leaving it as it found it; excise the section yourself if you want it gone"
         return 0
     fi
-    plan_add 3 ours toml "$2" "$3" "$4" - - - - \
+    plan_add 5 ours toml "$2" "$3" "$4" - - - - \
         "remove the [$3.$4] section from $2"
 }
 
@@ -2426,6 +2722,53 @@ abort() {
 
 # ------------------------------------------------------- removal primitives
 
+# An absolute path with every `.`, `..` and symlink resolved. `realpath` is not
+# POSIX and is missing on older macOS, and `realpath -e` would be wrong anyway
+# because the path is often one this run is about to create or has just
+# emptied.
+#
+# Two passes. The first cancels `.` and `..` as text, which works whether or not
+# the path exists; the second hands the surviving directory to the shell, which
+# is the only thing here that can see through a symlink. The final segment is
+# left unresolved on purpose: a symlink is deleted as a link, so the link's own
+# path is what the guard has to judge.
+canonical_path() {
+    _cp="$1"
+    case "$_cp" in
+        /*) ;;
+        *) _cp="$PWD/$_cp" ;;
+    esac
+    _cp_out=""
+    _cp_rest="${_cp#/}"
+    while [ -n "$_cp_rest" ]; do
+        _cp_seg="${_cp_rest%%/*}"
+        case "$_cp_rest" in
+            */*) _cp_rest="${_cp_rest#*/}" ;;
+            *) _cp_rest="" ;;
+        esac
+        case "$_cp_seg" in
+            ''|.) ;;
+            ..) _cp_out="${_cp_out%/*}" ;;
+            *) _cp_out="$_cp_out/$_cp_seg" ;;
+        esac
+    done
+    if [ -z "$_cp_out" ]; then
+        printf '%s\n' "/"
+        return 0
+    fi
+    _cp_base="${_cp_out##*/}"
+    _cp_dir="${_cp_out%/*}"
+    [ -n "$_cp_dir" ] || _cp_dir=/
+    if [ -d "$_cp_dir" ]; then
+        _cp_dir=$( ( CDPATH=''; cd -P -- "$_cp_dir" 2>/dev/null && pwd -P ) \
+            || printf '%s' "$_cp_dir")
+    fi
+    case "$_cp_dir" in
+        /) printf '%s\n' "/$_cp_base" ;;
+        *) printf '%s\n' "$_cp_dir/$_cp_base" ;;
+    esac
+}
+
 # The one path this script deletes through. Everything routes here so the
 # refusals cannot be skipped by a caller that forgot them. Tempfiles this
 # script creates come back through here too.
@@ -2437,11 +2780,16 @@ remove_path() {
         /*) ;;
         *) err "refusing to remove a relative path: $_rp" ;;
     esac
-    while [ "$_rp" != "/" ] && [ "${_rp%/}" != "$_rp" ]; do
-        _rp="${_rp%/}"
-    done
+    # Resolved before it is judged: `$HOME/..` is neither the string "/" nor the
+    # string "$HOME" and names the directory holding every user account. A guard
+    # that compares text is not a guard.
+    _rp=$(canonical_path "$_rp")
+    _rp_home=$(canonical_path "$HOME")
     [ "$_rp" != "/" ] || err "refusing to remove /"
-    [ "$_rp" != "$HOME" ] || err "refusing to remove \$HOME ($HOME)"
+    [ "$_rp" != "$_rp_home" ] || err "refusing to remove \$HOME ($HOME)"
+    case "$_rp_home" in
+        "$_rp"/*) err "refusing to remove $_rp: it contains \$HOME ($HOME)" ;;
+    esac
     if [ "$_rp_mode" = "empty-dir" ]; then
         run rmdir "$_rp"
     elif [ -e "$_rp" ] || [ -L "$_rp" ]; then
@@ -2527,7 +2875,9 @@ fd, tmp = tempfile.mkstemp(
 )
 try:
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+        # ensure_ascii=False: another server's UTF-8 value is not this run's to
+        # rewrite into escapes.
+        json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, path)
 except BaseException:
@@ -2582,7 +2932,9 @@ fd, tmp = tempfile.mkstemp(
 )
 try:
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+        # ensure_ascii=False: another server's UTF-8 value is not this run's to
+        # rewrite into escapes.
+        json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, path)
 except BaseException:
@@ -2769,8 +3121,17 @@ act_keychain() {
 act_mcplogout() {
     _ml_cli=$(removal_cli) || _ml_cli="-"
     if cli_verb_exists "$_ml_cli" logout mcp; then
-        run "$_ml_cli" mcp logout "$1"
-        return $?
+        # 4, not 0: the client's OAuth store is not readable from here, so the
+        # only thing this run can observe is that the verb was invoked. The
+        # re-scan cannot contradict a silent no-op, and an exit status is not
+        # proof of a deleted credential — the rule the local credential path
+        # already follows.
+        run "$_ml_cli" mcp logout "$1" && return 4
+        # The verb resolves the name across scopes and takes no scope flag, so
+        # it can bind to an entry other than the one the token belongs to and
+        # refuse. Reported as a failure rather than smoothed over.
+        note_manual "'$_ml_cli mcp logout $1' failed, so the hosted token is still stored; run /mcp, pick '$1', then Clear authentication"
+        return 1
     fi
     note_manual "clear the hosted token by hand: run /mcp, pick '$1', then Clear authentication"
     return 3
@@ -2798,7 +3159,12 @@ act_market() {
     fi
     backup_file "$2" || return 1
     json_remove_key "$2" "$1" || return 1
-    if [ "$3" != "-" ] && [ -d "$3" ]; then
+    [ "$3" != "-" ] || return 0
+    if ! marketplace_clone_confines "$3"; then
+        note_left "the '$1' registry names $3 as its clone, which is outside $(marketplace_clone_path); it was not removed"
+        return 0
+    fi
+    if [ -d "$3" ]; then
         remove_path "$3"
     fi
 }
@@ -2826,7 +3192,7 @@ do_action() {
 }
 
 execute_plan() {
-    for _ph in 1 2 3 4 5 6; do
+    for _ph in 1 2 3 4 5 6 7 8; do
         while IFS="$TAB" read -r _ _cls _knd _p1 _p2 _p3 _p4 _p5 _p6 _p7 _dsc; do
             [ -n "${_knd:-}" ] || continue
             tier_approved "$_cls" || continue
@@ -2834,7 +3200,8 @@ execute_plan() {
             do_action "$_cls" "$_knd" \
                 "$_p1" "$_p2" "$_p3" "$_p4" "$_p5" "$_p6" "$_p7" || _rc=$?
             # 3 means the action decided there was nothing to do and said why
-            # in a note of its own; anything else non-zero is a failure.
+            # in a note of its own; 4 means it ran but the result is not
+            # observable from here; anything else non-zero is a failure.
             if [ "$_rc" -eq 0 ]; then
                 DONE_COUNT=$((DONE_COUNT + 1))
                 note_done "$_dsc"
@@ -2843,6 +3210,11 @@ execute_plan() {
                 fi
             elif [ "$_rc" -eq 3 ]; then
                 SKIP_COUNT=$((SKIP_COUNT + 1))
+            elif [ "$_rc" -eq 4 ]; then
+                # Not counted as done and not a credential this run can claim
+                # to have deleted: "Removed:" is a verified word.
+                UNVERIFIED=$((UNVERIFIED + 1))
+                note_unverified "$_dsc"
             else
                 FAIL_COUNT=$((FAIL_COUNT + 1))
                 note_fail "$_dsc"
@@ -2898,8 +3270,16 @@ EOF
 
 print_teardown_report() {
     section "What happened"
-    say "  $DONE_COUNT completed, $SKIP_COUNT skipped, $FAIL_COUNT failed, $BACKUPS backed up"
+    say "  $DONE_COUNT completed, $UNVERIFIED unverifiable, $SKIP_COUNT skipped, $FAIL_COUNT failed, $BACKUPS backed up"
     print_note_group 'done' "Removed:"
+    print_note_group 'unverified' "Asked for, result not observable from here:"
+    if [ "$UNVERIFIED" -gt 0 ]; then
+        say "    The store these live in is the client's own and is not readable here, so"
+        say "    the command exiting 0 is the only signal and it is not proof: a no-op"
+        say "    exits 0 too, and the re-scan cannot tell the two apart. Treat them as"
+        say "    still stored until you have checked: run /mcp, pick the server, and"
+        say "    read its authentication state."
+    fi
     print_note_group 'fail' "Failed — these are still here:"
     print_note_group 'backup' "Backed up before editing:"
     print_note_group 'left' "Left alone:"
@@ -3075,6 +3455,19 @@ main() {
     if [ "$(count_lines "$PLAN")" -eq 0 ]; then
         say ""
         say "Nothing to remove."
+        # An empty plan is not a clean machine: a hand-edited Codex section, a
+        # registration the receipt says was already there, a --keep-* filter —
+        # each leaves a finding this run deliberately will not touch. The same
+        # tree under --scan exits 1, and automation reading exit 0 as clean has
+        # to be wrong in only one of the two.
+        print_note_group left "Left alone:"
+        print_note_group manual "Do this yourself:"
+        if [ "$SCAN_ERRORS" -gt 0 ]; then
+            exit 2
+        fi
+        if [ "$FINDINGS" -gt 0 ]; then
+            exit 1
+        fi
         exit 0
     fi
     if [ "$DRY_RUN" -eq 1 ]; then
@@ -3105,7 +3498,11 @@ main() {
     if [ "$FAIL_COUNT" -gt 0 ] || [ "$SCAN_ERRORS" -gt 0 ]; then
         exit 2
     fi
-    if [ "$FINDINGS" -gt 0 ]; then
+    # An action whose result this run cannot observe leaves the machine in a
+    # state it cannot call clean, so the exit says findings remain rather than
+    # success. Otherwise a hosted teardown would report 0 on the strength of a
+    # command that may have done nothing at all.
+    if [ "$FINDINGS" -gt 0 ] || [ "$UNVERIFIED" -gt 0 ]; then
         exit 1
     fi
     exit 0

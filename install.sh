@@ -237,19 +237,51 @@ receipt_uv() {
     fi
 }
 
-# Where the skills landed, confirmed rather than assumed: `npx skills add`
-# picks the directory and this script does not get to tell it which, so the
-# candidate below is only recorded once a skill of ours is actually in it. If
-# the tool ever lands somewhere else the receipt records nothing instead of
-# something false, and teardown falls back to its own default.
+# Where `npx skills add` can write: the global directory, and the project one
+# it picks instead when it runs inside a project. This script does not get to
+# tell it which, so both are looked at.
+skills_candidate_dirs() {
+    printf '%s\n' "$HOME/.claude/skills"
+    [ "$PWD" = "$HOME" ] || printf '%s\n' "$PWD/.claude/skills"
+}
+
+# One "<dir><tab><name>" line per skill of ours currently in either directory.
+skills_present() {
+    while IFS= read -r _sp_dir; do
+        [ -d "$_sp_dir" ] || continue
+        for _sp_skill in "$_sp_dir"/pipefy-*; do
+            [ -f "$_sp_skill/SKILL.md" ] || continue
+            printf '%s%s%s\n' "$_sp_dir" "$RECEIPT_TAB" "$(basename "$_sp_skill")"
+        done
+    done <<EOF
+$(skills_candidate_dirs)
+EOF
+}
+
+# The skills this run added, by difference against what was there before it.
+# Not "every pipefy-* directory": a skill the user wrote under that name is
+# none of the installer's business, and teardown reads these names to decide
+# what it is allowed to delete. Recording the directory the same way keeps the
+# receipt honest when the tool lands somewhere this did not predict — then it
+# records nothing rather than something false.
 receipt_skills() {
-    _rs_dir="$HOME/.claude/skills"
-    [ -d "$_rs_dir" ] || return 0
-    for _rs_skill in "$_rs_dir"/pipefy-*; do
-        [ -f "$_rs_skill/SKILL.md" ] || continue
-        receipt_put skills_dir "$_rs_dir"
-        return 0
-    done
+    _rs_before="$1"
+    _rs_dirs=""
+    while IFS= read -r _rs_line; do
+        [ -n "$_rs_line" ] || continue
+        if printf '%s\n' "$_rs_before" | grep -Fqx -- "$_rs_line"; then
+            continue
+        fi
+        _rs_dir="${_rs_line%"$RECEIPT_TAB"*}"
+        if ! printf '%s\n' "$_rs_dirs" | grep -Fqx -- "$_rs_dir"; then
+            _rs_dirs="$_rs_dirs$_rs_dir
+"
+            receipt_put skills_dir "$_rs_dir"
+        fi
+        receipt_put skill "${_rs_line##*"$RECEIPT_TAB"}"
+    done <<EOF
+$(skills_present)
+EOF
 }
 
 # 0 from the merge means this run created the entry, 3 means it found one and
@@ -432,8 +464,9 @@ install_skills() {
         return 0
     fi
     if confirm "Install Pipefy skills via 'npx skills add'?"; then
+        _is_before=$(skills_present)
         run npx skills add "$REPO" -y
-        receipt_skills
+        receipt_skills "$_is_before"
     fi
 }
 

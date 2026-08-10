@@ -48,3 +48,10 @@ def test_parse_field_definitions_raises_with_action():
             [{"label": "Status", "type": "select"}],
             action="filter phase fields",
         )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("message", ["", "   "])
+def test_malformed_field_definition_error_rejects_blank_message(message: str):
+    with pytest.raises(ValueError, match="non-blank message"):
+        MalformedFieldDefinitionError(message)

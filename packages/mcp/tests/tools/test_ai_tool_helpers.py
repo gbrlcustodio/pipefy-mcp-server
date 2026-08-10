@@ -4,7 +4,9 @@ import pytest
 from _shared.fixture_ids import make_pipe_id
 from pipefy_sdk import PipefyGraphQLError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.ai_tool_helpers import (
+    build_ai_tool_error,
     build_create_agent_partial_failure,
     build_create_agent_success,
     build_create_automation_success,
@@ -45,6 +47,24 @@ def _make_behaviors(*specs):
 
 
 # --- Unified-envelope / legacy-shape parity for AI success builders ---
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("exc_message", ["", "   "])
+def test_build_ai_tool_error_empty_message_uses_fallback(exc_message):
+    payload = build_ai_tool_error(exc_message)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "AI request failed." in message
+    assert "do not blind-retry" in message
+
+
+@pytest.mark.unit
+def test_build_ai_tool_error_preserves_non_empty_message():
+    payload = build_ai_tool_error("boom")
+    assert payload["success"] is False
+    assert tool_error_message(payload) == "boom"
 
 
 @pytest.mark.unit

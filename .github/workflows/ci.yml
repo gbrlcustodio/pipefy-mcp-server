@@ -96,6 +96,16 @@ jobs:
         config = json.loads(pathlib.Path.home().joinpath('.cursor/mcp.json').read_text())
         assert config['mcpServers']['pipefy'] == {'command': 'pipefy-mcp-server'}, config
         "
+    # ubuntu-latest often has a session bus address but no Secret Service client.
+    # uninstall.sh then treats the keychain as uninspected and exits 2 even after
+    # a clean teardown. An empty probe matches the test stubs: no pipefy items.
+    # Keep the stub outside $HOME so check_roundtrip does not see it as drift.
+    - name: Stub an empty Secret Service probe
+      run: |
+        mkdir -p /tmp/pipefy-ci-bin
+        printf '%s\n' '#!/bin/sh' 'exit 0' > /tmp/pipefy-ci-bin/secret-tool
+        chmod +x /tmp/pipefy-ci-bin/secret-tool
+        echo /tmp/pipefy-ci-bin >> "$GITHUB_PATH"
     - name: Uninstall
       working-directory: ${{ runner.temp }}
       run: sh "$GITHUB_WORKSPACE/uninstall.sh" --yes

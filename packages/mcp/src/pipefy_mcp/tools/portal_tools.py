@@ -35,6 +35,8 @@ from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
+_PORTAL_READ_FAILED = "Portal request failed."
+
 
 class PortalTools:
     """Registers MCP tools for portal read, metadata CRUD, and page operations."""
@@ -80,7 +82,9 @@ class PortalTools:
                     organization_uuid, search_term=search_term
                 )
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(
+                    map_portal_error_to_message(exc, empty_fallback=_PORTAL_READ_FAILED)
+                )
             return build_success_payload({"portals": portals}, include_parsed=True)
 
         @mcp.tool(
@@ -117,7 +121,9 @@ class PortalTools:
             try:
                 portal = await client.get_portal(portal_uuid)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(
+                    map_portal_error_to_message(exc, empty_fallback=_PORTAL_READ_FAILED)
+                )
             return build_success_payload(portal, include_parsed=True)
 
         @mcp.tool(

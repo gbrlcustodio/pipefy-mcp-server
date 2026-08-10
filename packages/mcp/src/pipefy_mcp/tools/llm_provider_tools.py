@@ -23,6 +23,7 @@ from pipefy_mcp.core.tool_error_envelope import (
     tool_success,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
     validate_page_size,
@@ -35,6 +36,11 @@ _PROVIDER_ID_DISCOVERY_HINT = (
     "Use 'get_llm_providers' to list provider IDs for the organization."
 )
 
+_PROVIDER_REQUEST_FAILED = (
+    "LLM provider request failed. Re-read provider state before retrying; "
+    "do not blind-retry."
+)
+
 
 def _provider_tool_error_from_exception(
     exc: BaseException, *, not_found_hint: bool = True
@@ -43,21 +49,27 @@ def _provider_tool_error_from_exception(
 
     Uses the shared SDK classifier (``pipefy_sdk.classify_exception``) so the
     kind/code the CLI and probes see is the same one reported here. A
-    transport-level failure with no GraphQL errors falls back to ``str(exc)``.
-    ``not_found_hint`` scopes the id-discovery hint to the per-id tools; the
-    list tool passes False so its own failure never tells the caller to retry
-    the call that just failed.
+    transport-level failure with no GraphQL errors falls back to ``str(exc)``
+    (or a stable non-empty fallback when blank). ``not_found_hint`` scopes the
+    id-discovery hint to the per-id tools; the list tool passes False so its
+    own failure never tells the caller to retry the call that just failed.
     """
     problem = classify_exception(exc)
     if problem is None:
-        return tool_error(str(exc))
+        return tool_error(
+            ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
+        )
     message = problem.message
     if not_found_hint and problem.kind.value == "not_found":
         message = f"{message} {_PROVIDER_ID_DISCOVERY_HINT}"
     details: dict[str, Any] = {"kind": problem.kind.value}
     if problem.correlation_id:
         details["correlation_id"] = problem.correlation_id
-    return tool_error(message, code=problem.code, details=details)
+    return tool_error(
+        ensure_non_empty_error_message(message, _PROVIDER_REQUEST_FAILED),
+        code=problem.code,
+        details=details,
+    )
 
 
 def _blank_error(value: str, field: str) -> dict[str, Any] | None:
@@ -346,7 +358,9 @@ class LlmProviderTools:
                     configuration_file_path=configuration_file_path.strip(),
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _provider_tool_error_from_exception(exc)
             return _provider_success(
@@ -398,7 +412,9 @@ class LlmProviderTools:
                     name=name,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _provider_tool_error_from_exception(exc)
             return _provider_success(
@@ -535,7 +551,9 @@ class LlmProviderTools:
                     system_provider_id=system_provider_id,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _provider_tool_error_from_exception(exc)
             return _provider_success(

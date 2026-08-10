@@ -20,11 +20,17 @@ from pipefy_mcp.core.tool_error_envelope import (
     tool_success,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 _KB_ID_DISCOVERY_HINT = (
     "Use 'get_ai_knowledge_bases' to list knowledge base IDs for the pipe."
+)
+
+_KB_REQUEST_FAILED = (
+    "Knowledge base request failed. Re-read knowledge base state "
+    "before retrying; do not blind-retry."
 )
 
 
@@ -41,18 +47,31 @@ def _kb_document_upload_error(
     details: dict[str, Any] = {"step": exc.step}
     if exc.step == "file_read":
         message = str(exc.__cause__) if exc.__cause__ else str(exc)
-        return tool_error(message, details=details)
+        return tool_error(
+            ensure_non_empty_error_message(message, _KB_REQUEST_FAILED),
+            details=details,
+        )
     if exc.step == "s3_upload":
         if exc.body_snippet:
             details["body_snippet"] = exc.body_snippet
-        return tool_error(str(exc), details=details)
+        return tool_error(
+            ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED),
+            details=details,
+        )
     problem = classify_exception(exc.__cause__) if exc.__cause__ else None
     if problem is None:
-        return tool_error(str(exc), details=details)
+        return tool_error(
+            ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED),
+            details=details,
+        )
     details["kind"] = problem.kind.value
     if problem.correlation_id:
         details["correlation_id"] = problem.correlation_id
-    return tool_error(problem.message, code=problem.code, details=details)
+    return tool_error(
+        ensure_non_empty_error_message(problem.message, _KB_REQUEST_FAILED),
+        code=problem.code,
+        details=details,
+    )
 
 
 def _kb_tool_error_from_exception(
@@ -62,20 +81,25 @@ def _kb_tool_error_from_exception(
 
     Uses the shared SDK classifier so the kind/code the CLI and probe see is the
     same reported here. A transport-level failure with no GraphQL errors falls
-    back to ``str(exc)``. ``not_found_hint`` scopes the id-discovery hint to the
-    per-id tools; the list tool passes False so its own failure never tells the
-    caller to retry the call that just failed.
+    back to ``str(exc)`` (or a stable non-empty fallback when blank).
+    ``not_found_hint`` scopes the id-discovery hint to the per-id tools; the
+    list tool passes False so its own failure never tells the caller to retry
+    the call that just failed.
     """
     problem = classify_exception(exc)
     if problem is None:
-        return tool_error(str(exc))
+        return tool_error(ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED))
     message = problem.message
     if not_found_hint and problem.kind.value == "not_found":
         message = f"{message} {_KB_ID_DISCOVERY_HINT}"
     details: dict[str, Any] = {"kind": problem.kind.value}
     if problem.correlation_id:
         details["correlation_id"] = problem.correlation_id
-    return tool_error(message, code=problem.code, details=details)
+    return tool_error(
+        ensure_non_empty_error_message(message, _KB_REQUEST_FAILED),
+        code=problem.code,
+        details=details,
+    )
 
 
 def _blank_error(value: str, field: str) -> dict[str, Any] | None:
@@ -206,7 +230,9 @@ class KnowledgeBaseTools:
                     description=description,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _kb_tool_error_from_exception(exc)
             return _kb_success(
@@ -255,7 +281,9 @@ class KnowledgeBaseTools:
                     description=description,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _kb_tool_error_from_exception(exc)
             return _kb_success(
@@ -396,7 +424,9 @@ class KnowledgeBaseTools:
             except KnowledgeBaseDocumentUploadError as exc:
                 return _kb_document_upload_error(exc)
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _kb_tool_error_from_exception(exc)
             return _kb_success(
@@ -441,7 +471,9 @@ class KnowledgeBaseTools:
                     description=description,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _kb_tool_error_from_exception(exc)
             return _kb_success(
@@ -594,7 +626,9 @@ class KnowledgeBaseTools:
                     search_query=search_query,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _kb_tool_error_from_exception(exc)
             return _kb_success(
@@ -656,7 +690,9 @@ class KnowledgeBaseTools:
                     description=description,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _KB_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _kb_tool_error_from_exception(exc)
             return _kb_success(

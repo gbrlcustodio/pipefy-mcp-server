@@ -33,6 +33,12 @@ PRUNE = {
     "directory. 'uv tool uninstall' empties this toolkit's environments and the "
     "root belongs to uv",
     ".git": "not present under HOME on a runner, and never toolkit state",
+    # Hosted GitHub Actions lays the workspace and RUNNER_TEMP under $HOME
+    # (`$HOME/work/...`). Install may clone skills into RUNNER_TEMP and leave
+    # that shared store by design; runner agent noise also accumulates there.
+    # Neither is toolkit state a user would see on a laptop.
+    "work": "GitHub Actions workspace and RUNNER_TEMP under HOME on hosted runners",
+    "actions-runner": "runner agent cache and diagnostics under HOME on some images",
 }
 
 # Files a completed teardown deliberately leaves behind. Each is a decision.

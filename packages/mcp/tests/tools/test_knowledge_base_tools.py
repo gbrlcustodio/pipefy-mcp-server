@@ -776,3 +776,70 @@ async def test_get_data_lookup_permission_denied_classified(
     error = payload.get("error") or {}
     details = error.get("details") or {}
     assert details.get("kind") == "permission_denied"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_empty_exception_message_uses_fallback(
+    kb_session, mock_kb_client, extract_payload, exc_message
+):
+    mock_kb_client.get_ai_knowledge_bases = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_bases", {"pipe_uuid": "pipe-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "Knowledge base request failed." in message
+    assert "do not blind-retry" in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_classified_blank_or_whitespace_message_becomes_unknown_error(
+    kb_session, mock_kb_client, extract_payload, exc_message
+):
+    """SDK classifier normalizes blank messages; MCP keeps the classified envelope."""
+    mock_kb_client.get_ai_knowledge_bases = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {
+                    "message": exc_message,
+                    "extensions": {
+                        "code": "PERMISSION_DENIED",
+                        "correlation_id": "corr-ws",
+                    },
+                }
+            ]
+        )
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_bases", {"pipe_uuid": "pipe-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert tool_error_message(payload) == "Unknown error"
+    assert payload["error"]["code"] == "PERMISSION_DENIED"
+    assert payload["error"]["details"]["kind"] == "permission_denied"
+    assert "do not blind-retry" not in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+async def test_non_empty_exception_message_preserved(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.get_ai_knowledge_bases = AsyncMock(
+        side_effect=RuntimeError("socket closed")
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_bases", {"pipe_uuid": "pipe-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "socket closed" in tool_error_message(payload)

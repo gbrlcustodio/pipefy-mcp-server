@@ -12,6 +12,14 @@ from pipefy_sdk.models.validators import NonBlankStr
 class MalformedFieldDefinitionError(ValueError):
     """Raised when Pipefy field definitions cannot be used for forms or filtering."""
 
+    def __init__(self, message: str) -> None:
+        if not str(message).strip():
+            raise ValueError(
+                "MalformedFieldDefinitionError requires a non-blank message, "
+                f"got {message!r}"
+            )
+        super().__init__(message)
+
 
 class FieldDefinition(BaseModel):
     """Minimum validated shape for a Pipefy field returned by GraphQL.

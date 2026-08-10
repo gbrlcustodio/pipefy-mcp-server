@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
 from pipefy_mcp.core.ipaas_gateway import IpaasGateway, oauth_connection_value
+from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
@@ -28,6 +29,11 @@ from pipefy_mcp.tools.tool_context import (
 _NOT_CONFIGURED_MESSAGE = (
     "The iPaaS tools are disabled on this server (PIPEFY_IPAAS_OAUTH_CLIENT_ID "
     "is blank). Restore the default or set a client id to enable them."
+)
+
+_IPAAS_REQUEST_FAILED = (
+    "iPaaS request failed. If this was a write, re-read counts/ids "
+    "before retrying; do not blind-retry."
 )
 
 # Only variables under this prefix are resolvable through {"$env": ...}
@@ -64,7 +70,9 @@ async def _run_ipaas_tool(
         token = await client.get_advanced_automations_token(pipe_id)
         return await work(gateway, token)
     except Exception as exc:  # noqa: BLE001
-        return build_error_payload(str(exc))
+        return build_error_payload(
+            ensure_non_empty_error_message(str(exc), _IPAAS_REQUEST_FAILED)
+        )
 
 
 class IpaasTools:

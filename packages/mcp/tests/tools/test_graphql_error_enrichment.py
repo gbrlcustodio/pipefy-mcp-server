@@ -280,6 +280,13 @@ class TestHandleToolGraphqlErrorIntegration:
         assert "Pipe not found (ID: 42)" in message
         assert "codes=NOT_FOUND" in message
 
+    @pytest.mark.parametrize("exc_message", ["", "   "])
+    def test_whitespace_only_graphql_messages_use_fallback(self, exc_message):
+        payload = handle_tool_graphql_error(
+            _build_graphql_exc(None, exc_message), "Domain fallback."
+        )
+        assert tool_error_message(payload) == "Domain fallback."
+
     @pytest.mark.parametrize(
         "kind,expected_label,expected_hint_substring",
         [

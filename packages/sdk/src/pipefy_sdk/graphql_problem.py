@@ -124,7 +124,7 @@ def classify_graphql_error_dicts(
     code = str(code_raw) if code_raw not in (None, "") else None
     correlation_raw = extensions.get("correlation_id")
     correlation_id = str(correlation_raw) if correlation_raw not in (None, "") else None
-    message = str(first.get("message") or "Unknown error")
+    message = str(first.get("message") or "").strip() or "Unknown error"
 
     kind = (
         _kind_from_code(code)

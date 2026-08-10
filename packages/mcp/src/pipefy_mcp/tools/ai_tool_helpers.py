@@ -27,7 +27,12 @@ from pipefy_mcp.core.tool_error_envelope import (
     tool_success,
 )
 from pipefy_mcp.tools.graphql_error_helpers import (
+    ensure_non_empty_error_message,
     extract_error_strings,
+)
+
+_AI_REQUEST_FAILED = (
+    "AI request failed. Re-read counts/ids before retrying; do not blind-retry."
 )
 
 logger = logging.getLogger(__name__)
@@ -226,13 +231,18 @@ def build_delete_agent_success(*, message: str) -> dict[str, Any]:
 def build_ai_tool_error(message: str) -> AiToolErrorPayload:
     """Generic AI-tool failure envelope.
 
-    Does not alter ``message``; callers must pass user-safe text (sanitized when
-    the source is the Internal API executor / GraphQL errors with diagnostic suffixes).
+    Blank or whitespace-only ``message`` is replaced with a stable fallback so
+    agents never see an empty failure. Callers still pass user-safe text
+    (sanitized when the source is the Internal API executor / GraphQL errors
+    with diagnostic suffixes).
 
     Args:
         message: User-visible failure reason.
     """
-    return cast(AiToolErrorPayload, tool_error(message))
+    return cast(
+        AiToolErrorPayload,
+        tool_error(ensure_non_empty_error_message(message, _AI_REQUEST_FAILED)),
+    )
 
 
 def build_validate_prompt_payload(

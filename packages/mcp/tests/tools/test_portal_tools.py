@@ -320,6 +320,70 @@ async def test_list_portals_transport_error_returns_error_envelope(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_list_portals_empty_exception_message_uses_fallback(
+    portal_session, mock_portal_client, extract_payload, exc_message
+):
+    mock_portal_client.list_portals = AsyncMock(side_effect=RuntimeError(exc_message))
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "list_portals", {"organization_uuid": "org-abc-123"}
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message == "Portal request failed."
+    assert "do not blind-retry" not in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_list_portals_whitespace_permission_denied_uses_guidance(
+    portal_session, mock_portal_client, extract_payload, exc_message
+):
+    mock_portal_client.list_portals = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {
+                    "message": exc_message,
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ]
+        )
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "list_portals", {"organization_uuid": "org-abc-123"}
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert "create_portal" in message
+    assert "manage_portals" in message
+    assert "do not blind-retry" not in message
+
+
+@pytest.mark.anyio
+async def test_list_portals_preserves_non_empty_exception_message(
+    portal_session, mock_portal_client, extract_payload
+):
+    mock_portal_client.list_portals = AsyncMock(side_effect=RuntimeError("portal boom"))
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "list_portals", {"organization_uuid": "org-abc-123"}
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "portal boom" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
 async def test_get_portal_transport_error_returns_error_envelope(
     portal_session, mock_portal_client, extract_payload
 ):

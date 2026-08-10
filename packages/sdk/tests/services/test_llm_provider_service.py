@@ -410,6 +410,15 @@ class TestGraphQLProblemClassifier:
     def test_empty_list_returns_none(self):
         assert classify_graphql_error_dicts([]) is None
 
+    def test_blank_or_whitespace_message_becomes_unknown_error(self):
+        for raw in ("", "   ", None):
+            problem = classify_graphql_error_dicts(
+                [{"message": raw, "extensions": {"code": "PERMISSION_DENIED"}}]
+            )
+            assert problem is not None
+            assert problem.message == "Unknown error"
+            assert problem.kind is GraphQLProblemKind.PERMISSION_DENIED
+
     def test_classify_exception_reads_errors_attribute(self):
         class FakeTransportError(Exception):
             def __init__(self):

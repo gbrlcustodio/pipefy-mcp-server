@@ -11,7 +11,7 @@ tags: [pipefy, onboarding, install, mcp, setup, claude, cursor]
 
 # Pipefy toolkit setup (first-time onboarding)
 
-**Canonical install snippets** live only in the root [`README.md#installation`](../../../README.md#installation). This skill is the agent **checklist** — print or run the README blocks verbatim; do not invent alternate commands.
+**Canonical install snippets** live only in the root [`README.md#installation`](../../../README.md#installation) — there is no second copy of the commands. This skill is the agent **checklist** — print or run the README blocks verbatim; do not invent alternate commands.
 
 Edge cases: [`packages/mcp/README.md`](../../../packages/mcp/README.md). Auth: [`docs/cli/auth.md`](../../../docs/cli/auth.md). Env: [`docs/config.md`](../../../docs/config.md).
 
@@ -63,7 +63,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
    | Claude Code plugin | [Claude Code plugin](../../../README.md#2-claude-code-plugin) | Marketplace + slash install/login |
    | CLI only | [CLI](../../../README.md#4-cli-only) | `pipefy` on PATH; no MCP |
 
-   **Never** register both hosted HTTP and local stdio/plugin under the MCP server name `pipefy`.
+   **Never** register both a hosted HTTP and a local stdio/plugin Pipefy server, whatever they are named: a second registration shadows the one you meant to use. Switching between paths is remove-then-add — [`docs/uninstall.md`](../../../docs/uninstall.md#switching-channels).
 
 2. **Execute the chosen README block** — run it in the shell, or print it for the user to paste (required for Claude slash commands). Do not reorder the plugin sequence: marketplace → `/plugin install pipefy` → `/pipefy:install` → `/pipefy:pipefy-login`.
 
@@ -86,7 +86,7 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
 | Slash commands missing | Plugin not installed | README [Claude Code plugin](../../../README.md#2-claude-code-plugin) — marketplace + install first |
-| More than one Pipefy MCP registration | Hosted + local/plugin both registered, possibly under different names | The `--scan` above names each one and where it lives. A plugin-provided server ranks below user scope, so removing the user entry alone falls through to it: `claude mcp remove <name> -s user` (or the client's settings) |
+| More than one Pipefy MCP registration | Hosted + local/plugin both registered, possibly under different names | The `--scan` above names each one and where it lives; remove-then-add recipes in [`docs/uninstall.md`](../../../docs/uninstall.md#switching-channels). A plugin-provided server ranks below user scope, so removing the user entry alone falls through to it: `claude mcp remove <name> -s user` (or the client's settings) |
 | `Needs authentication` after hosted add | OAuth not finished | `claude mcp login <name>` + browser |
 | `pipefy: command not found` | CLI not on PATH | `/pipefy:install` or README [CLI](../../../README.md#4-cli-only); check `$HOME/.local/bin` |
 | MCP tools empty / auth errors | Login not done | Re-run login; service accounts → `docs/config.md` |
@@ -95,4 +95,5 @@ Setup is outside the Pipefy MCP tool surface. After auth succeeds, verify with:
 ## See also
 
 - [`README.md#installation`](../../../README.md#installation)
+- [`docs/uninstall.md`](../../../docs/uninstall.md) — `uninstall.sh --scan`, teardown, and switching between hosted, local, and plugin
 - [`skills/README.md`](../../README.md)

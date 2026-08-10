@@ -1,6 +1,6 @@
 # CLI authentication
 
-See also the **[CLI docs index](README.md)** and **[`docs/config.md`](../config.md)** for the broader `PIPEFY_*` env-var story and the optional `~/.config/pipefy/config.toml` file that pins defaults across CLI and MCP invocations.
+See also the **[CLI docs index](README.md)** and **[`docs/config.md`](../config.md)** for the broader `PIPEFY_*` env-var story and the optional `~/.config/pipefy/config.toml` file that pins defaults across CLI and MCP invocations. To find and remove every credential this toolkit stored, whichever backend holds it, see **[`docs/uninstall.md`](../uninstall.md)**.
 
 The `pipefy` CLI accepts authentication from four sources. This page covers all of them, how the CLI picks one, and how to recover when something goes wrong.
 
@@ -288,3 +288,5 @@ Two env vars (mirrored as TOML keys) override the default behaviour:
 - `PIPEFY_KEYCHAIN_BACKEND=file` swaps the active backend to a plaintext on-disk keyring under `config_dir() / "keyring.cfg"` (`~/.config/pipefy/keyring.cfg` on POSIX, `%APPDATA%/pipefy/keyring.cfg` on Windows). Unblocks headless Linux without Secret Service. **The file is plaintext, not OS-secured**: anyone with read access to the file (including a co-tenant on a shared CI runner) reads the refresh token. Opt-in only.
 
 These are independent: `PIPEFY_DISABLE_STORED_SESSION=1` takes precedence (the file backend is never read or written). `pipefy auth status` will reflect the active backend name regardless (`Keyring`, `PlaintextKeyring`, etc.).
+
+Removing `PIPEFY_KEYCHAIN_BACKEND=file` **moves** the store rather than clearing it: the next login writes to the OS keychain while whatever is already in `keyring.cfg` stays there, still signed in and invisible to a keychain-only sweep. `./uninstall.sh --scan` resolves the effective backend and reads both stores regardless of which one is active — see [`docs/uninstall.md`](../uninstall.md).

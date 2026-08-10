@@ -28,6 +28,11 @@ WHEEL_URLS=""
 UV_INSTALLED_THIS_RUN=0
 PYTHON_OVERRIDE=""
 
+RECEIPT_SCHEMA=1
+RECEIPT=""
+RECEIPT_TAB=$(printf '\t')
+RECEIPT_CR=$(printf '\r')
+
 say() { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
 err() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -53,12 +58,16 @@ run_quiet() {
         || err "mktemp failed (TMPDIR=${TMPDIR:-/tmp})"
     # Clean up the tempfile even on signal (Ctrl-C between mktemp and rm).
     trap 'rm -f "$_rq_log"' EXIT INT TERM
-    if "$@" >"$_rq_log" 2>&1; then
+    # Captured on the failing command itself: `$?` after an `if` whose
+    # condition failed is the `if`'s own status, which is 0, so reading it
+    # there turns every failure into a success.
+    _rq_rc=0
+    "$@" >"$_rq_log" 2>&1 || _rq_rc=$?
+    if [ "$_rq_rc" -eq 0 ]; then
         rm -f "$_rq_log"
         trap - EXIT INT TERM
         return 0
     fi
-    _rq_rc=$?
     cat "$_rq_log" >&2 || true
     rm -f "$_rq_log"
     trap - EXIT INT TERM
@@ -150,6 +159,143 @@ confirm() {
         [yY]|[yY][eE][sS]) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+# ------------------------------------------------------------------ receipt
+#
+# What this run did, so uninstall.sh can be exact instead of guessing: which
+# tool directory the tools went into, whether uv was already here, whether a
+# client registration was created or found already present, where the skills
+# landed, and which release this was.
+#
+# Plain key=value, parsed with POSIX text tools alone. The JSON merge below
+# needs python3; teardown must not inherit that, so nothing about this format
+# does.
+#
+# One record per run, appended and never rewritten, so a second run with a
+# different --client does not erase the first. Each line is written as its step
+# succeeds, so an install that dies halfway still leaves the steps that did
+# happen; the closing `record=end` is what says the run finished.
+#
+# A value occupies exactly one line: backslash, tab, carriage return and
+# newline are written as \\, \t, \r and \n. `=` needs no escaping because a
+# reader splits on the first one only, and a space needs none because nothing
+# splits on whitespace.
+
+# The receipt is installer state, not user configuration. ~/.config/pipefy is
+# the user's, holds a file they authored, and is removed by teardown once it is
+# empty; state belongs under XDG_STATE_HOME, resolved the way
+# pipefy_infra.config.config_dir() resolves XDG_CONFIG_HOME.
+receipt_path() {
+    printf '%s\n' "${XDG_STATE_HOME:-$HOME/.local/state}/pipefy/install-receipt"
+}
+
+receipt_escape() {
+    # The trailing sentinel survives the command substitution, which would
+    # otherwise eat a value that ends in a newline.
+    _re=$(printf '%s.' "$1" \
+        | sed -e 's/\\/\\\\/g' \
+              -e "s/$RECEIPT_TAB/\\\\t/g" \
+              -e "s/$RECEIPT_CR/\\\\r/g" \
+        | awk 'BEGIN { ORS = "" } NR > 1 { printf "%s", "\\n" } { print }')
+    printf '%s' "${_re%.}"
+}
+
+# A receipt that cannot be written is a degraded teardown, never a failed
+# install: the tools are what the user asked for.
+receipt_put() {
+    [ -n "$RECEIPT" ] || return 0
+    if ! printf '%s=%s\n' "$1" "$(receipt_escape "$2")" >>"$RECEIPT"; then
+        warn "could not append to $RECEIPT; this run is only partly recorded and uninstall.sh will fall back to heuristics"
+        RECEIPT=""
+    fi
+}
+
+receipt_begin() {
+    _rb_path=$(receipt_path)
+    if [ "$DRY_RUN" -eq 1 ]; then
+        printf '+ record this run in %s\n' "$_rb_path" >&2
+        return 0
+    fi
+    if ! mkdir -p "$(dirname "$_rb_path")" 2>/dev/null; then
+        warn "could not create $(dirname "$_rb_path"); this run is not recorded and uninstall.sh will fall back to heuristics"
+        return 0
+    fi
+    RECEIPT="$_rb_path"
+    receipt_put record begin
+    # schema comes first so a reader can reject a record it cannot parse
+    # before it reads a single value out of it.
+    receipt_put schema "$RECEIPT_SCHEMA"
+    receipt_put time "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf 'unknown')"
+}
+
+receipt_uv() {
+    if [ "$UV_INSTALLED_THIS_RUN" -eq 1 ]; then
+        receipt_put uv_installed_by_us true
+    else
+        receipt_put uv_installed_by_us false
+    fi
+}
+
+# Where `npx skills add` can write: the global directory, and the project one
+# it picks instead when it runs inside a project. This script does not get to
+# tell it which, so both are looked at.
+skills_candidate_dirs() {
+    printf '%s\n' "$HOME/.claude/skills"
+    [ "$PWD" = "$HOME" ] || printf '%s\n' "$PWD/.claude/skills"
+}
+
+# One "<dir><tab><name>" line per skill of ours currently in either directory.
+skills_present() {
+    while IFS= read -r _sp_dir; do
+        [ -d "$_sp_dir" ] || continue
+        for _sp_skill in "$_sp_dir"/pipefy-*; do
+            [ -f "$_sp_skill/SKILL.md" ] || continue
+            printf '%s%s%s\n' "$_sp_dir" "$RECEIPT_TAB" "$(basename "$_sp_skill")"
+        done
+    done <<EOF
+$(skills_candidate_dirs)
+EOF
+}
+
+# The skills this run added, by difference against what was there before it.
+# Not "every pipefy-* directory": a skill the user wrote under that name is
+# none of the installer's business, and teardown reads these names to decide
+# what it is allowed to delete. Recording the directory the same way keeps the
+# receipt honest when the tool lands somewhere this did not predict — then it
+# records nothing rather than something false.
+receipt_skills() {
+    _rs_before="$1"
+    _rs_dirs=""
+    while IFS= read -r _rs_line; do
+        [ -n "$_rs_line" ] || continue
+        if printf '%s\n' "$_rs_before" | grep -Fqx -- "$_rs_line"; then
+            continue
+        fi
+        _rs_dir="${_rs_line%"$RECEIPT_TAB"*}"
+        if ! printf '%s\n' "$_rs_dirs" | grep -Fqx -- "$_rs_dir"; then
+            _rs_dirs="$_rs_dirs$_rs_dir
+"
+            receipt_put skills_dir "$_rs_dir"
+        fi
+        receipt_put skill "${_rs_line##*"$RECEIPT_TAB"}"
+    done <<EOF
+$(skills_present)
+EOF
+}
+
+# 0 from the merge means this run created the entry, 3 means it found one and
+# left it alone. Recording which is the whole point: without it teardown cannot
+# tell a registration it made from one that was already there.
+receipt_client_entry() {
+    case "$2" in
+        0) receipt_put "entry_created.$1" true ;;
+        3) receipt_put "entry_created.$1" false ;;
+    esac
+}
+
+receipt_end() {
+    receipt_put record end
 }
 
 detect_uv() {
@@ -305,6 +451,8 @@ EOF
     else
         run_quiet uv tool install --force "$@"
     fi
+    # The wheel is named for the module, the uv tool for the distribution.
+    receipt_put uv_tool "$(printf '%s' "$pkg" | tr '_' '-')"
 }
 
 install_skills() {
@@ -316,7 +464,9 @@ install_skills() {
         return 0
     fi
     if confirm "Install Pipefy skills via 'npx skills add'?"; then
+        _is_before=$(skills_present)
         run npx skills add "$REPO" -y
+        receipt_skills "$_is_before"
     fi
 }
 
@@ -330,6 +480,8 @@ require_python3() {
     fi
 }
 
+# Returns 0 when this run created the entry and 3 when it found one already
+# there. Anything else is a failure the python below has already explained.
 json_merge_pipefy() {
     path="$1"
     if [ "$DRY_RUN" -eq 1 ]; then
@@ -338,7 +490,8 @@ json_merge_pipefy() {
     fi
     require_python3
     mkdir -p "$(dirname "$path")"
-    python3 - "$path" <<'PY'
+    _jm_rc=0
+    python3 - "$path" <<'PY' || _jm_rc=$?
 import json, os, pathlib, sys, tempfile
 
 p = pathlib.Path(sys.argv[1])
@@ -366,12 +519,16 @@ if not isinstance(servers, dict):
     data["mcpServers"] = servers
 if "pipefy" in servers:
     print(f"{p}: mcpServers.pipefy already present; leaving as-is")
-    sys.exit(0)
+    # 3, not 0: the caller records whether this run created the entry, and a
+    # removal that cannot tell the two apart deletes the user's own work.
+    sys.exit(3)
 servers["pipefy"] = {"command": "pipefy-mcp-server"}
 fd, tmp_path = tempfile.mkstemp(prefix=p.name + ".", dir=str(p.parent))
 try:
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+        # ensure_ascii=False: another server's UTF-8 value is not this run's to
+        # rewrite into escapes.
+        json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp_path, p)
 except BaseException:
@@ -382,8 +539,13 @@ except BaseException:
     raise
 print(f"Updated {p}")
 PY
+    case "$_jm_rc" in
+        0|3) return "$_jm_rc" ;;
+        *) exit "$_jm_rc" ;;
+    esac
 }
 
+# Same contract as json_merge_pipefy: 0 created, 3 found already present.
 codex_append_pipefy() {
     path="$1"
     if [ "$DRY_RUN" -eq 1 ]; then
@@ -393,7 +555,7 @@ codex_append_pipefy() {
     mkdir -p "$(dirname "$path")"
     if [ -f "$path" ] && grep -q '^\[mcp_servers\.pipefy\]' "$path"; then
         say "$path already has [mcp_servers.pipefy]; leaving as-is."
-        return 0
+        return 3
     fi
     if [ -f "$path" ] && [ -s "$path" ]; then
         printf '\n' >> "$path"
@@ -420,15 +582,19 @@ EOF
 }
 
 write_client_config() {
+    _wc_rc=0
     case "$CLIENT" in
         cursor)
-            json_merge_pipefy "$HOME/.cursor/mcp.json"
+            json_merge_pipefy "$HOME/.cursor/mcp.json" || _wc_rc=$?
+            receipt_client_entry cursor "$_wc_rc"
             ;;
         claude-desktop)
-            json_merge_pipefy "$(claude_desktop_config_path)"
+            json_merge_pipefy "$(claude_desktop_config_path)" || _wc_rc=$?
+            receipt_client_entry claude-desktop "$_wc_rc"
             ;;
         codex)
-            codex_append_pipefy "$HOME/.codex/config.toml"
+            codex_append_pipefy "$HOME/.codex/config.toml" || _wc_rc=$?
+            receipt_client_entry codex "$_wc_rc"
             ;;
         claude-code)
             cat <<EOF
@@ -453,6 +619,11 @@ print_next_steps() {
     say "Install complete."
     if [ "$DRY_RUN" -eq 0 ] && command -v pipefy >/dev/null 2>&1; then
         pipefy --version || true
+    fi
+    if [ -n "$RECEIPT" ]; then
+        say ""
+        say "Recorded this run in $RECEIPT, which uninstall.sh reads so it removes"
+        say "what this install created and leaves what it found."
     fi
     if [ "$UV_INSTALLED_THIS_RUN" -eq 1 ]; then
         say ""
@@ -489,13 +660,23 @@ main() {
         UV_TOOL_DIR="$PREFIX"
         export UV_TOOL_DIR
     fi
+    receipt_begin
+    # Recorded whether it came from --prefix or from the caller's environment:
+    # either way the tool environments are unfindable at teardown time unless
+    # the same variable happens to be exported again.
+    if [ -n "${UV_TOOL_DIR:-}" ]; then
+        receipt_put uv_tool_dir "$UV_TOOL_DIR"
+    fi
     detect_uv
+    receipt_uv
     pick_system_python
     resolve_release
+    receipt_put release_tag "$TAG"
     install_tool pipefy_cli
     install_tool pipefy_mcp_server
     install_skills
     write_client_config
+    receipt_end
     print_next_steps
 }
 

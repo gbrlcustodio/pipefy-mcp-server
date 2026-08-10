@@ -128,7 +128,7 @@ Without a receipt the run is in **heuristic mode**, which is permanent rather th
 - **A git-tracked `.mcp.json`.** Editing it is not durable — the next checkout, branch switch, or stash pop restores it from the index — so the entry is disabled through `disabledMcpjsonServers` instead.
 - **A `pipefy` binary inside a project virtualenv.** It is reported for shadowing purposes and classified as belonging to that checkout.
 - **A `pipefy-*` skill nothing records this toolkit installing.** See above.
-- **Whatever a skill entry links out to, when that target is outside the store its lock file names.** The link is this toolkit's and goes; the directory it pointed at is reported and left.
+- **Whatever a skill entry links out to, when that target is outside `<base>/.agents/skills` for the base its lock file was found at.** The link is this toolkit's and goes; the directory it pointed at is reported and left.
 - **A Codex `[mcp_servers.<name>]` section with anything beyond the single line the installer appends**, including a `[mcp_servers.<name>.env]` sub-table beside it. The section and the sub-table are separate headers, so excising one would strand the other and whatever it holds; both are reported instead.
 - **A marketplace clone recorded outside the client's own plugin directory.** `installLocation` is data this script did not write, so it is checked against the canonical clone path and reported when it does not match.
 - **Your git checkouts.**

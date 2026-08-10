@@ -889,6 +889,41 @@ def test_a_project_lock_still_holding_another_source_is_kept(tmp_path):
     assert "still records skills from another source" in run.stdout
 
 
+def test_both_layouts_at_once_each_answer_from_their_own_lock(tmp_path):
+    """The same skill name is in both locks, and each has its own store.
+
+    Keyed on the name alone, the first record found answers for both: a project
+    skill is judged against the global store, read as outside it, and left —
+    reported as left alone, exit 0, nothing removed.
+    """
+    home = _home(tmp_path)
+    base = tmp_path / "roundtrip"
+    base.mkdir()
+    # Global: lock in the agent directory, links from ~/.claude/skills.
+    _install_skills(home, "pipefy-reports")
+    global_lock = home / ".agents" / ".skill-lock.json"
+    global_store = home / ".agents" / "skills" / "pipefy-reports"
+    global_store.mkdir(parents=True)
+    (global_store / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    global_link = home / ".claude" / "skills" / "pipefy-reports"
+    shutil.rmtree(global_link)
+    global_link.symlink_to(global_store)
+    # Project: same skill name, its own lock, its own store.
+    project_lock = _install_project_skills(base, "pipefy-reports")
+    project_store = base / ".agents" / "skills" / "pipefy-reports"
+
+    run = _run(home, _stub_path(tmp_path), cwd=base)
+
+    # Each half judged against its own record, and both go.
+    assert not project_store.exists(), run.stdout
+    assert not project_lock.exists()
+    assert not (base / ".claude" / "skills" / "pipefy-reports").is_symlink()
+    assert not global_store.exists()
+    assert not global_lock.exists()
+    assert not global_link.is_symlink()
+    assert "outside the skills store" not in run.stdout
+
+
 # ------------------------------------------------------------- hosted token
 
 

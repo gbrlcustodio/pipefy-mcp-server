@@ -42,3 +42,9 @@ repos:
         language: system
         files: ^uninstall\.sh$
         pass_filenames: false
+      - id: pipe-drain
+        name: consumers of a streaming producer read to the end
+        entry: python3 .github/workflows/scripts/check_pipe_drain.py
+        language: system
+        files: ^uninstall\.sh$
+        pass_filenames: false

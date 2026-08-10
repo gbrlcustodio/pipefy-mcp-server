@@ -284,9 +284,13 @@ client_has_cap() {
 # client id.
 client_row_with_cap() {
     client_rows | while IFS= read -r _cr; do
+        # Read to the end and keep the first: leaving the loop early closes the
+        # pipe on a producer still writing, and dash reports that EPIPE as
+        # `printf: I/O error` from a scan that writes nothing to stderr.
+        [ -z "${_crc_found:-}" ] || continue
         if client_has_cap "$_cr" "$1"; then
+            _crc_found=1
             printf '%s\n' "$_cr"
-            break
         fi
     done
 }
@@ -2278,15 +2282,22 @@ skill_provenance() {
     done <<EOF
 $RCPT_SKILLS
 EOF
-    records skilllock \
-        | awk -F"$TAB" -v n="$1" '$3 == n { print $4 "\t" $5; exit }'
+    records skilllock | awk -F"$TAB" -v l="$2" -v n="$1" \
+        '$2 == l && $3 == n && !seen { print $4 "\t" $5; seen = 1 }'
 }
 
-# The lock file that describes a skill. The path is one the probe built from
-# $HOME and the project directories it already sweeps, never a string read out
-# of a file, and it is only ever edited as JSON with a backup taken first.
-skill_lock_file() {
-    records skilllock | awk -F"$TAB" -v n="$1" '$3 == n { print $2; exit }'
+# The lock file describing the skills in one directory. The pairing comes from
+# the probe, which found both at the same base. Keying on the skill name alone
+# would cross the two layouts: a machine with a global and a project install of
+# this toolkit has the same skill name in both locks, and the first record
+# found would answer for the other one's store.
+#
+# The path is one the probe built from $HOME and the project directories it
+# already sweeps, never a string read out of a file, and it is only ever edited
+# as JSON with a backup taken first.
+lock_for_skills_dir() {
+    records skillsdir \
+        | awk -F"$TAB" -v d="$1" '$2 == d && !seen { print $3; seen = 1 }'
 }
 
 scan_skills_dir() {
@@ -2295,6 +2306,10 @@ scan_skills_dir() {
         note "no $_sd_dir"
         return 0
     fi
+    # Resolved once, from the directory rather than from a skill name: the same
+    # name appears in both locks on a machine carrying a global and a project
+    # install, and each has to answer for its own.
+    _sd_lock=$(lock_for_skills_dir "$_sd_dir")
     _hit=0
     _theirs=0
     for _skill in "$_sd_dir"/pipefy-*; do
@@ -2302,7 +2317,7 @@ scan_skills_dir() {
         # gives this catalog's skills.
         [ -f "$_skill/SKILL.md" ] || continue
         _sname=$(basename "$_skill")
-        _prov=$(skill_provenance "$_sname")
+        _prov=$(skill_provenance "$_sname" "$_sd_lock")
         case "$_prov" in
             receipt|ours*) ;;
             other*)
@@ -2320,7 +2335,7 @@ scan_skills_dir() {
         detail "$_sname"
         plan_add 7 ours rmpath "$_skill" - - - - - - \
             "delete the $_sname skill"
-        plan_skill_store "$_skill" "$_sname"
+        plan_skill_store "$_skill" "$_sname" "$_sd_lock"
     done
     if [ "$_hit" -eq 0 ]; then
         note "no pipefy-* skills from this toolkit in $_sd_dir"
@@ -2337,7 +2352,8 @@ scan_skills_dir() {
 # the global and project layouts and its directory differs with it, so the
 # store is derived from the base, which does not.
 skill_store_dir() {
-    records skilllock | awk -F"$TAB" -v n="$1" '$3 == n { print $6; exit }'
+    records skilllock | awk -F"$TAB" -v l="$1" -v n="$2" \
+        '$2 == l && $3 == n && !seen { print $6; seen = 1 }'
 }
 
 # Is a link target inside that store? Strictly inside: the store root holds
@@ -2363,8 +2379,8 @@ skill_store_confines() {
 # own, most likely — costs the link and nothing more. The report says so and
 # names what stayed, because "deleted the skill" would otherwise be false.
 plan_skill_store() {
-    _pss_lock=$(skill_lock_file "$2")
-    _pss_store=$(skill_store_dir "$2")
+    _pss_lock="$3"
+    _pss_store=$(skill_store_dir "$3" "$2")
     if [ -L "$1" ]; then
         _pss_target=$(canonical_path "$(resolve_link "$1")")
         if [ -d "$_pss_target" ] && [ "$_pss_target" != "$(canonical_path "$1")" ]; then

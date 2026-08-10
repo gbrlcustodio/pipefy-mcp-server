@@ -60,6 +60,11 @@ jobs:
       run: uvx --from shellcheck-py==0.11.0.1 shellcheck --shell=sh install.sh uninstall.sh
     - name: Deletions route through remove_path
       run: python3 .github/workflows/scripts/check_deletion_guard.py
+    # Not a behavioural test: whether the producer is still writing when the
+    # consumer leaves depends on the pipe buffer, so an early exit reproduces
+    # on one platform and not another.
+    - name: Consumers of a streaming producer read to the end
+      run: python3 .github/workflows/scripts/check_pipe_drain.py
 
   # The only check that proves completeness rather than the correctness of a
   # step someone thought to write: install for real, tear down for real, and

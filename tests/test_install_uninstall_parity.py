@@ -46,6 +46,12 @@ assert _spec is not None and _spec.loader is not None
 _guard = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_guard)
 
+_DRAIN_SCRIPT = _GUARD_SCRIPT.parent / "check_pipe_drain.py"
+_drain_spec = importlib.util.spec_from_file_location("check_pipe_drain", _DRAIN_SCRIPT)
+assert _drain_spec is not None and _drain_spec.loader is not None
+_drain = importlib.util.module_from_spec(_drain_spec)
+_drain_spec.loader.exec_module(_drain)
+
 # `security` reports an empty keychain, so a Darwin run reaches the same end
 # state as a Linux one without a source going uninspected.
 _SECURITY = """#!/bin/sh
@@ -423,3 +429,50 @@ def test_the_onboarding_skill_verifies_without_a_repository_checkout():
         # it as the checkout alternative beside the curl form is not.
         if "./uninstall.sh" in line:
             assert "curl -LsSf" in line, line
+
+
+# ------------------------------------------------------------- the pipe drain
+
+
+def test_every_consumer_of_a_streaming_producer_reads_to_the_end():
+    assert _drain.check(_UNINSTALL) == []
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        # `break` out of a loop fed by one of the table producers.
+        (
+            "client_rows | while IFS= read -r _cr; do\n",
+            "client_rows | while IFS= read -r _cr; do\n            break\n",
+        ),
+        # awk leaving on its first match, which is how the last one got in.
+        (
+            "'$2 == d && !seen { print $3; seen = 1 }'",
+            "'$2 == d { print $3; exit }'",
+        ),
+        # A `head` on the same shape. Nothing in the file uses it today, so
+        # this one is appended rather than substituted.
+        ("", "\nclient_ids_first() {\n    all_client_rows | head -n 1\n}\n"),
+    ],
+    ids=["break", "awk-exit", "head"],
+)
+def test_the_pipe_drain_check_has_teeth(tmp_path, mutation):
+    anchor, replacement = mutation
+    body = _UNINSTALL.read_text(encoding="utf-8")
+    if anchor:
+        assert anchor in body
+        body = body.replace(anchor, replacement, 1)
+    else:
+        body += replacement
+    mutated = tmp_path / "uninstall.sh"
+    mutated.write_text(body, encoding="utf-8")
+
+    assert _drain.check(mutated) != []
+
+
+def test_an_awk_end_block_is_not_an_early_exit():
+    """`END { exit !f }` runs after the input is consumed; it is the idiom."""
+    body = _UNINSTALL.read_text(encoding="utf-8")
+    assert "END { exit !f }" in body
+    assert _drain.check(_UNINSTALL) == []

@@ -34,9 +34,10 @@ PRUNE = {
     "root belongs to uv",
     ".git": "not present under HOME on a runner, and never toolkit state",
     # Hosted GitHub Actions lays the workspace and RUNNER_TEMP under $HOME
-    # (`$HOME/work/...`). Install may clone skills into RUNNER_TEMP and leave
-    # that shared store by design; runner agent noise also accumulates there.
-    # Neither is toolkit state a user would see on a laptop.
+    # (`$HOME/work/...`), and runner agent noise accumulates there throughout a
+    # job. None of it is toolkit state a user would see on a laptop. The job
+    # runs both scripts from `$HOME/roundtrip` precisely so that what they
+    # write does not land in here and escape the comparison.
     "work": "GitHub Actions workspace and RUNNER_TEMP under HOME on hosted runners",
     "actions-runner": "runner agent cache and diagnostics under HOME on some images",
 }

@@ -48,7 +48,6 @@ def webhook_session(webhook_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -86,7 +85,6 @@ async def test_send_inbox_email_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -113,7 +111,6 @@ async def test_send_inbox_email_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -148,7 +145,6 @@ async def test_get_email_templates_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -184,7 +180,6 @@ async def test_send_email_with_template_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -208,7 +203,6 @@ async def test_send_email_with_template_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_rejects_non_numeric_card_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -232,7 +226,6 @@ async def test_send_email_with_template_rejects_non_numeric_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_http_url(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -257,7 +250,6 @@ async def test_create_webhook_rejects_http_url(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_invalid_email_type(
     webhook_session, extract_payload
 ):
@@ -274,7 +266,6 @@ async def test_get_card_inbox_emails_invalid_email_type(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -308,7 +299,6 @@ async def test_create_webhook_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -339,7 +329,6 @@ async def test_create_webhook_graphql_error(
 
 class TestGetWebhooks:
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_success(self, webhook_session, mock_webhook_client, extract_payload):
         mock_webhook_client.get_webhooks.return_value = {
             "pipe": {
@@ -370,7 +359,6 @@ class TestGetWebhooks:
         assert payload["result"]["pipe"]["webhooks"][0]["id"] == "w1"
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_empty(self, webhook_session, mock_webhook_client, extract_payload):
         mock_webhook_client.get_webhooks.return_value = {"pipe": {"webhooks": []}}
 
@@ -386,7 +374,6 @@ class TestGetWebhooks:
         assert payload["result"]["pipe"]["webhooks"] == []
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_graphql_error(
         self, webhook_session, mock_webhook_client, extract_payload
     ):
@@ -406,7 +393,6 @@ class TestGetWebhooks:
         assert "pipe not found" in tool_error_message(payload).lower()
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_has_read_only_hint(self, webhook_session):
         async with webhook_session as session:
             listed = await session.list_tools()
@@ -417,7 +403,6 @@ class TestGetWebhooks:
 
 class TestUpdateWebhook:
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_success(self, webhook_session, mock_webhook_client, extract_payload):
         mock_webhook_client.update_webhook.return_value = {
             "updateWebhook": {
@@ -456,7 +441,6 @@ class TestUpdateWebhook:
         assert payload["result"]["updateWebhook"]["webhook"]["id"] == "w1"
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_graphql_error(
         self, webhook_session, mock_webhook_client, extract_payload
     ):
@@ -476,7 +460,6 @@ class TestUpdateWebhook:
         assert "webhook gone" in tool_error_message(payload)
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_rejects_when_no_fields_to_update(
         self, webhook_session, mock_webhook_client, extract_payload
     ):
@@ -493,7 +476,6 @@ class TestUpdateWebhook:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_preview_does_not_delete(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -514,7 +496,6 @@ async def test_delete_webhook_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -536,7 +517,6 @@ async def test_delete_webhook_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -557,7 +537,6 @@ async def test_delete_webhook_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_has_destructive_hint(webhook_session):
     async with webhook_session as session:
         listed = await session.list_tools()
@@ -568,7 +547,6 @@ async def test_delete_webhook_has_destructive_hint(webhook_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -610,7 +588,6 @@ async def test_get_card_inbox_emails_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_with_type_filter(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -634,7 +611,6 @@ async def test_get_card_inbox_emails_with_type_filter(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -655,7 +631,6 @@ async def test_get_card_inbox_emails_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_has_read_only_hint(webhook_session):
     async with webhook_session as session:
         listed = await session.list_tools()
@@ -670,7 +645,6 @@ async def test_get_card_inbox_emails_has_read_only_hint(webhook_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_coerces_int_repo_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -686,7 +660,6 @@ async def test_get_email_templates_coerces_int_repo_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_coerces_int_card_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -702,7 +675,6 @@ async def test_get_card_inbox_emails_coerces_int_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_coerces_int_card_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -731,7 +703,6 @@ async def test_send_inbox_email_coerces_int_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_coerces_int_ids(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -755,7 +726,6 @@ async def test_send_email_with_template_coerces_int_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_coerces_int_pipe_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -783,7 +753,6 @@ async def test_create_webhook_coerces_int_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_empty_to_list(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -806,7 +775,6 @@ async def test_send_inbox_email_rejects_empty_to_list(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_to_with_blank_items(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -829,7 +797,6 @@ async def test_send_inbox_email_rejects_to_with_blank_items(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_blank_subject(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -852,7 +819,6 @@ async def test_send_inbox_email_rejects_blank_subject(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_blank_from(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -875,7 +841,6 @@ async def test_send_inbox_email_rejects_blank_from(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_invalid_card_id(
     webhook_session, mock_webhook_client
 ):
@@ -901,7 +866,6 @@ async def test_send_inbox_email_rejects_invalid_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_rejects_blank_template_id(
     webhook_session, mock_webhook_client
 ):
@@ -916,7 +880,6 @@ async def test_send_email_with_template_rejects_blank_template_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_value_error_from_client(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -941,7 +904,6 @@ async def test_send_email_with_template_value_error_from_client(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_blank_url(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -958,7 +920,6 @@ async def test_create_webhook_rejects_blank_url(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_empty_actions_list(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -975,7 +936,6 @@ async def test_create_webhook_rejects_empty_actions_list(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_invalid_pipe_id(
     webhook_session, mock_webhook_client
 ):
@@ -999,7 +959,6 @@ async def test_create_webhook_rejects_invalid_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -1020,7 +979,6 @@ async def test_get_email_templates_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_rejects_invalid_repo_id(
     webhook_session, mock_webhook_client
 ):
@@ -1040,7 +998,6 @@ async def test_get_email_templates_rejects_invalid_repo_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_rejects_invalid_card_id(
     webhook_session, mock_webhook_client
 ):
@@ -1060,7 +1017,6 @@ async def test_get_card_inbox_emails_rejects_invalid_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_rejects_invalid_card_id(
     webhook_session, mock_webhook_client
 ):
@@ -1081,7 +1037,6 @@ async def test_send_email_with_template_rejects_invalid_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_rejects_blank_webhook_id(
     webhook_session, mock_webhook_client
 ):

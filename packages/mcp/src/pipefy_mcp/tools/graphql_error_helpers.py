@@ -40,6 +40,16 @@ from pipefy_mcp.core.tool_error_envelope import tool_error
 _DICT_REPR_PREFIX_RE = re.compile(r"^\s*\{\s*['\"]message['\"]\s*:")
 
 
+def ensure_non_empty_error_message(text: str, fallback: str) -> str:
+    """Return ``text`` when non-blank after strip; otherwise ``fallback``.
+
+    Args:
+        text: Candidate error message (may be empty or whitespace-only).
+        fallback: Stable non-empty message used when ``text`` is blank.
+    """
+    return text if text.strip() else fallback
+
+
 def _try_extract_message_from_dict_repr(raw: str) -> str | None:
     """Return inner ``message`` when ``str(exc)`` is a single-error dict repr.
 
@@ -541,6 +551,7 @@ __all__ = [
     "enrich_invalid_arguments_error",
     "enrich_not_found_error",
     "enrich_permission_denied_error",
+    "ensure_non_empty_error_message",
     "extract_error_strings",
     "extract_graphql_correlation_id",
     "extract_graphql_error_codes",

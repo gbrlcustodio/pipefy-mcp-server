@@ -32,9 +32,21 @@ def test_build_field_condition_payload_helpers__no_integration():
     assert created["condition_id"] == "c1"
     assert created["action"] == "created"
     assert "c1" in created["message"]
+    assert "verified" not in created
+    assert "warning" not in created
 
     updated = build_field_condition_success_payload("c2", "updated")
     assert updated["action"] == "updated"
+
+    verified = build_field_condition_success_payload("c3", "created", verified=True)
+    assert verified["verified"] is True
+    assert "warning" not in verified
+
+    warned = build_field_condition_success_payload(
+        "c4", "created", warning="could not verify"
+    )
+    assert warned["warning"] == "could not verify"
+    assert "verified" not in warned
 
     ok_del = build_field_condition_delete_payload(True)
     assert ok_del["success"] is True
@@ -74,7 +86,7 @@ def mock_pipe_config_client():
     client.create_phase = AsyncMock()
     client.update_phase = AsyncMock()
     client.delete_phase = AsyncMock()
-    client.get_phase_fields = AsyncMock()
+    client.get_phase_fields = AsyncMock(return_value={"fields": []})
     client.create_phase_field = AsyncMock()
     client.update_phase_field = AsyncMock()
     client.delete_phase_field = AsyncMock()
@@ -119,7 +131,6 @@ def pipe_config_session(pipe_config_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_pipe_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -141,7 +152,6 @@ async def test_create_pipe_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_pipe_rejects_blank_name(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -156,7 +166,6 @@ async def test_create_pipe_rejects_blank_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_pipe_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -179,7 +188,6 @@ async def test_update_pipe_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_pipe_requires_at_least_one_field(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -194,7 +202,6 @@ async def test_update_pipe_requires_at_least_one_field(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_pipe_preview_does_not_delete(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -217,7 +224,6 @@ async def test_delete_pipe_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_pipe_confirm_calls_mutation(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -240,7 +246,6 @@ async def test_delete_pipe_confirm_calls_mutation(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_pipe_invalid_id(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -259,7 +264,6 @@ async def test_delete_pipe_invalid_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_pipe_maps_not_found_on_get_pipe(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -286,7 +290,6 @@ async def test_delete_pipe_maps_not_found_on_get_pipe(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_clone_pipe_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -308,7 +311,6 @@ async def test_clone_pipe_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_phase_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -335,7 +337,6 @@ async def test_create_phase_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_with_explicit_name(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -359,7 +360,6 @@ async def test_update_phase_with_explicit_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_resolves_name_from_get_phase_fields(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -388,7 +388,6 @@ async def test_update_phase_resolves_name_from_get_phase_fields(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_requires_at_least_one_attr(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -402,7 +401,6 @@ async def test_update_phase_requires_at_least_one_attr(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -420,7 +418,6 @@ async def test_delete_phase_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_preview_does_not_delete(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -438,7 +435,6 @@ async def test_delete_phase_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_without_pipe_id_skips_dependent_lookups(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -456,7 +452,6 @@ async def test_delete_phase_without_pipe_id_skips_dependent_lookups(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_confirm_true_skips_dependent_lookups(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -477,7 +472,6 @@ async def test_delete_phase_confirm_true_skips_dependent_lookups(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_preview_all_sublookups_succeed(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -527,7 +521,6 @@ async def test_delete_phase_preview_all_sublookups_succeed(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_preview_partial_failure_automations_raises(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -563,7 +556,6 @@ async def test_delete_phase_preview_partial_failure_automations_raises(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_preview_all_sublookups_fail(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -581,7 +573,6 @@ async def test_delete_phase_preview_all_sublookups_fail(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_sublookups_run_in_parallel(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -620,7 +611,6 @@ async def test_delete_phase_sublookups_run_in_parallel(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_cards_not_enumerated(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -645,7 +635,6 @@ async def test_delete_phase_cards_not_enumerated(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_phase_field_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -683,7 +672,6 @@ async def test_create_phase_field_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_phase_field_with_options(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -720,7 +708,6 @@ async def test_create_phase_field_with_options(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_field_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -744,7 +731,6 @@ async def test_update_phase_field_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_field_success_with_string_slug(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -772,7 +758,6 @@ async def test_update_phase_field_success_with_string_slug(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_field_with_uuid_for_disambiguation(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -805,7 +790,6 @@ async def test_update_phase_field_with_uuid_for_disambiguation(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_field_rejects_blank_label(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -821,7 +805,6 @@ async def test_update_phase_field_rejects_blank_label(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -842,7 +825,6 @@ async def test_delete_phase_field_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_preview_does_not_delete(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -860,7 +842,6 @@ async def test_delete_phase_field_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_preview_lists_dependent_conditions(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -907,7 +888,6 @@ async def test_delete_phase_field_preview_lists_dependent_conditions(
 
 # delete_phase_field preview — expression-only field condition dependents
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_preview_includes_conditions_with_expression_only_refs(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -979,7 +959,6 @@ async def test_delete_phase_field_preview_includes_conditions_with_expression_on
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_preview_no_deps_unchanged(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1008,7 +987,6 @@ async def test_delete_phase_field_preview_no_deps_unchanged(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_no_phase_id_skips_enrichment(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1026,7 +1004,6 @@ async def test_delete_phase_field_no_phase_id_skips_enrichment(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_identifier_match_by_uuid(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1068,7 +1045,6 @@ async def test_delete_phase_field_identifier_match_by_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_enrichment_failure_degrades_gracefully(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1093,7 +1069,6 @@ async def test_delete_phase_field_enrichment_failure_degrades_gracefully(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_confirm_true_skips_enrichment(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1113,7 +1088,6 @@ async def test_delete_phase_field_confirm_true_skips_enrichment(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_success_with_string_slug(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1134,7 +1108,6 @@ async def test_delete_phase_field_success_with_string_slug(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_label_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1153,7 +1126,6 @@ async def test_create_label_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_label_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1174,7 +1146,6 @@ async def test_update_label_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_label_strips_id_from_extra_input__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1200,7 +1171,6 @@ async def test_update_label_strips_id_from_extra_input__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_label_missing_color_rejected_at_tool_boundary(
     pipe_config_session, mock_pipe_config_client
 ):
@@ -1217,7 +1187,6 @@ async def test_update_label_missing_color_rejected_at_tool_boundary(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_label_empty_color_returns_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1233,7 +1202,6 @@ async def test_update_label_empty_color_returns_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1251,7 +1219,6 @@ async def test_delete_label_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_preview_does_not_delete(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1269,7 +1236,6 @@ async def test_delete_label_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_preview_with_cards_in_use(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1307,7 +1273,6 @@ async def test_delete_label_preview_with_cards_in_use(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_preview_partial_sample_reports_actual_count(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1338,7 +1303,6 @@ async def test_delete_label_preview_partial_sample_reports_actual_count(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_preview_unused_label_no_dependents(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1357,7 +1321,6 @@ async def test_delete_label_preview_unused_label_no_dependents(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_preview_get_cards_fails_degrades(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1377,7 +1340,6 @@ async def test_delete_label_preview_get_cards_fails_degrades(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_confirm_true_skips_resolver(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1396,7 +1358,6 @@ async def test_delete_label_confirm_true_skips_resolver(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_preview_without_pipe_id_skips_cards_lookup(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1411,7 +1372,6 @@ async def test_delete_label_preview_without_pipe_id_skips_cards_lookup(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_pipe_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1429,7 +1389,6 @@ async def test_create_pipe_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_pipe_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1447,7 +1406,6 @@ async def test_update_pipe_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_clone_pipe_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1465,7 +1423,6 @@ async def test_clone_pipe_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_phase_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1483,7 +1440,6 @@ async def test_create_phase_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1501,7 +1457,6 @@ async def test_update_phase_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_get_phase_fields_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1519,7 +1474,6 @@ async def test_update_phase_get_phase_fields_error_returns_failure__no_integrati
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1536,7 +1490,6 @@ async def test_delete_phase_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_phase_field_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1554,7 +1507,6 @@ async def test_create_phase_field_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_phase_field_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1572,7 +1524,6 @@ async def test_update_phase_field_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1590,7 +1541,6 @@ async def test_delete_phase_field_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_cascade_diagnosis_with_pipe_id(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1633,7 +1583,6 @@ async def test_delete_phase_field_cascade_diagnosis_with_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_cascade_diagnosis_field_still_exists(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1670,7 +1619,6 @@ async def test_delete_phase_field_cascade_diagnosis_field_still_exists(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_cascade_diagnosis_skipped_without_pipe_id(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1696,7 +1644,6 @@ async def test_delete_phase_field_cascade_diagnosis_skipped_without_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_label_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1714,7 +1661,6 @@ async def test_create_label_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_label_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1732,7 +1678,6 @@ async def test_update_label_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_graphql_error_returns_failure__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1749,7 +1694,6 @@ async def test_delete_label_graphql_error_returns_failure__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_phase_field_strips_reserved_keys_from_extra_input__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1781,7 +1725,6 @@ async def test_create_phase_field_strips_reserved_keys_from_extra_input__no_inte
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_phase_rejects_blank_name__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1795,7 +1738,6 @@ async def test_create_phase_rejects_blank_name__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_label_rejects_blank_color__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1822,7 +1764,6 @@ async def test_create_label_rejects_blank_color__no_integration(
         ),
     ],
 )
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_label_color_maps_sdk_value_error__no_integration(
     pipe_config_session,
     mock_pipe_config_client,
@@ -1845,7 +1786,6 @@ async def test_label_color_maps_sdk_value_error__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_clone_pipe_rejects_invalid_organization_id__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1859,7 +1799,6 @@ async def test_clone_pipe_rejects_invalid_organization_id__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_rejects_invalid_id__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1872,7 +1811,6 @@ async def test_delete_phase_rejects_invalid_id__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_label_rejects_invalid_id__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1885,7 +1823,6 @@ async def test_delete_label_rejects_invalid_id__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1903,6 +1840,9 @@ async def test_create_field_condition_success(
     actions = [{"phaseFieldId": "308821043", "whenEvaluator": True, "actionId": "hide"}]
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-new"}},
+    }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-new", "phase": {"id": "pf-99"}},
     }
 
     async with pipe_config_session as session:
@@ -1928,10 +1868,10 @@ async def test_create_field_condition_success(
     assert payload["success"] is True
     assert payload["condition_id"] == "cond-new"
     assert payload["action"] == "created"
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_slug_like_phase_field_id_carries_invalid_arguments_code(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1967,7 +1907,6 @@ async def test_create_field_condition_slug_like_phase_field_id_carries_invalid_a
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_top_level_name__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1977,6 +1916,9 @@ async def test_create_field_condition_top_level_name__no_integration(
     actions = [{"phaseFieldId": "308821043", "actionId": "hide"}]
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-top"}},
+    }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-top", "phase": {"id": "pf-99"}},
     }
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1995,11 +1937,12 @@ async def test_create_field_condition_top_level_name__no_integration(
         actions,
         name="Top-level name",
     )
-    assert extract_payload(result)["success"] is True
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_top_level_name_wins_over_extra_input__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2009,6 +1952,9 @@ async def test_create_field_condition_top_level_name_wins_over_extra_input__no_i
     actions = [{"phaseFieldId": "308821043", "actionId": "hide"}]
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-win"}},
+    }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-win", "phase": {"id": "pf-99"}},
     }
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -2029,10 +1975,10 @@ async def test_create_field_condition_top_level_name_wins_over_extra_input__no_i
         index=3,
         name="Top wins",
     )
+    assert extract_payload(result)["verified"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_rejects_missing_name__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2052,7 +1998,6 @@ async def test_create_field_condition_rejects_missing_name__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_rejects_blank_name__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2077,7 +2022,6 @@ async def test_create_field_condition_rejects_blank_name__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_rejects_empty_condition__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2097,7 +2041,6 @@ async def test_create_field_condition_rejects_empty_condition__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_rejects_empty_expressions__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2117,7 +2060,6 @@ async def test_create_field_condition_rejects_empty_expressions__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_rejects_slug_like_phase_field_id__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2142,7 +2084,6 @@ async def test_create_field_condition_rejects_slug_like_phase_field_id__no_integ
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_accepts_uuid_phase_field_id__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2153,6 +2094,9 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
     actions = [{"phaseFieldId": uid}]
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-uuid"}},
+    }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-uuid", "phase": {"id": "1"}},
     }
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -2171,11 +2115,12 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
         actions,
         name="R",
     )
-    assert extract_payload(result)["success"] is True
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2189,6 +2134,9 @@ async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-x"}},
     }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-x", "phase": {"id": "1"}},
+    }
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_field_condition",
@@ -2201,11 +2149,12 @@ async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
         actions_in,
         name="R",
     )
-    assert extract_payload(result)["success"] is True
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2226,6 +2175,9 @@ async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-stripped"}},
     }
+    mock_pipe_config_client.get_field_condition.return_value = {
+        "fieldCondition": {"id": "cond-stripped", "phase": {"id": "1"}},
+    }
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_field_condition",
@@ -2243,12 +2195,13 @@ async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
         actions,
         name="R",
     )
-    assert extract_payload(result)["success"] is True
-    assert extract_payload(result)["condition_id"] == "cond-stripped"
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["condition_id"] == "cond-stripped"
+    assert payload["verified"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2280,7 +2233,6 @@ async def test_create_field_condition_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_field_condition_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2310,7 +2262,6 @@ async def test_update_field_condition_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_field_condition_success_with_explicit_condition_and_actions(
     pipe_config_session,
     mock_pipe_config_client,
@@ -2347,7 +2298,6 @@ async def test_update_field_condition_success_with_explicit_condition_and_action
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_field_condition_top_level_name__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2370,7 +2320,6 @@ async def test_update_field_condition_top_level_name__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_field_condition_rejects_blank_name__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2386,7 +2335,6 @@ async def test_update_field_condition_rejects_blank_name__no_integration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_update_field_condition_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2411,7 +2359,6 @@ async def test_update_field_condition_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_field_condition_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2431,7 +2378,6 @@ async def test_delete_field_condition_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_field_condition_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2480,7 +2426,6 @@ def test_normalize_phase_allowed_move_targets_missing_phase__no_integration():
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_allowed_move_targets_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2513,7 +2458,6 @@ async def test_get_phase_allowed_move_targets_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 @pytest.mark.parametrize("invalid_phase_id", [0, -1])
 async def test_get_phase_allowed_move_targets_rejects_invalid_phase_id(
     pipe_config_session,
@@ -2532,7 +2476,6 @@ async def test_get_phase_allowed_move_targets_rejects_invalid_phase_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_allowed_move_targets_not_found(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2552,7 +2495,6 @@ async def test_get_phase_allowed_move_targets_not_found(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_allowed_move_targets_graphql_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2572,7 +2514,6 @@ async def test_get_phase_allowed_move_targets_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_allowed_move_targets_read_only_hint(pipe_config_session):
     async with pipe_config_session as session:
         listed = await session.list_tools()
@@ -2601,7 +2542,6 @@ def test_normalize_phase_cards_list_missing_phase__no_integration():
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_cards_count_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2630,7 +2570,6 @@ async def test_get_phase_cards_count_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 @pytest.mark.parametrize("invalid_phase_id", [0, -1])
 async def test_get_phase_cards_count_rejects_invalid_phase_id(
     pipe_config_session,
@@ -2649,7 +2588,6 @@ async def test_get_phase_cards_count_rejects_invalid_phase_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_cards_count_not_found(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2669,7 +2607,6 @@ async def test_get_phase_cards_count_not_found(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_cards_count_graphql_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2689,7 +2626,6 @@ async def test_get_phase_cards_count_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_cards_success(
     pipe_config_session,
     mock_pipe_config_client,
@@ -2727,7 +2663,6 @@ async def test_get_phase_cards_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_cards_not_found(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -2745,7 +2680,6 @@ async def test_get_phase_cards_not_found(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 @pytest.mark.parametrize("invalid_phase_id", [0, -1])
 async def test_get_phase_cards_rejects_invalid_phase_id(
     pipe_config_session,
@@ -2764,7 +2698,6 @@ async def test_get_phase_cards_rejects_invalid_phase_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_cards_read_only_hint(pipe_config_session):
     async with pipe_config_session as session:
         listed = await session.list_tools()
@@ -2777,7 +2710,6 @@ async def test_get_phase_cards_read_only_hint(pipe_config_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_field_condition_has_destructive_hint(pipe_config_session):
     async with pipe_config_session as session:
         listed = await session.list_tools()

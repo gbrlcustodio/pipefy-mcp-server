@@ -177,6 +177,22 @@ class TestCheckWheels:
     ) -> None:
         assert _smoke.wheel_distribution(filename) == expected
 
+    @pytest.mark.parametrize("distribution", sorted(_smoke.PUBLISHED_DISTRIBUTIONS))
+    def test_wheel_stem_round_trips_every_published_member(
+        self, distribution: str
+    ) -> None:
+        """`release.py` derives the wheel set it requires on a Release from this.
+
+        The escaping is the whole risk: `pipefy-mcp-server` builds as
+        `pipefy_mcp_server-...`, so a stem taken from the name as written would
+        match nothing and read as a missing wheel.
+        """
+        stem = _smoke.wheel_stem(distribution)
+        assert (
+            _smoke.wheel_distribution(f"{stem}1.2.3-py3-none-any.whl") == distribution
+        )
+        assert "-" not in stem[:-1]
+
     def test_accepts_one_wheel_per_member(self, tmp_path: Path) -> None:
         _write_wheels(tmp_path, _COMPLETE_WHEELS)
         assert _smoke.check_wheels(tmp_path) == sorted(_COMPLETE_WHEELS)

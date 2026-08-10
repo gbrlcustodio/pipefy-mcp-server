@@ -88,7 +88,7 @@ def client_session(mcp_server, request):
         mcp_server,
         read_timeout_seconds=timedelta(seconds=10),
         raise_exceptions=True,
-        elicitation_callback=request.param,
+        elicitation_callback=getattr(request, "param", None),
     )
 
 
@@ -200,7 +200,6 @@ class TestCreateCardTool:
         assert "interactive form" in tool_error_message(payload).lower()
         mock_pipefy_client.create_card.assert_not_called()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation(
         self,
         client_session,
@@ -286,7 +285,6 @@ class TestCreateCardTool:
         assert result["createCard"]["card"]["id"] == "789"
         assert "card_link" in result
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation_filters_non_editable_fields(
         self,
         client_session,
@@ -329,7 +327,6 @@ class TestCreateCardTool:
                 str(pipe_id), {"field_1": "value_1"}
             )
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_title_passed_to_create_card_on_create_card_input(
         self,
         client_session,
@@ -358,7 +355,6 @@ class TestCreateCardTool:
             assert response["createCard"]["card"]["title"] == "Copa América"
             assert "card_link" in response
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_title_warning_when_response_title_mismatches(
         self,
         client_session,
@@ -389,7 +385,6 @@ class TestCreateCardTool:
             assert "not applied as expected" in response["title_warning"]
             assert "card_link" in response
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_title_warning_skipped_when_create_card_null(
         self,
         client_session,
@@ -413,7 +408,6 @@ class TestCreateCardTool:
             assert "title_warning" not in response
             assert "card_link" not in response
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_no_title_warning_when_response_matches(
         self,
         client_session,
@@ -438,7 +432,6 @@ class TestCreateCardTool:
             assert response["createCard"]["card"]["title"] == "My Title"
             assert "title_warning" not in response
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_no_title_skips_update_card(
         self,
         client_session,
@@ -461,7 +454,6 @@ class TestCreateCardTool:
             assert result.is_error is False
             mock_pipefy_client.update_card.assert_not_called()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_permission_denied_enriches_error_payload(
         self,
         client_session,
@@ -491,7 +483,54 @@ class TestCreateCardTool:
         assert payload["success"] is False
         assert "invite_members" in tool_error_message(payload)
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    @pytest.mark.parametrize("exc_message", ["", "   "])
+    async def test_create_card_empty_exception_message_uses_fallback(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+        exc_message,
+    ):
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.side_effect = RuntimeError(exc_message)
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "skip_elicitation": True},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        message = tool_error_message(payload)
+        assert message.strip()
+        assert message.startswith("Failed to create card.")
+        assert "get_cards" in message or "get_phase_cards_count" in message
+        assert "do not blind-retry" in message
+
+    async def test_create_card_preserves_non_empty_exception_message(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.side_effect = RuntimeError("boom")
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "skip_elicitation": True},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "boom" in tool_error_message(payload)
+
     @pytest.mark.parametrize("invalid_phase_id", [0, -1])
     async def test_create_card_rejects_invalid_phase_id(
         self,
@@ -514,7 +553,6 @@ class TestCreateCardTool:
         payload = extract_payload(result)
         assert payload["success"] is False
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_card_forwards_phase_id_with_skip_elicitation(
         self,
         client_session,
@@ -552,7 +590,6 @@ class TestCreateCardTool:
             str(pipe_id), {}, phase_id=str(phase_id)
         )
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_card_with_phase_id_filters_fields_via_get_phase_fields(
         self,
         client_session,
@@ -623,7 +660,6 @@ class TestCreateCardTool:
             str(pipe_id), {"pf1": "ok"}, phase_id=str(phase_id)
         )
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_card_with_phase_id_keeps_start_form_and_phase_fields(
         self,
         client_session,
@@ -685,7 +721,6 @@ class TestCreateCardTool:
 
 @pytest.mark.anyio
 class TestGetPipeMembersTool:
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_returns_members(self, client_session, mock_pipefy_client, pipe_id):
         async with client_session as session:
             mock_pipefy_client.get_pipe_members = AsyncMock(
@@ -701,7 +736,6 @@ class TestGetPipeMembersTool:
 class TestGetLabels:
     """Tests for get_labels tool (delegates to client.get_pipe)."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_labels_success_returns_labels(
         self,
         client_session,
@@ -724,7 +758,6 @@ class TestGetLabels:
             "labels": labels,
         }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_labels_empty_returns_empty_list(
         self,
         client_session,
@@ -741,7 +774,6 @@ class TestGetLabels:
         assert payload["success"] is True
         assert payload["labels"] == []
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_labels_null_labels_normalized_to_empty_list(
         self,
         client_session,
@@ -757,7 +789,6 @@ class TestGetLabels:
         payload = extract_payload(result)
         assert payload["labels"] == []
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_labels_pipe_null_returns_access_denied(
         self,
         client_session,
@@ -772,7 +803,6 @@ class TestGetLabels:
         assert payload["success"] is False
         assert "access denied" in tool_error_message(payload).lower()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_labels_get_pipe_exception_returns_error_payload(
         self,
         client_session,
@@ -798,7 +828,6 @@ class TestGetLabels:
 class TestDirectToolCalls:
     """Direct tests for tools that simply forward params to the client."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_card_forwards_params_to_client(
         self, client_session, mock_pipefy_client, extract_payload
     ):
@@ -815,7 +844,6 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload["card"]["id"] == "123"
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_pipe_forwards_pipe_id_to_client(
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
@@ -830,7 +858,6 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload["pipe"]["name"] == "My Pipe"
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_pipe_forwards_sdk_payload(
         self, client_session, mock_pipefy_client, extract_payload
     ):
@@ -854,7 +881,6 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload == sdk_payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_forwards_params_to_client(
         self, client_session, mock_pipefy_client
     ):
@@ -870,7 +896,6 @@ class TestDirectToolCalls:
         assert result.is_error is False
         mock_pipefy_client.move_card_to_phase.assert_called_once_with("100", "200")
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_returns_enriched_payload_when_transition_invalid(
         self, client_session, mock_pipefy_client, extract_payload
     ):
@@ -907,7 +932,6 @@ class TestDirectToolCalls:
         assert "99" in tool_error_message(payload)
         assert payload["valid_destinations"] == [{"id": "11", "name": "Done"}]
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_surfaces_original_error_when_destination_allowed(
         self, client_session, mock_pipefy_client
     ):
@@ -941,7 +965,106 @@ class TestDirectToolCalls:
         assert result.is_error is True
         assert "forbidden" in (result.content[0].text if result.content else "")
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_move_card_to_phase_returns_tool_error_for_required_field_when_dest_allowed(
+        self, client_session, mock_pipefy_client, extract_payload
+    ):
+        """Required-field move failures become success:false (not a tool crash)."""
+        api_msg = 'Field "Foo" is required! Please fill it and you\'ll be ready to go!'
+        mock_pipefy_client.move_card_to_phase = AsyncMock(
+            side_effect=PipefyGraphQLError([{"message": api_msg}])
+        )
+        mock_pipefy_client.get_card = AsyncMock(
+            return_value={
+                "card": {"current_phase": {"id": "10", "name": "Doing"}},
+            }
+        )
+        mock_pipefy_client.get_phase_allowed_move_targets = AsyncMock(
+            return_value={
+                "phase": {
+                    "id": "10",
+                    "name": "Doing",
+                    "cards_can_be_moved_to_phases": [
+                        {"id": "99", "name": "Target"},
+                    ],
+                }
+            }
+        )
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "fields": [
+                    {
+                        "id": "slug-foo",
+                        "internal_id": "123",
+                        "label": "Foo",
+                        "required": True,
+                    },
+                ]
+            }
+        )
+        mock_pipefy_client.get_field_conditions = AsyncMock(
+            return_value={
+                "phase": {
+                    "fieldConditions": [
+                        {
+                            "id": "fc-1",
+                            "actions": [
+                                {"phaseFieldId": "123", "actionId": "hide"},
+                            ],
+                        }
+                    ]
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "move_card_to_phase",
+                {"card_id": 1, "destination_phase_id": 99},
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload.get("success") is False
+        message = tool_error_message(payload)
+        assert "Foo" in message
+        assert "may be hidden by a field condition while still required" in message
+
+    async def test_move_card_to_phase_required_field_without_hide_still_tool_error(
+        self, client_session, mock_pipefy_client, extract_payload
+    ):
+        """Pattern match alone wraps the API message even when hide cross-check misses."""
+        api_msg = 'Field "Foo" is required! Please fill it and you\'ll be ready to go!'
+        mock_pipefy_client.move_card_to_phase = AsyncMock(
+            side_effect=PipefyGraphQLError([{"message": api_msg}])
+        )
+        mock_pipefy_client.get_card = AsyncMock(
+            return_value={
+                "card": {"current_phase": {"id": "10", "name": "Doing"}},
+            }
+        )
+        mock_pipefy_client.get_phase_allowed_move_targets = AsyncMock(
+            return_value={
+                "phase": {
+                    "id": "10",
+                    "cards_can_be_moved_to_phases": [
+                        {"id": "99", "name": "Target"},
+                    ],
+                }
+            }
+        )
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            side_effect=RuntimeError("fields unavailable")
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "move_card_to_phase",
+                {"card_id": 1, "destination_phase_id": 99},
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload.get("success") is False
+        message = tool_error_message(payload)
+        assert "Foo" in message
+        assert "hidden by a field condition" not in message
+
     async def test_get_start_form_fields_forwards_params_to_client(
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
@@ -961,7 +1084,6 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert "start_form_fields" in payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_comment_success(
         self,
         client_session,
@@ -980,7 +1102,6 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload == {"success": True, "comment_id": "c_999"}
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_comment_zero_id_coerces_to_string_and_calls_api(
         self,
         client_session,
@@ -999,7 +1120,6 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload == {"success": True, "comment_id": "c_999"}
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_comment_blank_text_returns_error_payload(
         self,
         client_session,
@@ -1018,7 +1138,6 @@ class TestDirectToolCalls:
         assert payload["success"] is False
         assert "error" in payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_comment_text_over_max_length_returns_error_payload(
         self,
         client_session,
@@ -1039,7 +1158,6 @@ class TestDirectToolCalls:
         assert payload["success"] is False
         assert "error" in payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_comment_api_exception_returns_mapped_error_payload(
         self,
         client_session,
@@ -1065,7 +1183,6 @@ class TestDirectToolCalls:
             payload
         ).lower() or "comment_id" in tool_error_message(payload)
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_success(
         self,
         client_session,
@@ -1083,7 +1200,6 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload == {"success": True}
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_zero_id_coerces_to_string_and_calls_api(
         self,
         client_session,
@@ -1101,7 +1217,6 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload == {"success": True}
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_api_exception_returns_mapped_error_payload(
         self,
         client_session,
@@ -1130,7 +1245,6 @@ class TestDirectToolCalls:
         assert "error" in payload
         assert "permission" in tool_error_message(payload).lower()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_comment_not_found_returns_mapped_error_payload(
         self,
         client_session,
@@ -1156,7 +1270,6 @@ class TestDirectToolCalls:
             payload
         ).lower() or "not found" in tool_error_message(payload)
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_preview_then_confirm_true_runs_mutation(
         self,
         client_session,
@@ -1196,7 +1309,6 @@ class TestDirectToolCalls:
 
 @pytest.mark.anyio
 class TestGetCardsTool:
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_with_include_fields_true_passes_to_client(
         self, client_session, mock_pipefy_client, pipe_id
     ):
@@ -1216,7 +1328,6 @@ class TestGetCardsTool:
             str(pipe_id), None, include_fields=True, first=None, after=None
         )
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_flag_on_emits_pagination(
         self,
         client_session,
@@ -1247,7 +1358,6 @@ class TestGetCardsTool:
         }
         assert payload["data"]["cards"]["edges"][0]["node"]["id"] == "1"
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_flag_on_no_first_omits_pagination(
         self,
         client_session,
@@ -1271,7 +1381,6 @@ class TestGetCardsTool:
         assert payload["success"] is True
         assert "pagination" not in payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_flag_off_returns_raw_graphql(
         self,
         client_session,
@@ -1290,7 +1399,6 @@ class TestGetCardsTool:
         payload = extract_payload(result)
         assert payload == expected
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_out_of_bounds_returns_invalid_arguments(
         self,
         client_session,
@@ -1314,7 +1422,6 @@ class TestGetCardsTool:
         }
         mock_pipefy_client.get_cards.assert_not_called()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_title_param_merges_into_search(
         self, client_session, mock_pipefy_client, pipe_id
     ):
@@ -1336,7 +1443,6 @@ class TestGetCardsTool:
             after=None,
         )
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_title_merges_with_existing_search(
         self, client_session, mock_pipefy_client, pipe_id
     ):
@@ -1365,7 +1471,6 @@ class TestGetCardsTool:
 
 @pytest.mark.anyio
 class TestFindCardsTool:
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_find_cards_forwards_params_to_client(
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
@@ -1404,7 +1509,6 @@ class TestFindCardsTool:
         assert FIND_CARDS_RESPONSE_KEY in payload
         assert payload[FIND_CARDS_RESPONSE_KEY]["edges"]
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_find_cards_empty_edges_includes_message(
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
@@ -1428,7 +1532,6 @@ class TestFindCardsTool:
         assert payload.get("message") == FIND_CARDS_EMPTY_MESSAGE
         assert payload.get(FIND_CARDS_RESPONSE_KEY, {}).get("edges") == []
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_find_cards_graphql_error_returns_enriched_envelope(
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
@@ -1463,7 +1566,6 @@ class TestFindCardsTool:
 
 @pytest.mark.anyio
 class TestUpdateCardFieldTool:
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_card_field_graphql_error_returns_enriched_envelope(
         self, client_session, mock_pipefy_client, extract_payload
     ):
@@ -1498,7 +1600,6 @@ class TestUpdateCardFieldTool:
 
 @pytest.mark.anyio
 class TestAddCardCommentTool:
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_success(
         self,
         client_session,
@@ -1519,7 +1620,6 @@ class TestAddCardCommentTool:
             payload = extract_payload(result)
             assert payload == {"success": True, "comment_id": "c_987"}
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_zero_card_id_coerces_to_string_and_calls_api(
         self,
         client_session,
@@ -1540,7 +1640,6 @@ class TestAddCardCommentTool:
             payload = extract_payload(result)
             assert payload == {"success": True, "comment_id": "c_987"}
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_api_exception_returns_mapped_error_payload(
         self,
         client_session,
@@ -1573,7 +1672,6 @@ class TestAddCardCommentTool:
             payload
         ) or "card_id" in tool_error_message(payload)
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_validation_error_text_over_limit_returns_explicit_length_message(
         self,
         client_session,
@@ -1637,7 +1735,6 @@ class TestGetPhaseFieldsTool:
             assert response["phase_name"] == "In Progress"
             assert response["fields"] == mock_fields
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_permission_denied(self, client_session, mock_pipefy_client):
         phase_id = 3190653829
         permission_error = Exception("Permission denied")
@@ -1794,7 +1891,6 @@ class TestFillCardPhaseFieldsTool:
             response = extract_payload(result)
             assert response == tool_error("Phase field update cancelled by user.")
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation(
         self,
         client_session,
@@ -1832,7 +1928,6 @@ class TestFillCardPhaseFieldsTool:
                 field_updates=[{"field_id": "status", "value": "completed"}],
             )
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation_filters_non_editable_fields(
         self,
         client_session,
@@ -1883,7 +1978,6 @@ class TestFillCardPhaseFieldsTool:
                 field_updates=[{"field_id": "status", "value": "completed"}],
             )
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_no_fields_returns_message(
         self,
         client_session,
@@ -1913,7 +2007,6 @@ class TestFillCardPhaseFieldsTool:
             response = extract_payload(result)
             assert response.get("message") == "No fields to update."
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_permission_denied(
         self,
         client_session,
@@ -1946,7 +2039,6 @@ class TestFillCardPhaseFieldsTool:
 
 @pytest.mark.anyio
 class TestUpdateCardTool:
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_update_card_field(
         self,
         client_session,
@@ -1980,7 +2072,6 @@ class TestUpdateCardTool:
 class TestDeleteCardTool:
     """Test cases for delete_card tool."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_preview_returned_when_no_elicitation_and_no_confirm(
         self,
         client_session,
@@ -2018,7 +2109,6 @@ class TestDeleteCardTool:
                 ),
             }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_confirm_true_accepts_string_card_id(
         self,
         client_session,
@@ -2081,7 +2171,6 @@ class TestDeleteCardTool:
                 ),
             }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_invalid_card_id_returns_error(
         self,
         client_session,
@@ -2106,7 +2195,6 @@ class TestDeleteCardTool:
             )
             assert payload == expected_payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_resource_not_found_error_mapping(
         self,
         client_session,
@@ -2144,7 +2232,6 @@ class TestDeleteCardTool:
             )
             assert payload == expected_payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_permission_denied_error_mapping(
         self,
         client_session,
@@ -2189,7 +2276,6 @@ class TestDeleteCardTool:
             )
             assert payload == expected_payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_deletion_fails_with_success_false(
         self,
         client_session,
@@ -2307,7 +2393,6 @@ class TestDeleteCardTool:
         assert payload["success"] is False
         assert payload["requires_confirmation"] is True
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_debug_true_appends_codes_and_correlation_id_to_error(
         self,
         client_session,
@@ -2346,7 +2431,6 @@ class TestDeleteCardTool:
 class TestGetCardRelations:
     """Tests for get_card_relations tool."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_success_returns_child_and_parent_relations(
         self,
         client_session,
@@ -2384,7 +2468,6 @@ class TestGetCardRelations:
         assert payload["child_relations"] == child_rel
         assert payload["parent_relations"] == parent_rel
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_success_accepts_camelcase_keys_from_response(
         self,
         client_session,
@@ -2403,7 +2486,6 @@ class TestGetCardRelations:
         assert payload["child_relations"] == row
         assert payload["parent_relations"] == []
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_empty_relations_returns_empty_lists(
         self,
         client_session,
@@ -2424,7 +2506,6 @@ class TestGetCardRelations:
             "parent_relations": [],
         }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_graphql_error_returns_error_payload(
         self,
         client_session,
@@ -2445,7 +2526,6 @@ class TestGetCardRelations:
         assert payload["success"] is False
         assert "error" in payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_card_null_returns_not_found(
         self,
         client_session,
@@ -2465,7 +2545,6 @@ class TestGetCardRelations:
 class TestDeleteCardRelation:
     """Tests for delete_card_relation tool."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_preview_then_confirm_success(
         self,
         client_session,
@@ -2517,7 +2596,6 @@ class TestDeleteCardRelation:
         assert payload["success"] is True
         assert payload["message"] == "Card relation removed."
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_api_exception_returns_error_payload(
         self,
         client_session,
@@ -2547,7 +2625,6 @@ class TestDeleteCardRelation:
         assert payload["success"] is False
         assert "error" in payload
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_mutation_success_false_returns_error(
         self,
         client_session,
@@ -2577,7 +2654,6 @@ class TestDeleteCardRelation:
 class TestPipefyIdCoercion:
     """PipefyId coerces int IDs to str at the tool boundary."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_pipe_coerces_int_pipe_id(
         self, client_session, mock_pipefy_client, extract_payload
     ):
@@ -2589,7 +2665,6 @@ class TestPipefyIdCoercion:
         assert result.is_error is False
         mock_pipefy_client.get_pipe.assert_called_once_with("999")
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_coerces_int_ids(
         self, client_session, mock_pipefy_client
     ):
@@ -2643,7 +2718,6 @@ class TestSkipElicitation:
             str(pipe_id), {"f1": "a"}
         )
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_card_skip_elicitation_returns_error_for_malformed_fields(
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
@@ -3073,7 +3147,6 @@ class TestElicitationWithoutABackChannel:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("client_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "tool_name,args,prep",
     [

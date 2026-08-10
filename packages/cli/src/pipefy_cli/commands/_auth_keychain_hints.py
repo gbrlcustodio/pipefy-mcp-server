@@ -22,8 +22,7 @@ _LINUX_HINT = (
 _MACOS_HINT = (
     "macOS Keychain rejected the write (often errSecInvalidOwnerEdit, -25244: "
     "invalid attempt to change the owner of this item). Clear the entry with "
-    "`pipefy auth logout`; if it reports `Not signed in. Nothing to do.` "
-    "(or fails), remove it directly with "
+    "`pipefy auth logout`; if that fails, remove it directly with "
     "`security delete-generic-password -s pipefy`. Then run "
     "`pipefy auth login` again from Terminal.app and click Always Allow if "
     f"prompted. {_ESCAPE_HATCH}"

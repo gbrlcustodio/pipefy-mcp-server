@@ -56,7 +56,6 @@ def observability_session(observability_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_logs_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -94,7 +93,6 @@ async def test_get_ai_agent_logs_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_logs_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -112,7 +110,6 @@ async def test_get_ai_agent_logs_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_log_details_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -147,7 +144,6 @@ async def test_get_ai_agent_log_details_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -184,7 +180,6 @@ async def test_get_automation_logs_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_by_repo_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -221,7 +216,6 @@ async def test_get_automation_logs_by_repo_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_log_tools_have_read_only_hint(observability_session):
     async with observability_session as session:
         listed = await session.list_tools()
@@ -239,7 +233,6 @@ async def test_log_tools_have_read_only_hint(observability_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_agents_usage_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -278,7 +271,6 @@ async def test_get_agents_usage_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automations_usage_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -310,7 +302,6 @@ async def test_get_automations_usage_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_partial_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -367,7 +358,6 @@ async def test_get_automation_execution_metrics_partial_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_without_ids_fetches_all(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -402,7 +392,6 @@ async def test_get_automation_execution_metrics_without_ids_fetches_all(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_rejects_invalid_period(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -424,7 +413,6 @@ async def test_get_automation_execution_metrics_rejects_invalid_period(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_rejects_empty_ids(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -442,7 +430,6 @@ async def test_get_automation_execution_metrics_rejects_empty_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_rejects_first_over_cap(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -461,7 +448,6 @@ async def test_get_automation_execution_metrics_rejects_first_over_cap(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_forwards_pagination(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -498,7 +484,6 @@ async def test_get_automation_execution_metrics_forwards_pagination(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_forwards_filters(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -540,7 +525,6 @@ async def test_get_automation_execution_metrics_forwards_filters(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 @pytest.mark.parametrize(
     ("arg", "value"),
     [
@@ -567,7 +551,6 @@ async def test_get_automation_execution_metrics_rejects_invalid_enum(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_rejects_empty_action_ids(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -586,7 +569,6 @@ async def test_get_automation_execution_metrics_rejects_empty_action_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_execution_metrics_value_error_from_client(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -608,7 +590,6 @@ async def test_get_automation_execution_metrics_value_error_from_client(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -645,7 +626,6 @@ async def test_get_ai_credit_usage_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -666,7 +646,6 @@ async def test_get_ai_credit_usage_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_value_error_from_client(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -687,7 +666,6 @@ async def test_get_ai_credit_usage_value_error_from_client(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_export_automation_jobs_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -720,7 +698,6 @@ async def test_export_automation_jobs_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -749,7 +726,6 @@ async def test_get_automation_jobs_export_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -770,7 +746,6 @@ async def test_get_automation_jobs_export_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_rejects_empty_export_id(
     observability_session, mock_observability_client
 ):
@@ -785,7 +760,6 @@ async def test_get_automation_jobs_export_rejects_empty_export_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_coerces_int_export_id(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -813,7 +787,6 @@ async def test_get_automation_jobs_export_coerces_int_export_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_coerces_int_export_id(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -841,7 +814,6 @@ async def test_get_automation_jobs_export_csv_coerces_int_export_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_coerces_int_automation_id(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -865,7 +837,6 @@ async def test_get_automation_logs_coerces_int_automation_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_usage_tools_have_read_only_hint(observability_session):
     async with observability_session as session:
         listed = await session.list_tools()
@@ -882,7 +853,6 @@ async def test_usage_tools_have_read_only_hint(observability_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_export_tool_not_read_only(observability_session):
     async with observability_session as session:
         listed = await session.list_tools()
@@ -893,7 +863,6 @@ async def test_export_tool_not_read_only(observability_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_read_only_hint(observability_session):
     async with observability_session as session:
         listed = await session.list_tools()
@@ -904,7 +873,6 @@ async def test_get_automation_jobs_export_read_only_hint(observability_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_success(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -934,7 +902,6 @@ async def test_get_automation_jobs_export_csv_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_value_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -955,7 +922,6 @@ async def test_get_automation_jobs_export_csv_value_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_rejects_bad_max_chars(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -972,7 +938,6 @@ async def test_get_automation_jobs_export_csv_rejects_bad_max_chars(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_read_only_hint(observability_session):
     async with observability_session as session:
         listed = await session.list_tools()
@@ -983,7 +948,6 @@ async def test_get_automation_jobs_export_csv_read_only_hint(observability_sessi
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_logs_rejects_invalid_repo_uuid(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -997,7 +961,6 @@ async def test_get_ai_agent_logs_rejects_invalid_repo_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_log_details_rejects_invalid_log_uuid(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1011,7 +974,6 @@ async def test_get_ai_agent_log_details_rejects_invalid_log_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_rejects_invalid_period(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1028,7 +990,6 @@ async def test_get_ai_credit_usage_rejects_invalid_period(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_agents_usage_rejects_empty_org_uuid(
     observability_session, mock_observability_client
 ):
@@ -1047,7 +1008,6 @@ async def test_get_agents_usage_rejects_empty_org_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_agents_usage_rejects_missing_dates(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1068,7 +1028,6 @@ async def test_get_agents_usage_rejects_missing_dates(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_first", [0, -1, _MAX_PAGE_SIZE + 1])
 async def test_get_ai_agent_logs_rejects_out_of_bounds_first(
     observability_session, mock_observability_client, extract_payload, bad_first
@@ -1085,7 +1044,6 @@ async def test_get_ai_agent_logs_rejects_out_of_bounds_first(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_logs_debug_true_appends_codes(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1116,7 +1074,6 @@ async def test_get_ai_agent_logs_debug_true_appends_codes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_debug_true_appends_codes(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1147,7 +1104,6 @@ async def test_get_ai_credit_usage_debug_true_appends_codes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_export_automation_jobs_coerces_int_organization_id(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1170,7 +1126,6 @@ async def test_export_automation_jobs_coerces_int_organization_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_agents_usage_coerces_int_organization_uuid(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1199,7 +1154,6 @@ async def test_get_agents_usage_coerces_int_organization_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automations_usage_coerces_int_organization_uuid(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1231,7 +1185,6 @@ async def test_get_automations_usage_coerces_int_organization_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_coerces_int_organization_uuid(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1260,7 +1213,6 @@ async def test_get_ai_credit_usage_coerces_int_organization_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_rejects_blank_automation_id(
     observability_session, mock_observability_client
 ):
@@ -1272,7 +1224,6 @@ async def test_get_automation_logs_rejects_blank_automation_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_first", [0, _MAX_PAGE_SIZE + 1])
 async def test_get_automation_logs_rejects_out_of_bounds_first(
     observability_session, mock_observability_client, extract_payload, bad_first
@@ -1294,7 +1245,6 @@ async def test_get_automation_logs_rejects_out_of_bounds_first(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_by_repo_rejects_blank_repo_id(
     observability_session, mock_observability_client
 ):
@@ -1306,7 +1256,6 @@ async def test_get_automation_logs_by_repo_rejects_blank_repo_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_first", [0, _MAX_PAGE_SIZE + 1])
 async def test_get_automation_logs_by_repo_rejects_out_of_bounds_first(
     observability_session, mock_observability_client, extract_payload, bad_first
@@ -1328,7 +1277,6 @@ async def test_get_automation_logs_by_repo_rejects_out_of_bounds_first(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_agents_usage_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1357,7 +1305,6 @@ async def test_get_agents_usage_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automations_usage_rejects_empty_org_uuid(
     observability_session, mock_observability_client
 ):
@@ -1376,7 +1323,6 @@ async def test_get_automations_usage_rejects_empty_org_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automations_usage_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1405,7 +1351,6 @@ async def test_get_automations_usage_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_rejects_empty_org_uuid(
     observability_session, mock_observability_client
 ):
@@ -1425,7 +1370,6 @@ async def test_get_ai_credit_usage_rejects_empty_org_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_export_automation_jobs_rejects_empty_org_id(
     observability_session, mock_observability_client
 ):
@@ -1440,7 +1384,6 @@ async def test_export_automation_jobs_rejects_empty_org_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_export_automation_jobs_rejects_invalid_period(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1457,7 +1400,6 @@ async def test_export_automation_jobs_rejects_invalid_period(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_export_automation_jobs_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1482,7 +1424,6 @@ async def test_export_automation_jobs_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_log_details_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1501,7 +1442,6 @@ async def test_get_ai_agent_log_details_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_log_details_rewrites_automationaction_not_found(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1536,7 +1476,6 @@ async def test_get_ai_agent_log_details_rewrites_automationaction_not_found(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1560,7 +1499,6 @@ async def test_get_automation_logs_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_by_repo_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1584,7 +1522,6 @@ async def test_get_automation_logs_by_repo_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_rejects_bad_max_download_bytes(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1601,7 +1538,6 @@ async def test_get_automation_jobs_export_csv_rejects_bad_max_download_bytes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_graphql_error(
     observability_session, mock_observability_client, extract_payload
 ):
@@ -1623,7 +1559,6 @@ async def test_get_automation_jobs_export_csv_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_rejects_empty_export_id(
     observability_session, mock_observability_client
 ):

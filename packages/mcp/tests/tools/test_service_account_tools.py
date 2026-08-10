@@ -45,7 +45,6 @@ def sa_session(sa_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_success(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -85,7 +84,6 @@ async def test_create_service_account_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_passes_expiration(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -118,7 +116,6 @@ async def test_create_service_account_passes_expiration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_with_pipe_ids_chains_and_verifies(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -165,7 +162,6 @@ async def test_create_service_account_with_pipe_ids_chains_and_verifies(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_pipe_ids_null_members_still_returns_secret(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -203,7 +199,6 @@ async def test_create_service_account_pipe_ids_null_members_still_returns_secret
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_bad_pipe_ids(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -224,7 +219,6 @@ async def test_create_service_account_rejects_bad_pipe_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_long_name(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -240,7 +234,6 @@ async def test_create_service_account_rejects_long_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_bad_expiration_pair(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -261,7 +254,6 @@ async def test_create_service_account_rejects_bad_expiration_pair(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_blank_org(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -277,7 +269,6 @@ async def test_create_service_account_rejects_blank_org(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_graphql_error(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -296,7 +287,6 @@ async def test_create_service_account_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "raw",
     [
@@ -331,7 +321,6 @@ async def test_create_service_account_soft_failure_is_not_reported_as_created(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "raw",
     [
@@ -377,7 +366,6 @@ async def test_create_service_account_without_secret_fails_closed(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_without_secret_surfaces_uuid_for_cleanup(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -400,7 +388,6 @@ async def test_create_service_account_without_secret_surfaces_uuid_for_cleanup(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_failure_never_echoes_secret(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -423,7 +410,6 @@ async def test_create_service_account_failure_never_echoes_secret(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_delete_service_account_preview_does_not_call_mutation(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -440,7 +426,6 @@ async def test_delete_service_account_preview_does_not_call_mutation(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_delete_service_account_confirmed(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -465,7 +450,6 @@ async def test_delete_service_account_confirmed(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "raw",
     [
@@ -494,7 +478,6 @@ async def test_delete_service_account_soft_failure_is_not_reported_as_deleted(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_delete_service_account_rejects_blank_uuid(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -510,7 +493,6 @@ async def test_delete_service_account_rejects_blank_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_delete_service_account_has_destructive_hint(sa_session):
     async with sa_session as session:
         listed = await session.list_tools()

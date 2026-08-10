@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
+    ensure_non_empty_error_message,
     extract_error_strings,
     extract_graphql_error_codes,
 )
@@ -30,6 +31,7 @@ _PORTAL_PERMISSION_GUIDANCE = (
     "Permission denied. Request organization permissions such as "
     "`create_portal` or `manage_portals` from your admin."
 )
+_PORTAL_OPERATION_FAILED = "Portal operation failed. Try again or contact support."
 
 
 def map_portal_error_to_message(exc: BaseException) -> str:
@@ -43,7 +45,9 @@ def map_portal_error_to_message(exc: BaseException) -> str:
         and ``manage_portals``.
     """
     if isinstance(exc, PortalPermissionError):
-        return str(exc).strip()
+        return ensure_non_empty_error_message(
+            str(exc).strip(), _PORTAL_PERMISSION_GUIDANCE
+        )
 
     text = str(exc).strip()
     lowered = text.lower()
@@ -67,7 +71,7 @@ def map_portal_error_to_message(exc: BaseException) -> str:
         if messages:
             return "; ".join(messages)
 
-    return text or "Portal operation failed. Try again or contact support."
+    return ensure_non_empty_error_message(text, _PORTAL_OPERATION_FAILED)
 
 
 def validate_tool_ids(

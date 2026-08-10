@@ -163,7 +163,6 @@ def portal_session(portal_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_list_portals_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -186,7 +185,6 @@ async def test_list_portals_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_list_portals_coerces_int_organization_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -208,7 +206,6 @@ async def test_list_portals_coerces_int_organization_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_list_portals_passes_search_term(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -230,7 +227,6 @@ async def test_list_portals_passes_search_term(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_list_portals_empty_returns_empty_list(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -248,7 +244,6 @@ async def test_list_portals_empty_returns_empty_list(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_list_portals_value_error_returns_error_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -268,7 +263,6 @@ async def test_list_portals_value_error_returns_error_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_get_portal_success(portal_session, mock_portal_client, extract_payload):
     mock_portal_client.get_portal = AsyncMock(return_value=_PORTAL_DETAIL)
 
@@ -287,7 +281,6 @@ async def test_get_portal_success(portal_session, mock_portal_client, extract_pa
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_get_portal_not_found_returns_error_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -307,7 +300,6 @@ async def test_get_portal_not_found_returns_error_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_list_portals_transport_error_returns_error_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -328,7 +320,6 @@ async def test_list_portals_transport_error_returns_error_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_get_portal_transport_error_returns_error_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -347,7 +338,6 @@ async def test_get_portal_transport_error_returns_error_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_read_tools_have_readonly_hint(portal_session):
     read_tool_names = ["list_portals", "get_portal"]
 
@@ -369,7 +359,6 @@ async def test_read_tools_have_readonly_hint(portal_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_coerces_int_organization_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -389,7 +378,6 @@ async def test_create_portal_coerces_int_organization_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -409,7 +397,6 @@ async def test_create_portal_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_permission_denied_returns_actionable_error(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -430,7 +417,6 @@ async def test_create_portal_permission_denied_returns_actionable_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -460,7 +446,6 @@ async def test_update_portal_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_invalid_visibility_returns_validation_envelope(
     portal_session, mock_portal_client
 ):
@@ -478,7 +463,6 @@ async def test_update_portal_invalid_visibility_returns_validation_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_rejects_when_no_fields_to_update(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -496,7 +480,6 @@ async def test_update_portal_rejects_when_no_fields_to_update(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_rejects_blank_name(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -514,7 +497,6 @@ async def test_update_portal_rejects_blank_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_get_portal_rejects_empty_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -528,7 +510,6 @@ async def test_get_portal_rejects_empty_portal_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_rejects_empty_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -545,7 +526,6 @@ async def test_delete_portal_rejects_empty_portal_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_permission_denied_returns_actionable_error(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -570,7 +550,6 @@ async def test_update_portal_permission_denied_returns_actionable_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_preview_does_not_delete(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -589,7 +568,6 @@ async def test_delete_portal_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -611,7 +589,6 @@ async def test_delete_portal_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -633,7 +610,6 @@ async def test_delete_portal_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_permission_denied_returns_actionable_error(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -655,7 +631,6 @@ async def test_delete_portal_permission_denied_returns_actionable_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_has_destructive_hint(portal_session):
     async with portal_session as session:
         listed = await session.list_tools()
@@ -673,7 +648,6 @@ async def test_delete_portal_has_destructive_hint(portal_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_page_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -699,7 +673,6 @@ async def test_create_portal_page_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_page_passes_optional_fields(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -728,7 +701,6 @@ async def test_create_portal_page_passes_optional_fields(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_page_permission_denied_returns_actionable_error(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -750,7 +722,6 @@ async def test_create_portal_page_permission_denied_returns_actionable_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_page_rejects_negative_index(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -768,7 +739,6 @@ async def test_create_portal_page_rejects_negative_index(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_page_rejects_empty_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -785,7 +755,6 @@ async def test_create_portal_page_rejects_empty_portal_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_page_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -814,7 +783,6 @@ async def test_update_portal_page_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_page_rejects_negative_index(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -836,7 +804,6 @@ async def test_update_portal_page_rejects_negative_index(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_page_rejects_when_no_fields_to_update(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -854,7 +821,6 @@ async def test_update_portal_page_rejects_when_no_fields_to_update(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_page_preview_does_not_delete(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -874,7 +840,6 @@ async def test_delete_portal_page_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_page_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -902,7 +867,6 @@ async def test_delete_portal_page_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_page_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -927,7 +891,6 @@ async def test_delete_portal_page_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_page_has_destructive_hint(portal_session):
     async with portal_session as session:
         listed = await session.list_tools()
@@ -940,7 +903,6 @@ async def test_delete_portal_page_has_destructive_hint(portal_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_sort_portal_pages_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -965,7 +927,6 @@ async def test_sort_portal_pages_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_sort_portal_pages_rejects_empty_page_ids(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -983,7 +944,6 @@ async def test_sort_portal_pages_rejects_empty_page_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_sort_portal_pages_rejects_duplicate_page_ids(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1001,7 +961,6 @@ async def test_sort_portal_pages_rejects_duplicate_page_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "invalid_page_ids",
     [
@@ -1030,7 +989,6 @@ async def test_sort_portal_pages_rejects_invalid_page_id_items(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_sort_portal_pages_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1055,7 +1013,6 @@ async def test_sort_portal_pages_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_page_layout_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1079,7 +1036,6 @@ async def test_update_portal_page_layout_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_page_layout_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1103,7 +1059,6 @@ async def test_update_portal_page_layout_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_page_layout_permission_denied_returns_actionable_error(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1125,7 +1080,6 @@ async def test_update_portal_page_layout_permission_denied_returns_actionable_er
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_page_layout_transport_error_returns_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1147,7 +1101,6 @@ async def test_update_portal_page_layout_transport_error_returns_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_page_write_tools_are_not_readonly(portal_session):
     write_tool_names = [
         "create_portal_page",
@@ -1182,7 +1135,6 @@ _ELEMENT_WRITE_TOOL_NAMES = [
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_element_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1213,7 +1165,6 @@ async def test_create_portal_element_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_element_rejects_invalid_metadata_before_client(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1236,7 +1187,6 @@ async def test_create_portal_element_rejects_invalid_metadata_before_client(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_element_rejects_unknown_type_before_client(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1257,7 +1207,6 @@ async def test_create_portal_element_rejects_unknown_type_before_client(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_element_rejects_blank_page_id(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1278,7 +1227,6 @@ async def test_create_portal_element_rejects_blank_page_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_element_permission_denied_returns_actionable_error(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1304,7 +1252,6 @@ async def test_create_portal_element_permission_denied_returns_actionable_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_element_docstring_mentions_portal_tool_in_ui(
     portal_session,
 ):
@@ -1318,7 +1265,6 @@ async def test_create_portal_element_docstring_mentions_portal_tool_in_ui(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_element_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1358,7 +1304,6 @@ async def test_update_portal_element_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_element_rejects_invalid_metadata_before_client(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1381,7 +1326,6 @@ async def test_update_portal_element_rejects_invalid_metadata_before_client(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_element_preview_does_not_delete(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1401,7 +1345,6 @@ async def test_delete_portal_element_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_element_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1429,7 +1372,6 @@ async def test_delete_portal_element_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_element_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1454,7 +1396,6 @@ async def test_delete_portal_element_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_portal_element_has_destructive_hint(portal_session):
     async with portal_session as session:
         listed = await session.list_tools()
@@ -1467,7 +1408,6 @@ async def test_delete_portal_element_has_destructive_hint(portal_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_duplicate_portal_element_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1501,7 +1441,6 @@ async def test_duplicate_portal_element_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_duplicate_portal_element_rejects_blank_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1522,7 +1461,6 @@ async def test_duplicate_portal_element_rejects_blank_portal_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_element_write_tools_are_not_readonly(portal_session):
     async with portal_session as session:
         listed = await session.list_tools()
@@ -1542,7 +1480,6 @@ async def test_element_write_tools_are_not_readonly(portal_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_sub_portal_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1569,7 +1506,6 @@ async def test_create_sub_portal_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_sub_portal_rejects_blank_main_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1586,7 +1522,6 @@ async def test_create_sub_portal_rejects_blank_main_portal_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_sub_portal_transport_error_not_permission_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1611,7 +1546,6 @@ async def test_create_sub_portal_transport_error_not_permission_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_sub_portal_element_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1642,7 +1576,6 @@ async def test_update_sub_portal_element_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_sub_portal_element_rejects_blank_sub_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1663,7 +1596,6 @@ async def test_update_sub_portal_element_rejects_blank_sub_portal_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_sub_portal_element_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1688,7 +1620,6 @@ async def test_update_sub_portal_element_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_publish_sub_portal_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1717,7 +1648,6 @@ async def test_publish_sub_portal_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_publish_sub_portal_rejects_blank_element_id(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1738,7 +1668,6 @@ async def test_publish_sub_portal_rejects_blank_element_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_publish_sub_portal_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1763,7 +1692,6 @@ async def test_publish_sub_portal_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_publish_sub_portal_permission_denied_returns_actionable_error(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1789,7 +1717,6 @@ async def test_publish_sub_portal_permission_denied_returns_actionable_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 @pytest.mark.parametrize(
     ("tool_name", "client_method", "tool_args"),
     [
@@ -1851,7 +1778,6 @@ async def test_sub_portal_internal_api_permission_denied_returns_actionable_erro
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_unpublish_sub_portal_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1878,7 +1804,6 @@ async def test_unpublish_sub_portal_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_unpublish_sub_portal_rejects_blank_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1898,7 +1823,6 @@ async def test_unpublish_sub_portal_rejects_blank_portal_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_unpublish_sub_portal_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1922,7 +1846,6 @@ async def test_unpublish_sub_portal_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_element_preview_does_not_delete(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1945,7 +1868,6 @@ async def test_delete_sub_portal_element_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_element_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1974,7 +1896,6 @@ async def test_delete_sub_portal_element_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_element_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -1999,7 +1920,6 @@ async def test_delete_sub_portal_element_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_element_has_destructive_hint(portal_session):
     async with portal_session as session:
         listed = await session.list_tools()
@@ -2012,7 +1932,6 @@ async def test_delete_sub_portal_element_has_destructive_hint(portal_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_preview_does_not_delete(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -2032,7 +1951,6 @@ async def test_delete_sub_portal_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -2054,7 +1972,6 @@ async def test_delete_sub_portal_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_fails_when_success_false(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -2075,7 +1992,6 @@ async def test_delete_sub_portal_fails_when_success_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_rejects_blank_sub_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -2191,7 +2107,6 @@ _SUB_PORTAL_ELEMENT_OR_SUB_UUID_CASES = [
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 @pytest.mark.parametrize("invalid_id", _INVALID_SUB_PORTAL_ID_VALUES)
 @pytest.mark.parametrize(
     ("tool_name", "id_field", "base_args", "client_method"),
@@ -2223,7 +2138,6 @@ async def test_sub_portal_write_tools_reject_invalid_portal_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 @pytest.mark.parametrize("invalid_id", _INVALID_SUB_PORTAL_ID_VALUES)
 @pytest.mark.parametrize(
     ("tool_name", "id_field", "base_args", "client_method"),
@@ -2255,7 +2169,6 @@ async def test_sub_portal_write_tools_reject_invalid_element_or_sub_portal_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_has_destructive_hint(portal_session):
     async with portal_session as session:
         listed = await session.list_tools()
@@ -2268,7 +2181,6 @@ async def test_delete_sub_portal_has_destructive_hint(portal_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_sub_portal_write_tools_are_not_readonly(portal_session):
     async with portal_session as session:
         listed = await session.list_tools()
@@ -2283,7 +2195,6 @@ async def test_sub_portal_write_tools_are_not_readonly(portal_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_sub_portal_docstring_mentions_publish_semantics(
     portal_session,
 ):
@@ -2297,7 +2208,6 @@ async def test_create_sub_portal_docstring_mentions_publish_semantics(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_sub_portal_element_docstring_mentions_publish_semantics(
     portal_session,
 ):
@@ -2310,7 +2220,6 @@ async def test_update_sub_portal_element_docstring_mentions_publish_semantics(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_publish_sub_portal_docstring_mentions_subportals_published(
     portal_session,
 ):
@@ -2325,7 +2234,6 @@ async def test_publish_sub_portal_docstring_mentions_subportals_published(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_unpublish_sub_portal_docstring_mentions_subportals_published(
     portal_session,
 ):
@@ -2339,7 +2247,6 @@ async def test_unpublish_sub_portal_docstring_mentions_subportals_published(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_delete_sub_portal_docstring_warns_irreversible(portal_session):
     async with portal_session as session:
         listed = await session.list_tools()

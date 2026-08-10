@@ -38,6 +38,7 @@ RUNNERS="uvx uv npx python python3 pipx"
 PLUGIN_ID="pipefy@pipefy"
 MARKETPLACE_ID="pipefy"
 UV_TOOLS="pipefy-cli $SERVER_BINARY"
+RECEIPT_SCHEMA_MAX=1           # the newest install-receipt schema this can read
 
 # The client table. One row per MCP client, pipe-separated because a config
 # path can contain spaces:
@@ -79,6 +80,23 @@ KEEP_CONFIG=0
 
 OS=""
 CONFIG_DIR=""
+RECEIPT_FILE=""
+RECEIPT_STATE=""
+# Everything the receipt said, merged. Path-valued lists stay escaped until the
+# moment they are used, one value per line.
+RCPT_PRESENT=0
+RCPT_UNREADABLE=0
+RCPT_TOOL_DIRS=""
+RCPT_SKILL_DIRS=""
+RCPT_TOOLS=""
+RCPT_CREATED=""
+RCPT_TAG=""
+RCPT_UV_OURS=0
+RCPT_RECORDS=0
+RCPT_PARTIAL=0
+RCPT_FUTURE=0
+RCPT_BAD=0
+RCPT_JUNK=0
 PYTHON3=""
 RECORDS=""
 PLAN=""
@@ -97,6 +115,8 @@ TIER1_OK=0
 TIER2_OK=0
 TIER3_OK=0
 TAB=$(printf '\t')
+NL='
+'
 
 # Secrets. `_session_masking_env_vars()` (packages/cli/.../commands/auth.py)
 # inspects PIPEFY_TOKEN plus both sides of the legacy alias map in
@@ -374,6 +394,184 @@ config_toml_path() {
     fi
 }
 
+# ------------------------------------------------------------ install receipt
+#
+# install.sh appends one key=value record per run to this file: the tool
+# directory it used, whether it installed uv, which client entries it created
+# rather than found, where the skills landed, and the release tag. Reading it
+# is what makes a teardown exact instead of a guess.
+#
+# It is read with awk alone. python3 degrades per source in this script, and
+# the receipt is one of the sources that has to keep working without it.
+#
+# It is also an input to a destructive program, so it is treated as untrusted
+# text. A record whose schema this script does not know is skipped rather than
+# half-read; a malformed line is counted and dropped; and no value from here
+# ever names something to delete. Values only ever pick which directory to ask
+# uv about, which skills directory to enumerate, and whether a registration the
+# structural scan already found may be removed. The deletion guard in
+# remove_path() is the backstop behind that, not the reason it holds.
+
+# The receipt is installer state, not user configuration, so it lives under
+# XDG_STATE_HOME rather than beside the config.toml the user wrote. That keeps
+# it out of the directory this script empties and then removes, and out of the
+# way of a user who backs up their own config.
+resolve_receipt_path() {
+    RECEIPT_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/pipefy"
+    RECEIPT_FILE="$RECEIPT_STATE/install-receipt"
+}
+
+# `%b` expands exactly the four sequences the writer emits, and the parser has
+# already rejected any record containing a sequence it does not. The trailing
+# sentinel survives the command substitution, which would otherwise eat a value
+# ending in a newline.
+receipt_unescape() {
+    _ru=$(printf '%b.' "$1")
+    printf '%s' "${_ru%.}"
+}
+
+# Merge rule: every field answers "did this machine ever get X from an
+# install.sh run", and that only ever becomes true. Directories and tool names
+# are therefore the union across records, `true` beats `false` for a boolean,
+# and only the purely informational release tag takes the newest value. Two
+# runs with different --prefix each created tool environments and both have to
+# be torn down, so keeping just the last would strand the first; and a second
+# run finding the entry a first run created does not un-create it.
+receipt_records() {
+    AW_MAX="$RECEIPT_SCHEMA_MAX" awk '
+        # Every backslash the writer emits introduces \\, \n, \r or \t. A value
+        # holding anything else was not written by install.sh, and expanding it
+        # would invent a path.
+        function okesc(s,   i, n, c, d) {
+            n = length(s)
+            for (i = 1; i <= n; i++) {
+                c = substr(s, i, 1)
+                if (c != "\\") continue
+                i++
+                d = substr(s, i, 1)
+                if (d != "\\" && d != "n" && d != "r" && d != "t") return 0
+            }
+            return 1
+        }
+        function addset(label, v,   key) {
+            key = label "=" v
+            if (key in seen) return
+            seen[key] = 1
+            setlabel[++nset] = label
+            setvalue[nset] = v
+        }
+        function endrec() {
+            if (!started) return
+            records++
+            if (!complete) partial++
+            if (!ok) { if (newer) future++; else unreadable++ }
+            started = 0
+        }
+        BEGIN { max = ENVIRON["AW_MAX"] + 0 }
+        {
+            p = index($0, "=")
+            if (p == 0) { junk++; next }
+            k = substr($0, 1, p - 1)
+            v = substr($0, p + 1)
+            if (k !~ /^[a-z][a-z0-9_.-]*$/) { junk++; next }
+            if (k == "record" && v == "begin") {
+                endrec()
+                started = 1; expect = 1; ok = 0; complete = 0; newer = 0
+                next
+            }
+            if (!started) { junk++; next }
+            if (expect) {
+                # schema is the first line of a record by construction, so a
+                # reader decides whether it can read the rest before it reads
+                # any of it.
+                expect = 0
+                if (k == "schema" && v ~ /^[0-9]+$/) {
+                    if (v + 0 >= 1 && v + 0 <= max) ok = 1
+                    else if (v + 0 > max) newer = 1
+                }
+                next
+            }
+            if (k == "record" && v == "end") { complete = 1; next }
+            if (!ok) next
+            if (!okesc(v)) { junk++; next }
+            if (k == "uv_tool_dir") { addset("uv_tool_dir", v); next }
+            if (k == "skills_dir") { addset("skills_dir", v); next }
+            if (k == "uv_tool") { addset("uv_tool", v); next }
+            if (k == "uv_installed_by_us") { if (v == "true") uvours = 1; next }
+            if (k == "release_tag") { tag = v; next }
+            if (k ~ /^entry_created\./) {
+                c = substr(k, 15)
+                if (v == "true") created[c] = "true"
+                else if (!(c in created)) created[c] = "false"
+                next
+            }
+            # An unknown but well-formed key is ignored, not counted: the
+            # schema number is what gates readability.
+        }
+        END {
+            endrec()
+            for (i = 1; i <= nset; i++)
+                printf "%s\t%s\n", setlabel[i], setvalue[i]
+            for (c in created)
+                printf "entry_created\t%s\t%s\n", c, created[c]
+            if (tag != "") printf "release_tag\t%s\n", tag
+            printf "meta\trecords\t%d\n", records
+            printf "meta\tpartial\t%d\n", partial
+            printf "meta\tfuture\t%d\n", future
+            printf "meta\tunreadable\t%d\n", unreadable
+            printf "meta\tjunk\t%d\n", junk
+            printf "meta\tuv_ours\t%d\n", uvours + 0
+        }
+    ' "$1"
+}
+
+read_receipt() {
+    RCPT_PRESENT=0
+    RCPT_UNREADABLE=0
+    RCPT_TOOL_DIRS=""
+    RCPT_SKILL_DIRS=""
+    RCPT_TOOLS=""
+    RCPT_CREATED=""
+    RCPT_TAG=""
+    RCPT_UV_OURS=0
+    RCPT_RECORDS=0
+    RCPT_PARTIAL=0
+    RCPT_FUTURE=0
+    RCPT_BAD=0
+    RCPT_JUNK=0
+    [ -e "$RECEIPT_FILE" ] || return 0
+    if [ ! -f "$RECEIPT_FILE" ] || [ ! -r "$RECEIPT_FILE" ]; then
+        RCPT_UNREADABLE=1
+        return 0
+    fi
+    RCPT_PRESENT=1
+    while IFS="$TAB" read -r _rr_kind _rr_a _rr_b; do
+        case "${_rr_kind:-}" in
+            uv_tool_dir) RCPT_TOOL_DIRS="$RCPT_TOOL_DIRS$_rr_a$NL" ;;
+            skills_dir) RCPT_SKILL_DIRS="$RCPT_SKILL_DIRS$_rr_a$NL" ;;
+            uv_tool) RCPT_TOOLS="$RCPT_TOOLS$_rr_a$NL" ;;
+            release_tag) RCPT_TAG="$_rr_a" ;;
+            entry_created) RCPT_CREATED="$RCPT_CREATED$_rr_a$TAB$_rr_b$NL" ;;
+            meta)
+                case "$_rr_a" in
+                    records) RCPT_RECORDS="$_rr_b" ;;
+                    partial) RCPT_PARTIAL="$_rr_b" ;;
+                    future) RCPT_FUTURE="$_rr_b" ;;
+                    unreadable) RCPT_BAD="$_rr_b" ;;
+                    junk) RCPT_JUNK="$_rr_b" ;;
+                    uv_ours) RCPT_UV_OURS="$_rr_b" ;;
+                esac ;;
+        esac
+    done <<EOF
+$(receipt_records "$RECEIPT_FILE")
+EOF
+}
+
+# "true", "false", or empty when no run recorded anything for this client.
+receipt_entry_created() {
+    printf '%s' "$RCPT_CREATED" | awk -F"$TAB" -v c="$1" '$1 == c { print $2; exit }'
+}
+
 # Follow a symlink chain by hand: `readlink -f` is not POSIX and is missing on
 # older macOS. Bounded so a cycle cannot hang the scan.
 resolve_link() {
@@ -596,6 +794,20 @@ def classify(name, entry):
     return kind, endpoint, command, "no"
 
 
+def installer_shape(entry):
+    """Exactly what install.sh's JSON merge writes, and nothing else.
+
+    Without a receipt this is the only evidence that an entry was the
+    installer's work rather than the user's, so it is an equality test on the
+    whole value: one key, one command, no args, no env.
+    """
+    if not isinstance(entry, dict):
+        return "other"
+    if set(entry) == {"command"} and entry.get("command") == BINARY:
+        return "installer"
+    return "other"
+
+
 def scan_env_block(path, keypath, segs, block):
     """Report PIPEFY_* keys in an env block, with the JSON path a remover needs.
 
@@ -624,7 +836,8 @@ def walk_servers(path, keypath, segs, servers, scope, projdir):
     for name, entry in servers.items():
         kind, endpoint, command, match = classify(name, entry)
         if match != "no":
-            emit("mcp", match, name, scope, projdir, path, kind, endpoint, command)
+            emit("mcp", match, name, scope, projdir, path, kind, endpoint,
+                 command, installer_shape(entry))
             MCP_ROWS.append(
                 (match, name, scope, projdir, path, kind, endpoint, command)
             )
@@ -878,6 +1091,78 @@ PY
 
 # ---------------------------------------------------------------- detectors
 
+# Newline-separated set membership, compared for equality.
+list_has() {
+    printf '%s' "$1" | awk -v v="$2" '$0 == v { f = 1 } END { exit !f }'
+}
+
+scan_receipt() {
+    section "Install receipt"
+    if [ "$RCPT_UNREADABLE" -eq 1 ]; then
+        uninspected "$RECEIPT_FILE exists but could not be read"
+        return 0
+    fi
+    if [ "$RCPT_PRESENT" -eq 0 ]; then
+        note "no install receipt at $RECEIPT_FILE"
+        print_heuristic_mode
+        return 0
+    fi
+    finding "$RECEIPT_FILE"
+    detail "$RCPT_RECORDS install run(s) recorded"
+    if [ "$RCPT_PARTIAL" -gt 0 ]; then
+        detail "$RCPT_PARTIAL of them stop mid-record, so that install did not finish;"
+        detail "what it did record is still used, and a path that no longer exists is skipped"
+    fi
+    if [ "$RCPT_FUTURE" -gt 0 ]; then
+        detail "$RCPT_FUTURE were written by a newer schema than this script reads, and are"
+        detail "skipped whole rather than half-read; get a newer uninstall.sh"
+    fi
+    if [ "$RCPT_BAD" -gt 0 ]; then
+        detail "$RCPT_BAD carry no schema this script recognises and are skipped whole"
+    fi
+    if [ "$RCPT_JUNK" -gt 0 ]; then
+        detail "$RCPT_JUNK lines are malformed and were dropped"
+    fi
+    if [ -n "$RCPT_TAG" ]; then
+        detail "release: $(receipt_unescape "$RCPT_TAG")"
+    fi
+    while IFS= read -r _sr_line; do
+        [ -n "$_sr_line" ] || continue
+        detail "installed as a uv tool: $(receipt_unescape "$_sr_line")"
+    done <<EOF
+$RCPT_TOOLS
+EOF
+    while IFS="$TAB" read -r _sr_client _sr_made; do
+        [ -n "${_sr_client:-}" ] || continue
+        if [ "$_sr_made" = true ]; then
+            detail "created the '$CANONICAL_NAME' registration in the $_sr_client config"
+        else
+            detail "found a '$CANONICAL_NAME' registration already in the $_sr_client config and left it"
+        fi
+    done <<EOF
+$RCPT_CREATED
+EOF
+    if [ "$RCPT_UV_OURS" -eq 1 ]; then
+        detail "uv was installed by one of those runs. It is still not removed: by now"
+        detail "other tools depend on it, and a tool directory is not uv itself."
+    fi
+    plan_add 6 ours rmpath "$RECEIPT_FILE" - - - - - - \
+        "delete the install receipt $RECEIPT_FILE"
+    plan_add 6 ours rmdir "$RECEIPT_STATE" - - - - - - \
+        "remove $RECEIPT_STATE if it ends up empty"
+}
+
+# Permanent, not transitional: every install that predates the receipt has
+# none, and one is only written by a version of install.sh that writes one.
+print_heuristic_mode() {
+    detail "Heuristic mode. Without a receipt this run cannot tell a registration the"
+    detail "installer created from one it found already there and left alone, so in a"
+    detail "config the installer writes it removes an entry only where the value is"
+    detail "exactly the single command the installer writes, and reports the rest for"
+    detail "you to judge. uv is never treated as this toolkit's. This is not a"
+    detail "migration step: every install made before the receipt existed lands here."
+}
+
 scan_binaries() {
     section "Executables on PATH"
     for _bin in pipefy "$SERVER_BINARY"; do
@@ -923,23 +1208,60 @@ scan_uv_tools() {
     if [ -n "${UV_TOOL_DIR:-}" ]; then
         detail "UV_TOOL_DIR=$UV_TOOL_DIR"
     fi
-    _listing=$(uv tool list 2>/dev/null) || _listing=""
+    scan_uv_tool_dir -
+    # A tool directory the caller's environment no longer points at is
+    # invisible to `uv tool list`, which is why install.sh records it.
+    _seen=""
+    while IFS= read -r _ut_line; do
+        [ -n "$_ut_line" ] || continue
+        _ut_dir=$(receipt_unescape "$_ut_line")
+        [ "$_ut_dir" != "${UV_TOOL_DIR:-}" ] || continue
+        if list_has "$_seen" "$_ut_dir"; then
+            continue
+        fi
+        _seen="$_seen$_ut_dir$NL"
+        if [ ! -d "$_ut_dir" ]; then
+            note "the receipt records a tool directory that is gone: $_ut_dir"
+            continue
+        fi
+        detail "from the install receipt: $_ut_dir"
+        scan_uv_tool_dir "$_ut_dir"
+    done <<EOF
+$RCPT_TOOL_DIRS
+EOF
+    if [ -z "${UV_TOOL_DIR:-}" ] && [ "$RCPT_PRESENT" -eq 0 ]; then
+        detail "install.sh --prefix sets UV_TOOL_DIR, and an install that wrote no receipt"
+        detail "recorded it nowhere, so a tool under a custom prefix is invisible here"
+        detail "unless that prefix is exported"
+    fi
+}
+
+# One tool directory: "-" for whatever this environment resolves to, an
+# absolute path for one the receipt named.
+scan_uv_tool_dir() {
+    _sud_dir="$1"
+    if is_set "$_sud_dir"; then
+        _listing=$(UV_TOOL_DIR="$_sud_dir" uv tool list 2>/dev/null) || _listing=""
+    else
+        _listing=$(uv tool list 2>/dev/null) || _listing=""
+    fi
     for _tool in $UV_TOOLS; do
         # `uv tool list` prints "<name> v<version>" per tool with its
         # executables indented under it. Match the first field exactly.
         if printf '%s\n' "$_listing" \
             | awk -v t="$_tool" '$1 == t { f = 1 } END { exit !f }'; then
-            finding "uv tool installed: $_tool"
-            plan_add 4 ours uvtool "$_tool" - - - - - - \
-                "uv tool uninstall $_tool"
-        else
+            if is_set "$_sud_dir"; then
+                finding "uv tool installed: $_tool (under $_sud_dir)"
+                _sud_desc="uv tool uninstall $_tool, under $_sud_dir"
+            else
+                finding "uv tool installed: $_tool"
+                _sud_desc="uv tool uninstall $_tool"
+            fi
+            plan_add 4 ours uvtool "$_tool" "$_sud_dir" - - - - - "$_sud_desc"
+        elif ! is_set "$_sud_dir"; then
             note "uv tool not installed: $_tool"
         fi
     done
-    if [ -z "${UV_TOOL_DIR:-}" ]; then
-        detail "install.sh --prefix sets UV_TOOL_DIR and records it nowhere, so a tool"
-        detail "installed under a custom prefix is invisible unless that prefix is exported"
-    fi
 }
 
 # Reported, never acted on. There are two distinct ways to lose data here, so
@@ -1705,17 +2027,42 @@ scan_completions() {
 
 scan_skills() {
     section "Skills"
-    # `npx skills add` writes into the state directory of the client that owns
-    # the plugin system, which is also where install.sh's skills step lands.
+    # `npx skills add` picks where it writes, so install.sh records what it
+    # observed afterwards. Absent that, the fallback is the state directory of
+    # the client that owns the plugin system, which is where it was seen to
+    # land.
+    _dirs=""
     _srow=$(client_row_with_cap plugin-system)
-    [ -n "$_srow" ] || return 0
-    _dir="$(client_field "$_srow" 7)/skills"
-    if [ ! -d "$_dir" ]; then
-        note "no $_dir"
+    if [ -n "$_srow" ]; then
+        _dirs="$(client_field "$_srow" 7)/skills$NL"
+    fi
+    while IFS= read -r _sk_line; do
+        [ -n "$_sk_line" ] || continue
+        _sk_dir=$(receipt_unescape "$_sk_line")
+        if list_has "$_dirs" "$_sk_dir"; then
+            continue
+        fi
+        _dirs="$_dirs$_sk_dir$NL"
+    done <<EOF
+$RCPT_SKILL_DIRS
+EOF
+    [ -n "$_dirs" ] || return 0
+    while IFS= read -r _dir; do
+        [ -n "$_dir" ] || continue
+        scan_skills_dir "$_dir"
+    done <<EOF
+$_dirs
+EOF
+}
+
+scan_skills_dir() {
+    _sd_dir="$1"
+    if [ ! -d "$_sd_dir" ]; then
+        note "no $_sd_dir"
         return 0
     fi
     _hit=0
-    for _skill in "$_dir"/pipefy-*; do
+    for _skill in "$_sd_dir"/pipefy-*; do
         # A directory holding a SKILL.md, under the name `npx skills add`
         # gives this catalog's skills.
         [ -f "$_skill/SKILL.md" ] || continue
@@ -1726,9 +2073,9 @@ scan_skills() {
             "delete the $_sname skill"
     done
     if [ "$_hit" -eq 0 ]; then
-        note "no pipefy-* skills in $_dir"
+        note "no pipefy-* skills in $_sd_dir"
     else
-        finding "$_hit pipefy-* skills installed under $_dir"
+        finding "$_hit pipefy-* skills installed under $_sd_dir"
     fi
 }
 
@@ -1776,7 +2123,7 @@ EOF
 #   toml        a1 file  a2 table key  a3 section name
 #   plugin      a1 plugin id  a2 registry file  a3 scope
 #   market      a1 marketplace id  a2 registry file  a3 clone location
-#   uvtool      a1 tool name
+#   uvtool      a1 tool name  a2 UV_TOOL_DIR the receipt named, or "-"
 #   logout      -
 #   mcplogout   a1 registration name
 #   keychain    a1 account
@@ -1858,7 +2205,7 @@ plan_registrations() {
     [ -n "$PYTHON3" ] || return 0
     _scoped_id=$(client_field "$(client_row_with_cap scopes)" 1)
     _hosted_seen=""
-    while IFS="$TAB" read -r _ _match _name _scope _pdir _file _kind _endpoint _command; do
+    while IFS="$TAB" read -r _ _match _name _scope _pdir _file _kind _endpoint _command _shape; do
         [ "${_match:-}" = "definite" ] || continue
         _cid=$(client_id_for_file "$_file")
         [ -n "$_cid" ] || _cid="$_scoped_id"
@@ -1882,6 +2229,9 @@ plan_registrations() {
             project)
                 plan_project_registration "$_name" "$_pdir" "$_file" ;;
             *)
+                # Every remaining scope is a client whose config install.sh
+                # writes itself, so provenance is answerable and is asked.
+                registration_is_ours "$_cid" "$_name" "$_shape" "$_file" || continue
                 plan_add 3 ours jsonkey "$_file" "$(client_field "$_crow" 5)" \
                     "$_name" - - - - \
                     "remove the '$_name' registration from $_file" ;;
@@ -1889,6 +2239,37 @@ plan_registrations() {
     done <<EOF
 $(records mcp)
 EOF
+}
+
+# May this run delete a registration from a config install.sh writes?
+#
+# With a receipt the answer is recorded fact: the installer either created the
+# entry or found it already there, and an entry it found is the user's. Without
+# one it is a judgement, and the judgement is narrow on purpose — only a value
+# that is exactly the single command the installer writes. Every install made
+# before the receipt existed takes that path, so it is permanent.
+#
+# The receipt speaks only for the canonical name, because that is the only name
+# install.sh registers under. A definite match under any other name in the same
+# file is judged on its shape like any other.
+registration_is_ours() {
+    _rio_client="$1"
+    _rio_name="$2"
+    _rio_shape="$3"
+    _rio_file="$4"
+    if [ "$RCPT_PRESENT" -eq 1 ] && [ "$_rio_name" = "$CANONICAL_NAME" ]; then
+        case "$(receipt_entry_created "$_rio_client")" in
+            true) return 0 ;;
+            false)
+                note_left "'$_rio_name' in $_rio_file was already registered when install.sh ran, which recorded leaving it as it found it; remove it yourself if you want it gone"
+                return 1 ;;
+        esac
+    fi
+    if [ "$_rio_shape" = installer ]; then
+        return 0
+    fi
+    note_left "'$_rio_name' in $_rio_file is not the single command install.sh writes and no receipt records the installer creating it, so it is left alone; remove it yourself if it is yours"
+    return 1
 }
 
 # The hosted server's OAuth token lives in the client's own credential store,
@@ -1928,12 +2309,20 @@ plan_toml_section() {
         note_left "[$3.$4] in $2 — --client $CLIENT excludes $1"
         return 0
     fi
-    if toml_section_is_pristine "$2" "$3" "$4"; then
-        plan_add 3 ours toml "$2" "$3" "$4" - - - - \
-            "remove the [$3.$4] section from $2"
+    if ! toml_section_is_pristine "$2" "$3" "$4"; then
+        note_left "[$3.$4] in $2 holds more than the single line the installer appends, so it was edited by hand; excise the section yourself"
         return 0
     fi
-    note_left "[$3.$4] in $2 holds more than the single line the installer appends, so it was edited by hand; excise the section yourself"
+    # The pristine test above is already the shape test heuristic mode relies
+    # on; a receipt can still overrule it, because a section the installer
+    # found already there is pristine and is not ours.
+    if [ "$RCPT_PRESENT" -eq 1 ] && [ "$4" = "$CANONICAL_NAME" ] \
+        && [ "$(receipt_entry_created "$1")" = false ]; then
+        note_left "[$3.$4] in $2 was already there when install.sh ran, which recorded leaving it as it found it; excise the section yourself if you want it gone"
+        return 0
+    fi
+    plan_add 3 ours toml "$2" "$3" "$4" - - - - \
+        "remove the [$3.$4] section from $2"
 }
 
 # ------------------------------------------------------------- presentation
@@ -2343,6 +2732,12 @@ act_uvtool() {
         note_left "uv is not on PATH, so '$1' could not be uninstalled"
         return 1
     fi
+    # A subshell so the tool directory the receipt named applies to this one
+    # uninstall and not to any later action.
+    if is_set "${2:-}"; then
+        ( UV_TOOL_DIR="$2"; export UV_TOOL_DIR; run uv tool uninstall "$1" )
+        return $?
+    fi
     run uv tool uninstall "$1"
 }
 
@@ -2419,7 +2814,7 @@ do_action() {
         toml) act_toml "$1" "$2" "$3" ;;
         plugin) act_plugin "$1" "$2" "$3" ;;
         market) act_market "$1" "$2" "$3" ;;
-        uvtool) act_uvtool "$1" ;;
+        uvtool) act_uvtool "$1" "$2" ;;
         logout) act_logout ;;
         mcplogout) act_mcplogout "$1" ;;
         keychain) act_keychain "$1" ;;
@@ -2570,6 +2965,7 @@ run_scan() {
     FINDINGS=0
     SCAN_ERRORS=0
     : >"$RECORDS"
+    read_receipt
 
     set --
     while IFS= read -r _pdir; do
@@ -2589,6 +2985,9 @@ EOF
     fi
     analyse_conflicts
 
+    # First, because everything downstream is read differently depending on
+    # whether there is a receipt, and the reader deserves to know which.
+    scan_receipt
     scan_binaries
     scan_uv_tools
     scan_uv_cache
@@ -2622,6 +3021,7 @@ main() {
     BACKUP_STAMP=$(date +%Y%m%d%H%M%S 2>/dev/null) || BACKUP_STAMP=""
     [ -n "$BACKUP_STAMP" ] || BACKUP_STAMP="backup"
 
+    resolve_receipt_path
     RECORDS=$(mktemp "${TMPDIR:-/tmp}/pipefy-scan.XXXXXX") \
         || err "mktemp failed (TMPDIR=${TMPDIR:-/tmp})"
     PLAN=$(mktemp "${TMPDIR:-/tmp}/pipefy-plan.XXXXXX") \

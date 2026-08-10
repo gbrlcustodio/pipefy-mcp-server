@@ -148,11 +148,19 @@ def test_extract_error_strings_from_errors_list_string_items():
 
 @pytest.mark.unit
 def test_extract_error_strings_skips_empty_message_and_blank_strings():
-    """Dict with empty message or blank string items are skipped."""
+    """Dict with empty/whitespace message or blank string items are skipped."""
     exc = Exception("")
-    exc.errors = [{"message": ""}, {"message": "ok"}, ""]
+    exc.errors = [{"message": ""}, {"message": "   "}, {"message": "ok"}, "", "  "]
     result = extract_error_strings(exc)
     assert result == ["ok"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_all_whitespace_structured_yields_empty():
+    """Whitespace-only structured messages do not block fallbacks downstream."""
+    exc = Exception("   ")
+    exc.errors = [{"message": "   "}, "  "]
+    assert extract_error_strings(exc) == []
 
 
 @pytest.mark.unit

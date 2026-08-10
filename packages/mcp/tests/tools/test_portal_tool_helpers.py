@@ -77,6 +77,21 @@ def test_map_portal_error_whitespace_permission_denied_uses_guidance(
 
 
 @pytest.mark.unit
+def test_map_portal_error_whitespace_graphql_message_uses_empty_fallback() -> None:
+    """Whitespace-only GraphQL messages must not bypass empty_fallback.
+
+    Empty ``message`` is already substituted to ``Unknown error`` when
+    ``PipefyGraphQLError`` is constructed; whitespace stays truthy there and
+    used to leak through ``extract_error_strings`` before the strip fix.
+    """
+    message = map_portal_error_to_message(
+        PipefyGraphQLError([{"message": "   "}]),
+        empty_fallback="Portal request failed.",
+    )
+    assert message == "Portal request failed."
+
+
+@pytest.mark.unit
 def test_map_portal_error_permission_denied_transport_query_error() -> None:
     """GraphQL PERMISSION_DENIED codes map to portal permission guidance."""
     exc = PipefyGraphQLError([{"message": "forbidden"}])

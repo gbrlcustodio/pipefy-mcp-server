@@ -92,15 +92,19 @@ def extract_error_strings(exc: BaseException) -> list[str]:
         for item in errors:
             if isinstance(item, dict):
                 msg = item.get("message")
-                if isinstance(msg, str) and msg:
-                    structured.append(msg)
-            elif isinstance(item, str) and item:
-                structured.append(item)
+                if isinstance(msg, str):
+                    stripped = msg.strip()
+                    if stripped:
+                        structured.append(stripped)
+            elif isinstance(item, str):
+                stripped = item.strip()
+                if stripped:
+                    structured.append(stripped)
 
     if structured:
         return structured
 
-    raw = str(exc)
+    raw = str(exc).strip()
     if not raw:
         return []
 

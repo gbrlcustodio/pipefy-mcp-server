@@ -265,7 +265,7 @@ client_ids() {
 }
 
 client_row() {
-    all_client_rows | awk -F'|' -v id="$1" '$1 == id { print; exit }'
+    all_client_rows | awk -F'|' -v id="$1" '$1 == id && !seen { print; seen = 1 }'
 }
 
 # Field n of a row: 1 id, 3 format, 4 config, 5 servers, 6 scope, 7 statedir,
@@ -293,7 +293,7 @@ client_row_with_cap() {
 
 # Which client owns a config path, for --client narrowing and for reports.
 client_id_for_file() {
-    client_rows | awk -F'|' -v f="$1" '$4 == f { print $1; exit }'
+    client_rows | awk -F'|' -v f="$1" '$4 == f && !seen { print $1; seen = 1 }'
 }
 
 # Which client reads a config file. A project .mcp.json and a plugin's own
@@ -1966,11 +1966,29 @@ keychain_accounts() {
     '
 }
 
+# A Secret Service is reached over the session bus, and so is the keyring
+# backend the CLI stores sessions with. Without a bus there is no service, so
+# no login could have written there — which is a different answer from "this
+# run could not look", and only one of the two is a source left uninspected.
+session_bus_present() {
+    [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && return 0
+    [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "${XDG_RUNTIME_DIR}/bus" ] && return 0
+    return 1
+}
+
 scan_keychain_linux() {
     if ! command -v secret-tool >/dev/null 2>&1; then
-        # Uninspected, not clean, and the same call as the missing `security`
-        # on Darwin: a credential store nothing could read is a source this run
-        # has no answer for, whatever the reason it could not read it.
+        if ! session_bus_present; then
+            # Headless boxes, containers and CI runners land here. Nothing was
+            # skipped, so this must not read as a source that failed.
+            note "no Secret Service on this machine, so no session is stored in one"
+            detail "reaching one needs a session bus and this has none, so a login"
+            detail "could not have written there. A file-backend store is checked below."
+            return 0
+        fi
+        # A bus is present, so a service may hold a session this run cannot
+        # read. Same call as a missing `security` on Darwin: uninspected, not
+        # clean, whatever the reason it could not be read.
         uninspected "keychain not inspected — 'secret-tool' not on PATH"
         detail "install libsecret-tools (or the Secret Service client for your desktop)"
         detail "to have this run enumerate the store, or check it yourself"
@@ -2960,7 +2978,7 @@ cli_verb_exists() {
 }
 
 client_row_for_config() {
-    client_rows | awk -F'|' -v f="$1" '$4 == f { print; exit }'
+    client_rows | awk -F'|' -v f="$1" '$4 == f && !seen { print; seen = 1 }'
 }
 
 removal_cli() {

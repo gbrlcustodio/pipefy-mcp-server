@@ -12,7 +12,8 @@ For a short in-repo overview and dev commands, see **[`../../packages/sdk/README
 
 ## Errors
 
-`PipefyError` is the root. Catch it to handle any failure the SDK raises:
+`PipefyError` is the root of the API error types. Catch it to handle a failure
+the Pipefy API reported:
 
 ```python
 from pipefy_sdk import PipefyError, PipefyGraphQLError
@@ -24,22 +25,25 @@ except PipefyGraphQLError as exc:
     # message and extensions; read codes off that rather than the message text.
     codes = [(e.get("extensions") or {}).get("code") for e in exc.errors]
 except PipefyError:
-    # anything else the SDK owns
+    # any other failure the API reported; see the carve-outs below
     ...
 ```
 
 The hierarchy:
 
-- **`PipefyError`** — root of every error the SDK raises.
+- **`PipefyError`** — root of the API error types below.
 - **`PipefyAPIError`** — the API returned an error payload.
 - **`PipefyGraphQLError`** — a GraphQL response carried `errors`. Subclasses `PipefyAPIError`, and carries the raw list on `.errors`. This is what most failures arrive as.
 
 Catch the specific type before the root, since `except PipefyError` also catches
 `PipefyGraphQLError` and would otherwise shadow it.
 
-`PortalPermissionError` sits deliberately outside this hierarchy: it subclasses
-`ValueError`, which is what maps a portal permission denial to CLI exit code 2
-rather than 1. Catch it by name.
+Other exported error types sit outside this root. Catch these by name:
+
+- **`PortalPermissionError`** subclasses `ValueError`. That parentage is what
+  maps a portal permission denial to CLI exit code 2 rather than 1.
+- **`AttachmentUploadError`** and **`KnowledgeBaseDocumentUploadError`**
+  subclass `Exception`.
 
 Transport-level failures (connection refused, timeouts) surface as `gql`'s
 `TransportError`, which the SDK does not wrap.

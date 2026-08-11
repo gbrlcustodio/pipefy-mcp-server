@@ -813,6 +813,22 @@ def test_a_missing_secret_tool_is_uninspected_rather_than_clean(tmp_path):
     assert "sources could not be inspected" in result.stdout
 
 
+def test_a_scan_writes_nothing_to_stderr(tmp_path):
+    """`client_rows` streams, and a consumer that exits early closed the pipe.
+
+    dash reported the resulting EPIPE as `printf: I/O error`. Whether the
+    producer is still writing when the consumer goes depends on the pipe
+    buffer, so this reproduces on Linux and not on macOS: it guards the
+    regression where CI runs, and passes either way where it does not.
+    """
+    home = _home(tmp_path)
+
+    result = _run(home, _stub_path(tmp_path))
+
+    assert "I/O error" not in result.stderr, result.stderr
+    assert result.stderr == "", result.stderr
+
+
 # --------------------------------------------------------------- keychain
 
 

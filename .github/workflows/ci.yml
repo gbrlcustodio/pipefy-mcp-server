@@ -60,6 +60,11 @@ jobs:
       run: uvx --from shellcheck-py==0.11.0.1 shellcheck --shell=sh install.sh uninstall.sh
     - name: Deletions route through remove_path
       run: python3 .github/workflows/scripts/check_deletion_guard.py
+    # Not a behavioural test: whether the producer is still writing when the
+    # consumer leaves depends on the pipe buffer, so an early exit reproduces
+    # on one platform and not another.
+    - name: Consumers of a streaming producer read to the end
+      run: python3 .github/workflows/scripts/check_pipe_drain.py
 
   # The only check that proves completeness rather than the correctness of a
   # step someone thought to write: install for real, tear down for real, and
@@ -71,20 +76,23 @@ jobs:
     - uses: actions/checkout@v6
     - name: Set up uv
       uses: astral-sh/setup-uv@v7
-    # `npx skills add` picks its target from the agents it finds. Creating
-    # Claude Code's directory pins the round trip to one location instead of
-    # whatever a bare runner resolves to.
-    - name: Give the skills installer a target
-      run: mkdir -p "$HOME/.claude"
+    # `npx skills add` writes into the working directory, not $HOME, whatever
+    # agent directories exist elsewhere. Both scripts therefore run from a
+    # scratch directory under $HOME: the skills land somewhere the snapshot
+    # covers, so a teardown that stopped removing them would fail this job.
+    # RUNNER_TEMP is under $HOME on hosted runners and is pruned as runner
+    # noise, which is why it is not that directory.
+    - name: Make the scratch directory both scripts run from
+      run: mkdir -p "$HOME/roundtrip" "$HOME/.claude"
     - name: Snapshot HOME
       run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/before.txt"
-    # Both scripts run from a scratch directory rather than the checkout: this
-    # repository's own git-tracked .mcp.json is a project-scope registration,
-    # and tearing down against one is a different scenario from a user's
-    # machine.
+    # Not the checkout: this repository's own git-tracked .mcp.json is a
+    # project-scope registration, and tearing down against one is a different
+    # scenario from a user's machine.
     - name: Install
-      working-directory: ${{ runner.temp }}
-      run: sh "$GITHUB_WORKSPACE/install.sh" --yes --client cursor
+      run: |
+        cd "$HOME/roundtrip"
+        sh "$GITHUB_WORKSPACE/install.sh" --yes --client cursor
     - name: Snapshot HOME after the install
       run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/installed.txt"
     - name: The install is real
@@ -96,6 +104,10 @@ jobs:
         config = json.loads(pathlib.Path.home().joinpath('.cursor/mcp.json').read_text())
         assert config['mcpServers']['pipefy'] == {'command': 'pipefy-mcp-server'}, config
         "
+        # Pins where the skills actually landed. If a future `skills add`
+        # chooses somewhere else, this fails here rather than quietly leaving
+        # the teardown assertion below with nothing to prove.
+        ls "$HOME/roundtrip/.claude/skills" | grep -q '^pipefy-'
     # ubuntu-latest often has a session bus address but no Secret Service client.
     # uninstall.sh then treats the keychain as uninspected and exits 2 even after
     # a clean teardown. An empty probe matches the test stubs: no pipefy items.
@@ -107,8 +119,9 @@ jobs:
         chmod +x /tmp/pipefy-ci-bin/secret-tool
         echo /tmp/pipefy-ci-bin >> "$GITHUB_PATH"
     - name: Uninstall
-      working-directory: ${{ runner.temp }}
-      run: sh "$GITHUB_WORKSPACE/uninstall.sh" --yes
+      run: |
+        cd "$HOME/roundtrip"
+        sh "$GITHUB_WORKSPACE/uninstall.sh" --yes
     - name: Snapshot HOME after the teardown
       run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/after.txt"
     - name: Nothing the toolkit installed is still registered
@@ -122,6 +135,14 @@ jobs:
         config = json.loads(pathlib.Path.home().joinpath('.cursor/mcp.json').read_text())
         assert 'pipefy' not in config.get('mcpServers', {}), config
         "
+        # Stated outright rather than left to the filesystem diff, so the
+        # guarantee does not depend on which directories stay pruned.
+        left=$(find "$HOME" -maxdepth 6 -path '*/.claude/skills/pipefy-*' -print 2>/dev/null | head -5)
+        if [ -n "$left" ]; then
+          echo "skills survived the teardown:" >&2
+          printf '%s\n' "$left" >&2
+          exit 1
+        fi
     - name: The filesystem is back where it started
       run: |
         python3 .github/workflows/scripts/check_roundtrip.py check \

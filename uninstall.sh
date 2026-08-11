@@ -265,7 +265,7 @@ client_ids() {
 }
 
 client_row() {
-    all_client_rows | awk -F'|' -v id="$1" '$1 == id { print; exit }'
+    all_client_rows | awk -F'|' -v id="$1" '$1 == id && !seen { print; seen = 1 }'
 }
 
 # Field n of a row: 1 id, 3 format, 4 config, 5 servers, 6 scope, 7 statedir,
@@ -284,16 +284,20 @@ client_has_cap() {
 # client id.
 client_row_with_cap() {
     client_rows | while IFS= read -r _cr; do
+        # Read to the end and keep the first: leaving the loop early closes the
+        # pipe on a producer still writing, and dash reports that EPIPE as
+        # `printf: I/O error` from a scan that writes nothing to stderr.
+        [ -z "${_crc_found:-}" ] || continue
         if client_has_cap "$_cr" "$1"; then
+            _crc_found=1
             printf '%s\n' "$_cr"
-            break
         fi
     done
 }
 
 # Which client owns a config path, for --client narrowing and for reports.
 client_id_for_file() {
-    client_rows | awk -F'|' -v f="$1" '$4 == f { print $1; exit }'
+    client_rows | awk -F'|' -v f="$1" '$4 == f && !seen { print $1; seen = 1 }'
 }
 
 # Which client reads a config file. A project .mcp.json and a plugin's own
@@ -1068,13 +1072,23 @@ for pdir in project_dirs:
 # --- where each installed skill came from. `skills add` keeps a lock file
 # recording the source of every skill it wrote; that record is the only
 # provenance a skill has, since a directory name is not evidence of anything.
-def scan_skill_lock(path):
+#
+# Two layouts, both observed. A global install writes the lock inside the agent
+# directory; a project install writes it at the base of the project. The store
+# is `<base>/.agents/skills` either way, which is why it is derived from the
+# base rather than from wherever the lock happens to sit.
+SKILL_LOCKS = (os.path.join(".agents", ".skill-lock.json"), "skills-lock.json")
+SKILL_STORE = os.path.join(".agents", "skills")
+
+
+def scan_skill_lock(base, path):
     data = load(path)
     if not isinstance(data, dict):
         return
     skills = data.get("skills")
     if not isinstance(skills, dict):
         return
+    store = os.path.join(base, SKILL_STORE)
     for name, meta in skills.items():
         if not isinstance(meta, dict):
             continue
@@ -1082,16 +1096,20 @@ def scan_skill_lock(path):
         source_url = str(meta.get("sourceUrl") or "")
         ours = source in SKILL_SOURCES or source_url in SKILL_SOURCES
         emit("skilllock", path, name, "ours" if ours else "other",
-             source or source_url or "?")
+             source or source_url or "?", store)
+    # The skills directory a client reads sits beside the base too, and on a
+    # project install it is nowhere this scan would otherwise look.
+    emit("skillsdir", os.path.join(base, ".claude", "skills"), path)
 
 
 seen_locks = set()
 for base in [os.path.expanduser("~")] + project_dirs:
-    lock = os.path.join(base, ".agents", ".skill-lock.json")
-    if lock in seen_locks:
-        continue
-    seen_locks.add(lock)
-    scan_skill_lock(lock)
+    for leaf in SKILL_LOCKS:
+        lock = os.path.join(base, leaf)
+        if lock in seen_locks:
+            continue
+        seen_locks.add(lock)
+        scan_skill_lock(base, lock)
 
 # --- one group per distinct registration, so a repo with many worktrees does
 # not print the same stdio entry dozens of times
@@ -2223,6 +2241,17 @@ scan_skills() {
     done <<EOF
 $RCPT_SKILL_DIRS
 EOF
+    # A project install links from a skills directory beside the project, which
+    # is in no client's row and in no receipt this machine necessarily has.
+    while IFS="$TAB" read -r _ _sk_dir _; do
+        [ -n "${_sk_dir:-}" ] || continue
+        if list_has "$_dirs" "$_sk_dir"; then
+            continue
+        fi
+        _dirs="$_dirs$_sk_dir$NL"
+    done <<EOF
+$(records skillsdir)
+EOF
     if [ -z "$PYTHON3" ]; then
         uninspected "skill provenance not inspected — python3 unavailable"
         detail "the source of an installed skill is recorded in a JSON lock file, and"
@@ -2253,15 +2282,22 @@ skill_provenance() {
     done <<EOF
 $RCPT_SKILLS
 EOF
-    records skilllock \
-        | awk -F"$TAB" -v n="$1" '$3 == n { print $4 "\t" $5; exit }'
+    records skilllock | awk -F"$TAB" -v l="$2" -v n="$1" \
+        '$2 == l && $3 == n && !seen { print $4 "\t" $5; seen = 1 }'
 }
 
-# The lock file that describes a skill. The path is one the probe built from
-# $HOME and the project directories it already sweeps, never a string read out
-# of a file, and it is only ever edited as JSON with a backup taken first.
-skill_lock_file() {
-    records skilllock | awk -F"$TAB" -v n="$1" '$3 == n { print $2; exit }'
+# The lock file describing the skills in one directory. The pairing comes from
+# the probe, which found both at the same base. Keying on the skill name alone
+# would cross the two layouts: a machine with a global and a project install of
+# this toolkit has the same skill name in both locks, and the first record
+# found would answer for the other one's store.
+#
+# The path is one the probe built from $HOME and the project directories it
+# already sweeps, never a string read out of a file, and it is only ever edited
+# as JSON with a backup taken first.
+lock_for_skills_dir() {
+    records skillsdir \
+        | awk -F"$TAB" -v d="$1" '$2 == d && !seen { print $3; seen = 1 }'
 }
 
 scan_skills_dir() {
@@ -2270,6 +2306,10 @@ scan_skills_dir() {
         note "no $_sd_dir"
         return 0
     fi
+    # Resolved once, from the directory rather than from a skill name: the same
+    # name appears in both locks on a machine carrying a global and a project
+    # install, and each has to answer for its own.
+    _sd_lock=$(lock_for_skills_dir "$_sd_dir")
     _hit=0
     _theirs=0
     for _skill in "$_sd_dir"/pipefy-*; do
@@ -2277,7 +2317,7 @@ scan_skills_dir() {
         # gives this catalog's skills.
         [ -f "$_skill/SKILL.md" ] || continue
         _sname=$(basename "$_skill")
-        _prov=$(skill_provenance "$_sname")
+        _prov=$(skill_provenance "$_sname" "$_sd_lock")
         case "$_prov" in
             receipt|ours*) ;;
             other*)
@@ -2295,7 +2335,7 @@ scan_skills_dir() {
         detail "$_sname"
         plan_add 7 ours rmpath "$_skill" - - - - - - \
             "delete the $_sname skill"
-        plan_skill_store "$_skill" "$_sname"
+        plan_skill_store "$_skill" "$_sname" "$_sd_lock"
     done
     if [ "$_hit" -eq 0 ]; then
         note "no pipefy-* skills from this toolkit in $_sd_dir"
@@ -2307,19 +2347,20 @@ scan_skills_dir() {
     fi
 }
 
-# The store `skills add` writes its content into, derived from the lock file it
-# keeps beside that store rather than assumed: global and per-project installs
-# each get their own, and neither path is one this script may hardcode.
-skill_store_root() {
-    [ -n "${1:-}" ] || return 1
-    printf '%s\n' "$(dirname "$1")/skills"
+# The store `skills add` wrote a skill's content into, as the probe derived it
+# from the base its lock file was found at. The lock's own name differs between
+# the global and project layouts and its directory differs with it, so the
+# store is derived from the base, which does not.
+skill_store_dir() {
+    records skilllock | awk -F"$TAB" -v l="$1" -v n="$2" \
+        '$2 == l && $3 == n && !seen { print $6; seen = 1 }'
 }
 
 # Is a link target inside that store? Strictly inside: the store root holds
 # every agent's skills, and no single skill is ever the root itself.
 skill_store_confines() {
-    _ssc_root=$(skill_store_root "${2:-}") || return 1
-    _ssc_root=$(canonical_path "$_ssc_root")
+    { [ -n "${2:-}" ] && [ "$2" != "-" ]; } || return 1
+    _ssc_root=$(canonical_path "$2")
     _ssc_have=$(canonical_path "$1")
     case "$_ssc_have" in
         "$_ssc_root"/*) return 0 ;;
@@ -2338,11 +2379,12 @@ skill_store_confines() {
 # own, most likely — costs the link and nothing more. The report says so and
 # names what stayed, because "deleted the skill" would otherwise be false.
 plan_skill_store() {
-    _pss_lock=$(skill_lock_file "$2")
+    _pss_lock="$3"
+    _pss_store=$(skill_store_dir "$3" "$2")
     if [ -L "$1" ]; then
         _pss_target=$(canonical_path "$(resolve_link "$1")")
         if [ -d "$_pss_target" ] && [ "$_pss_target" != "$(canonical_path "$1")" ]; then
-            if skill_store_confines "$_pss_target" "$_pss_lock"; then
+            if skill_store_confines "$_pss_target" "$_pss_store"; then
                 detail "content at $_pss_target"
                 plan_add 7 ours rmpath "$_pss_target" - - - - - - \
                     "delete the $2 skill content at $_pss_target"
@@ -2356,6 +2398,10 @@ plan_skill_store() {
     [ -n "$_pss_lock" ] || return 0
     plan_add 7 ours jsonkey "$_pss_lock" skills "$2" - - - - \
         "drop the $2 entry from $_pss_lock"
+    # Phase 8, not 7: this only holds once every entry dropped above is gone,
+    # and rows inside a phase run in the order they were planned.
+    plan_add 8 ours rmlock "$_pss_lock" - - - - - - \
+        "remove $_pss_lock if it ends up recording no skills"
 }
 
 report_probe_errors() {
@@ -2417,6 +2463,7 @@ EOF
 #   keychain    a1 account
 #   rmpath      a1 path
 #   rmdir       a1 path, removed only when empty
+#   rmlock      a1 skills lock file, removed only when it records no skills
 #   rcline      a1 file  a2 extended regular expression matching the lines
 
 plan_add() {
@@ -2960,7 +3007,7 @@ cli_verb_exists() {
 }
 
 client_row_for_config() {
-    client_rows | awk -F'|' -v f="$1" '$4 == f { print; exit }'
+    client_rows | awk -F'|' -v f="$1" '$4 == f && !seen { print; seen = 1 }'
 }
 
 removal_cli() {
@@ -3079,6 +3126,39 @@ act_rmdir() {
     remove_path "$1" empty-dir
 }
 
+# The lock file is `skills add`'s own and can list skills from several sources,
+# so it goes only once the entries dropped above were the only ones in it — the
+# same contract as rmdir. A project install writes one per project and this is
+# the only thing that clears it; the global one usually survives, and should.
+act_rmlock() {
+    [ -f "$1" ] || return 0
+    if [ "$DRY_RUN" -eq 1 ]; then
+        trace "remove $1 if it records no skills"
+        return 0
+    fi
+    [ -n "$PYTHON3" ] || return 1
+    _rl_rc=0
+    "$PYTHON3" - "$1" <<'PY' || _rl_rc=$?
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except (OSError, ValueError) as exc:
+    sys.stderr.write("error: %s: %s\n" % (sys.argv[1], exc))
+    sys.exit(1)
+skills = data.get("skills") if isinstance(data, dict) else None
+sys.exit(0 if isinstance(skills, dict) and not skills else 3)
+PY
+    if [ "$_rl_rc" -eq 3 ]; then
+        note_left "$1 was kept: it still records skills from another source"
+        return 3
+    fi
+    [ "$_rl_rc" -eq 0 ] || return "$_rl_rc"
+    remove_path "$1"
+}
+
 act_uvtool() {
     if ! command -v uv >/dev/null 2>&1; then
         note_left "uv is not on PATH, so '$1' could not be uninstalled"
@@ -3186,6 +3266,7 @@ do_action() {
         keychain) act_keychain "$1" ;;
         rmpath) act_rmpath "$1" "$_ac_class" ;;
         rmdir) act_rmdir "$1" ;;
+        rmlock) act_rmlock "$1" ;;
         rcline) act_rcline "$1" "$2" ;;
         *) return 1 ;;
     esac

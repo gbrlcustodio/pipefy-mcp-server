@@ -106,7 +106,9 @@ A teardown uses the exit codes `--scan` uses, judged by the closing re-scan rath
 
 ### Skills are removed only where something records installing them
 
-`pipefy-` is a namespace anyone may write in, and the directory name is not evidence of who wrote it. A skill is removed when the install receipt records this toolkit's installer adding it, or when the lock file `skills add` keeps records its source as this repository; anything else under the same prefix is reported and left where it is. A skill directory is often a link into a shared store, so the store content and the lock entry go with the link rather than being stranded behind it — but only where the link points inside the store the lock file names. Following a link is unbounded reach, so a link out to anything else costs the link and nothing more, and the report says where the content it pointed at was left.
+`pipefy-` is a namespace anyone may write in, and the directory name is not evidence of who wrote it. A skill is removed when the install receipt records this toolkit's installer adding it, or when the lock file `skills add` keeps records its source as this repository; anything else under the same prefix is reported and left where it is. A skill directory is often a link into a shared store, so the store content and the lock entry go with the link rather than being stranded behind it — but only where the link points inside that store. Following a link is unbounded reach, so a link out to anything else costs the link and nothing more, and the report says where the content it pointed at was left.
+
+`skills add` has two layouts and both are read. A global install keeps its lock at `~/.agents/.skill-lock.json`; an install run from inside a project keeps it at `<project>/skills-lock.json` and links a skills directory beside it. The store is `<base>/.agents/skills` in both, which is why it is derived from the base the lock was found at rather than from wherever the lock itself sits. The lock file is `skills add`'s own and may record skills from several sources, so this run drops its own entries and removes the file only when those were the only ones in it.
 
 ## The install receipt, and heuristic mode
 
@@ -126,7 +128,7 @@ Without a receipt the run is in **heuristic mode**, which is permanent rather th
 - **A git-tracked `.mcp.json`.** Editing it is not durable — the next checkout, branch switch, or stash pop restores it from the index — so the entry is disabled through `disabledMcpjsonServers` instead.
 - **A `pipefy` binary inside a project virtualenv.** It is reported for shadowing purposes and classified as belonging to that checkout.
 - **A `pipefy-*` skill nothing records this toolkit installing.** See above.
-- **Whatever a skill entry links out to, when that target is outside the store its lock file names.** The link is this toolkit's and goes; the directory it pointed at is reported and left.
+- **Whatever a skill entry links out to, when that target is outside `<base>/.agents/skills` for the base its lock file was found at.** The link is this toolkit's and goes; the directory it pointed at is reported and left.
 - **A Codex `[mcp_servers.<name>]` section with anything beyond the single line the installer appends**, including a `[mcp_servers.<name>.env]` sub-table beside it. The section and the sub-table are separate headers, so excising one would strand the other and whatever it holds; both are reported instead.
 - **A marketplace clone recorded outside the client's own plugin directory.** `installLocation` is data this script did not write, so it is checked against the canonical clone path and reported when it does not match.
 - **Your git checkouts.**

@@ -326,6 +326,38 @@ def _install_skills(home: Path, *names: str, source: str = "pipefy/ai-toolkit") 
     _write_json(lock_path, lock)
 
 
+# The other layout, and the one a `curl | sh` install from inside a project
+# gets: `skills add` writes the lock at the base rather than inside the agent
+# directory, and links a skills directory beside it at the content under
+# `<base>/.agents/skills`. Both were observed; only the lock's name and place
+# differ, which is why the store is derived from the base.
+def _install_project_skills(
+    base: Path, *names: str, source: str = "pipefy/ai-toolkit"
+) -> Path:
+    lock_path = base / "skills-lock.json"
+    lock = (
+        json.loads(lock_path.read_text(encoding="utf-8"))
+        if lock_path.exists()
+        else {"version": 3, "skills": {}}
+    )
+    for name in names:
+        store = base / ".agents" / "skills" / name
+        store.mkdir(parents=True, exist_ok=True)
+        (store / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+        link = base / ".claude" / "skills" / name
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(store)
+        lock["skills"][name] = {
+            "installedAt": "2026-01-01T00:00:00.000Z",
+            "skillPath": f"skills/{name}/SKILL.md",
+            "source": source,
+            "sourceType": "github",
+            "sourceUrl": f"https://github.com/{source}.git",
+        }
+    _write_json(lock_path, lock)
+    return lock_path
+
+
 # ------------------------------------------------------------ the sequence
 
 
@@ -742,6 +774,7 @@ def test_a_skill_linked_into_a_shared_store_takes_its_content_with_it(tmp_path):
     skill, and removing only the link leaves the content and the lock entry."""
     home = _home(tmp_path)
     _install_skills(home, "pipefy-reports")
+    lock = home / ".agents" / ".skill-lock.json"
     store = home / ".agents" / "skills" / "pipefy-reports"
     store.mkdir(parents=True)
     (store / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
@@ -753,8 +786,9 @@ def test_a_skill_linked_into_a_shared_store_takes_its_content_with_it(tmp_path):
 
     assert not link.exists() and not link.is_symlink()
     assert not store.exists()
-    lock = json.loads((home / ".agents" / ".skill-lock.json").read_text("utf-8"))
-    assert lock["skills"] == {}
+    # The entry goes, and with nothing else recorded in it the lock goes too.
+    assert f"drop the pipefy-reports entry from {lock}" in run.stdout
+    assert not lock.exists()
     assert "content at" in run.stdout
 
 
@@ -788,7 +822,7 @@ def test_a_skill_linked_outside_the_store_keeps_its_content(tmp_path):
 def test_a_skill_link_with_no_lock_file_to_derive_a_store_from_keeps_its_content(
     tmp_path,
 ):
-    """No lock file, no derived store, no permitted deletion target."""
+    """No lock file in either layout, no derived store, no permitted target."""
     home = _home(tmp_path)
     store = home / ".agents" / "skills" / "pipefy-reports"
     store.mkdir(parents=True)
@@ -809,6 +843,85 @@ def test_a_skill_link_with_no_lock_file_to_derive_a_store_from_keeps_its_content
     assert store.is_dir()
     assert not link.is_symlink()
     assert "outside the skills store" in run.stdout
+
+
+def test_a_project_install_takes_its_store_and_its_lock_file(tmp_path):
+    """The layout a round trip run from a project directory produces.
+
+    The lock is at the base and the store is under `.agents` beside it, so a
+    store derived from the lock's own directory points at nothing and the
+    content survives a teardown that reported success.
+    """
+    home = _home(tmp_path)
+    base = tmp_path / "roundtrip"
+    base.mkdir()
+    lock = _install_project_skills(base, "pipefy-reports", "pipefy-relations")
+    links = base / ".claude" / "skills"
+    store = base / ".agents" / "skills"
+
+    run = _run(home, _stub_path(tmp_path), cwd=base)
+
+    assert sorted(p.name for p in links.iterdir()) == []
+    # The content, not the empty directory it sat in: the round-trip snapshot
+    # this mirrors compares files, and an empty `.agents/skills` is not state.
+    assert sorted(p.name for p in store.iterdir()) == []
+    assert list(base.rglob("SKILL.md")) == []
+    assert not lock.exists()
+    assert "2 pipefy-* skills from this toolkit" in run.stdout
+
+
+def test_a_project_lock_still_holding_another_source_is_kept(tmp_path):
+    """The lock is `skills add`'s file, not this toolkit's."""
+    home = _home(tmp_path)
+    base = tmp_path / "roundtrip"
+    base.mkdir()
+    lock = _install_project_skills(base, "pipefy-reports")
+    _install_project_skills(base, "pipefy-theirs", source="someone-else/theirs")
+
+    run = _run(home, _stub_path(tmp_path), cwd=base)
+
+    assert lock.exists()
+    assert list(json.loads(lock.read_text(encoding="utf-8"))["skills"]) == [
+        "pipefy-theirs"
+    ]
+    assert (base / ".agents" / "skills" / "pipefy-theirs").is_dir()
+    assert not (base / ".agents" / "skills" / "pipefy-reports").exists()
+    assert "still records skills from another source" in run.stdout
+
+
+def test_both_layouts_at_once_each_answer_from_their_own_lock(tmp_path):
+    """The same skill name is in both locks, and each has its own store.
+
+    Keyed on the name alone, the first record found answers for both: a project
+    skill is judged against the global store, read as outside it, and left —
+    reported as left alone, exit 0, nothing removed.
+    """
+    home = _home(tmp_path)
+    base = tmp_path / "roundtrip"
+    base.mkdir()
+    # Global: lock in the agent directory, links from ~/.claude/skills.
+    _install_skills(home, "pipefy-reports")
+    global_lock = home / ".agents" / ".skill-lock.json"
+    global_store = home / ".agents" / "skills" / "pipefy-reports"
+    global_store.mkdir(parents=True)
+    (global_store / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    global_link = home / ".claude" / "skills" / "pipefy-reports"
+    shutil.rmtree(global_link)
+    global_link.symlink_to(global_store)
+    # Project: same skill name, its own lock, its own store.
+    project_lock = _install_project_skills(base, "pipefy-reports")
+    project_store = base / ".agents" / "skills" / "pipefy-reports"
+
+    run = _run(home, _stub_path(tmp_path), cwd=base)
+
+    # Each half judged against its own record, and both go.
+    assert not project_store.exists(), run.stdout
+    assert not project_lock.exists()
+    assert not (base / ".claude" / "skills" / "pipefy-reports").is_symlink()
+    assert not global_store.exists()
+    assert not global_lock.exists()
+    assert not global_link.is_symlink()
+    assert "outside the skills store" not in run.stdout
 
 
 # ------------------------------------------------------------- hosted token

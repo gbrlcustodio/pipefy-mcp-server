@@ -48,4 +48,4 @@ Default to the smaller surface. Add a field, a method, a tool, or a flag only wh
 
 ## Planned: vertical slices
 
-A larger restructure organizes each package by domain vertical slice rather than technical layer, with the four roles (models, client, use cases, facade) held by an import-linter contract inside each slice. It is deferred to its own initiative, including the `PipefyClient` to `Pipefy` rename. The full reasoning is preserved in the branch history of this change.
+A larger restructure organizes each package by domain vertical slice rather than technical layer, with the four roles (models, client, use cases, facade) held by an import-linter contract inside each slice. It is deferred to its own initiative, including the `PipefyClient` to `Pipefy` rename. The full reasoning is in the decision record [ADR-0004](adr/0004-vertical-slice-structure.md).

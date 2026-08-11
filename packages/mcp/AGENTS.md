@@ -1,6 +1,6 @@
 # MCP package conventions
 
-Scoped to `packages/mcp/`. Repo-wide guidance lives in `../../AGENTS.md`. The layer model, type-ownership rule, and alternative-constructor guide are in [`../../docs/architecture.md`](../../docs/architecture.md); this package's intra-package layering is enforced by import-linter (`uv run lint-imports`).
+Scoped to `packages/mcp/`. Repo-wide guidance lives in `../../AGENTS.md`. The layer model and the three surfaces are in [`../../docs/contributing/architecture.md`](../../docs/contributing/architecture.md), and the type-ownership rule and the alternative-constructor guide are in [`../../docs/contributing/conventions.md`](../../docs/contributing/conventions.md); this package's intra-package layering is enforced by import-linter (`uv run lint-imports`).
 
 ## Distribution model
 

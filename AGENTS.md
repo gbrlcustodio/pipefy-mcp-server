@@ -1,28 +1,31 @@
 # Repository Guidelines
 
 ## Documentation map
-- **`README.md`** — Project pitch, one-page install front door (`README.md#installation`: hosted MCP, Quick install, Claude Code plugin, CLI, skills), repo layout, MCP tools table, contributing.
-- **`CONTRIBUTING.md`** — Skills contribution guide (frontmatter, CI, style); entry point for GitHub contributors.
-- **`docs/README.md`** — Index of docs by surface (MCP, CLI, SDK) and shared guides.
-- **`docs/config.md`** — `PIPEFY_*` environment variables, `config.toml` schema, precedence chain.
-- **`docs/parity.md`** — MCP tool ↔ CLI command parity matrix. Source of truth for coverage and deferrals.
-- **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
-- **`docs/dependencies.md`** — Rationale for runtime dependencies.
-- **`docs/uninstall.md`** — `uninstall.sh --scan` and teardown, and switching between the hosted, local, and plugin channels. The two root scripts are colocated so `install.sh` and `uninstall.sh` stay reviewable side by side; a test asserts every file the installer writes is one the teardown accounts for.
-- **`docs/architecture.md`**: Intra-package layering (domain, adapter, composition root), type ownership at boundaries, ports, and the alternative-constructor guide.
-- **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior). Includes `identifiers.md`, the canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id.
-- **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
-- **`docs/sdk/README.md`** — Using `pipefy` as a library.
-- **`skills/AGENTS.md`** — Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.
-- **`skills/onboarding/pipefy-toolkit-setup/`** — First-time setup checklist for agents (links to README snippets; does not own commands).
+- **`README.md`**. Project pitch, one-page install front door (`README.md#installation`: hosted MCP, Quick install, Claude Code plugin, CLI, skills), repo layout, MCP tools table, contributing.
+- **`CONTRIBUTING.md`**. Skills contribution guide (frontmatter, CI, style). The entry point for GitHub contributors.
+- **`docs/README.md`**. Index of docs by application (MCP, CLI, SDK) and shared guides.
+- **`docs/config.md`**. `PIPEFY_*` environment variables, `config.toml` schema, precedence chain.
+- **`docs/parity.md`**. MCP tool ↔ CLI command parity matrix. Source of truth for coverage and deferrals.
+- **`docs/MIGRATION.md`**. What existing MCP users need to know about v0.1.
+- **`docs/contributing/dependencies.md`**. Rationale for runtime dependencies.
+- **`docs/uninstall.md`**. `uninstall.sh --scan` and teardown, and switching between the hosted, local, and plugin channels. The two root scripts are colocated so `install.sh` and `uninstall.sh` stay reviewable side by side. A test asserts every file the installer writes is one the teardown accounts for.
+- **`docs/contributing/architecture.md`**. The map of the code. The quality goals and the constraints that shape it, the boundary with its diagram, and the decomposition into applications, packages, and layers. Then one runtime scenario, the rules that cross every package, the known debt, and the glossary.
+- **`docs/contributing/conventions.md`**. The code conventions, as rules with permanent IDs. A rule belongs there when a reviewer applies it by judgment to one unit of code.
+- **`docs/mcp/tools/`**. Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior). Includes `identifiers.md`, the canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id.
+- **`docs/cli/`**. CLI-specific guides, for example introspect-then-execute.
+- **`docs/sdk/README.md`**. Using `pipefy` as a library.
+- **`skills/AGENTS.md`**. Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.
+- **`skills/onboarding/pipefy-toolkit-setup/`**. First-time setup checklist for agents. It links to README snippets and owns no commands.
 
 ## Project structure
 
 ```
-packages/sdk/   → pipefy            (Vendor API SDK — GraphQL, models, services; dist named `pipefy`, import module `pipefy_sdk`)
-packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle; depends on pipefy)
-packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy)
-skills/         → agent skills catalog (Markdown; no Python package)
+packages/sdk/   → pipefy            (Vendor API SDK: GraphQL, models, services. Dist named `pipefy`, import module `pipefy_sdk`)
+packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle. Depends on pipefy)
+packages/cli/   → pipefy-cli        (Typer CLI. Depends on pipefy)
+packages/auth/  → pipefy-auth       (Shared OAuth and keychain helpers for CLI and MCP. Depends on pipefy-infra)
+packages/infra/ → pipefy-infra      (Shared TOML config loader, path discovery, SSRF defenses, string helpers. Leaf package)
+skills/         → agent skills catalog (Markdown, no Python package)
 ```
 
 **Vendor API SDK** means the GraphQL-facing library (`pipefy`) used by both MCP and CLI, distinct from app glue or generic shared helpers.
@@ -79,44 +82,11 @@ Use **Cursor's MCP integration** as the primary smoke test for tool changes. MCP
 - Built-in generics (`list[str]`, `dict[str, Any]`), union syntax (`str | None`).
 - `ruff` enforces formatting and import sorting — run before committing.
 
-### Type validation at boundaries, not inside
+### Coding principles
 
-Static typing is the contract for internal code; do not re-check it at runtime. A parameter annotated `value: str` is trusted by every internal caller, and a type checker, not a hand-written `isinstance` guard, is the right place to enforce it. Adding runtime type guards inside internal functions reinvents dynamic typing by hand and sets the wrong norm: do it once and it becomes the expectation everywhere.
+The code conventions live in [`docs/contributing/conventions.md`](docs/contributing/conventions.md). A rule belongs there when a reviewer applies it by judgment to one unit of code, from validating at the edge to when we lift a constraint we imposed on ourselves. Each rule carries a permanent ID, so cite the ID (`PARSE-3`) rather than quoting the text.
 
-Runtime type checks belong only at a trust boundary, where untyped or external data crosses into typed code and static analysis cannot follow:
-
-- The MCP tool signature is the boundary. `MCPServer` builds a pydantic model per tool from the signature, so a scalar arg declared `color: str` is coerced and rejected there. SDK planners called behind it (for example `normalize_label_color`) trust the type and must not guard it again.
-- The CLI command signature is the same kind of boundary. Typer parses and coerces options against their annotations (a `color: str` option in `pipefy_cli` is the rejection point), and the same SDK planners run behind it, so the MCP and CLI surfaces validate at the edge and trust the type underneath identically.
-- A `dict`-typed tool arg (for example `filter: dict | None`) validates the container but not its nested values. Validating that nested, un-schema'd structure (the job of `validate_report_cards_filter`) is legitimate boundary work, not defensive noise.
-
-When a type-related failure looks plausible, the fix is a type checker in CI, not a per-function guard.
-
-### Parse, don't validate
-
-The boundary check should return a type that carries its result, not a bool or a bare raise that the interior re-derives. Validation that only raises throws away what it learned: the value flows on with its original loose type, so every downstream caller re-checks or re-normalizes it. Parsing turns loose input into a precise type once, and that type carries the proof, so the interior is total.
-
-In practice:
-
-- pydantic-settings models are the parse step for env vars: raw `os.environ` strings in, a typed `PipefySettings` / `AuthSettings` out, illegal values rejected at construction. Normalize there (strip, `rstrip('/')`, lowercase) so no consumer re-normalizes the same field later.
-- Prefer a closed sum type over a bag of optionals when inputs are mutually exclusive or co-dependent. `pipefy_auth.resolve_pipefy_auth` returns a `ResolvedAuth` (`StaticTokenAuth | ServiceAccountAuth | StoredSessionAuth`), so the winning credential tier is kept in the type; `build_httpx_auth` is then total over it, with no `None` branch and no fallthrough. Recovering the decision after the fact (an `isinstance` reverse lookup that maps a built `httpx.Auth` back to its tier name) is the anti-pattern this replaces.
-- Make illegal states unrepresentable instead of checking for them downstream. A cross-field rule such as "verify_audience requires audience" is a sum type wearing two fields; co-dependent credentials are one optional value, not two independent optionals that a helper later re-assembles.
-
-A function that accepts the parsed type may assume the guarantee and must not re-check it. This pairs with the boundary rule above: that one says where to validate, this one says what the check should hand back.
-
-### Parsed types are self-guaranteeing
-
-A parsed type rejects invalid construction itself; it does not rely on the pipeline that usually builds it. Its constructor enforces every invariant it claims, so holding an instance is proof it is valid and a hand-written instance cannot be invalid. The domain name is the guarantee, not the resolver that happens to produce it.
-
-- A recurring (value + invariant) pair earns a dedicated leaf type rather than a bare `str`, so every field holding one inherits the guarantee instead of re-checking it. A one-off invariant stays with its owner.
-- When validity depends on a policy, carry the policy as part of the value so the constructor has the context to judge it.
-- A runtime-erased alias does not qualify: it disappears at runtime, so an invalid value still constructs. Reach for a type whose constructor actually runs.
-- Settings models stay pure data readers. A cross-field rule fails fast at construction, not through a projection method a consumer must remember to call, which makes the parse optional and invites a silent `None`.
-
-### Composition: the per-app runtime
-
-Parsed types are decisions and cost no I/O to build. Effects (keychain reads, network, building clients or verifiers) live in a per-application runtime built once at startup: the single place raw settings become domain types and wired resources. Downstream depends on the runtime or the types it holds, never on raw settings or an ad-hoc resolve. The runtime lives in the app package; shared packages export parsed types and resolvers, not app wiring or effects. Whether an app wires eagerly (fail fast at boot) or keeps effectful members lazy is a per-app choice.
-
-The layer model this sits inside (domain, adapter, composition root), the rule that domain types do not carry framework or SDK types, and where an alternative constructor lives (classmethod on the type versus free factory in the adapter) are in [`docs/architecture.md`](docs/architecture.md). Intra-package layering is enforced by import-linter in `packages/mcp`; the inter-package direction is enforced by ruff `TID251`.
+The map of the code lives in [`docs/contributing/architecture.md`](docs/contributing/architecture.md): the quality goals it serves, the constraints it accepts, and the boundary it draws. It decomposes the code into applications, packages, and layers, states the rules that cross every package, and carries one runtime scenario. It also lists where the code does not match that map, and settles the names that carry a second meaning. Import-linter enforces the intra-package layering in `packages/mcp`, and ruff `TID251` enforces the inter-package direction.
 
 ## Testing
 - `pytest-asyncio`, `pytest-cov`, `pytest-mock`.

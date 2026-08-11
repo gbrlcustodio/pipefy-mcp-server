@@ -1,8 +1,8 @@
 # Documentation index
 
-Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)** monorepo (packages: `pipefy-mcp-server`, `pipefy-cli`, `pipefy`). Use the sections below to load only the surface you need.
+Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)** monorepo (applications: `pipefy-mcp-server`, `pipefy-cli`, `pipefy`). Use the sections below to load only the application you need.
 
-## By surface
+## By application
 
 | Area | Path | Contents |
 |------|------|----------|
@@ -19,9 +19,9 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 | [`uninstall.md`](uninstall.md) | `uninstall.sh --scan` and teardown, and switching between the hosted, local, and plugin channels |
 | [`parity.md`](parity.md) | MCP tool ↔ CLI command matrix (source of truth for coverage and deferrals) |
 | [`MIGRATION.md`](MIGRATION.md) | Notes for existing MCP users across packaging changes |
-| [`dependencies.md`](dependencies.md) | Why each runtime dependency exists |
-| [`architecture.md`](architecture.md) | Intra-package layering, type ownership at boundaries, ports, and alternative constructors |
-| [`response-typing.md`](response-typing.md) | When to parse a GraphQL response into a validating model vs. leave it a `TypedDict` |
+| [`contributing/dependencies.md`](contributing/dependencies.md) | Why each runtime dependency exists |
+| [`contributing/architecture.md`](contributing/architecture.md) | Map of the code: the quality goals and constraints that shape it, the boundary with its diagram, the decomposition into applications, packages, and layers, one runtime scenario, the rules that cross every package, the known debt, and the glossary |
+| [`contributing/conventions.md`](contributing/conventions.md) | Code conventions, as rules with permanent IDs. A rule belongs there when a reviewer applies it by judgment to one unit of code |
 | [`ipaas.md`](ipaas.md) | iPaaS (Advanced Automations) tools: meta-tool pattern, flow overview, vocabulary |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributing skills (Markdown playbooks) |
 | [`../RELEASE.md`](../RELEASE.md) | Versioning and GitHub Releases |
@@ -29,4 +29,4 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 | [`../SECURITY.md`](../SECURITY.md) | Vulnerability disclosure |
 | [`compliance/COMPLIANCE.template.md`](compliance/COMPLIANCE.template.md) | Stub for per-blueprint `COMPLIANCE.md` / AI Compliance Card |
 
-First-time install and per-client MCP wiring live in the root [`README.md#installation`](../README.md#installation). First-time agent checklist (path choice, ask-your-agent, verify): [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](../skills/onboarding/pipefy-toolkit-setup/SKILL.md). Package READMEs under `packages/*/README.md` cover surface-specific edge cases.
+First-time install and per-client MCP wiring live in the root [`README.md#installation`](../README.md#installation). First-time agent checklist (path choice, ask-your-agent, verify): [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](../skills/onboarding/pipefy-toolkit-setup/SKILL.md). Each README under `packages/*/README.md` covers the edge cases of its own package.

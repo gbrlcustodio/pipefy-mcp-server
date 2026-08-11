@@ -99,7 +99,7 @@ lint.extend-select = ["TID251"]
 # Intra-package layering, enforced by import-linter (run `uv run lint-imports`
 # from this directory). Ruff's TID251 above guards the inter-package direction;
 # this guards the direction within pipefy_mcp. The rationale and the layer model
-# live in docs/architecture.md.
+# live in docs/contributing/architecture.md.
 [tool.importlinter]
 root_package = "pipefy_mcp"
 

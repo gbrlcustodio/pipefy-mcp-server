@@ -79,7 +79,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
 
-> **Pre-1.0 note:** builds ship as pre-releases to PyPI on every tag (`uvx` and `uv tool install` resolve them automatically; the stable default lands at **v1.0**). Current line: **`v0.3.0-beta.*`** ([latest tag](https://github.com/pipefy/ai-toolkit/releases/tag/v0.3.0-beta.1)). Installing `pipefy-cli` pulls `pipefy` and `pipefy-auth` transitively. To pin a version use the PEP 440 form `pipefy-cli==0.3.0b1`; do **not** pass a global `--prerelease allow` (it lets transitive deps jump to their own pre-releases and can pull a broken build).
+> **Pre-1.0 note:** builds ship as pre-releases to PyPI on every tag, and `uvx` and `uv tool install` resolve them automatically. The stable default lands at **v1.0**, and the current line is always the [latest release](https://github.com/pipefy/ai-toolkit/releases/latest). `pipefy-cli` and `pipefy-mcp-server` each bring `pipefy`, `pipefy-auth`, and `pipefy-infra` with them. To pin a version, convert the tag to its PEP 440 form: the tag `v0.5.0-alpha.1` installs as `pipefy-cli==0.5.0a1`. Do **not** pass a global `--prerelease allow`, because it lets transitive deps jump to their own pre-releases and can pull a broken build.
 
 ### 1. Hosted MCP (Claude Code)
 
@@ -173,13 +173,15 @@ Deprecation and semver (post-1.0): [`docs/DEPRECATION.md`](docs/DEPRECATION.md).
 
 ## Repository layout
 
-`uv` workspace with three Python packages and a skills catalog. **`pipefy`** is the vendor GraphQL layer; MCP and CLI depend on it and do not import each other.
+`uv` workspace with five Python packages and a skills catalog. **`pipefy`** is the vendor GraphQL layer. MCP and CLI depend on it and do not import each other.
 
 | Path | Distribution | Role |
 |------|--------------|------|
 | [`packages/sdk/`](packages/sdk/) | `pipefy` | GraphQL transport, services, queries, Pydantic models. [Package README](packages/sdk/README.md) |
 | [`packages/mcp/`](packages/mcp/) | `pipefy-mcp-server` | MCP tool registration and server lifecycle. [Package README](packages/mcp/README.md) |
 | [`packages/cli/`](packages/cli/) | `pipefy-cli` | Typer CLI (`pipefy` command). [Package README](packages/cli/README.md) |
+| [`packages/auth/`](packages/auth/) | `pipefy-auth` | Shared OAuth and keychain helpers for MCP and CLI. [Package README](packages/auth/README.md) |
+| [`packages/infra/`](packages/infra/) | `pipefy-infra` | Shared config loading, path discovery, and URL safety. Leaf package. [Package README](packages/infra/README.md) |
 | [`skills/`](skills/) | — | Agent skill playbooks. [Catalog](skills/README.md) |
 
 ---

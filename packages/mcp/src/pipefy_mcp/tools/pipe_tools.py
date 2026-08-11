@@ -975,6 +975,17 @@ class PipeTools:
             Use this tool for simple, single-field updates. The entire field value
             will be replaced with the new value provided.
 
+            **List-valued fields (connections, attachments, checklists, labels, assignees):**
+            never assume append. Prefer ``update_card`` with ``field_updates`` and
+            ``operation`` ``"ADD"`` or ``"REMOVE"`` (``updateFieldsValues``) so you only send
+            the item(s) to add or remove. This tool's ``new_value`` replaces the **entire**
+            list. For connector/connection fields the list must be related card **ids**, not
+            display titles; ``get_card(include_fields=true)`` returns connector ``value`` as
+            display titles only (not ids), so do not rebuild from that ``value`` — read ids via
+            ``get_card_relations`` (or GraphQL ``array_value``). Concurrent full-list rewrites
+            can still drop items. To *write* links through a pipe relation (not a connector
+            field), use ``create_card_relation`` / ``delete_card_relation``.
+
             **Not for automations:** if/then rules that stamp or copy dynamic values on cards
             (``%{id}``, ``%{created_at}``, ``%{automation_event_execution_datetime}``, etc.) belong in
             ``create_automation`` with ``action_id: "update_card_field"`` and numeric ``fieldId`` in

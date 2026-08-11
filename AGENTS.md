@@ -11,6 +11,7 @@
 - **`docs/uninstall.md`** — `uninstall.sh --scan` and teardown, and switching between the hosted, local, and plugin channels. The two root scripts are colocated so `install.sh` and `uninstall.sh` stay reviewable side by side; a test asserts every file the installer writes is one the teardown accounts for.
 - **`docs/contributing/architecture.md`**: the layer model, the composition root, the ports seam, and the three surfaces.
 - **`docs/contributing/conventions.md`**: writing code at a boundary, validation, parsing, type ownership, response typing, constructors, and single-form arguments.
+- **`docs/contributing/authoring.md`**: how the docs tree is organized, the audience and Diataxis cuts, and where a new doc goes.
 - **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior). Includes `identifiers.md`, the canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id.
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
 - **`docs/sdk/README.md`** — Using `pipefy` as a library.

@@ -1444,7 +1444,11 @@ Usage: pipefy card update [OPTIONS] CARD_ID
 │ --label-ids              TEXT  Comma-separated label ids.                    │
 │ --field-updates          TEXT  JSON array of field update objects for        │
 │                                updateFieldsValues. Each object: {"field_id"  │
-│                                (or "fieldId"): "<slug>", "value": <v>}.      │
+│                                (or "fieldId"): "<slug>", "value": <v>,       │
+│                                "operation": "ADD"|"REMOVE"|"REPLACE"         │
+│                                (optional, default REPLACE)}. For             │
+│                                connector/connection fields, prefer           │
+│                                ADD/REMOVE with related card ids.             │
 │ --json           -j                                                          │
 │ --help                         Show this message and exit.                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯

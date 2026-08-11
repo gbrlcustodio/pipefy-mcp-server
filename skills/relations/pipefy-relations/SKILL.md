@@ -18,6 +18,7 @@ Link processes and cards across workflows. **8 MCP tools.**
 - **Pipe relations** define parent/child structure between pipes (who connects to whom, constraints, auto-fill). Use `get_pipe_relations` on a pipe to list relation IDs and metadata.
 - **Card relations** connect individual cards through an existing pipe relation: pass `source_id` = the pipe relation's ID (from `get_pipe_relations`). Default `sourceType` is `PipeRelation`; use `extra_input` (e.g., `sourceType: Field`) when the API requires a field-based link — see `introspect_type` on `CreateCardRelationInput`.
 - **Table relations** in GraphQL are loaded by table-relation ID, not by database table ID: `get_table_relations` takes a non-empty list of those IDs.
+- **Connector fields** are card fields (connection type), not pipe relations for *writes*. Prefer `update_card` + `field_updates` with `operation` ADD/REMOVE (related **card ids**). `update_card_field` is **replace-all** of the full id list; `get_card` `value` is display titles only — do not rebuild from it. This skill's `get_card_relations` still **reads** connector-field links (with card ids). `create_card_relation` / `delete_card_relation` write links through a pipe relation and are incremental — pick the surface that matches the link type.
 
 ---
 
@@ -83,5 +84,6 @@ Link processes and cards across workflows. **8 MCP tools.**
 
 ## See also
 
-- `skills/pipes-and-cards/` — create the pipes and cards before linking them.
+- `skills/pipes-and-cards/` — create the pipes and cards before linking them; connector field updates and `update_card_field` replace-all live there.
+- `docs/mcp/tools/identifiers.md` — which args expect slug vs numeric id for field and relation tools.
 - `skills/introspection/` — discover `CreateCardRelationInput` when non-standard `sourceType` is needed.

@@ -12,7 +12,7 @@ Three roles:
 - Adapter. It translates an outside type into a domain type, or it registers domain behavior with a framework. Framework and SDK imports live here. A driving adapter is entered from the outside, for example an MCP tool call or a CLI command. A driven adapter is called by the core to reach the outside, for example Pipefy data access.
 - Composition root. The per-app wiring, built once at startup. It is the only place that constructs concrete adapters and framework objects.
 
-The mapping of these roles onto module paths lives with the code. See `packages/mcp` and its `pyproject.toml` import-linter contract. That contract is the source of truth for the layering that holds today. This document states the model, not the snapshot, so it does not go stale as modules move.
+The mapping of these roles onto module paths lives with the code. See `packages/mcp` and its `pyproject.toml` import-linter contract. That contract is the source of truth for the layering that holds today. This document states the model, not the snapshot, so it does not go stale as modules move. The reasoning behind the model is in the decision record [ADR-0001](adr/0001-layered-responsibility.md).
 
 The framework-free core is a target, not a fact today. The `core` layer still imports `settings` and Starlette in places. The import-linter contract that would lock it is written but disabled, because the pure domain has no single home module yet.
 
@@ -55,12 +55,12 @@ One domain is exposed through three surfaces, and each surface is matched to its
 
 The layer split follows from this. The SDK executes. The application layer, which is the CLI and the MCP server, owns intent, orchestration, and outcomes. Place a behavior by its determinism. Deterministic resolution, such as a friendly id to a uuid, lives in the SDK. Ambiguous resolution lives in the application layer, where a human or an LLM can decide.
 
-The identifier form is a per-surface decision, not one global choice. The SDK takes numeric ids first. The CLI takes deterministic ids. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. The MCP server takes the human intent as the primary input. It resolves ambiguity by elicitation when the client declares that capability. Interactive behavior versus ambient behavior follows from the surface's declared capability, so a headless caller stays deterministic.
+The identifier form is a per-surface decision, not one global choice. The SDK takes numeric ids first. The CLI takes deterministic ids. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. The MCP server takes the human intent as the primary input. It resolves ambiguity by elicitation when the client declares that capability. Interactive behavior versus ambient behavior follows from the surface's declared capability, so a headless caller stays deterministic. These identifier rules come from the decision record [ADR-0002](adr/0002-typed-single-form-contract.md).
 
 ### Earn the surface
 
-Default to the smaller surface. Add a field, a method, a tool, or a flag only when a user need earns it. This is why the MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs.
+Default to the smaller surface. Add a field, a method, a tool, or a flag only when a user need earns it. This is why the MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. The reasoning is in the decision record [ADR-0003](adr/0003-mcp-tools-express-outcomes.md).
 
 ## Planned: vertical slices
 
-A larger restructure would organize each package by domain vertical slice rather than technical layer. An import-linter contract inside each slice would hold the four roles: models, client, use cases, facade. This work is deferred to its own initiative. It includes the `PipefyClient` to `Pipefy` rename. The full reasoning is preserved in the branch history of this change.
+A larger restructure would organize each package by domain vertical slice rather than technical layer. An import-linter contract inside each slice would hold the four roles: models, client, use cases, facade. This work is deferred to its own initiative. It includes the `PipefyClient` to `Pipefy` rename. The full reasoning is in the decision record [ADR-0004](adr/0004-vertical-slice-structure.md).

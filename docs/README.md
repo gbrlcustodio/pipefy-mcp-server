@@ -22,6 +22,7 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 | [`dependencies.md`](dependencies.md) | Why each runtime dependency exists |
 | [`contributing/architecture.md`](contributing/architecture.md) | Layer model, composition root, ports, and the three surfaces |
 | [`contributing/conventions.md`](contributing/conventions.md) | Writing code at a boundary: validation, parsing, type ownership, response typing, constructors, single-form arguments |
+| [`contributing/authoring.md`](contributing/authoring.md) | How the docs tree is organized and where a new doc goes |
 | [`ipaas.md`](ipaas.md) | iPaaS (Advanced Automations) tools: meta-tool pattern, flow overview, vocabulary |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributing skills (Markdown playbooks) |
 | [`../RELEASE.md`](../RELEASE.md) | Versioning and GitHub Releases |

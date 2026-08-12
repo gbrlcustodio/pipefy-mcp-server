@@ -1,51 +1,66 @@
 # Architecture
 
-This document describes the shape of the code: the layers inside a package, what each layer may import, and the three surfaces the repository ships. It is contributor explanation. For the rules about writing code at a boundary (validation, parsing, typing, arguments), see [`conventions.md`](conventions.md).
+This document describes the shape of the code: the layers inside a package, what each layer can import, and the three surfaces the repository ships. It is explanation for contributors. For the rules about writing code at a boundary (validation, parsing, typing, arguments), see [`conventions.md`](conventions.md).
 
 ## Layer model
 
-We follow a hexagonal shape with a deliberately thin core. Most of this codebase is an adapter. `pipefy-mcp-server` wraps the MCP SDK and the Pipefy GraphQL API, and `pipefy-cli` wraps Typer over the same SDK. The business logic that is genuinely ours is small, so the domain tier is small, and most modules legitimately touch a framework or the vendor SDK. That is the point of an adapter, not a leak.
+We follow a hexagonal shape with a thin core. Most of this codebase is an adapter. `pipefy-mcp-server` wraps the MCP SDK and the Pipefy GraphQL API. `pipefy-cli` wraps Typer over the same SDK. The logic that is genuinely ours is small, so the core is small. Most modules touch a framework or the vendor SDK. That is the point of an adapter, not a leak.
 
 Three roles:
 
-- Domain (core). Pure types and logic. Owns the interfaces (ports) it needs from the outside. Imports no framework and no vendor SDK.
-- Adapter. Translates an outside type into a domain type, or registers domain behavior with a framework. Framework and SDK imports live here. A driving adapter is entered from the outside (an MCP tool call, a CLI command). A driven adapter is called by the core to reach the outside (Pipefy data access).
-- Composition root. The per-app wiring built once at startup. It is the only place that constructs concrete adapters and framework objects and hands them to everything else.
+- Domain (core). Pure types and logic. It owns the ports that it needs from the outside. It imports no framework and no vendor SDK.
+- Adapter. It translates an outside type into a domain type, or it registers domain behavior with a framework. Framework and SDK imports live here. A driving adapter is entered from the outside, for example an MCP tool call or a CLI command. A driven adapter is called by the core to reach the outside, for example Pipefy data access.
+- Composition root. The per-app wiring, built once at startup. It is the only place that constructs concrete adapters and framework objects.
 
-The current mapping of these roles onto module paths lives with the code. See `packages/mcp` and its `pyproject.toml` import-linter contract, which is the source of truth for the layering that holds today. This document states the model, not the snapshot, so it does not go stale as modules move.
+The mapping of these roles onto module paths lives with the code. See `packages/mcp` and its `pyproject.toml` import-linter contract. That contract is the source of truth for the layering that holds today. This document states the model, not the snapshot, so it does not go stale as modules move. The reasoning behind the model is in the decision record [ADR-0001](adr/0001-layered-responsibility.md).
+
+The framework-free core is a target, not a fact today. The `core` layer still imports `settings` and Starlette in places. The import-linter contract that would lock it is written but disabled, because the pure domain has no single home module yet.
 
 ## Dependency rule
 
-Imports point inward. An outer role may import an inner one, never the reverse. Between packages this is enforced by ruff `TID251`. Within a package it is enforced by import-linter. The enforced spine is the acyclic import chain that holds today, and it is recorded in the package's `pyproject.toml` rather than restated here.
+Imports point inward. An outer role can import an inner one, never the reverse.
 
-Every package has at least one driving port, which is how it is entered, and, if it reaches outside, a driven port, which is how it reaches out.
+Between packages, ruff `TID251` bans the inward-breaking imports. Each package lists the modules it must not import. Within the MCP package, import-linter holds the layer order `server > tools > core > auth > settings`. A second contract bans any `pipefy_mcp.settings` import from the `tools` layer. The enforced spine is the acyclic import chain that holds today. It is recorded in each package's `pyproject.toml`, not restated here.
+
+An app package is entered through a driving surface, for example an MCP tool call or a CLI command. A shared support library is not entered this way. It is called as a library.
 
 ## Ports and dependency inversion
 
-Business logic depends on an interface shaped by what it needs, and the adapter implements it. This names where that seam sits, so "invert" is not read as "invert everything". The seam is domain to infrastructure: a vendor SDK, the network, a database. You define a narrow interface in the domain (`find_by_email`, not `Database.query`), scoped to one need, and let an adapter satisfy it. You do not invert stdlib calls, and you do not invert calls that stay inside the domain. Wrapping `dict` or a pure helper behind an interface buys nothing.
+Business logic depends on an interface shaped by what it needs, and the adapter implements it. This names where the seam sits, so "invert" is not read as "invert everything". The seam is domain to infrastructure: a vendor SDK, the network, a database. Define a narrow interface in the domain (`find_by_email`, not `Database.query`), scoped to one need. Let an adapter satisfy it. Do not invert stdlib calls. Do not invert calls that stay inside the domain. A port over `dict` or a pure helper buys nothing.
 
-Introduce an owned port where there is payoff, a test seam or a second implementation. The clearest first candidate is a narrow protocol over the Pipefy engine, so tool logic can be exercised against a fake without the real client.
+Add an owned port only where there is payoff: a test seam or a second implementation. Ports are not universal. Today they live in the SDK. `GraphQLExecutor` is a driven port over the GraphQL client. The attachment service owns `S3Uploader` and `UrlDownloader`. A test injects a fake against each. The clearest next candidate is a narrow protocol over the Pipefy engine, so tool logic can run against a fake without the real client.
+
+### Shared support libraries
+
+Not every package is a surface. `auth` and `infra` are shared support libraries. A shared library holds its own domain and adapters, and the ports rule applies to it by payoff.
+
+- `infra` is pure or thin utility (`coerce`, `security`, `filesystem`, `telemetry`). A port over it buys nothing, so it stays port-free.
+- `auth` does real driven I/O: OIDC and JWKS network calls, keychain storage, and a loopback redirect server. It also holds domain logic such as PKCE and token resolution. So `auth` is the one shared library with real port candidates: a credential-store seam over `storage.py` and an HTTP seam over `_http.py`. Neither is built yet.
+
+The CLI is a driving adapter, not a shared library. It owns no driven port, because it composes the SDK and `auth` for outbound work.
 
 ## Composition root
 
-Effects are built once, in a per-app runtime, at startup. Parsed types are decisions and cost no I/O to build, so they are constructed freely. Effects such as keychain reads, network calls, and building clients or verifiers live in the runtime, the single place where raw settings become domain types and wired resources. There is one composition root per app package, not one for the repo. Only the composition root constructs concrete adapters and framework objects. A tool module does not reach for a concrete client. It receives what it needs from the runtime. A shared package exports parsed types and resolvers, not app wiring or effects. Whether an app wires eagerly and fails fast at boot, or keeps effectful members lazy, is a per-app choice.
+Effects are built once, in a per-app composition root, at startup. Parsed types are decisions and cost no I/O to build, so they are constructed freely. Effects such as keychain reads, network calls, and client construction live in the composition root. That is the single place where raw settings become domain types and wired resources.
+
+There is one composition root per app, not one for the repo. The MCP app centralizes it in `core/runtime.py` (`McpRuntime.for_profile`). The CLI composes at its entry point instead of a single runtime module. A tool module does not reach for a concrete client. It receives what it needs from the composition root. A shared package exports parsed types and resolvers, not app wiring or effects. An app can wire eagerly and fail fast at boot, or it can keep effectful members lazy. That is a per-app choice.
 
 ## The three surfaces
 
 One domain is exposed through three surfaces, and each surface is matched to its user.
 
 - The SDK is for a programmer. It executes a named operation deterministically and returns a domain value. It is the deterministic execution layer.
-- The CLI is for a human or a script in a shell. It is thin over the SDK, and discovery is a separate command, which is idiomatic where composition is the point.
-- The MCP server is for an LLM acting on intent. It takes a human intent and keeps ids internal to the tool.
+- The CLI is for a human or a script in a shell. It is thin over the SDK. Discovery is a separate command, which is idiomatic in a shell.
+- The MCP server is for an LLM that acts on intent. It takes a human intent and keeps ids internal to the tool.
 
 The layer split follows from this. The SDK executes. The application layer, which is the CLI and the MCP server, owns intent, orchestration, and outcomes. Place a behavior by its determinism. Deterministic resolution, such as a friendly id to a uuid, lives in the SDK. Ambiguous resolution lives in the application layer, where a human or an LLM can decide.
 
-The identifier form is a per-surface decision, not one global choice. The SDK defaults to numeric-first ids. The CLI takes deterministic ids and gates any name resolution behind an explicit flag that fails closed under automation. The MCP server takes the human intent as the primary input and resolves ambiguity by elicitation when the client supports it. Interactive behavior versus ambient behavior follows from the surface's declared capability, so a headless caller stays deterministic.
+The identifier form is a per-surface decision, not one global choice. The SDK takes numeric ids first. The CLI takes deterministic ids. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. The MCP server takes the human intent as the primary input. It resolves ambiguity by elicitation when the client declares that capability. Interactive behavior versus ambient behavior follows from the surface's declared capability, so a headless caller stays deterministic. These identifier rules come from the decision record [ADR-0002](adr/0002-typed-single-form-contract.md).
 
 ### Earn the surface
 
-Default to the smaller surface. Add a field, a method, a tool, or a flag only when a user need earns it. This is why the MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs.
+Default to the smaller surface. Add a field, a method, a tool, or a flag only when a user need earns it. This is why the MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. The reasoning is in the decision record [ADR-0003](adr/0003-mcp-tools-express-outcomes.md).
 
 ## Planned: vertical slices
 
-A larger restructure organizes each package by domain vertical slice rather than technical layer, with the four roles (models, client, use cases, facade) held by an import-linter contract inside each slice. It is deferred to its own initiative, including the `PipefyClient` to `Pipefy` rename. The full reasoning is in the decision record [ADR-0004](adr/0004-vertical-slice-structure.md).
+A larger restructure would organize each package by domain vertical slice rather than technical layer. An import-linter contract inside each slice would hold the four roles: models, client, use cases, facade. This work is deferred to its own initiative. It includes the `PipefyClient` to `Pipefy` rename. The full reasoning is in the decision record [ADR-0004](adr/0004-vertical-slice-structure.md).

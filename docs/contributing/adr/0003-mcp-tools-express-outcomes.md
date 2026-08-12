@@ -1,6 +1,6 @@
 # ADR-0003: MCP tools express outcomes
 
-Status: contract standards adopted and partially delivered. The outcome-tool consolidation is deferred.
+Status: proposed. The contract standards are ready. The outcome-tool consolidation is deferred.
 Date: 2026-07-20
 
 ## Context

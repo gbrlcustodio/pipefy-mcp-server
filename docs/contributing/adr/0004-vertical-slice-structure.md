@@ -1,6 +1,6 @@
 # ADR-0004: Vertical-slice structure and naming
 
-Status: accepted, deferred to its own initiative
+Status: proposed, deferred to its own initiative
 Date: 2026-07-20
 
 ## Context

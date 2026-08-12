@@ -1,6 +1,6 @@
 # ADR-0002: Typed, single-form contract
 
-Status: adopted for arguments and identifiers. The typed-output rollout is in progress.
+Status: proposed. The arguments and identifiers parts are ready. The typed-output rollout is a later step.
 Date: 2026-07-23
 
 ## Context

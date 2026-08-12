@@ -1528,6 +1528,10 @@ Usage: pipefy email template list [OPTIONS]
 
  List email templates for a repo (``get_email_templates``).
 
+ Hard stop: creating, editing and deleting email templates is not available
+ through the API, MCP or CLI. Only the Pipefy UI can do it, so the template
+ must already exist before any flow that uses it.
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --repo           TEXT     Pipe or table id whose templates to list.       │
 │                              [required]                                      │
@@ -1541,6 +1545,10 @@ Usage: pipefy email template list [OPTIONS]
 Usage: pipefy email template send [OPTIONS]
 
  Send using an email template (``send_email_with_template``).
+
+ Hard stop: there is no API, MCP or CLI path to create or change an email
+ template. A new or edited template is a manual step in the Pipefy UI; the
+ template must exist before sending.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --card                TEXT  Card id (inbox sender context). [required]    │
@@ -2449,6 +2457,10 @@ Usage: pipefy org get [OPTIONS] [ORGANIZATION_ID]
 
  Fetch organization details (``get_organization``).
 
+ ``pipesCount`` counts every pipe in the organization, while pipe listings
+ return only the pipes the calling identity is a member of, so a listing
+ smaller than the count is not an error.
+
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │   organization_id      [ORGANIZATION_ID]  Numeric organization id. Omit when │
 │                                           PIPEFY_ORG_ID is set (see          │
@@ -2689,6 +2701,10 @@ Usage: pipefy pipe get [OPTIONS] PIPE_ID
 Usage: pipefy pipe list [OPTIONS]
 
  Search pipes across organizations (same as MCP ``search_pipes``).
+
+ Results are membership scoped: each organization returns only the pipes the
+ calling identity is a member of, so the list can fall below the org-wide
+ ``pipesCount`` even when nothing was truncated.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --name         -n      TEXT                       Optional pipe name filter  │

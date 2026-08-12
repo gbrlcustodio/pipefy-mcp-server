@@ -106,7 +106,12 @@ def email_template_list(
         help="Print machine-readable JSON to stdout.",
     ),
 ) -> None:
-    """List email templates for a repo (``get_email_templates``)."""
+    """List email templates for a repo (``get_email_templates``).
+
+    Hard stop: creating, editing and deleting email templates is not
+    available through the API, MCP or CLI. Only the Pipefy UI can do it,
+    so the template must already exist before any flow that uses it.
+    """
 
     async def factory(client: PipefyClient):
         return await client.get_email_templates(
@@ -147,7 +152,12 @@ def email_template_send(
         help="Print machine-readable JSON to stdout.",
     ),
 ) -> None:
-    """Send using an email template (``send_email_with_template``)."""
+    """Send using an email template (``send_email_with_template``).
+
+    Hard stop: there is no API, MCP or CLI path to create or change an
+    email template. A new or edited template is a manual step in the
+    Pipefy UI; the template must exist before sending.
+    """
     to_list: list[str] | None = None
     if to is not None and to.strip():
         to_list = [e.strip() for e in to.split(",") if e.strip()]

@@ -23,6 +23,8 @@ Ten tools manage Pipefy traditional automations: if/then rules bound to a pipe v
 | `update_automation` | No | Patches a rule: first-class typed `condition` (see [Condition contract](#condition-contract-condition)) and/or `extra_input` (`UpdateAutomationInput` fields). Requires at least one. |
 | `delete_automation` | No | Permanently deletes a rule (`destructiveHint=True` — confirm with the user first). |
 
+**Catalog limit: no action applies a label.** The action catalog has no label action, so an if/then rule that labels a card cannot be created through the API or MCP. `get_automation_actions(pipe_id)` is the dynamic source of truth for what a pipe offers; read it instead of assuming. The durable path for that intent is a rule configured in Pipefy itself, where it lives in the process and keeps running unattended. Record that manual step in the plan given to the user, and confirm in the product what is available for that trigger. `update_card(label_ids=[...])` sets labels on a single card as a one-off correction: something has to run the call each time and nothing persists as process behavior, so it does not stand in for the missing action. `create_label` / `update_label` / `delete_label` manage label definitions on the pipe, not label assignment on cards.
+
 ### Traditional automation: `field_map` and dynamic values
 
 Use action `update_card_field` when a rule should **stamp or copy values onto the triggering card** (for example, set a datetime field when a card is created). Do **not** use the MCP tool `update_card_field` for this — that tool updates one card field by **slug** in a single call. Automations use numeric `fieldId` values inside `extra_input.action_params.field_map`.

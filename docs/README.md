@@ -22,6 +22,7 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 | [`contributing/dependencies.md`](contributing/dependencies.md) | Why each runtime dependency exists |
 | [`contributing/architecture.md`](contributing/architecture.md) | Map of the architecture: the quality requirements and constraints that shape it, the boundary with its diagram, the decomposition into applications, packages, and layers, one runtime scenario, the rules that cross every package, the known debt, and the glossary |
 | [`contributing/conventions.md`](contributing/conventions.md) | Code conventions, as rules with permanent IDs. A rule belongs there when a reviewer applies it by judgment to one unit of code |
+| [`contributing/authoring.md`](contributing/authoring.md) | How the docs tree is organized and where a new doc goes |
 | [`ipaas.md`](ipaas.md) | iPaaS (Advanced Automations) tools: meta-tool pattern, flow overview, vocabulary |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributing skills (Markdown playbooks) |
 | [`../RELEASE.md`](../RELEASE.md) | Versioning and GitHub Releases |

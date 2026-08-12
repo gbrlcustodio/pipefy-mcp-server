@@ -8,7 +8,7 @@ These readers arrive here:
 - A reviewer wants the rule and the ID to cite, and both live in [`conventions.md`](conventions.md).
 - A consumer of one application wants its interface instead of the layer model, in [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), or [`docs/sdk`](../sdk/README.md).
 
-The map explains rather than instructs. It points at the owner of a fact rather than repeat it: a check, a schema, or another document. A copy appears only where the argument here depends on it. The reader pays one hop for that. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
+The map explains rather than instructs. It points at the owner of a fact rather than repeat it: a check, a schema, or a record under [`adr/`](adr/README.md). A copy appears only where the argument here depends on it. The reader pays one hop for that. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
 ## Quality requirements
 
@@ -112,7 +112,7 @@ An application is what a consumer uses. Each one exposes the same domain, and ea
 
 That match of application to consumer decides the layer split. The SDK executes. The CLI and the MCP server own intent, orchestration, and outcomes. The determinism of a behavior decides where that behavior lives. Deterministic resolution, such as a friendly identifier to a uuid, lives in the SDK. Ambiguous resolution lives in the CLI and the MCP server, where a human or an LLM can decide.
 
-Each application decides its own identifier form, and there is no global choice. The SDK takes numeric identifiers first. The CLI takes deterministic identifiers. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. An identifier that can match more than one resource therefore never resolves silently, which is what `QR-7` requires. `ARG-1` in [`conventions.md`](conventions.md) holds each argument to one form, and [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md) names which one, per tool and per argument.
+Each application decides its own identifier form, and there is no global choice. The SDK takes numeric identifiers first. The CLI takes deterministic identifiers. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. An identifier that can match more than one resource therefore never resolves silently, which is what `QR-7` requires. `ARG-1` in [`conventions.md`](conventions.md) holds each argument to one form, and [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md) names which one, per tool and per argument. These identifier rules come from the decision record [ADR-0002](adr/0002-typed-single-form-contract.md).
 
 The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic, which is what `QR-3` requires.
 
@@ -120,7 +120,7 @@ A destructive operation carries the same split. `QR-6` asks that the operation n
 
 The path that holds today does not read that capability. A destructive tool previews what it affects, and it acts only after an explicit confirmation from the caller. One explicit answer therefore serves the interactive case and the ambient case alike, and [Known gaps](#known-gaps) carries the design question. [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md) owns the protocol, and it records two limits. The guard protects against accident and not against intent, because a caller can confirm without a preview. Authorization stays the API's.
 
-The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag.
+The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag. The reasoning is in the decision record [ADR-0003](adr/0003-mcp-tools-express-outcomes.md).
 
 ## Tool surface
 
@@ -162,7 +162,7 @@ The layers of the MCP package map onto those roles, and their names come from it
 - The `auth` layer is a driven adapter over network and keychain I/O.
 - `settings` is parsed configuration at the innermost point.
 
-The CLI has no such layers, so this mapping belongs to the MCP package alone. The module list stays in the import-linter contract at `packages/mcp/pyproject.toml`, which CI runs.
+The CLI has no such layers, so this mapping belongs to the MCP package alone. The module list stays in the import-linter contract at `packages/mcp/pyproject.toml`, which CI runs. The reasoning behind the model is in the decision record [ADR-0001](adr/0001-layered-responsibility.md).
 
 ## Dependency rule
 

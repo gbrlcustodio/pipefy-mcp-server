@@ -203,6 +203,8 @@ Pick the right tool for "notification" intent:
 
 Do NOT hand-build `action_params.taskParams` via `create_automation` when `create_send_task_automation` is the right tool.
 
+An automation that sends email depends on a template that already exists: template create, edit and delete have no API or MCP path, only the Pipefy UI. When the process needs a new or changed template, state that manual UI step in the plan or summary you give the user.
+
 ---
 
 ## Agentic + human-in-the-loop pattern

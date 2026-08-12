@@ -1303,6 +1303,12 @@ class PipeTools:
             is missing and the org returned ``max_pipes_per_org`` pipes (conservative:
             the full org list may be larger).
 
+            Results are also membership shaped: each organization returns only the
+            pipes the calling identity is a member of, so the list can fall below
+            the org-wide ``pipesCount`` even when nothing was truncated. Membership
+            and truncation are separate causes. See
+            ``docs/mcp/tools/organization.md``.
+
             Args:
                 pipe_name: Optional pipe name to search for (case-insensitive partial match).
                            If not provided, returns up to ``max_pipes_per_org`` pipes per org.

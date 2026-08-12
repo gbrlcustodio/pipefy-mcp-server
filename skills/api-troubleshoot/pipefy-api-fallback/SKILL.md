@@ -162,8 +162,10 @@ Write tools and `execute_graphql` can report failure even when the mutation alre
 - Do NOT use `createAutomation` with `action: create_card` + `field_map` — returns `INTERNAL_SERVER_ERROR` (confirmed API bug).
 - Instead, use `createCard` with the `throughConnectors` parameter. Prerequisite: a connector field with `canCreateNewConnected: true` must exist.
 
-### Pipe visibility returning empty list
-- If `organization { pipes { ... } }` returns `[]` but `pipesCount > 0`, the Service Account is not a member of those pipes.
+### Pipe listing shorter than `pipesCount`
+- `pipesCount` is the org-wide total; `organization { pipes { ... } }` and `search_pipes` return only the pipes the calling identity is a member of. A shorter listing, or an empty one, is expected behavior and not an error. Role does not widen it: a `super_admin` gets the same membership-scoped result. Detail and workarounds: [`docs/mcp/tools/organization.md`](../../../docs/mcp/tools/organization.md#why-counts-disagree).
+- `organization { pipes(include_publics: true) }` widens the listing with pipes that are public inside the org. It still normally returns fewer than `pipesCount`.
+- Service accounts hit this most often: an SA starts as a member of nothing.
 - Pipes created via API are automatically visible to the SA.
 - Pipes created in the UI require the SA to be added as an admin.
 - Workaround: get pipe IDs from the user once and query `pipe(id: "...")` directly.

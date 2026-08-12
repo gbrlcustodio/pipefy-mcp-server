@@ -148,6 +148,7 @@ Skills (`skills/`) and tools (`packages/mcp/`, `packages/cli/`) live in the same
 ## Commit & PR guidelines
 - Conventional Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:` with optional scopes.
 - One functional change per commit (atomic). PRs touching more than 10 files or 300 changed lines should be split.
+- Sign off every commit (`git commit -s`). CI enforces the Developer Certificate of Origin (DCO), so an unsigned commit fails the check.
 - PRs must include: summary, testing performed (commands + results), docs updates if tool behavior or config changed.
 
 ## Security

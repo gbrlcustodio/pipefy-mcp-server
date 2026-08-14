@@ -32,11 +32,6 @@ _PROCESS_SIGNING_KEY = secrets.token_bytes(32)
 
 _TokenStatus = Literal["missing", "invalid_or_expired"]
 
-_TOKEN_STATUS_SENTENCE: dict[_TokenStatus, str] = {
-    "missing": "The confirmation token is missing. ",
-    "invalid_or_expired": "The previous confirmation token was invalid or expired. ",
-}
-
 
 class DestructivePreviewPayload(TypedDict):
     """Returned when the tool needs confirmation before deletion."""
@@ -92,9 +87,9 @@ async def check_destructive_confirmation(
             base preview is still returned.
 
     Returns:
-        ``None`` when ``confirm=True`` and the token verifies: the caller
+        ``None`` when ``confirm=True`` and the token verifies. The caller
         should proceed with the deletion.
-        A preview payload otherwise: the caller must return it as-is.
+        A preview payload otherwise. The caller must return it as-is.
     """
     identity = dict(resource_identity)
     key = signing_key_for(ctx)
@@ -138,21 +133,26 @@ def _build_preview_payload(
     confirmation_token: str,
     token_status: _TokenStatus | None = None,
 ) -> DestructivePreviewPayload:
-    status_sentence = (
-        _TOKEN_STATUS_SENTENCE[token_status] if token_status is not None else ""
+    sentences = [
+        f"⚠️ Deleting {resource_descriptor} is permanent and cannot be undone.",
+    ]
+    if token_status == "missing":
+        sentences.append("The confirmation token is missing.")
+    elif token_status == "invalid_or_expired":
+        sentences.append("The previous confirmation token was invalid or expired.")
+    sentences.append(
+        "Show this preview to the user and get their explicit approval before continuing."
+    )
+    sentences.append(
+        "Once they approve, call again with confirm=True "
+        f'and confirmation_token="{confirmation_token}".'
     )
     return {
         "success": False,
         "requires_confirmation": True,
         "resource": resource_descriptor,
         "confirmation_token": confirmation_token,
-        "message": (
-            f"⚠️ Deleting {resource_descriptor} is permanent and cannot be undone. "
-            f"{status_sentence}"
-            "Show this preview to the user and get their explicit approval before continuing. "
-            "Once they approve, call again with confirm=True "
-            f'and confirmation_token="{confirmation_token}".'
-        ),
+        "message": " ".join(sentences),
     }
 
 

@@ -19,7 +19,7 @@ The rows split by whether a requirement competes. A guarantee has nothing on the
 
 | ID | Category | Demand | Held by |
 |---|---|---|---|
-| `QR-3` | Operability | When no human is present, a run never waits and never prompts | The CLI consumer in a pipeline, and the headless MCP consumer |
+| `QR-3` | Operability | When no human is present, a run never blocks on an answer | The CLI consumer in a pipeline, and the headless MCP consumer |
 | `QR-4` | Security | A request acts as the caller that sent it, and never as another caller | The MCP consumer under the remote profile |
 | `QR-6` | Safety | A destructive operation names what it affects before it runs | The MCP consumer and the CLI consumer |
 | `QR-7` | Correctness | An ambiguous identifier never silently resolves to one match | Every consumer |
@@ -107,7 +107,7 @@ Each application decides its own identifier form, and there is no global choice.
 
 The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic, which is what `QR-3` requires.
 
-A destructive operation carries the same split. `QR-6` asks that the operation name what it affects before it runs, and `QR-3` asks that no run wait when no human is present. Together they leave the choice to the declared capability, exactly as ambiguity does above.
+A destructive operation carries the same split. `QR-6` asks that the operation name what it affects before it runs, and `QR-3` asks that no run block on an answer when no human is present. Together they leave the choice to the declared capability, exactly as ambiguity does above.
 
 The path that holds today does not read that capability. A tool declares itself with `destructiveHint`, the first call returns a preview of the resource and its dependents, and only an explicit `confirm` on a second call deletes. The CLI takes `--yes`, or it prompts when a human is present. One explicit answer therefore serves the interactive case and the ambient case alike, and [Known gaps](#known-gaps) carries the design question. Two limits hold meanwhile, and [`packages/mcp/CLAUDE.md`](../../packages/mcp/CLAUDE.md) records both. The guard protects against accident and not against intent, because a caller can send `confirm` on the first call. Authorization stays the API's.
 

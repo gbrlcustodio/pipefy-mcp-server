@@ -91,7 +91,7 @@ flowchart LR
     auth -- "login and token validation" --> idp["Pipefy identity provider (OIDC)"]
 ```
 
-An arrow inside the workspace is a dependency that the package declares in its own `pyproject.toml`. The CLI reaches `pipefy-infra` through the SDK and through `pipefy-auth`, and it declares neither edge itself. A crossing of the boundary names the concept, not the class that implements it, and [Ports and dependency inversion](#ports-and-dependency-inversion) is where the port names live. The `transport` setting decides whether an MCP client arrives over stdio or over HTTP, and what each caller does about a credential is in [Identity lifetime](#identity-lifetime).
+An arrow inside the workspace is a dependency that the package declares in its own `pyproject.toml`. The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and it receives that package as a transitive of the SDK and of `pipefy-auth`. One CLI module imports `pipefy_infra` directly all the same, and [Known gaps](#known-gaps) carries that. A crossing of the boundary names the concept, not the class that implements it, and [Ports and dependency inversion](#ports-and-dependency-inversion) is where the port names live. The `transport` setting decides whether an MCP client arrives over stdio or over HTTP, and what each caller does about a credential is in [Identity lifetime](#identity-lifetime).
 
 ## The three applications
 
@@ -209,6 +209,7 @@ A caller can also carry state between calls, such as a vendor cursor or an expor
 
 The map above holds today, with the exceptions below. Each entry names the artifact that closes the gap, so an entry disappears when we enable its artifact. Where the artifact is not yet chosen, the entry says so.
 
+- An undeclared CLI dependency. `packages/cli/src/pipefy_cli/commands/_auth_keychain_hints.py` imports `pipefy_infra.config`, and `packages/cli/pyproject.toml` declares no `pipefy-infra`. The import resolves today because the SDK and `pipefy-auth` both bring that package in. No check catches it, because a `TID251` list bans an import and cannot demand a declaration. The artifact is the declared dependency, and the arrow in the diagram follows it.
 - The framework-free core. The `core` layer of `pipefy-mcp-server` still imports `settings` and Starlette in places. The import-linter contract that locks it is written but disabled, because the pure domain has no single home module yet.
 - A port over the filesystem, the OS, the network, and the keychain. `pipefy-infra` wraps the filesystem, the OS, and the network boundary. `pipefy-auth` owns network and keychain I/O. The MCP `IpaasGateway` is a concrete class that builds its own HTTP client, and a test mocks that class rather than a fake behind an interface. None of the three sits behind a port that its caller owns, so the artifact is a port declared under `PORT-1` to `PORT-3`.
 - The outcome-shaped tool set, which is `QR-5`. The tool names copy the API operations today, so one user intent can cost several calls. `SURF-1` in [`conventions.md`](conventions.md) admits each replacement, and the gap closes when the tool set expresses outcomes.

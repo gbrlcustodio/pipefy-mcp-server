@@ -32,8 +32,12 @@ class OrganizationTools:
             """Fetch Pipefy organization details by ID.
 
             Returns id, uuid, name, plan, role, members count, pipes count,
-            and creation date. The response includes both ``result`` (pretty-printed
-            JSON string) and ``data`` (parsed dict) for convenience.
+            and creation date. ``pipesCount`` counts every pipe in the organization,
+            while pipe listings return only the pipes the current identity is a
+            member of, so a listing smaller than the count is not an error
+            (detail in ``docs/mcp/tools/organization.md``). The response includes
+            both ``result`` (pretty-printed JSON string) and ``data`` (parsed
+            dict) for convenience.
 
             Args:
                 organization_id: Numeric organization ID.

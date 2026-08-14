@@ -53,7 +53,12 @@ def org_get(
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Fetch organization details (``get_organization``)."""
+    """Fetch organization details (``get_organization``).
+
+    ``pipesCount`` counts every pipe in the organization, while pipe
+    listings return only the pipes the calling identity is a member of,
+    so a listing smaller than the count is not an error.
+    """
 
     pipefy_settings, _token = settings_and_token(ctx)
     resolved = (organization_id or "").strip()

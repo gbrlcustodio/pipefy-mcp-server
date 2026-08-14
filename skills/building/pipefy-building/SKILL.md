@@ -42,7 +42,7 @@ If the user already has a building skill or a detailed build prompt/spec, use th
 
 ## Product limits live in domain skills
 
-Hard stops and quirks (phase connections UI-only, incompatible automation event×action pairs, verify-after-write, AI consent) are documented in the domain skills above — follow those contracts after routing.
+Hard stops and quirks (phase connections UI-only, email template create/edit UI-only, incompatible automation event×action pairs, no automation action applies a label, verify-after-write, AI consent) are documented in the domain skills above; follow those contracts after routing.
 
 ## See also
 

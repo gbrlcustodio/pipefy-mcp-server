@@ -68,6 +68,8 @@ When setting up an iPaaS (Advanced Automations) flow that runs under a **service
 | `get_email_templates` | `pipefy email template list --repo <id>` | Yes | List templates for a pipe or table (`repo_id` numeric). |
 | `send_email_with_template` | `pipefy email template send` | No | Send using a template (`email_template_id` from that list). |
 
+> **Templates are UI-only.** Creating, editing and deleting an email template has no API, MCP or CLI path: the GraphQL schema has no template CRUD mutation. The template must already exist before a flow can send with it. When the process needs a new or changed template, put the manual Pipefy UI step in the plan you give the user instead of promising an end-to-end email flow.
+
 ### Steps — send a card inbox email
 
 1. **Get the card's inbox emails** (see what has been received):

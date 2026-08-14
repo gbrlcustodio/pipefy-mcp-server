@@ -72,7 +72,12 @@ def pipe_list(
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Search pipes across organizations (same as MCP ``search_pipes``)."""
+    """Search pipes across organizations (same as MCP ``search_pipes``).
+
+    Results are membership scoped: each organization returns only the
+    pipes the calling identity is a member of, so the list can fall below
+    the org-wide ``pipesCount`` even when nothing was truncated.
+    """
 
     async def factory(client: PipefyClient):
         return await client.search_pipes(name, max_pipes_per_org=max_per_org)

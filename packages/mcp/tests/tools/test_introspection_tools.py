@@ -12,6 +12,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -325,7 +326,111 @@ async def test_execute_graphql_success(
     )
     payload = extract_payload(result)
     assert payload["success"] is True
+    assert payload.get("requires_confirmation") is not True
     assert "Query" in payload["result"]
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_mutation_without_token_returns_preview(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation { __typename }"},
+        )
+    assert result.is_error is False
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    token = payload["confirmation_token"]
+    assert token
+    assert token.startswith("v1.")
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_mutation_identity_hashes_are_hex(
+    introspection_session, mock_introspection_client, monkeypatch
+):
+    captured = {}
+
+    async def capture_guard(_ctx, **kwargs):
+        captured["resource_identity"] = kwargs["resource_identity"]
+        return {
+            "success": False,
+            "requires_confirmation": True,
+            "confirmation_token": "v1.preview",
+        }
+
+    monkeypatch.setattr(
+        "pipefy_mcp.tools.introspection_tools.check_destructive_confirmation",
+        capture_guard,
+    )
+    async with introspection_session as session:
+        await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation { __typename }", "variables": {"n": 1}},
+        )
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    identity = captured["resource_identity"]
+    for value in (identity["document"], identity["variables"]):
+        assert isinstance(value, str)
+        assert len(value) == 64
+        assert all(c in "0123456789abcdef" for c in value)
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_mutation_with_matching_token_executes(
+    introspection_session, mock_introspection_client
+):
+    mock_introspection_client.execute_graphql = AsyncMock(
+        return_value={"__typename": "Mutation"}
+    )
+    async with introspection_session as session:
+        payload = await confirm_after_preview(
+            session,
+            "execute_graphql",
+            {"query": "mutation { __typename }", "confirm": True},
+        )
+    mock_introspection_client.execute_graphql.assert_awaited_once_with(
+        "mutation { __typename }", None
+    )
+    assert payload["success"] is True
+    assert "Mutation" in payload["result"]
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_token_from_mutation_a_does_not_execute_mutation_b(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    async with introspection_session as session:
+        preview = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation A { __typename }"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "execute_graphql",
+            {
+                "query": "mutation B { __typename }",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    payload = extract_payload(mismatch)
+    assert payload["requires_confirmation"] is True
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_does_not_set_destructive_hint(introspection_session):
+    async with introspection_session as session:
+        listed = await session.list_tools()
+    tool = next(t for t in listed.tools if t.name == "execute_graphql")
+    assert tool.annotations is not None
+    assert tool.annotations.read_only_hint is False
+    assert tool.annotations.destructive_hint is not True
 
 
 @pytest.mark.anyio

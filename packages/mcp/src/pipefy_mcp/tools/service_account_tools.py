@@ -187,7 +187,7 @@ class ServiceAccountTools:
 
             Two-step operation: preview with ``confirm=False`` (default), then echo
             ``confirmation_token`` from the preview on step 2. Deleting the account
-            revokes its credentials — any integration using it stops working.
+            revokes its credentials: any integration using it stops working.
 
             Args:
                 organization_uuid: The organization UUID.

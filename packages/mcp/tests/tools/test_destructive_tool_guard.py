@@ -40,9 +40,7 @@ def _assert_token_required_wording(message):
     lowered = message.lower()
     assert "token" in lowered
     assert "confirm=True" in message
-    has_status = any(word in lowered for word in ("missing", "invalid", "expired"))
-    has_prior = "preview" in lowered
-    assert has_status or has_prior
+    assert any(word in lowered for word in ("missing", "invalid", "expired"))
 
 
 def _make_ctx(*, can_elicit=False, request=None):

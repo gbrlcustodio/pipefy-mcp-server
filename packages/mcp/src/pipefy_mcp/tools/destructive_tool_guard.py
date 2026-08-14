@@ -30,6 +30,13 @@ from pipefy_mcp.tools.destructive_confirmation_token import (
 
 _PROCESS_SIGNING_KEY = secrets.token_bytes(32)
 
+_TokenStatus = Literal["missing", "invalid_or_expired"]
+
+_TOKEN_STATUS_SENTENCE: dict[_TokenStatus, str] = {
+    "missing": "The confirmation token is missing. ",
+    "invalid_or_expired": "The previous confirmation token was invalid or expired. ",
+}
+
 
 class DestructivePreviewPayload(TypedDict):
     """Returned when the tool needs confirmation before deletion."""
@@ -85,9 +92,9 @@ async def check_destructive_confirmation(
             base preview is still returned.
 
     Returns:
-        ``None`` when ``confirm=True`` and the token verifies — the caller
+        ``None`` when ``confirm=True`` and the token verifies: the caller
         should proceed with the deletion.
-        A preview payload otherwise — the caller must return it as-is.
+        A preview payload otherwise: the caller must return it as-is.
     """
     identity = dict(resource_identity)
     key = signing_key_for(ctx)
@@ -101,13 +108,20 @@ async def check_destructive_confirmation(
     ):
         return None
 
+    token_status: _TokenStatus | None = None
+    if confirm:
+        token_status = "missing" if confirmation_token is None else "invalid_or_expired"
     minted = mint_confirmation_token(
         tool_name=tool_name,
         resource_identity=identity,
         key=key,
         now=now,
     )
-    preview = _build_preview_payload(resource_descriptor, confirmation_token=minted)
+    preview = _build_preview_payload(
+        resource_descriptor,
+        confirmation_token=minted,
+        token_status=token_status,
+    )
     if dependents_resolver is not None:
         try:
             deps = await dependents_resolver()
@@ -122,7 +136,11 @@ def _build_preview_payload(
     resource_descriptor: str,
     *,
     confirmation_token: str,
+    token_status: _TokenStatus | None = None,
 ) -> DestructivePreviewPayload:
+    status_sentence = (
+        _TOKEN_STATUS_SENTENCE[token_status] if token_status is not None else ""
+    )
     return {
         "success": False,
         "requires_confirmation": True,
@@ -130,6 +148,7 @@ def _build_preview_payload(
         "confirmation_token": confirmation_token,
         "message": (
             f"⚠️ Deleting {resource_descriptor} is permanent and cannot be undone. "
+            f"{status_sentence}"
             "Show this preview to the user and get their explicit approval before continuing. "
             "Once they approve, call again with confirm=True "
             f'and confirmation_token="{confirmation_token}".'

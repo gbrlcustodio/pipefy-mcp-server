@@ -92,7 +92,7 @@ flowchart LR
     auth -- "login and token validation" --> idp["Pipefy identity provider (OIDC)"]
 ```
 
-An arrow between two packages is a dependency that the package declares in its own `pyproject.toml`. The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and it receives that package as a transitive of the SDK and of `pipefy-auth`. One CLI module imports `pipefy_infra` directly all the same, and [Known gaps](#known-gaps) carries that. A crossing of the boundary names the concept, not the class that implements it, and [Ports and dependency inversion](#ports-and-dependency-inversion) is where the port names live. The `transport` setting decides whether an MCP client arrives over stdio or over HTTP, and what each caller does about a credential is in [Identity lifetime](#identity-lifetime).
+An arrow between two packages is a dependency that the package declares in its own `pyproject.toml`. The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and it receives that package as a transitive of the SDK and of `pipefy-auth`. One CLI module imports `pipefy_infra` directly, and [Known gaps](#known-gaps) carries that. A crossing of the boundary names the concept, not the class that implements it, and [Ports and dependency inversion](#ports-and-dependency-inversion) is where the port names live. The `transport` setting decides whether an MCP client arrives over stdio or over HTTP, and what each caller does about a credential is in [Identity lifetime](#identity-lifetime).
 
 ## Applications
 

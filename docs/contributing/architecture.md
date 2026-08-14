@@ -221,6 +221,7 @@ The map above holds today, with the exceptions below. Each entry names the artif
 - No tool offers field selection or a summary mode, so a response carries whatever the query returned. That is `QR-10`. The artifact is a per-tool projection.
 - `QR-2` does not hold for CLI output. The CLI prints the payload it received, so a vendor schema change reaches a script that parses `--json`. The artifact is a declared output contract for the CLI.
 - `QR-11` is not on this map. The announcement lives in the changelog, the release notes, and the migration guide, and no section here states what a breaking change owes a consumer. The artifact is that section.
+- The skills check copies the CLI command names. A build check compares every playbook in `skills/` against the current MCP tool names and the top-level `pipefy` commands. It reads the tool names from the registered tools, and it carries its own list of the command names. The CLI registers `service-account`, and that list does not carry it, so a playbook that names the command breaks the build for the wrong reason. The artifact is a check that reads the registered commands, as it already reads the registered tools.
 
 ## Vocabulary
 

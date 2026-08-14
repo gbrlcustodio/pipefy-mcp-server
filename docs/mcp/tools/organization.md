@@ -26,12 +26,14 @@ Other paths to an org id, when you already have context:
 
 Truncation is a second, independent cause of a short list. `search_pipes` caps results per organization (`max_pipes_per_org`, 1 to 500, and 500 is the default) and sets `pipes_truncated` on the org entry. A pipe can be missing because the identity is not a member of it, because the cap cut it, or both.
 
-`pipes_truncated` does not separate those two causes. It is conservative: it is also set whenever `pipesCount` exceeds the number of pipes returned, which is true on every membership-scoped listing. So a `true` flag on its own is not evidence that the cap cut anything, and on an org where the identity is a member of few pipes it will be `true` no matter how high the cap goes.
+When unfiltered, `pipes_truncated` does not separate those two causes. It is conservative: it is also set whenever `pipesCount` exceeds the number of pipes returned, which is true of every membership-scoped unfiltered listing. So a `true` flag on its own is not evidence that the cap cut anything, and on an org where the identity is a member of few pipes it will be `true` no matter how high the cap goes.
+
+With a name filter, `pipesCount` is omitted and the flag is set only when matching pipes exceeded the cap. On that path `pipes_truncated: true` means the cap cut matching pipes.
 
 What to do:
 
 - Treat `pipesCount` as a total, not as the expected size of a listing. Do not compare the two to decide whether a call failed.
-- Read `search_limits.max_pipes_per_org` before acting on `pipes_truncated`. Raising the cap only helps if the applied cap is below 500 and the returned count reached it. When the applied cap is already 500 and the list is well under it, the cap cut nothing and membership is the cause.
+- Read `search_limits.max_pipes_per_org` before acting on `pipes_truncated`. Raising the cap only helps if the applied cap is below 500 and the returned count reached it. When unfiltered, if the applied cap is already 500 and the list is well under it, the cap cut nothing and membership is the cause. With a name filter, treat `true` as the cap having cut matching pipes.
 - To see more pipes, list from an identity with broader access, or add the identity to the pipes it needs.
 - For a wider read through `execute_graphql`, `organization { pipes(include_publics: true) }` adds pipes that are public inside the organization but that the identity is not a member of. The toolkit tools do not expose this argument. Even the widened list normally stays below `pipesCount`, so it does not reconcile the two numbers.
 

@@ -424,6 +424,32 @@ async def test_execute_graphql_token_from_mutation_a_does_not_execute_mutation_b
 
 
 @pytest.mark.anyio
+async def test_execute_graphql_token_from_variables_a_does_not_execute_variables_b(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mutation = "mutation M($i: ID!) { __typename }"
+    async with introspection_session as session:
+        preview = await session.call_tool(
+            "execute_graphql",
+            {"query": mutation, "variables": {"i": "1"}},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "execute_graphql",
+            {
+                "query": mutation,
+                "variables": {"i": "2"},
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    payload = extract_payload(mismatch)
+    assert payload["requires_confirmation"] is True
+    assert payload["confirmation_token"] != token
+
+
+@pytest.mark.anyio
 async def test_execute_graphql_does_not_set_destructive_hint(introspection_session):
     async with introspection_session as session:
         listed = await session.list_tools()

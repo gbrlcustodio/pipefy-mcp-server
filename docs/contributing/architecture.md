@@ -83,11 +83,27 @@ An application is what a consumer uses. Three of them expose one domain, and eac
 
 That match of application to consumer decides the layer split. The SDK executes. The CLI and the MCP server own intent, orchestration, and outcomes. The determinism of a behavior decides where that behavior lives. Deterministic resolution, such as a friendly identifier to a uuid, lives in the SDK. Ambiguous resolution lives in the CLI and the MCP server, where a human or an LLM can decide.
 
-Each application decides its own identifier form, and there is no global choice. The SDK takes numeric identifiers first. The CLI takes deterministic identifiers. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. The canonical form per tool and per argument is in [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md).
+Each application decides its own identifier form, and there is no global choice. The SDK takes numeric identifiers first. The CLI takes deterministic identifiers. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. A form that can match more than one resource therefore never resolves itself, which is what `QR-7` requires, and `ARG-1` in [`conventions.md`](conventions.md) is the rule that holds each argument to one form. The canonical form per tool and per argument is in [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md).
 
 The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic, which is what `QR-3` requires.
 
-The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag.
+A destructive operation carries the same split. `QR-6` asks that the operation name what it affects before it runs, and `QR-3` asks that no run wait when no human is present. Together they leave the choice to the declared capability, exactly as ambiguity does above.
+
+The path that holds today does not read that capability. A tool declares itself with `destructiveHint`, the first call returns a preview of the resource and its dependents, and only an explicit `confirm` on a second call deletes. The CLI takes `--yes`, or it prompts when a human is present. One explicit answer therefore serves the interactive case and the ambient case alike, and [Known gaps](#known-gaps) carries the design question. Two limits hold meanwhile, and [`packages/mcp/CLAUDE.md`](../../packages/mcp/CLAUDE.md) records both. The guard protects against accident and not against intent, because a caller can send `confirm` on the first call. Authorization stays the API's.
+
+The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag.
+
+## Tool surface
+
+A deployment decides how many tools a model sees, and that decision is separate from how many the catalog holds. `QR-9` is the requirement.
+
+Two axes classify the catalog. A domain is the one subject a tool is about, and the eight domains partition it, so every registered tool has exactly one. A profile is a journey-sized selection that crosses domains, and the six profiles overlap. `--toolsets` and `PIPEFY_MCP_TOOLSETS` name either kind, and an unknown name is a usage error.
+
+The remote profile applies a default-deny floor before any selection runs. Selection only removes, so it narrows within the floor and never widens past it. The `power` branch takes a different route. It withdraws the curated tools from the listing and registers four catalog meta-tools over them, alongside the raw GraphQL tools. The model-facing set is then nine tools whatever the catalog holds, which is `QR-9` met at its strongest.
+
+A build-time guard keys the partition to the registered tool names, with no count written down, so a new tool with no domain fails the build. That is why the partition cannot go stale.
+
+The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and profile boundaries, and the reasoning behind them, are in [`packages/mcp/CLAUDE.md`](../../packages/mcp/CLAUDE.md).
 
 ## Package decomposition
 
@@ -135,11 +151,25 @@ These are the ports the repository owns today. `GraphQLExecutor` in the SDK is a
 
 ## Composition root
 
-The composition root does two jobs at startup: it parses raw input into decisions, and it builds effects once. Raw input means the environment, a config file, and the startup flags. Parsed types cost no I/O, so we construct them freely. At startup an effect happens only here: a keychain read, a network call, or the construction of a client. Downstream code then receives a decision it can rely on, and never a raw value it must re-read. That parse is `QR-1` applied to configuration, so an invalid value fails at startup and not in the code that later reads it.
+The composition root does two jobs at startup: it parses raw input into decisions, and it builds effects once. Raw input means the environment, a config file, and the startup flags. Parsed types cost no I/O, so we construct them freely. At startup an effect happens only here: a keychain read, a network call, or the construction of a client. Downstream code then receives a decision it can rely on, and never a raw value it must re-read. That parse is `QR-1` applied to configuration, under `VALID-2` in [`conventions.md`](conventions.md), so an invalid value fails at startup and not in the code that later reads it.
 
 There is one composition root per application, not one for the repo. Each one parses its startup input at its entry point. The MCP server then centralizes the wiring in `core/runtime.py` (`McpRuntime.for_profile`). The CLI wires at its entry point, without a single runtime module. Where the wiring lives is a per-application choice.
 
 A tool module does not construct a concrete client. It receives what it needs from the composition root. A shared package exports parsed types and resolvers, not application wiring or effects. An application can wire eagerly and fail fast at boot, or it can keep effectful members lazy. That is a per-application choice.
+
+## Response shape
+
+`PARSE-5` says the direction of the data does not change the rule, so a response is parsed on the same terms as an argument. This section is that rule applied outward.
+
+One shape carries both outcomes, so a consumer reads success and failure the same way. A migrated MCP tool returns `success` and `data`, with `message` and `pagination` when they apply.
+
+An invalid argument does not reach a tool body. The argument error is reshaped into that same envelope, so a caller receives the field and the rule rather than a stack trace. That is `QR-1` at the tool boundary, and [Composition root](#composition-root) is the same requirement applied to configuration.
+
+A denial carries more than a status. The permission-denied path adds the vendor error codes and a correlation id, under a per-deployment timeout, and a `debug` argument adds those codes to a transport-level error. That is the cause half of `QR-8`. No response states whether a retry can succeed, so [Known gaps](#known-gaps) holds the other half.
+
+A partial result is not a failure. A read that the caller may perform in part returns what succeeded, plus a list naming what was denied, which is `QR-12`. One limit comes with it: `success` stays true on that response, so the list is the only signal and a consumer that reads `success` alone misses it.
+
+Two limits on reach. The envelope is the MCP application's shape, because the CLI prints the underlying payload instead, and [`docs/parity.md`](../parity.md) records where the two differ. And the shape arrives by wrapping rather than as a tool's own return type: a flag switches it, it covers migrated tools only, and it reaches an internal of the MCP SDK, which is why that dependency is pinned to one minor. The requirement is right and the mechanism is not settled, so [Known gaps](#known-gaps) carries it.
 
 ## Identity lifetime
 
@@ -157,12 +187,15 @@ A caller can also carry state between calls, such as a vendor cursor or an expor
 
 ## Known gaps
 
-The map above holds today, with the exceptions below. Each entry names the artifact that closes the gap, so an entry disappears when we enable its artifact.
+The map above holds today, with the exceptions below. Each entry names the artifact that closes the gap, so an entry disappears when we enable its artifact. Where the artifact is not yet chosen, the entry says so.
 
 - The framework-free core. The `core` layer of `pipefy-mcp-server` still imports `settings` and Starlette in places. The import-linter contract that locks it is written but disabled, because the pure domain has no single home module yet.
 - A port over the filesystem, the OS, the network, and the keychain. `pipefy-infra` wraps the filesystem, the OS, and the network boundary. `pipefy-auth` owns network and keychain I/O. Neither one sits behind a port that its caller owns, so the artifact is a port declared under `PORT-1` to `PORT-3`.
 - The outcome-shaped tool set, which is `QR-5`. The tool names copy the API operations today, so one user intent can cost several calls. `SURF-1` in [`conventions.md`](conventions.md) admits each replacement, and the gap closes when the tool set expresses outcomes.
 - `QR-1` does not hold end to end. The positive-id check has three homes and no owner, so a comment model accepts a negative card id today. The artifact is one owner for that check, under `PARSE-3` in [`conventions.md`](conventions.md).
+- The capability-aware destructive path, which is `QR-6`. One explicit answer serves the interactive case and the ambient case alike, so the declared capability of the client decides nothing here. Elicitation is the candidate for the interactive half. It cannot carry the authorization half, because a client can auto-accept an elicitation prompt when a tool runs programmatically. The artifact is a destructive path that reads the capability and keeps the explicit answer as the only ambient authorization.
+- A settled bound on the tool surface, which is `QR-9`. The taxonomy in [Tool surface](#tool-surface) tames a catalog that is too large, so it treats a symptom of the `QR-5` entry above. The artifact is not yet chosen, and the exploration is open.
+- The native response shape, which is `QR-1`, `QR-8`, and `QR-12`. One envelope for every outcome is the right requirement, and it arrives by wrapping: a flag, migrated tools only, and a patch on an MCP SDK internal that pins that dependency to one minor. The artifact is the envelope as a tool's own return type, which retires both the flag and the patch.
 
 ## Vocabulary
 

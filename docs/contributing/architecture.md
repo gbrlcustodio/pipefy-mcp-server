@@ -93,9 +93,9 @@ flowchart LR
 
 An arrow inside the workspace is a dependency that the package declares in its own `pyproject.toml`. The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and it receives that package as a transitive of the SDK and of `pipefy-auth`. One CLI module imports `pipefy_infra` directly all the same, and [Known gaps](#known-gaps) carries that. A crossing of the boundary names the concept, not the class that implements it, and [Ports and dependency inversion](#ports-and-dependency-inversion) is where the port names live. The `transport` setting decides whether an MCP client arrives over stdio or over HTTP, and what each caller does about a credential is in [Identity lifetime](#identity-lifetime).
 
-## The three applications
+## Applications
 
-An application is what a consumer uses. Three of them expose one domain, and each one matches its consumer. The skills catalog in `skills/` also ships, and it sits outside this document: markdown playbooks with no code and no layers.
+An application is what a consumer uses. Each one exposes the same domain, and each one matches its consumer. The skills catalog in `skills/` also ships, and it sits outside this document: markdown playbooks with no code and no layers.
 
 - The SDK is for a programmer. It executes a named operation deterministically and returns a domain value. It is the deterministic execution layer.
 - The CLI is for a human or a script in a shell. It is thin over the SDK. Discovery is a separate command, which is idiomatic in a shell.

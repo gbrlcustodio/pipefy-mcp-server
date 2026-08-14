@@ -117,13 +117,13 @@ The MCP layer prefers a tool that expresses an outcome over one tool per API end
 
 A deployment decides how many tools a model sees, and that decision is separate from how many the catalog holds. `QR-9` is the requirement.
 
-Two axes classify the catalog. A domain is the one subject a tool is about, and the eight domains partition it, so every registered tool has exactly one. A profile is a journey-sized selection that crosses domains, and the six profiles overlap. `--toolsets` and `PIPEFY_MCP_TOOLSETS` name either kind, or one of four keywords. `all` and `default` mean no curation, and `power` and `architect` name the same branch. An unknown name is a usage error.
+Two axes classify the catalog. A domain is the one subject a tool is about, and the eight domains partition it, so every registered tool has exactly one. A tool profile is a journey-sized selection that crosses domains, and the six of them overlap. `--toolsets` and `PIPEFY_MCP_TOOLSETS` name either kind, or one of four keywords. `all` and `default` mean no curation, and `power` and `architect` name the same branch. An unknown name is a usage error.
 
 The remote profile applies a default-deny floor before any selection runs. Selection only removes, so it narrows within the floor and never widens past it. The `power` branch takes a different route. It withdraws the curated tools from the listing and registers four catalog meta-tools over them, alongside the raw GraphQL tools. The model-facing set is then nine tools whatever the catalog holds, which is `QR-9` met at its strongest.
 
 A build-time guard keys the partition to the registered tool names, with no count written down, so a new tool with no domain fails the build. That is why the partition cannot go stale.
 
-The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and profile boundaries, and the reasoning behind them, are in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
+The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and tool profile boundaries, and the reasoning behind them, are in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 
 ## Package decomposition
 
@@ -224,10 +224,11 @@ The map above holds today, with the exceptions below. Each entry names the artif
 
 ## Vocabulary
 
-Five names carry a second meaning elsewhere, so each one is fixed here.
+Six names carry a second meaning elsewhere, so each one is fixed here.
 
 - Contract. Qualified at each use. The typed input contract is the parsed model at the edge of an application. The import-linter contract is the layer order in `packages/mcp/pyproject.toml`.
 - Application. A package that a consumer uses, and one that owns a driving port. The SDK, the CLI, and the MCP server are the three, and a shared library is not one. The code labels the same concept `surface`, in `ClientSurface` and in a call such as `surface="mcp"`, and stamps it into the outbound `User-Agent`. This document says application instead, because the rest of the repository spends the word surface on the set of tools a deployment exposes.
 - Consumer. The party that uses an application: a program that imports the SDK, a person or a script at a terminal, or an LLM. This document never calls that party a client. The word client names two other things here: the program that speaks the MCP protocol, and a constructed object such as the GraphQL client.
+- Profile. Qualified at each use. A deployment profile is local or remote, it is set by the `transport` and the credential source, and [Identity lifetime](#identity-lifetime) turns on that difference. A tool profile is one of the six persona-shaped selections that [Tool surface](#tool-surface) describes, and `--toolsets` names it. A bare "profile" in this document means the deployment profile, because that is the sense the rest of the repository carries.
 - SDK. A bare "SDK" means the Pipefy SDK, the `pipefy` distribution. A third-party SDK is always named, for example the MCP SDK.
 - auth. `pipefy-auth` is the shared package. The `auth` layer is the driven adapter inside `pipefy-mcp-server`.

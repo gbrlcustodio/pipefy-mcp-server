@@ -3,20 +3,32 @@
 Every tool with ``destructiveHint=True`` should call
 :func:`check_destructive_confirmation` **before** executing the deletion.
 
-* ``confirm=False`` → returns a preview payload; **never** deletes. Some MCP clients
-  auto-accept elicitation prompts when tools are invoked programmatically; this
-  guard therefore does **not** use elicitation to authorize deletion—only an
-  explicit follow-up call with ``confirm=True`` does.
-* ``confirm=True`` → returns ``None`` so the caller proceeds with the deletion.
+MCP elicitation is unused: some clients auto-accept elicitation prompts when
+tools are invoked programmatically.
+
+Proceed requires ``confirm=True`` and a verified confirmation token. The token
+orders the two-step protocol (preview, then confirm); it is not an authorization
+control. API permission remains the boundary that allows or denies the deletion.
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+import hashlib
+import secrets
+import time
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Literal
 
 from mcp.server.mcpserver import Context
 from typing_extensions import NotRequired, TypedDict
+
+from pipefy_mcp.auth.request_identity import require_request_bearer
+from pipefy_mcp.tools.destructive_confirmation_token import (
+    mint_confirmation_token,
+    verify_confirmation_token,
+)
+
+_PROCESS_SIGNING_KEY = secrets.token_bytes(32)
 
 
 class DestructivePreviewPayload(TypedDict):
@@ -26,49 +38,76 @@ class DestructivePreviewPayload(TypedDict):
     requires_confirmation: Literal[True]
     resource: str
     message: str
+    confirmation_token: str
     dependents: NotRequired[dict[str, Any]]
 
 
 DependentsResolver = Callable[[], Awaitable[dict[str, Any] | None]]
 
 
-class DestructiveCancelledPayload(TypedDict):
-    success: Literal[False]
-    error: str
+def signing_key_for(ctx: Context) -> bytes:
+    """HMAC key for this request: SHA-256 of the bearer, else a process key."""
+    try:
+        bearer = require_request_bearer(ctx.request_context.request)
+    except Exception:  # noqa: BLE001
+        return _PROCESS_SIGNING_KEY
+    return hashlib.sha256(bearer.encode("utf-8")).digest()
 
 
 async def check_destructive_confirmation(
-    _ctx: Context,
+    ctx: Context,
     *,
     confirm: bool,
     resource_descriptor: str,
+    resource_identity: Mapping[str, Any],
+    tool_name: str,
+    confirmation_token: str | None = None,
     dependents_resolver: DependentsResolver | None = None,
 ) -> DestructivePreviewPayload | None:
-    """Gate a destructive operation behind explicit ``confirm=True``.
+    """Gate a destructive operation behind ``confirm=True`` and a verified token.
 
     Call this **after** fetching resource info but **before** executing the
     deletion.
 
     Args:
-        _ctx: MCP request context (reserved for future use / logging).
-        confirm: Must be ``True`` to allow the deletion to run.
+        ctx: MCP request context; used to derive the HMAC signing key.
+        confirm: Must be ``True`` together with a verified token to proceed.
         resource_descriptor: Human-readable description of the resource about
             to be deleted (e.g. ``"phase 'Initial' (ID: 42)"``). Used in
-            preview payloads.
+            preview payloads; never signed.
+        resource_identity: Resource ids bound into the confirmation token.
+        tool_name: Destructive tool name bound into the confirmation token.
+        confirmation_token: Token from a prior preview, or ``None``.
         dependents_resolver: Optional async callable (no arguments) that returns
             a dict to attach under ``dependents`` on the preview, or ``None`` /
-            empty dict to skip enrichment. Never invoked when ``confirm=True``.
-            Exceptions are swallowed so the base preview is still returned.
+            empty dict to skip enrichment. Invoked on every preview path;
+            never invoked when proceeding. Exceptions are swallowed so the
+            base preview is still returned.
 
     Returns:
-        ``None`` when the caller should proceed with the deletion.
-        A preview payload when ``confirm`` is false — the caller must return
-        it as-is.
+        ``None`` when ``confirm=True`` and the token verifies — the caller
+        should proceed with the deletion.
+        A preview payload otherwise — the caller must return it as-is.
     """
-    if confirm:
+    identity = dict(resource_identity)
+    key = signing_key_for(ctx)
+    now = int(time.time())
+    if confirm and verify_confirmation_token(
+        confirmation_token,
+        tool_name=tool_name,
+        resource_identity=identity,
+        key=key,
+        now=now,
+    ):
         return None
 
-    preview = _build_preview_payload(resource_descriptor)
+    minted = mint_confirmation_token(
+        tool_name=tool_name,
+        resource_identity=identity,
+        key=key,
+        now=now,
+    )
+    preview = _build_preview_payload(resource_descriptor, confirmation_token=minted)
     if dependents_resolver is not None:
         try:
             deps = await dependents_resolver()
@@ -79,21 +118,28 @@ async def check_destructive_confirmation(
     return preview
 
 
-def _build_preview_payload(resource_descriptor: str) -> DestructivePreviewPayload:
+def _build_preview_payload(
+    resource_descriptor: str,
+    *,
+    confirmation_token: str,
+) -> DestructivePreviewPayload:
     return {
         "success": False,
         "requires_confirmation": True,
         "resource": resource_descriptor,
+        "confirmation_token": confirmation_token,
         "message": (
-            f"⚠️ You are about to permanently delete {resource_descriptor}. "
-            "This action is irreversible. Set 'confirm=True' to proceed."
+            f"⚠️ Deleting {resource_descriptor} is permanent and cannot be undone. "
+            "Show this preview to the user and get their explicit approval before continuing. "
+            "Once they approve, call again with confirm=True "
+            f'and confirmation_token="{confirmation_token}".'
         ),
     }
 
 
 __all__ = [
     "DependentsResolver",
-    "DestructiveCancelledPayload",
     "DestructivePreviewPayload",
     "check_destructive_confirmation",
+    "signing_key_for",
 ]

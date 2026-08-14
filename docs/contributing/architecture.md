@@ -59,7 +59,7 @@ Limits that this repository does not decide.
 
 In domain terms, the toolkit acts on the Pipefy organizations that a caller can access. Every call acts as a member or a service account of one of them. Inside an organization, a pipe holds the definition of a process and a card is one run of that process. A table holds records of the business entities that a process reads, and a record has no lifecycle of its own. Around those, the toolkit reaches portals, reports, members and roles, webhooks, files in storage, and the automations of a pipe. It also reaches the flows of the iPaaS, which run on a separate engine, and [`docs/ipaas.md`](../ipaas.md) defines those terms. The GraphQL schema stays the source of truth for entity shape.
 
-The diagram draws the boundary in both directions, with the workspace packages inside it.
+The diagram draws the boundary in both directions, with the toolkit packages inside it.
 
 ```mermaid
 flowchart LR
@@ -67,7 +67,7 @@ flowchart LR
     shell["Person or script at a terminal"] --> cli
     program["Embedding program"] --> sdk
 
-    subgraph workspace["uv workspace"]
+    subgraph toolkit["Toolkit packages"]
         direction TB
         mcp["pipefy-mcp-server (packages/mcp)"]
         cli["pipefy-cli (packages/cli)"]
@@ -91,7 +91,7 @@ flowchart LR
     auth -- "login and token validation" --> idp["Pipefy identity provider (OIDC)"]
 ```
 
-An arrow inside the workspace is a dependency that the package declares in its own `pyproject.toml`. The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and it receives that package as a transitive of the SDK and of `pipefy-auth`. One CLI module imports `pipefy_infra` directly all the same, and [Known gaps](#known-gaps) carries that. A crossing of the boundary names the concept, not the class that implements it, and [Ports and dependency inversion](#ports-and-dependency-inversion) is where the port names live. The `transport` setting decides whether an MCP client arrives over stdio or over HTTP, and what each caller does about a credential is in [Identity lifetime](#identity-lifetime).
+An arrow between two packages is a dependency that the package declares in its own `pyproject.toml`. The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and it receives that package as a transitive of the SDK and of `pipefy-auth`. One CLI module imports `pipefy_infra` directly all the same, and [Known gaps](#known-gaps) carries that. A crossing of the boundary names the concept, not the class that implements it, and [Ports and dependency inversion](#ports-and-dependency-inversion) is where the port names live. The `transport` setting decides whether an MCP client arrives over stdio or over HTTP, and what each caller does about a credential is in [Identity lifetime](#identity-lifetime).
 
 ## Applications
 

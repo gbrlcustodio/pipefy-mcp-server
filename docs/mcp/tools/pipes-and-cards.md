@@ -8,7 +8,7 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, and
 - Successful mutations return a structured `result` (GraphQL payload).
 - Most write tools support optional `debug=true` on errors (GraphQL codes + `correlation_id`).
 - `extra_input` merges extra API keys (camelCase); keys that would duplicate primary arguments are ignored.
-- **Destructive deletes** (`delete_pipe`, `delete_card`) use a two-step flow: first call returns a preview, then `confirm=true` after user approval.
+- **Destructive deletes** (`delete_pipe`, `delete_card`, and the other deletes in this guide) follow [Destructive operations](cross-cutting.md#destructive-operations): echo `confirmation_token` from the preview with `confirm=true`.
 
 ### Pipefy IDs (type safety)
 
@@ -48,8 +48,8 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 
 | Group | Tools | Notes |
 |-------|-------|-------|
-| Pipe | `create_pipe`, `update_pipe`, `delete_pipe`, `clone_pipe` | `delete_pipe`: two-step — preview first, then `confirm=true`. |
-| Phase | `create_phase`, `update_phase`, `delete_phase` | `create_phase` `index`: 1-based insert among `get_pipe` workflow phases; omit to append. Prefer `1+` (not `0`). Index sets order only - not Connections / `allowed_phases` (UI-only). Destructive deletes: confirm with the user. |
+| Pipe | `create_pipe`, `update_pipe`, `delete_pipe`, `clone_pipe` | `delete_pipe`: [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`. |
+| Phase | `create_phase`, `update_phase`, `delete_phase` | `create_phase` `index`: 1-based insert among `get_pipe` workflow phases; omit to append. Prefer `1+` (not `0`). Index sets order only - not Connections / `allowed_phases` (UI-only). `delete_phase`: [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`. |
 | Phase transitions | `get_phase_allowed_move_targets` | Read-only; mirrors **Phase → Connections** (`cards_can_be_moved_to_phases`). Call before `move_card_to_phase`. Edges are configured in the Pipefy UI only. |
 | Phase field | `create_phase_field`, `update_phase_field`, `delete_phase_field` | `field_type` maps to API `type`; `field_id` may be a slug or numeric ID. |
 | Label | `create_label`, `update_label`, `delete_label` | `color` must be a hex string (e.g. `#FF0000`), not a name. |
@@ -62,11 +62,11 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | `fill_card_phase_fields` | Fill phase-specific fields on a card; may use elicitation when available. |
 | `add_card_comment` | Add a comment to a card. |
 | `update_comment` | Update an existing comment. |
-| `delete_comment` | Delete a comment (two-step: preview with `confirm=false`, then `confirm=true` after approval; `destructiveHint=True`). |
+| `delete_comment` | Delete a comment ([two-step](cross-cutting.md#destructive-operations) with `confirmation_token`; `destructiveHint=True`). |
 | `move_card_to_phase` | Move card to another phase. On failure for a required empty field, may return `success: false` naming that field; when a hide condition on the same required field is detected, the error may note that the field may be hidden while still required. |
 | `update_card_field` | Single-field update (`updateCardField`). |
 | `update_card` | Metadata (title, assignees, labels, due date) and/or multiple custom fields via `field_updates`. |
-| `delete_card` | Two-step: default preview; `confirm=true` after explicit user confirmation. `card_id` is a **string** in the API; pass `"…"` or a coerced positive integer (see [Pipefy IDs](#pipefy-ids-type-safety)). |
+| `delete_card` | [Two-step](cross-cutting.md#destructive-operations) with `confirmation_token`. `card_id` is a **string** in the API; pass `"…"` or a coerced positive integer (see [Pipefy IDs](#pipefy-ids-type-safety)). |
 | `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call**: to attach multiple files, call the tool once per file. Provide **exactly one source**: `file_path` (a local filesystem path the MCP server reads; supports `~` expansion; local profile only) or `file_url` (an HTTPS URL the server downloads under an SSRF guard — http only if the deployment enables insecure URLs; works on any profile). On the hosted server `file_path` is rejected — pass `file_url`. `file_name` is inferred from the source basename when omitted (supply it explicitly when a URL has none); optional `content_type` is inferred from `file_name`. Either source is rejected above **100 MiB** before the presigned request. **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid: using the uuid returns `RESOURCE_NOT_FOUND`. |
 | `create_attachment_presigned_url` | Mints an S3 upload target (`upload_url`, `storage_path` object key, `expires_in_seconds`) for an org + `file_name`, **without transferring bytes** — for attaching a file the server can't read (a local file on the hosted profile, or bytes too large to inline). The client PUTs the file to `upload_url` within the expiry, then sets an attachment field to `[storage_path]` via `update_card_field` / `set_table_record_field_value` (store the key, never the url). Remote-safe. |
 
@@ -151,9 +151,9 @@ Five tools read and configure conditional visibility on phase fields.
 |------|-----------|------|
 | `get_field_conditions` | Yes | Lists conditions for a phase (expressions, actions). |
 | `get_field_condition` | Yes | Loads one condition by ID. |
-| `create_field_condition` | No | Creates a rule: `phase_id`, `condition` (dict), `actions` (list of dicts), optional `extra_input`. Re-reads after create: `verified: true` when the rule exists on the requested phase; missing/wrong phase → `success: false` with codes `FIELD_CONDITION_NOT_PERSISTED` / `FIELD_CONDITION_WRONG_PHASE` and `error.details` (`condition_id`, `phase_id`, optional `actual_phase_id`) — delete with `confirm=true` before recreating; if verify reads are inconclusive, may return success with a warning (verification unavailable). Rejects `hide`/`hidden` on a `required=true` field before the mutation (matches `internal_id`, `id`, or `uuid`). |
+| `create_field_condition` | No | Creates a rule: `phase_id`, `condition` (dict), `actions` (list of dicts), optional `extra_input`. Re-reads after create: `verified: true` when the rule exists on the requested phase; missing/wrong phase → `success: false` with codes `FIELD_CONDITION_NOT_PERSISTED` / `FIELD_CONDITION_WRONG_PHASE` and `error.details` (`condition_id`, `phase_id`, optional `actual_phase_id`). Two-step delete (`confirmation_token`) before recreating; if verify reads are inconclusive, may return success with a warning (verification unavailable). Rejects `hide`/`hidden` on a `required=true` field before the mutation (matches `internal_id`, `id`, or `uuid`). |
 | `update_field_condition` | No | Patches an existing rule: `condition_id` and at least one of `condition`, `actions`, or `extra_input`. `actions` must be top-level (`actions` in `extra_input` → `INVALID_ARGUMENTS`). When top-level `actions` is provided, rejects `hide`/`hidden` on a `required=true` field before the mutation (best-effort if phase fields cannot be loaded). |
-| `delete_field_condition` | No | Deletes a rule (`destructiveHint=True` — confirm with the user first). |
+| `delete_field_condition` | No | Deletes a rule (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |
 
 - `create_field_condition` maps to `createFieldConditionInput`: `phase_id`, `condition`, `actions`.
 - Action entries use `phaseFieldId` with the target field's `internal_id` from `get_phase_fields` (not the slug `id`).

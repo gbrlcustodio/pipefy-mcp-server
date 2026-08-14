@@ -25,9 +25,11 @@ For traditional automations and AI automations (prompt-driven), see [skills/auto
 | `get_ai_agent` | `pipefy agent get` | Yes | Full agent config including behaviors. |
 | `create_ai_agent` | `pipefy agent create` | No | Create a new conversational agent (active by default; `active=false` / `--inactive` to start disabled). |
 | `update_ai_agent` | `pipefy agent update` | No | **Full-replace** (not patch). Always send complete `behaviors`. Preserves disabled state. |
-| `delete_ai_agent` | `pipefy agent delete` | No | **(Two-step destructive)** |
+| `delete_ai_agent` | `pipefy agent delete` | No | **(Two-step destructive)**[^mcp-confirm] |
 | `toggle_ai_agent_status` | `pipefy agent toggle` | No | Explicit activate/deactivate (e.g. `--inactive`). |
 | `validate_ai_agent_behaviors` | `pipefy agent validate-behaviors` | Yes | **Pre-flight check before create/update.** |
+
+[^mcp-confirm]: MCP two-step: echo `confirmation_token` from the preview with `confirm=true`. CLI: `--yes`.
 
 The read tools (`get_ai_agents`, `get_ai_agent`, `validate_ai_agent_behaviors`) and the write tools (`create`/`update`/`delete`/`toggle`) are all remote-safe: available under the hosted (`profile=remote`) surface.
 
@@ -218,15 +220,15 @@ Knowledge bases are pipe-scoped data sources an agent draws on. Attach one by pu
 | `get_ai_knowledge_base_plain_text` | `pipefy kb plain-text get` | Yes | Fetch one plain text with its content. |
 | `create_ai_knowledge_base_plain_text` | `pipefy kb plain-text create` | No | Create a plain text (`name`, `content` 1-3500, `description` 1-900 — all required). |
 | `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | No | Partial update; pass at least one of name/content/description. |
-| `delete_ai_knowledge_base_plain_text` | `pipefy kb plain-text delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `delete_ai_knowledge_base_plain_text` | `pipefy kb plain-text delete` | No | **(Two-step destructive)**[^mcp-confirm] |
 | `get_ai_knowledge_base_document` | `pipefy kb document get` | Yes | Fetch one document's metadata (`content` is the stored URL, not text). |
 | `create_ai_knowledge_base_document` | `pipefy kb document create` | No | Upload a local PDF in one shot (`file_path`/`--file`, `name`, `description` 1-900). `.pdf` + 20 MiB cap client-side; indexing is async. |
 | `update_ai_knowledge_base_document` | `pipefy kb document update` | No | Metadata-only update (name/description); no file replacement. |
-| `delete_ai_knowledge_base_document` | `pipefy kb document delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `delete_ai_knowledge_base_document` | `pipefy kb document delete` | No | **(Two-step destructive)**[^mcp-confirm] |
 | `get_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup get` | Yes | Fetch one data lookup; the payload never includes `conditions` — keep the definition client-side. |
 | `create_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup create` | No | Create a data lookup (`name`, `description` 1-900, `source_repo_id` numeric pipe ID, `output_fields` 1-30, `conditions` — all required). |
 | `update_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup update` | No | Full replacement: resend `source_repo_id`/`output_fields`/`conditions` every call; omitted `search_query` clears it; only name/description are partial. |
-| `delete_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `delete_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup delete` | No | **(Two-step destructive)**[^mcp-confirm] |
 | `validate_knowledge_base_access` | `pipefy kb validate-access` | Yes | Probe read access before writes. |
 
 ### Flow: validate-access → create plain text → attach
@@ -326,7 +328,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
 - **Ghost agents.** An agent listed by `get_ai_agents` may return "Agent not found" on `get_ai_agent` — a Pipefy backend artifact, persists across sessions, do not retry.
 - **GraphQL error hints.** When a dedicated read tool returns permission-denied or not-found, the `error.message` may cite concrete tools (e.g. `"Use 'get_ai_agents' to list agents..."`). Trust the hint; don't improvise alternative flows.
 - **Validation rejections.** Common issues: invalid `trigger_event`, prompt too long, missing required action config. Read the `errors` field per behavior.
-- **`delete_ai_agent` first call returns preview.** Expected — show preview to user, then call with `confirm=true`.
+- **`delete_ai_agent` first call returns preview.** Expected. Show the preview, then call with `confirm=true` and the preview's `confirmation_token`.
 
 ## See also
 

@@ -28,7 +28,7 @@ This is **Tier 2** in the resolution strategy: when a dedicated MCP tool fails o
 | `introspect_query` | `pipefy introspect query` | Yes | Root query arguments and return type. Optional `max_depth`. |
 | `introspect_mutation` | `pipefy introspect mutation` | Yes | Root mutation arguments and return type. Optional `max_depth`. |
 | `search_schema` | `pipefy introspect schema search` | Yes | Keyword search on type names/descriptions. Optional `kind` filter. |
-| `execute_graphql` | `pipefy graphql exec` | No | Execute arbitrary GraphQL (`--yes` required for mutations). |
+| `execute_graphql` | `pipefy graphql exec` | No | Execute arbitrary GraphQL. Queries ungated. Mutations: MCP two-step with `confirmation_token`; CLI `--yes`. |
 | `get_organization` | `pipefy org get` | Yes | Load organization info (name, plan, UUID, member count, pipe count). |
 | `list_organizations` | `pipefy org list` | Yes | List organizations the caller can access — no id required. The zero-knowledge entry point for org discovery. |
 
@@ -93,7 +93,7 @@ pipefy introspect schema search automation --kind INPUT_OBJECT --json
 - Ad-hoc queries like resolving an org UUID via `pipe(id: $id) { organization { uuid } }`.
 - Complex nested queries that no single tool covers.
 
-**Always prefer dedicated MCP tools** — they validate inputs, handle pagination, and format errors consistently. `execute_graphql` is the fallback when dedicated tools can't solve the problem.
+**Always prefer dedicated MCP tools.** They validate inputs, handle pagination, and format errors consistently. `execute_graphql` is the fallback when dedicated tools can't solve the problem. Queries are ungated; MCP mutations need the two-step `confirmation_token`.
 
 ---
 
@@ -125,10 +125,16 @@ pipefy introspect schema search automation --kind INPUT_OBJECT --json
 
    > **Mutations:** the CLI exits with code 2 unless `--yes` is passed (guardrail for agents and scripts).
 
-5. **Execute the mutation (MCP):**
+5. **Execute the mutation (MCP):** two-step. The first call returns a preview with `confirmation_token` and does not mutate. Echo that token on the second call.
 
    ```
    execute_graphql query="mutation CreateLabel($input: CreateLabelInput!) { createLabel(input: $input) { label { id name } } }" variables='{"input": {"pipe_id": 67890, "name": "Urgent", "color": "#FF0000"}}'
+   ```
+
+   Then after the preview:
+
+   ```
+   execute_graphql query="mutation CreateLabel($input: CreateLabelInput!) { createLabel(input: $input) { label { id name } } }" variables='{"input": {"pipe_id": 67890, "name": "Urgent", "color": "#FF0000"}}' confirm=true confirmation_token="<token from preview>"
    ```
 
 ---
@@ -186,10 +192,16 @@ execute_graphql query='query($id: ID!) { pipe(id: $id) { organization { id uuid 
 
 ### Recipe 6 — Update a select field's options after creation
 
-`create_phase_field` does not accept options. Create first, then update:
+`create_phase_field` does not accept options. Create first, then update. MCP mutations are two-step: preview, then `confirm=true` plus `confirmation_token`. CLI `--yes` can stay one-shot.
 
 ```
 execute_graphql query='mutation($id: ID!, $options: [String!]) { updatePhaseField(input: { id: $id, options: $options }) { phase_field { id label options } } }' variables='{"id":"<field-id>","options":["High","Medium","Low"]}'
+```
+
+Then after the preview:
+
+```
+execute_graphql query='mutation($id: ID!, $options: [String!]) { updatePhaseField(input: { id: $id, options: $options }) { phase_field { id label options } } }' variables='{"id":"<field-id>","options":["High","Medium","Low"]}' confirm=true confirmation_token="<token from preview>"
 ```
 
 ### Recipe 7 — Check phase transition rules

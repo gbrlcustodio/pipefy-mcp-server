@@ -23,7 +23,7 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 | `get_automation` | `pipefy automation get` | Single automation with full rule config — returns `event_params` and `action_params` (including `aiParams` for AI rules). |
 | `create_automation` | `pipefy automation create` | Create an if/then rule. `active` defaults to true. First-class typed `condition` (see [Conditions](#conditions--gate-a-rule-on-field-tests)); other fields via `extra_input`. |
 | `update_automation` | `pipefy automation update` | Patch a rule: first-class typed `condition` (see [Conditions](#conditions--gate-a-rule-on-field-tests)) and/or `extra_input`. |
-| `delete_automation` | `pipefy automation delete` | **(Two-step destructive)** |
+| `delete_automation` | `pipefy automation delete` | **(Two-step destructive)**[^mcp-confirm] |
 | `simulate_automation` | `pipefy automation simulate` | **AI-only** dry-run (`generate_with_ai` action). |
 | `get_automation_events` | `pipefy automation events list` | Available trigger events. |
 | `get_automation_event_attributes` | `pipefy automation event-attributes` | Official `field_map.value` event-attribute tokens. |
@@ -44,8 +44,10 @@ Logs, usage, and job exports for automations live in [skills/observability/pipef
 | `get_ai_automation` | `pipefy ai-automation get` | Full config including prompt, fields, condition. |
 | `create_ai_automation` | `pipefy ai-automation create` | Create a prompt-driven automation (requires AI enabled on the pipe). |
 | `update_ai_automation` | `pipefy ai-automation update` | Change name, `active`, prompt, `field_ids`, or `condition`. |
-| `delete_ai_automation` | `pipefy ai-automation delete` | **(Two-step destructive)** |
+| `delete_ai_automation` | `pipefy ai-automation delete` | **(Two-step destructive)**[^mcp-confirm] |
 | `validate_ai_automation_prompt` | `pipefy ai-automation validate-prompt` | **Pre-flight check.** Returns `{valid, problems, warnings, field_map}` — also detects prompt `%{id}` ∩ `field_ids` overlap. |
+
+[^mcp-confirm]: MCP two-step: echo `confirmation_token` from the preview with `confirm=true`. CLI: `--yes`.
 
 ---
 

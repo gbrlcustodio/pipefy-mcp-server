@@ -29,11 +29,13 @@ Link processes and cards across workflows. **8 MCP tools.**
 | `get_pipe_relations` | `pipefy relation pipe list --pipe <id>` | Yes | List pipe-to-pipe relations for a pipe. |
 | `create_pipe_relation` | `pipefy relation pipe create` | No | Create a new pipe-to-pipe relation. |
 | `update_pipe_relation` | `pipefy relation pipe update <id>` | No | Change relation config (auto-fill, constraints). |
-| `delete_pipe_relation` | `pipefy relation pipe delete <id>` | No | **Two-step destructive.** |
+| `delete_pipe_relation` | `pipefy relation pipe delete <id>` | No | **Two-step destructive.**[^mcp-confirm] |
 | `get_table_relations` | `pipefy relation table list --ids <id,...>` | Yes | Load table relations by relation ID. |
 | `get_card_relations` | `pipefy relation card list --card <id>` | Yes | List all card-to-card relations on a card. |
 | `create_card_relation` | `pipefy relation card create` | No | Link two cards through an existing pipe relation. |
-| `delete_card_relation` | `pipefy relation card delete <id>` | No | **Two-step destructive.** |
+| `delete_card_relation` | `pipefy relation card delete <id>` | No | **Two-step destructive.**[^mcp-confirm] |
+
+[^mcp-confirm]: MCP two-step: echo `confirmation_token` from the preview with `confirm=true`. CLI: `--yes`.
 
 ---
 
@@ -80,7 +82,7 @@ Link processes and cards across workflows. **8 MCP tools.**
 
 - **`create_card_relation` fails with "relation not found":** `source_id` must be the **pipe relation ID** (from `get_pipe_relations`), not the pipe ID. These are different values.
 - **Table relations return empty:** `get_table_relations` requires table-relation IDs, not table IDs. Get table-relation IDs from the table's connection config.
-- **`delete_pipe_relation` first call returns preview:** expected — show preview to user, then call with `confirm=true`.
+- **`delete_pipe_relation` first call returns preview:** expected. Show the preview, then call with `confirm=true` and the preview's `confirmation_token`.
 
 ## See also
 

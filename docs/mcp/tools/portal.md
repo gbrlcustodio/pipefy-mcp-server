@@ -106,7 +106,7 @@ Fifteen values accepted by `create_portal_element` / `update_portal_element` (SD
 | `get_portal` | Yes | Full portal: `published`, `pages[]`, `elements[]`, `subPortals[]`. |
 | `create_portal` | No | Idempotent main portal (`findOrCreateInterfaceByTemplate`). |
 | `update_portal` | No | `name`, `visibility` (`internal` \| `private` \| `public`), `color`, `icon`, `display_pipefy_header`. |
-| `delete_portal` | No | Irreversible; MCP two-step `confirm`; CLI `--yes`. |
+| `delete_portal` | No | Irreversible; MCP two-step with `confirmation_token`; CLI `--yes`. |
 | `create_portal_page` | No | `interface_uuid` + `title`; optional `description`, `index`, `elements`. |
 | `update_portal_page` | No | Page metadata; at least one field. |
 | `delete_portal_page` | No | Irreversible; destructive hints / `--yes`. |
@@ -129,7 +129,7 @@ Fifteen values accepted by `create_portal_element` / `update_portal_element` (SD
 
 ## Destructive operations
 
-Portal deletes follow the [cross-cutting two-step contract](cross-cutting.md#destructive-operations): MCP preview (`confirm=false`) then execute (`confirm=true`). CLI uses **`--yes`** (`confirm_destructive`).
+Portal deletes follow the [cross-cutting two-step contract](cross-cutting.md#destructive-operations): the MCP preview includes `confirmation_token`; the second call sets `confirm=true` and echoes that token. CLI uses **`--yes`** (`confirm_destructive`). `unpublish_sub_portal` stays ungated.
 
 Applies to: `delete_portal`, `delete_portal_page`, `delete_portal_element`, `delete_sub_portal`, `delete_sub_portal_element`.
 

@@ -33,7 +33,7 @@ The rows split by whether a requirement competes. A guarantee has nothing on the
 | 1 | `QR-8` | Diagnosability | A failure names its cause and whether a retry can succeed | Every consumer |
 | 2 | `QR-1` | Usability | An invalid request names the field and the rule it broke | Every consumer |
 | 3 | `QR-2` | Compatibility | A vendor API change does not reach the consumer's code | The SDK consumer, and any script that parses output |
-| 4 | `QR-9` | Efficiency | The tool list carries only what the deployment needs | The MCP consumer |
+| 4 | `QR-9` | Efficiency | The tool list carries only what the consumer's work needs | The MCP consumer |
 | 5 | `QR-5` | Efficiency | One user intent costs one call | The MCP consumer |
 | 6 | `QR-10` | Efficiency | A response carries only what the intent needs | The MCP consumer |
 

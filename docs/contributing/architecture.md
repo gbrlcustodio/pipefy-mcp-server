@@ -11,7 +11,7 @@ Four readers arrive here:
 
 ## Quality goals
 
-Each goal states a demand that a consumer of an application holds, in that consumer's terms. Each one names the mechanism that serves it, and each mechanism section names its goal. A reason that no longer holds is then visible from either side.
+Each goal states a demand that a consumer of an application holds, in that consumer's terms. A goal and its mechanism each name the other.
 
 **QG-1. An invalid request returns an error that tells the caller what to correct.** Every consumer holds it. The typed input contract at each application edge serves it, together with `VALID-2` and the parse rules in [`conventions.md`](conventions.md).
 

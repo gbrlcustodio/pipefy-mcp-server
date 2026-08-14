@@ -9,23 +9,43 @@ Four readers arrive here:
 - A coding agent reads this document as current, so a stale sentence becomes a wrong instruction. That is why the layer order stays where a check can fail, not where a sentence can go stale.
 - A consumer of one application wants its interface instead of the layer model, in [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), or [`docs/sdk`](../sdk/README.md).
 
-## Quality goals
+## Quality requirements
 
-Each goal states a demand that a consumer of an application holds, in that consumer's terms. A `Served by` cell names a section of this document or a permanent rule ID, and that section names the goal back. A path or a symbol goes stale, so no cell holds one.
+Each row states a demand that a consumer of an application holds, in that consumer's terms. A category alone is not a requirement, so every row carries its demand beside it. This section holds every requirement that has shaped a decision here, and not every quality the toolkit could be judged on.
 
-| ID | Demand | Held by | Served by |
+The rows split by whether a requirement competes. A guarantee has nothing on the other side of the trade, so it carries no rank. A goal costs something we can choose not to spend, so it carries one. Where a requirement is served, the section that serves it names the requirement back. Where it is not served, or not yet on this map, [Known gaps](#known-gaps) names it.
+
+**Guarantees.** Each one is a demand that no release trades away.
+
+| ID | Category | Demand | Held by |
 |---|---|---|---|
-| `QR-1` | An invalid request returns an error that tells the caller what to correct | Every consumer | `VALID-2`, [Composition root](#composition-root) |
-| `QR-2` | A change in the toolkit or in a vendor API does not reach the consumer's code | The SDK consumer, and any script or agent that names a command or a tool | [Layer model](#layer-model), [Ports](#ports-and-dependency-inversion) |
-| `QR-3` | When no human is present, a run never waits and never prompts | The CLI consumer in a pipeline, and the headless MCP consumer | [The three applications](#the-three-applications) |
-| `QR-4` | A request runs as the caller that sent it, and never as another caller | The MCP consumer under the remote profile | [Identity lifetime](#identity-lifetime) |
-| `QR-5` | An LLM calls by intent, not by endpoint | The MCP consumer | `SURF-1`, [Known gaps](#known-gaps) |
-| `QR-6` | A destructive operation declares itself and names what it affects before it runs | The MCP consumer and the CLI consumer | No section yet |
+| `QR-3` | Operability | When no human is present, a run never waits and never prompts | The CLI consumer in a pipeline, and the headless MCP consumer |
+| `QR-4` | Security | A request acts as the caller that sent it, and never as another caller | The MCP consumer under the remote profile |
+| `QR-6` | Safety | A destructive operation names what it affects before it runs | The MCP consumer and the CLI consumer |
+| `QR-7` | Correctness | An ambiguous identifier never silently resolves to one match | Every consumer |
+| `QR-11` | Compatibility | A breaking change is announced before it ships | The SDK consumer, and any script or agent that names a command or a tool |
+| `QR-12` | Diagnosability | A partial result names what did not succeed | Every consumer |
 
-This document does not rank the goals, because a rank decides whose demand wins, and that decision has an owner outside this document. These trades are real:
+**Goals.** Ranked by what a consumer can do when the goal is not met.
+
+| Rank | ID | Category | Demand | Held by |
+|---|---|---|---|---|
+| 1 | `QR-8` | Diagnosability | A failure names its cause and whether a retry can succeed | Every consumer |
+| 2 | `QR-1` | Usability | An invalid request names the field and the rule it broke | Every consumer |
+| 3 | `QR-2` | Compatibility | A vendor API change does not reach the consumer's code | The SDK consumer, and any script that parses output |
+| 4 | `QR-9` | Efficiency | A deployment bounds its model-facing tool count independently of catalog size | The MCP consumer |
+| 5 | `QR-5` | Efficiency | One user intent costs one call | The MCP consumer |
+| 6 | `QR-10` | Efficiency | A response carries only what the intent needs | The MCP consumer |
+
+`QR-8` and `QR-1` rank first, because a consumer who cannot see why a call failed cannot act at all. `QR-2` follows, because that consumer can act but pays for a change they did not make. The last three are costs a consumer can measure and plan around.
+
+The three Efficiency rows are three separate costs, paid at different moments: the catalog once at connect, the calls per intent, and the payload per call. `QR-9` outranks the other two because its cost lands before the consumer asks for anything.
+
+These trades are real:
 
 - A confirmation that the model must answer costs a second call, so `QR-6` spends what `QR-5` saves. A confirmation that the client answers costs `QR-5` nothing.
 - When no human is present, a consent dialog cannot run, so `QR-3` leaves the intent to an explicit flag.
+- The `power` branch holds the tool count at nine, and every call then routes through one meta-tool, so `QR-9` spends what `QR-5` saves.
 
 ## Constraints
 
@@ -196,6 +216,10 @@ The map above holds today, with the exceptions below. Each entry names the artif
 - The capability-aware destructive path, which is `QR-6`. One explicit answer serves the interactive case and the ambient case alike, so the declared capability of the client decides nothing here. Elicitation is the candidate for the interactive half. It cannot carry the authorization half, because a client can auto-accept an elicitation prompt when a tool runs programmatically. The artifact is a destructive path that reads the capability and keeps the explicit answer as the only ambient authorization.
 - A settled bound on the tool surface, which is `QR-9`. The taxonomy in [Tool surface](#tool-surface) tames a catalog that is too large, so it treats a symptom of the `QR-5` entry above. The artifact is not yet chosen, and the exploration is open.
 - The native response shape, which is `QR-1`, `QR-8`, and `QR-12`. One envelope for every outcome is the right requirement, and it arrives by wrapping: a flag, migrated tools only, and a patch on an MCP SDK internal that pins that dependency to one minor. The artifact is the envelope as a tool's own return type, which retires both the flag and the patch.
+- No response states whether a retry can succeed, so `QR-8` holds for cause alone. The artifact is a retryability signal on the error envelope.
+- No tool offers field selection or a summary mode, so a response carries whatever the query returned. That is `QR-10`. The artifact is a per-tool projection.
+- `QR-2` does not hold for CLI output. The CLI prints the payload it received, so a vendor schema change reaches a script that parses `--json`. The artifact is a declared output contract for the CLI.
+- `QR-11` is not on this map. The announcement lives in the changelog, the release notes, and the migration guide, and no section here states what a breaking change owes a consumer. The artifact is that section.
 
 ## Vocabulary
 

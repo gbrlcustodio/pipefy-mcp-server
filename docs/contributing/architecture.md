@@ -1,12 +1,12 @@
 # Architecture
 
-The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three, down to the layers inside one package. The map explains rather than instructs. Where a check enforces part of the map, the section names that check. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
+The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three, down to the layers inside one package. The map explains rather than instructs. Where a check enforces part of the map, the section names that check. Where a schema, a contract, or another document owns a fact, the section names that owner and does not restate the fact. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
 These readers arrive here:
 
 - A contributor who changes code starts at [Package decomposition](#package-decomposition) and reads inward from there.
 - A reviewer wants the rule and the ID to cite, and both live in [`conventions.md`](conventions.md).
-- A coding agent reads this document as current, so a stale sentence becomes a wrong instruction. That is why the layer order stays where a check can fail, not where a sentence can go stale.
+- A coding agent reads this document as current, so a stale sentence becomes a wrong instruction. The layer order is the example: an import-linter contract holds it, and the build fails when the code drifts.
 - A consumer of one application wants its interface instead of the layer model, in [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), or [`docs/sdk`](../sdk/README.md).
 
 ## Quality requirements

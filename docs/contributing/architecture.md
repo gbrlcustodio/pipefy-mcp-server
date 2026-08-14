@@ -95,7 +95,7 @@ An arrow between two packages is a dependency that the package declares in its o
 
 ## Applications
 
-An application is what a consumer uses. Each one exposes the same domain, and each one matches its consumer. The skills catalog in `skills/` also ships, and it sits outside this document: markdown playbooks with no code and no layers.
+An application is what a consumer uses. Each one exposes the same domain, and each one matches its consumer.
 
 - The SDK is for a programmer. It executes a named operation deterministically and returns a domain value. It is the deterministic execution layer.
 - The CLI is for a human or a script in a shell. It is thin over the SDK. Discovery is a separate command, which is idiomatic in a shell.

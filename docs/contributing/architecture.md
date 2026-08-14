@@ -2,7 +2,7 @@
 
 The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three, down to the layers inside one package. The map explains rather than instructs. Where a check enforces part of the map, the section names that check. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
-Four readers arrive here:
+These readers arrive here:
 
 - A contributor who changes code starts at [Package decomposition](#package-decomposition) and reads inward from there.
 - A reviewer wants the rule and the ID to cite, and both live in [`conventions.md`](conventions.md).
@@ -49,7 +49,7 @@ These trades are real:
 
 ## Constraints
 
-Three limits that this repository does not decide.
+Limits that this repository does not decide.
 
 - The MCP protocol publishes a tool's inputs as JSON Schema, and a language model fills them from that schema alone. The schema is therefore an instruction to the model, and not only a check on what arrives.
 - The Pipefy GraphQL API is not ours to change, so its entity shape and its error shape come as the vendor defines them. Any better shape is a translation that we build and maintain.
@@ -59,7 +59,7 @@ Three limits that this repository does not decide.
 
 In domain terms, the toolkit acts on the Pipefy organizations that a caller can access. Every call acts as a member or a service account of one of them. Inside an organization, a pipe holds the definition of a process and a card is one run of that process. A table holds records of the business entities that a process reads, and a record has no lifecycle of its own. Around those, the toolkit reaches portals, reports, members and roles, webhooks, files in storage, and the automations of a pipe. It also reaches the flows of the iPaaS, which run on a separate engine, and [`docs/ipaas.md`](../ipaas.md) defines those terms. The GraphQL schema stays the source of truth for entity shape.
 
-The diagram draws the boundary in both directions, with the five packages inside it.
+The diagram draws the boundary in both directions, with the workspace packages inside it.
 
 ```mermaid
 flowchart LR
@@ -127,7 +127,7 @@ The machinery is this large because the catalog is. The tool names copy the API 
 
 ## Package decomposition
 
-Five packages: three applications and two shared libraries. The graph is in the diagram above. The MCP server and the CLI never depend on each other, and a shared library never depends on an application. That is the reason for the split.
+Three applications and two shared libraries. The graph is in the diagram above. The MCP server and the CLI never depend on each other, and a shared library never depends on an application. That is the reason for the split.
 
 The diagram draws what each package declares. Each package also carries its own ruff `TID251` ban list, with one message per banned package, and that list holds the edges that must never appear. `pipefy_infra` declares itself a leaf and bans the other four. `pipefy_auth` bans all three applications. `pipefy_sdk` bans the MCP server and the CLI. Each of those two bans the other and the private modules of the SDK.
 
@@ -139,13 +139,13 @@ The code has a hexagonal shape with a thin core. Most of this codebase is an ada
 
 The logic that is genuinely ours is small, so the core is small. A module that touches a framework does the work of an adapter, and it is not a leak. This shape serves `QR-2`, because a vendor change stops at the adapter that wraps it.
 
-Three roles:
+The roles:
 
 - Domain (core). Pure types and logic. It owns the ports that it needs from the outside. It imports no framework and no third-party SDK.
 - Adapter. It translates an outside type into a domain type, or it registers domain behavior with a framework. Framework and third-party SDK imports live here. A driving adapter is entered from the outside, for example an MCP tool call or a CLI command. The core calls a driven adapter to reach the outside, for example Pipefy data access.
 - Composition root. The per-application wiring, built once at startup. It is the only place that constructs concrete adapters and framework objects.
 
-The five layers of the MCP package map onto those three roles, and the five names come from its import-linter contract.
+The layers of the MCP package map onto those roles, and their names come from its import-linter contract.
 
 - `server` and `core/runtime.py` are the composition root.
 - `tools` are driving adapters.
@@ -224,7 +224,7 @@ The map above holds today, with the exceptions below. Each entry names the artif
 
 ## Vocabulary
 
-Six names carry a second meaning elsewhere, so each one is fixed here.
+These names carry a second meaning elsewhere, so each one is fixed here.
 
 - Contract. Qualified at each use. The typed input contract is the parsed model at the edge of an application. The import-linter contract is the layer order in `packages/mcp/pyproject.toml`.
 - Application. A package that a consumer uses, and one that owns a driving port. The SDK, the CLI, and the MCP server are the three, and a shared library is not one. The code labels the same concept `surface`, in `ClientSurface` and in a call such as `surface="mcp"`, and stamps it into the outbound `User-Agent`. This document says application instead, because the rest of the repository spends the word surface on the set of tools a deployment exposes.

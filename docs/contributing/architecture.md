@@ -15,17 +15,17 @@ Each goal states a demand that a consumer of an application holds, in that consu
 
 | ID | Demand | Held by | Served by |
 |---|---|---|---|
-| `QG-1` | An invalid request returns an error that tells the caller what to correct | Every consumer | `VALID-2`, [Composition root](#composition-root) |
-| `QG-2` | A change in the toolkit or in a vendor API does not reach the consumer's code | The SDK consumer, and any script or agent that names a command or a tool | [Layer model](#layer-model), [Ports](#ports-and-dependency-inversion) |
-| `QG-3` | When no human is present, a run never waits and never prompts | The CLI consumer in a pipeline, and the headless MCP consumer | [The three applications](#the-three-applications) |
-| `QG-4` | A request runs as the caller that sent it, and never as another caller | The MCP consumer under the remote profile | [Identity lifetime](#identity-lifetime) |
-| `QG-5` | An LLM calls by intent, not by endpoint | The MCP consumer | `SURF-1`, [Known gaps](#known-gaps) |
-| `QG-6` | A destructive operation declares itself and names what it affects before it runs | The MCP consumer and the CLI consumer | No section yet |
+| `QR-1` | An invalid request returns an error that tells the caller what to correct | Every consumer | `VALID-2`, [Composition root](#composition-root) |
+| `QR-2` | A change in the toolkit or in a vendor API does not reach the consumer's code | The SDK consumer, and any script or agent that names a command or a tool | [Layer model](#layer-model), [Ports](#ports-and-dependency-inversion) |
+| `QR-3` | When no human is present, a run never waits and never prompts | The CLI consumer in a pipeline, and the headless MCP consumer | [The three applications](#the-three-applications) |
+| `QR-4` | A request runs as the caller that sent it, and never as another caller | The MCP consumer under the remote profile | [Identity lifetime](#identity-lifetime) |
+| `QR-5` | An LLM calls by intent, not by endpoint | The MCP consumer | `SURF-1`, [Known gaps](#known-gaps) |
+| `QR-6` | A destructive operation declares itself and names what it affects before it runs | The MCP consumer and the CLI consumer | No section yet |
 
 This document does not rank the goals, because a rank decides whose demand wins, and that decision has an owner outside this document. These trades are real:
 
-- A confirmation that the model must answer costs a second call, so `QG-6` spends what `QG-5` saves. A confirmation that the client answers costs `QG-5` nothing.
-- When no human is present, a consent dialog cannot run, so `QG-3` leaves the intent to an explicit flag.
+- A confirmation that the model must answer costs a second call, so `QR-6` spends what `QR-5` saves. A confirmation that the client answers costs `QR-5` nothing.
+- When no human is present, a consent dialog cannot run, so `QR-3` leaves the intent to an explicit flag.
 
 ## Constraints
 
@@ -85,7 +85,7 @@ That match of application to consumer decides the layer split. The SDK executes.
 
 Each application decides its own identifier form, and there is no global choice. The SDK takes numeric identifiers first. The CLI takes deterministic identifiers. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. The canonical form per tool and per argument is in [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md).
 
-The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic, which is what `QG-3` requires.
+The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic, which is what `QR-3` requires.
 
 The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag.
 
@@ -101,7 +101,7 @@ What each package depends on, and why, is in [`dependencies.md`](dependencies.md
 
 The code has a hexagonal shape with a thin core. Most of this codebase is an adapter. `pipefy-mcp-server` wraps the MCP SDK and the Pipefy SDK. `pipefy-cli` wraps Typer over the Pipefy SDK.
 
-The logic that is genuinely ours is small, so the core is small. A module that touches a framework does the work of an adapter, and it is not a leak. This shape serves `QG-2`, because a vendor change stops at the adapter that wraps it.
+The logic that is genuinely ours is small, so the core is small. A module that touches a framework does the work of an adapter, and it is not a leak. This shape serves `QR-2`, because a vendor change stops at the adapter that wraps it.
 
 Three roles:
 
@@ -131,11 +131,11 @@ An application is entered through a driving port, for example an MCP tool call o
 
 Business logic depends on an interface shaped by what it needs, and the adapter implements it. This rule names where the boundary sits, so "invert" does not mean "invert everything". The boundary is domain to infrastructure: a third-party SDK, the network, a database. Ports are not universal, and the rules that add one are `PORT-1` to `PORT-3` in [`conventions.md`](conventions.md).
 
-These are the ports the repository owns today. `GraphQLExecutor` in the SDK is a driven port over the GraphQL client. The attachment service owns `S3Uploader` and `UrlDownloader`. A test injects a fake against each. The MCP `IpaasGateway` owns an outbound HTTP chain, and a test already stands a fake in its place. Each one serves `QG-2`, because a change behind a port stops at that port.
+These are the ports the repository owns today. `GraphQLExecutor` in the SDK is a driven port over the GraphQL client. The attachment service owns `S3Uploader` and `UrlDownloader`. A test injects a fake against each. The MCP `IpaasGateway` owns an outbound HTTP chain, and a test already stands a fake in its place. Each one serves `QR-2`, because a change behind a port stops at that port.
 
 ## Composition root
 
-The composition root does two jobs at startup: it parses raw input into decisions, and it builds effects once. Raw input means the environment, a config file, and the startup flags. Parsed types cost no I/O, so we construct them freely. At startup an effect happens only here: a keychain read, a network call, or the construction of a client. Downstream code then receives a decision it can rely on, and never a raw value it must re-read. That parse is `QG-1` applied to configuration, so an invalid value fails at startup and not in the code that later reads it.
+The composition root does two jobs at startup: it parses raw input into decisions, and it builds effects once. Raw input means the environment, a config file, and the startup flags. Parsed types cost no I/O, so we construct them freely. At startup an effect happens only here: a keychain read, a network call, or the construction of a client. Downstream code then receives a decision it can rely on, and never a raw value it must re-read. That parse is `QR-1` applied to configuration, so an invalid value fails at startup and not in the code that later reads it.
 
 There is one composition root per application, not one for the repo. Each one parses its startup input at its entry point. The MCP server then centralizes the wiring in `core/runtime.py` (`McpRuntime.for_profile`). The CLI wires at its entry point, without a single runtime module. Where the wiring lives is a per-application choice.
 
@@ -151,7 +151,7 @@ Resolved once per process. The SDK takes its credential from settings or from th
 
 Resolved once per request. The MCP remote profile holds no caller credential at startup, and `session_for_request` snapshots the bearer off each request. The `pipefy-auth` package then validates that bearer in the resource-server role. `StartupIdentity` and `RequestScopedIdentity` are the two shapes in code, and both delegate to `pipefy-auth`.
 
-One rule follows, and it is what `QG-4` requires of any application here. With a per-process identity, downstream code can hold what it received. With a per-request identity, nothing caches it, and process-global state never answers a question about the caller. That is why the import-linter contract bans a `settings` import from the `tools` layer, and the full reasoning is in [`packages/mcp/CLAUDE.md`](../../packages/mcp/CLAUDE.md).
+One rule follows, and it is what `QR-4` requires of any application here. With a per-process identity, downstream code can hold what it received. With a per-request identity, nothing caches it, and process-global state never answers a question about the caller. That is why the import-linter contract bans a `settings` import from the `tools` layer, and the full reasoning is in [`packages/mcp/CLAUDE.md`](../../packages/mcp/CLAUDE.md).
 
 A caller can also carry state between calls, such as a vendor cursor or an export id. The API authorizes that value on each request. A handle that we mint ourselves obeys the same rule.
 
@@ -161,8 +161,8 @@ The map above holds today, with the exceptions below. Each entry names the artif
 
 - The framework-free core. The `core` layer of `pipefy-mcp-server` still imports `settings` and Starlette in places. The import-linter contract that locks it is written but disabled, because the pure domain has no single home module yet.
 - A port over the filesystem, the OS, the network, and the keychain. `pipefy-infra` wraps the filesystem, the OS, and the network boundary. `pipefy-auth` owns network and keychain I/O. Neither one sits behind a port that its caller owns, so the artifact is a port declared under `PORT-1` to `PORT-3`.
-- The outcome-shaped tool set, which is `QG-5`. The tool names copy the API operations today, so one user intent can cost several calls. `SURF-1` in [`conventions.md`](conventions.md) admits each replacement, and the gap closes when the tool set expresses outcomes.
-- `QG-1` does not hold end to end. The positive-id check has three homes and no owner, so a comment model accepts a negative card id today. The artifact is one owner for that check, under `PARSE-3` in [`conventions.md`](conventions.md).
+- The outcome-shaped tool set, which is `QR-5`. The tool names copy the API operations today, so one user intent can cost several calls. `SURF-1` in [`conventions.md`](conventions.md) admits each replacement, and the gap closes when the tool set expresses outcomes.
+- `QR-1` does not hold end to end. The positive-id check has three homes and no owner, so a comment model accepts a negative card id today. The artifact is one owner for that check, under `PARSE-3` in [`conventions.md`](conventions.md).
 
 ## Vocabulary
 

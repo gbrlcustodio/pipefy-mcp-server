@@ -42,9 +42,11 @@ A code example names no shipped symbol. A symbol in an example rots on the next 
 
 Neither document carries the inventory or the remediation plan for a gap. A concrete step is closeable work, so it belongs in an issue.
 
-## Generate fast-changing reference from code
+## Point at the owner of a fact
 
-A hand-maintained doc that mirrors a code list will drift. Make the code the single source of truth, and generate the doc from it: docstrings, pydantic `Field(description=...)`, the tool registry, or Typer help. Hand-author only where there is no code source, such as a concept doc. Do not keep a generated table and durable prose in the same file.
+Every fact has one owner: the code, a schema, an enforced contract, or another document. A document that restates a fact it does not own holds a copy, and that copy drifts. A reader then cannot tell which copy is current, so name the owner and point there. [`architecture.md`](architecture.md) names the import-linter contract rather than listing the layer modules, and it names the GraphQL schema rather than describing entity shape.
+
+Where the code owns a list, generate the document from that code: docstrings, pydantic `Field(description=...)`, the tool registry, or Typer help. Hand-author only where there is no code source, such as a concept doc. Do not keep a generated table and durable prose in the same file.
 
 ## Keep it small
 

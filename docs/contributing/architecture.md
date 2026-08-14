@@ -109,7 +109,7 @@ The MCP server takes the human intent as the primary input. When the client decl
 
 A destructive operation carries the same split. `QR-6` asks that the operation name what it affects before it runs, and `QR-3` asks that no run block on an answer when no human is present. Together they leave the choice to the declared capability, exactly as ambiguity does above.
 
-The path that holds today does not read that capability. A tool declares itself with `destructiveHint`, the first call returns a preview of the resource and its dependents, and only an explicit `confirm` on a second call deletes. The CLI takes `--yes`, or it prompts when a human is present. One explicit answer therefore serves the interactive case and the ambient case alike, and [Known gaps](#known-gaps) carries the design question. Two limits hold meanwhile, and [`packages/mcp/CLAUDE.md`](../../packages/mcp/CLAUDE.md) records both. The guard protects against accident and not against intent, because a caller can send `confirm` on the first call. Authorization stays the API's.
+The path that holds today does not read that capability. A tool declares itself with `destructiveHint`, the first call returns a preview of the resource and its dependents, and only an explicit `confirm` on a second call deletes. The CLI takes `--yes`, or it prompts when a human is present. One explicit answer therefore serves the interactive case and the ambient case alike, and [Known gaps](#known-gaps) carries the design question. Two limits hold meanwhile, and [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md) records both. The guard protects against accident and not against intent, because a caller can send `confirm` on the first call. Authorization stays the API's.
 
 The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag.
 
@@ -123,7 +123,7 @@ The remote profile applies a default-deny floor before any selection runs. Selec
 
 A build-time guard keys the partition to the registered tool names, with no count written down, so a new tool with no domain fails the build. That is why the partition cannot go stale.
 
-The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and profile boundaries, and the reasoning behind them, are in [`packages/mcp/CLAUDE.md`](../../packages/mcp/CLAUDE.md).
+The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and profile boundaries, and the reasoning behind them, are in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 
 ## Package decomposition
 
@@ -201,7 +201,7 @@ Resolved once per process. The SDK takes its credential from settings or from th
 
 Resolved once per request. The MCP remote profile holds no caller credential at startup, and `session_for_request` snapshots the bearer off each request. The `pipefy-auth` package then validates that bearer in the resource-server role. `StartupIdentity` and `RequestScopedIdentity` are the two shapes in code, and both delegate to `pipefy-auth`.
 
-One rule follows, and it is what `QR-4` requires of any application here. With a per-process identity, downstream code can hold what it received. With a per-request identity, nothing caches it, and process-global state never answers a question about the caller. That is why the import-linter contract bans a `settings` import from the `tools` layer, and the full reasoning is in [`packages/mcp/CLAUDE.md`](../../packages/mcp/CLAUDE.md).
+One rule follows, and it is what `QR-4` requires of any application here. With a per-process identity, downstream code can hold what it received. With a per-request identity, nothing caches it, and process-global state never answers a question about the caller. That is why the import-linter contract bans a `settings` import from the `tools` layer, and the full reasoning is in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 
 A caller can also carry state between calls, such as a vendor cursor or an export id. The API authorizes that value on each request. A handle that we mint ourselves obeys the same rule.
 

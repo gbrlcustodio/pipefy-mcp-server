@@ -117,7 +117,7 @@ The MCP layer prefers a tool that expresses an outcome over one tool per API end
 
 A deployment decides how many tools a model sees, and that decision is separate from how many the catalog holds. `QR-9` is the requirement.
 
-Two axes classify the catalog. A domain is the one subject a tool is about, and the eight domains partition it, so every registered tool has exactly one. A profile is a journey-sized selection that crosses domains, and the six profiles overlap. `--toolsets` and `PIPEFY_MCP_TOOLSETS` name either kind, and an unknown name is a usage error.
+Two axes classify the catalog. A domain is the one subject a tool is about, and the eight domains partition it, so every registered tool has exactly one. A profile is a journey-sized selection that crosses domains, and the six profiles overlap. `--toolsets` and `PIPEFY_MCP_TOOLSETS` name either kind, or one of four keywords. `all` and `default` mean no curation, and `power` and `architect` name the same branch. An unknown name is a usage error.
 
 The remote profile applies a default-deny floor before any selection runs. Selection only removes, so it narrows within the floor and never widens past it. The `power` branch takes a different route. It withdraws the curated tools from the listing and registers four catalog meta-tools over them, alongside the raw GraphQL tools. The model-facing set is then nine tools whatever the catalog holds, which is `QR-9` met at its strongest.
 
@@ -147,7 +147,7 @@ Three roles:
 
 The five layers of the MCP package map onto those three roles, and the five names come from its import-linter contract.
 
-- `server` is the composition root.
+- `server` and `core/runtime.py` are the composition root.
 - `tools` are driving adapters.
 - `core` holds the domain and the runtime wiring today.
 - The `auth` layer is a driven adapter over network and keychain I/O.
@@ -159,7 +159,7 @@ The CLI has no such layers, so this mapping belongs to the MCP package alone. Th
 
 Imports point inward. An outer role can import an inner one, never the reverse.
 
-Between packages, ruff `TID251` bans the inward-breaking imports. Each package lists the modules it must not import. Within the MCP package, import-linter holds the layer order that [Layer model](#layer-model) names. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read. The enforced spine is the acyclic import chain that holds today. It is recorded in each package's `pyproject.toml`, not restated here.
+Between packages, ruff `TID251` bans the inward-breaking imports. Each package lists the modules it must not import. Within the MCP package, import-linter holds the layer order that [Layer model](#layer-model) names. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read or as a startup type import. The enforced spine is the acyclic import chain that holds today. It is recorded in each package's `pyproject.toml`, not restated here.
 
 An application is entered through a driving port, for example an MCP tool call or a CLI command. A shared support library is not entered this way. It is called as a library.
 

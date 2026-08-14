@@ -17,6 +17,7 @@ from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.portal_tools import PortalTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 _PORTAL_LIST_NODE = {
     "id": "portal-uuid-1",
@@ -632,63 +633,58 @@ async def test_delete_portal_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-async def test_delete_portal_success(
-    portal_session, mock_portal_client, extract_payload
-):
+async def test_delete_portal_success(portal_session, mock_portal_client):
     mock_portal_client.delete_portal = AsyncMock(
         return_value={"deleteInterface": {"success": True}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_portal",
             {"portal_uuid": "portal-to-delete", "confirm": True},
         )
 
-    assert result.is_error is False
     mock_portal_client.delete_portal.assert_awaited_once_with("portal-to-delete")
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["deleteInterface"]["success"] is True
 
 
 @pytest.mark.anyio
 async def test_delete_portal_fails_when_success_false(
-    portal_session, mock_portal_client, extract_payload
+    portal_session, mock_portal_client
 ):
     mock_portal_client.delete_portal = AsyncMock(
         return_value={"deleteInterface": {"success": False}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_portal",
             {"portal_uuid": "portal-to-delete", "confirm": True},
         )
 
-    assert result.is_error is False
     mock_portal_client.delete_portal.assert_awaited_once_with("portal-to-delete")
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed to delete portal" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
 async def test_delete_portal_permission_denied_returns_actionable_error(
-    portal_session, mock_portal_client, extract_payload
+    portal_session, mock_portal_client
 ):
     mock_portal_client.delete_portal = AsyncMock(
         side_effect=ValueError(_PORTAL_PERMISSION_DENIED_MSG)
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_portal",
             {"portal_uuid": "portal-to-delete", "confirm": True},
         )
 
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
     assert "create_portal" in message or "manage_portals" in message
@@ -904,15 +900,14 @@ async def test_delete_portal_page_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-async def test_delete_portal_page_success(
-    portal_session, mock_portal_client, extract_payload
-):
+async def test_delete_portal_page_success(portal_session, mock_portal_client):
     mock_portal_client.delete_portal_page = AsyncMock(
         return_value={"deletePage": {"success": True}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_portal_page",
             {
                 "portal_uuid": _PORTAL_UUID,
@@ -921,25 +916,24 @@ async def test_delete_portal_page_success(
             },
         )
 
-    assert result.is_error is False
     mock_portal_client.delete_portal_page.assert_awaited_once_with(
         _PORTAL_UUID, _PAGE_UUID
     )
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["deletePage"]["success"] is True
 
 
 @pytest.mark.anyio
 async def test_delete_portal_page_fails_when_success_false(
-    portal_session, mock_portal_client, extract_payload
+    portal_session, mock_portal_client
 ):
     mock_portal_client.delete_portal_page = AsyncMock(
         return_value={"deletePage": {"success": False}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_portal_page",
             {
                 "portal_uuid": _PORTAL_UUID,
@@ -948,8 +942,6 @@ async def test_delete_portal_page_fails_when_success_false(
             },
         )
 
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed to delete" in tool_error_message(payload).lower()
 
@@ -1409,15 +1401,14 @@ async def test_delete_portal_element_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-async def test_delete_portal_element_success(
-    portal_session, mock_portal_client, extract_payload
-):
+async def test_delete_portal_element_success(portal_session, mock_portal_client):
     mock_portal_client.delete_portal_element = AsyncMock(
         return_value={"deleteElement": {"success": True}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_portal_element",
             {
                 "element_id": _ELEMENT_UUID,
@@ -1426,25 +1417,24 @@ async def test_delete_portal_element_success(
             },
         )
 
-    assert result.is_error is False
     mock_portal_client.delete_portal_element.assert_awaited_once_with(
         _ELEMENT_UUID, _PAGE_UUID
     )
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["deleteElement"]["success"] is True
 
 
 @pytest.mark.anyio
 async def test_delete_portal_element_fails_when_success_false(
-    portal_session, mock_portal_client, extract_payload
+    portal_session, mock_portal_client
 ):
     mock_portal_client.delete_portal_element = AsyncMock(
         return_value={"deleteElement": {"success": False}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_portal_element",
             {
                 "element_id": _ELEMENT_UUID,
@@ -1453,8 +1443,6 @@ async def test_delete_portal_element_fails_when_success_false(
             },
         )
 
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed to delete" in tool_error_message(payload).lower()
 
@@ -1832,10 +1820,13 @@ async def test_sub_portal_internal_api_permission_denied_returns_actionable_erro
     )
 
     async with portal_session as session:
-        result = await session.call_tool(tool_name, tool_args)
+        if tool_args.get("confirm"):
+            payload = await confirm_after_preview(session, tool_name, tool_args)
+        else:
+            result = await session.call_tool(tool_name, tool_args)
+            assert result.is_error is False
+            payload = extract_payload(result)
 
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     message = tool_error_message(payload).lower()
     assert "create_portal" in message or "manage_portals" in message
@@ -1932,15 +1923,14 @@ async def test_delete_sub_portal_element_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-async def test_delete_sub_portal_element_success(
-    portal_session, mock_portal_client, extract_payload
-):
+async def test_delete_sub_portal_element_success(portal_session, mock_portal_client):
     mock_portal_client.delete_sub_portal_element = AsyncMock(
         return_value={"deleteSubPortalElement": {"success": True}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_sub_portal_element",
             {
                 "portal_uuid": _MAIN_PORTAL_UUID,
@@ -1949,26 +1939,25 @@ async def test_delete_sub_portal_element_success(
             },
         )
 
-    assert result.is_error is False
     mock_portal_client.delete_sub_portal_element.assert_awaited_once_with(
         _MAIN_PORTAL_UUID,
         _FORMS_ELEMENT_ID,
     )
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["deleteSubPortalElement"]["success"] is True
 
 
 @pytest.mark.anyio
 async def test_delete_sub_portal_element_fails_when_success_false(
-    portal_session, mock_portal_client, extract_payload
+    portal_session, mock_portal_client
 ):
     mock_portal_client.delete_sub_portal_element = AsyncMock(
         return_value={"deleteSubPortalElement": {"success": False}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_sub_portal_element",
             {
                 "portal_uuid": _MAIN_PORTAL_UUID,
@@ -1977,8 +1966,6 @@ async def test_delete_sub_portal_element_fails_when_success_false(
             },
         )
 
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed" in tool_error_message(payload).lower()
 
@@ -2015,42 +2002,38 @@ async def test_delete_sub_portal_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-async def test_delete_sub_portal_success(
-    portal_session, mock_portal_client, extract_payload
-):
+async def test_delete_sub_portal_success(portal_session, mock_portal_client):
     mock_portal_client.delete_sub_portal = AsyncMock(
         return_value={"deleteSubPortalInterface": {"success": True}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_sub_portal",
             {"sub_portal_uuid": _SUB_PORTAL_UUID, "confirm": True},
         )
 
-    assert result.is_error is False
     mock_portal_client.delete_sub_portal.assert_awaited_once_with(_SUB_PORTAL_UUID)
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["deleteSubPortalInterface"]["success"] is True
 
 
 @pytest.mark.anyio
 async def test_delete_sub_portal_fails_when_success_false(
-    portal_session, mock_portal_client, extract_payload
+    portal_session, mock_portal_client
 ):
     mock_portal_client.delete_sub_portal = AsyncMock(
         return_value={"deleteSubPortalInterface": {"success": False}}
     )
 
     async with portal_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_sub_portal",
             {"sub_portal_uuid": _SUB_PORTAL_UUID, "confirm": True},
         )
 
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed" in tool_error_message(payload).lower()
 

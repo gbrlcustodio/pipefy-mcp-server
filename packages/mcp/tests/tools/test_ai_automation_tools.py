@@ -15,6 +15,7 @@ from tools.conftest import (
     assert_invalid_arguments_envelope,
     build_tool_test_server,
 )
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -411,70 +412,64 @@ class TestDeleteAiAutomation:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_automation.return_value = {"success": True}
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": "rm-1", "confirm": True},
             )
-        assert result.is_error is False
         mock_pipefy_client.delete_automation.assert_awaited_once_with("rm-1")
-        p = extract_payload(result)
-        assert p["success"] is True
+        assert payload["success"] is True
 
     async def test_graphql_error(
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_automation.side_effect = PipefyGraphQLError(
             [{"message": "forbidden"}]
         )
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": "z", "confirm": True},
             )
-        p = extract_payload(result)
-        assert p["success"] is False
-        assert "forbidden" in tool_error_message(p)
+        assert payload["success"] is False
+        assert "forbidden" in tool_error_message(payload)
 
     async def test_works_without_oauth_config(
         self,
         client_session_no_ai,
         mock_pipefy_client_no_ai,
-        extract_payload,
     ):
         """Delete uses public GraphQL, not the Internal API. OAuth is not required."""
         mock_pipefy_client_no_ai.delete_automation.return_value = {"success": True}
         async with client_session_no_ai as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": "1", "confirm": True},
             )
-        assert result.is_error is False
         mock_pipefy_client_no_ai.delete_automation.assert_awaited_once_with("1")
-        p = extract_payload(result)
-        assert p["success"] is True
+        assert payload["success"] is True
 
     async def test_api_success_false_returns_error_payload(
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_automation.return_value = {"success": False}
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": "x", "confirm": True},
             )
-        p = extract_payload(result)
-        assert p["success"] is False
-        assert "did not succeed" in tool_error_message(p).lower()
+        assert payload["success"] is False
+        assert "did not succeed" in tool_error_message(payload).lower()
 
     async def test_rejects_invalid_automation_id(
         self,
@@ -1017,15 +1012,15 @@ class TestPipefyIdCoercion:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_automation.return_value = {"success": True}
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": 501, "confirm": True},
             )
-        assert extract_payload(result)["success"] is True
+        assert payload["success"] is True
         mock_pipefy_client.delete_automation.assert_awaited_once_with("501")
 
 

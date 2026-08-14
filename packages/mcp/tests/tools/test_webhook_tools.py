@@ -13,6 +13,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -496,42 +497,36 @@ async def test_delete_webhook_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-async def test_delete_webhook_success(
-    webhook_session, mock_webhook_client, extract_payload
-):
+async def test_delete_webhook_success(webhook_session, mock_webhook_client):
     mock_webhook_client.delete_webhook.return_value = {
         "deleteWebhook": {"success": True}
     }
 
     async with webhook_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_webhook",
             {"webhook_id": "webhook-1", "confirm": True},
         )
 
-    assert result.is_error is False
     mock_webhook_client.delete_webhook.assert_awaited_once_with("webhook-1")
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["result"]["deleteWebhook"]["success"] is True
 
 
 @pytest.mark.anyio
-async def test_delete_webhook_graphql_error(
-    webhook_session, mock_webhook_client, extract_payload
-):
+async def test_delete_webhook_graphql_error(webhook_session, mock_webhook_client):
     mock_webhook_client.delete_webhook.side_effect = PipefyGraphQLError(
         [{"message": "webhook not found"}]
     )
 
     async with webhook_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_webhook",
             {"webhook_id": "w1", "confirm": True},
         )
 
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "webhook not found" in tool_error_message(payload).lower()
 

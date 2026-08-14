@@ -13,6 +13,20 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.table_tools import TableTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
+
+
+def _assert_destructive_preview(payload, *, resource):
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    assert payload["resource"] == resource
+    message = payload["message"]
+    assert "confirm=True" in message
+    assert message.index("explicit approval") < message.index("confirm=True")
+    token = payload["confirmation_token"]
+    assert isinstance(token, str)
+    assert token.startswith("v1.")
+    assert token != "v1."
 
 
 @pytest.fixture
@@ -541,44 +555,32 @@ async def test_delete_table_preview(table_session, mock_table_client, extract_pa
 
     mock_table_client.delete_table.assert_not_called()
     payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload["requires_confirmation"] is True
-    assert payload["resource"] == "table 'Cat' (ID: 5)"
+    _assert_destructive_preview(payload, resource="table 'Cat' (ID: 5)")
 
 
 @pytest.mark.anyio
-async def test_delete_table_confirm_success(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_confirm_success(table_session, mock_table_client):
     mock_table_client.get_table.return_value = {"table": {"id": "5", "name": "Cat"}}
     mock_table_client.delete_table.return_value = {"deleteTable": {"success": True}}
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table",
-            {"table_id": 5, "confirm": True},
-        )
+        payload = await confirm_after_preview(session, "delete_table", {"table_id": 5})
 
     mock_table_client.delete_table.assert_awaited_once_with("5")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
-async def test_delete_table_graphql_error_on_confirm(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_graphql_error_on_confirm(table_session, mock_table_client):
     mock_table_client.get_table.return_value = {"table": {"id": "1", "name": "X"}}
     mock_table_client.delete_table.side_effect = PipefyGraphQLError(
         [{"message": "cannot"}]
     )
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table",
-            {"table_id": 1, "confirm": True},
-        )
+        payload = await confirm_after_preview(session, "delete_table", {"table_id": 1})
 
-    assert extract_payload(result)["success"] is False
+    assert payload["success"] is False
 
 
 @pytest.mark.anyio
@@ -655,37 +657,32 @@ async def test_update_table_record_graphql_error(
 
 
 @pytest.mark.anyio
-async def test_delete_table_record_success(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_record_success(table_session, mock_table_client):
     mock_table_client.delete_table_record.return_value = {
         "deleteTableRecord": {"success": True},
     }
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table_record",
-            {"record_id": 99, "confirm": True},
+        payload = await confirm_after_preview(
+            session, "delete_table_record", {"record_id": 99}
         )
 
     mock_table_client.delete_table_record.assert_awaited_once_with("99")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
-async def test_delete_table_record_graphql_error(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_record_graphql_error(table_session, mock_table_client):
     mock_table_client.delete_table_record.side_effect = PipefyGraphQLError(
         [{"message": "no"}]
     )
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table_record", {"record_id": 1, "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_table_record", {"record_id": 1}
         )
 
-    assert extract_payload(result)["success"] is False
+    assert payload["success"] is False
 
 
 @pytest.mark.anyio
@@ -800,37 +797,36 @@ async def test_update_table_field_graphql_error(
 
 
 @pytest.mark.anyio
-async def test_delete_table_field_success(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_field_success(table_session, mock_table_client):
     mock_table_client.delete_table_field.return_value = {
         "deleteTableField": {"success": True},
     }
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table_field", {"field_id": 88, "table_id": "tbl_1", "confirm": True}
+        payload = await confirm_after_preview(
+            session,
+            "delete_table_field",
+            {"field_id": 88, "table_id": "tbl_1"},
         )
 
     mock_table_client.delete_table_field.assert_awaited_once_with("88", "tbl_1")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
-async def test_delete_table_field_graphql_error(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_field_graphql_error(table_session, mock_table_client):
     mock_table_client.delete_table_field.side_effect = PipefyGraphQLError(
         [{"message": "nope"}]
     )
 
     async with table_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_table_field",
-            {"field_id": "x", "table_id": "tbl_1", "confirm": True},
+            {"field_id": "x", "table_id": "tbl_1"},
         )
 
-    assert extract_payload(result)["success"] is False
+    assert payload["success"] is False
 
 
 @pytest.mark.anyio
@@ -1203,8 +1199,7 @@ async def test_delete_table_record_preview_without_confirm(
 
     mock_table_client.delete_table_record.assert_not_called()
     payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload.get("requires_confirmation") is True
+    _assert_destructive_preview(payload, resource="table record (ID: 99)")
 
 
 # ---------------------------------------------------------------------------
@@ -1365,8 +1360,43 @@ async def test_delete_table_field_preview_without_confirm(
 
     mock_table_client.delete_table_field.assert_not_called()
     payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload.get("requires_confirmation") is True
+    _assert_destructive_preview(payload, resource="table field (ID: slug-1)")
+
+
+@pytest.mark.anyio
+async def test_delete_table_field_rejects_token_when_table_id_differs(
+    table_session, mock_table_client, extract_payload
+):
+    mock_table_client.delete_table_field.return_value = {
+        "deleteTableField": {"success": True},
+    }
+
+    async with table_session as session:
+        preview = await session.call_tool(
+            "delete_table_field",
+            {"field_id": "prioridade", "table_id": "tbl_A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_table_field",
+            {
+                "field_id": "prioridade",
+                "table_id": "tbl_B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_table_client.delete_table_field.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_table_field",
+            {"field_id": "prioridade", "table_id": "tbl_A"},
+        )
+
+    mock_table_client.delete_table_field.assert_awaited_once_with("prioridade", "tbl_A")
+    assert matched["success"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -1574,19 +1604,13 @@ async def test_delete_table_graphql_error_on_lookup(
 
 
 @pytest.mark.anyio
-async def test_delete_table_confirm_returns_false(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_confirm_returns_false(table_session, mock_table_client):
     mock_table_client.get_table.return_value = {"table": {"id": "5", "name": "T"}}
     mock_table_client.delete_table.return_value = {"deleteTable": {"success": False}}
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table",
-            {"table_id": 5, "confirm": True},
-        )
+        payload = await confirm_after_preview(session, "delete_table", {"table_id": 5})
 
-    payload = extract_payload(result)
     assert payload["success"] is False
 
 

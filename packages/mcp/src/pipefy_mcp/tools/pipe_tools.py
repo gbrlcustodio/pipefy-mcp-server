@@ -512,18 +512,17 @@ class PipeTools:
             ctx: Context,
             comment_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> DeleteCommentPayload:
             """Delete a comment from Pipefy.
 
-            Two-step operation:
-
-            1. **Preview** — call with ``confirm=False`` (default). Returns a preview payload;
-               nothing is deleted. Elicitation is **not** used to authorize deletion.
-            2. **Execute** — call again with ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 comment_id: The ID of the comment to delete.
-                confirm: Must be ``True`` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             try:
@@ -538,6 +537,9 @@ class PipeTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"comment (ID: {delete_input.comment_id})",
+                resource_identity={"comment_id": delete_input.comment_id},
+                tool_name="delete_comment",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -564,13 +566,13 @@ class PipeTools:
             parent_id: PipefyId,
             source_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict:
             """Remove a link between two related cards.
 
             ``source_id`` is the **pipe relation** id from ``get_pipe_relations`` (same as
-            ``create_card_relation``). Two-step flow: preview with ``confirm=False`` (default),
-            then execute with ``confirm=True`` after explicit approval.
+            ``create_card_relation``). Echo ``confirmation_token`` from the preview on step 2.
 
             The ``deleteCardRelation`` mutation is only available on the Internal API,
             not the public GraphQL schema; it runs with the session's credential like
@@ -580,7 +582,8 @@ class PipeTools:
                 child_id: Child card ID in the relation.
                 parent_id: Parent card ID in the relation.
                 source_id: Pipe relation ID defining the pipe-to-pipe link.
-                confirm: Must be ``True`` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
 
             Returns:
@@ -608,6 +611,13 @@ class PipeTools:
                 resource_descriptor=(
                     f"card relation (child: {cid}, parent: {pid}, source: {sid})"
                 ),
+                resource_identity={
+                    "child_id": cid,
+                    "parent_id": pid,
+                    "source_id": sid,
+                },
+                tool_name="delete_card_relation",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -1335,20 +1345,19 @@ class PipeTools:
             ctx: Context,
             card_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> DeleteCardPayload:
             """Delete a card from Pipefy.
 
-            Two-step operation:
-
-            1. **Preview** — call with ``confirm=False`` (default). Returns a preview payload;
-               nothing is deleted. Elicitation is **not** used to authorize deletion (automated
-               clients may auto-accept prompts).
-            2. **Execute** — call again with ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Elicitation is **not**
+            used to authorize deletion (automated clients may auto-accept prompts).
 
             Args:
                 card_id: The ID of the card to delete.
-                confirm: Must be ``True`` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When true, appends GraphQL error codes and correlation_id to the error message.
 
             Returns:
@@ -1385,6 +1394,9 @@ class PipeTools:
                 resource_descriptor=(
                     f"card '{card_title}' (ID: {card_id_str}) from pipe '{pipe_name}'"
                 ),
+                resource_identity={"card_id": card_id_str},
+                tool_name="delete_card",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

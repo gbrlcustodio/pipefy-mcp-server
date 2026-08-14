@@ -12,6 +12,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.relation_tools import RelationTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -249,40 +250,39 @@ async def test_update_pipe_relation_graphql_error(
 
 
 @pytest.mark.anyio
-async def test_delete_pipe_relation_success(
-    relation_session, mock_relation_client, extract_payload
-):
+async def test_delete_pipe_relation_success(relation_session, mock_relation_client):
     mock_relation_client.delete_pipe_relation.return_value = {
         "deletePipeRelation": {"success": True},
     }
 
     async with relation_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_pipe_relation",
             {"relation_id": 100, "confirm": True},
         )
 
-    assert result.is_error is False
     mock_relation_client.delete_pipe_relation.assert_awaited_once_with("100")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
 async def test_delete_pipe_relation_graphql_error(
-    relation_session, mock_relation_client, extract_payload
+    relation_session, mock_relation_client
 ):
     mock_relation_client.delete_pipe_relation.side_effect = PipefyGraphQLError(
         [{"message": "denied"}]
     )
 
     async with relation_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_pipe_relation",
             {"relation_id": 1, "confirm": True},
         )
 
-    assert extract_payload(result)["success"] is False
-    assert "denied" in tool_error_message(extract_payload(result))
+    assert payload["success"] is False
+    assert "denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

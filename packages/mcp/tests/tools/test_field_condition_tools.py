@@ -13,6 +13,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 _MINIMAL_CREATE_CONDITION = {
     "expressions": [
@@ -35,6 +36,7 @@ def mock_pipefy_client():
     client.get_field_condition = AsyncMock()
     client.create_field_condition = AsyncMock()
     client.update_field_condition = AsyncMock()
+    client.delete_field_condition = AsyncMock()
     client.get_phase_fields = AsyncMock(return_value={"fields": []})
     return client
 
@@ -821,3 +823,16 @@ class TestRequiredHiddenLint:
         assert payload["success"] is True
         mock_pipefy_client.update_field_condition.assert_awaited_once()
         mock_pipefy_client.get_phase_fields.assert_awaited_once_with(phase_id)
+
+
+@pytest.mark.anyio
+class TestDeleteFieldCondition:
+    async def test_success(self, client_session, mock_pipefy_client):
+        mock_pipefy_client.delete_field_condition.return_value = {"success": True}
+        async with client_session as session:
+            payload = await confirm_after_preview(
+                session, "delete_field_condition", {"condition_id": "cond-9"}
+            )
+        mock_pipefy_client.delete_field_condition.assert_awaited_once_with("cond-9")
+        assert payload["success"] is True
+        assert payload.get("message")

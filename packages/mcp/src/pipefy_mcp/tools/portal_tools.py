@@ -230,16 +230,18 @@ class PortalTools:
             ctx: Context,
             portal_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a portal interface (irreversible).
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Elicitation does not authorize
             deletion (only ``confirm=True`` does).
 
             Args:
                 portal_uuid: Portal interface UUID to delete.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
@@ -250,6 +252,9 @@ class PortalTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"portal (UUID: {portal_uuid})",
+                resource_identity={"portal_uuid": portal_uuid},
+                tool_name="delete_portal",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -400,16 +405,18 @@ class PortalTools:
             portal_uuid: str,
             page_id: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a portal page (irreversible).
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 portal_uuid: Parent portal interface UUID.
                 page_id: Page UUID to delete.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
@@ -427,6 +434,9 @@ class PortalTools:
                 resource_descriptor=(
                     f"portal page (UUID: {page_id}) in portal (UUID: {portal_uuid})"
                 ),
+                resource_identity={"page_id": page_id, "portal_uuid": portal_uuid},
+                tool_name="delete_portal_page",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -682,16 +692,18 @@ class PortalTools:
             element_id: str,
             page_id: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a portal page element (irreversible).
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute
-            with ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 element_id: Element UUID to delete.
                 page_id: Parent page UUID.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             element_id, err = validate_tool_id(element_id, "element_id")
@@ -709,6 +721,9 @@ class PortalTools:
                 resource_descriptor=(
                     f"portal element (UUID: {element_id}) on page (UUID: {page_id})"
                 ),
+                resource_identity={"element_id": element_id, "page_id": page_id},
+                tool_name="delete_portal_element",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -955,17 +970,19 @@ class PortalTools:
             portal_uuid: str,
             element_id: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Detach sub-portal wiring from a main portal page element.
 
-            Two-step operation: preview with ``confirm=False`` (default), then
-            execute with ``confirm=True`` after explicit human approval. Uses
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Uses
             ``deleteSubPortalElement`` (internal API).
 
             Args:
                 portal_uuid: Main portal interface UUID.
                 element_id: Page element UUID to detach.
-                confirm: Set to True to execute the detach (step 2).
+                confirm: Set to True with the preview token to execute the detach (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             ids, err = validate_tool_ids(
@@ -984,6 +1001,12 @@ class PortalTools:
                     f"sub-portal element link (element UUID: {ids['element_id']}) "
                     f"in portal (UUID: {ids['portal_uuid']})"
                 ),
+                resource_identity={
+                    "element_id": ids["element_id"],
+                    "portal_uuid": ids["portal_uuid"],
+                },
+                tool_name="delete_sub_portal_element",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -1016,16 +1039,18 @@ class PortalTools:
             ctx: Context,
             sub_portal_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a sub-portal entity (irreversible).
 
-            Two-step operation: preview with ``confirm=False`` (default), then
-            execute with ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
             Removes the sub-portal interface via ``deleteSubPortalInterface``.
 
             Args:
                 sub_portal_uuid: Sub-portal UUID to delete permanently.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             ids, err = validate_tool_ids({"sub_portal_uuid": sub_portal_uuid})
@@ -1038,6 +1063,9 @@ class PortalTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"sub-portal (UUID: {ids['sub_portal_uuid']})",
+                resource_identity={"sub_portal_uuid": ids["sub_portal_uuid"]},
+                tool_name="delete_sub_portal",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

@@ -430,19 +430,20 @@ class LlmProviderTools:
             provider_id: str,
             organization_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a custom (BYOM) LLM provider permanently. This action is irreversible. Requires manage_ai_providers and an eligible plan.
 
-            Two-step operation: preview with `confirm=False` (default), then execute
-            with `confirm=True` after explicit human approval. Elicitation does not
-            authorize deletion (only `confirm=True` does). Check
+            Two-step operation: preview with `confirm=False` (default), then echo
+            `confirmation_token` from the preview on step 2. Check
             `get_llm_provider_dependencies` first — owners that still reference the
             provider are blockers.
 
             Args:
                 provider_id: Provider ID to delete (from `get_llm_providers`).
                 organization_uuid: Organization UUID (not the numeric ID).
-                confirm: Must be `True` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             provider_id, id_err = validate_tool_id(provider_id, "provider_id")
@@ -451,18 +452,25 @@ class LlmProviderTools:
             err = _blank_error(organization_uuid, "organization_uuid")
             if err is not None:
                 return err
+            organization_uuid = organization_uuid.strip()
 
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"LLM provider (ID: {provider_id})",
+                resource_identity={
+                    "provider_id": provider_id,
+                    "organization_uuid": organization_uuid,
+                },
+                tool_name="delete_llm_provider",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
 
             try:
                 result = await client.delete_llm_provider(
-                    provider_id, organization_uuid.strip()
+                    provider_id, organization_uuid
                 )
             except Exception as exc:  # noqa: BLE001
                 return _provider_tool_error_from_exception(exc)

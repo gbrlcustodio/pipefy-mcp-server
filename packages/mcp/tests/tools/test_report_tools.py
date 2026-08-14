@@ -13,6 +13,7 @@ from pipefy_sdk.report_filter_preflight import EXAMPLE_PHASE_FILTER
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.report_tools import ReportTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 GOLDEN_REPORT_PHASE_FILTER = {
     **EXAMPLE_PHASE_FILTER,
@@ -589,21 +590,17 @@ async def test_update_pipe_report_success(
 
 
 @pytest.mark.anyio
-async def test_delete_pipe_report_success(
-    report_session, mock_report_client, extract_payload
-):
+async def test_delete_pipe_report_success(report_session, mock_report_client):
     mock_report_client.delete_pipe_report.return_value = {
         "deletePipeReport": {"success": True}
     }
 
     async with report_session as session:
-        result = await session.call_tool(
-            "delete_pipe_report", {"report_id": "r10", "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_pipe_report", {"report_id": "r10", "confirm": True}
         )
 
-    assert result.is_error is False
     mock_report_client.delete_pipe_report.assert_awaited_once_with("r10")
-    payload = extract_payload(result)
     assert payload["success"] is True
 
 
@@ -664,21 +661,17 @@ async def test_update_organization_report_success(
 
 
 @pytest.mark.anyio
-async def test_delete_organization_report_success(
-    report_session, mock_report_client, extract_payload
-):
+async def test_delete_organization_report_success(report_session, mock_report_client):
     mock_report_client.delete_organization_report.return_value = {
         "deleteOrganizationReport": {"success": True}
     }
 
     async with report_session as session:
-        result = await session.call_tool(
-            "delete_organization_report", {"report_id": "or5", "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_organization_report", {"report_id": "or5", "confirm": True}
         )
 
-    assert result.is_error is False
     mock_report_client.delete_organization_report.assert_awaited_once_with("or5")
-    payload = extract_payload(result)
     assert payload["success"] is True
 
 
@@ -1545,19 +1538,16 @@ async def test_update_pipe_report_graphql_error(
 
 
 @pytest.mark.anyio
-async def test_delete_pipe_report_graphql_error(
-    report_session, mock_report_client, extract_payload
-):
+async def test_delete_pipe_report_graphql_error(report_session, mock_report_client):
     mock_report_client.delete_pipe_report.side_effect = PipefyGraphQLError(
         [{"message": "delete denied"}]
     )
 
     async with report_session as session:
-        result = await session.call_tool(
-            "delete_pipe_report", {"report_id": "r10", "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_pipe_report", {"report_id": "r10", "confirm": True}
         )
 
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "delete denied" in tool_error_message(payload)
 
@@ -1601,18 +1591,17 @@ async def test_update_organization_report_graphql_error(
 
 @pytest.mark.anyio
 async def test_delete_organization_report_graphql_error(
-    report_session, mock_report_client, extract_payload
+    report_session, mock_report_client
 ):
     mock_report_client.delete_organization_report.side_effect = PipefyGraphQLError(
         [{"message": "org delete failed"}]
     )
 
     async with report_session as session:
-        result = await session.call_tool(
-            "delete_organization_report", {"report_id": "or5", "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_organization_report", {"report_id": "or5", "confirm": True}
         )
 
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "org delete failed" in tool_error_message(payload)
 

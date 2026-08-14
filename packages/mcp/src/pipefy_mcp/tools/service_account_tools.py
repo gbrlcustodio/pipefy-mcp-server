@@ -180,20 +180,21 @@ class ServiceAccountTools:
             organization_uuid: str,
             service_account_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Permanently delete an organization service account.
 
-            Two-step operation: preview with ``confirm=False`` (default), then
-            execute with ``confirm=True`` after explicit human approval. Deleting
-            the account revokes its credentials — any integration using it stops
-            working.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Deleting the account
+            revokes its credentials — any integration using it stops working.
 
             Args:
                 organization_uuid: The organization UUID.
                 service_account_uuid: The service account UUID (from
                     `create_service_account`).
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -210,19 +211,27 @@ class ServiceAccountTools:
                     "Invalid 'service_account_uuid': provide the service account UUID.",
                     code="INVALID_ARGUMENTS",
                 )
+            organization_uuid = organization_uuid.strip()
+            service_account_uuid = service_account_uuid.strip()
 
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
-                resource_descriptor=f"service account {service_account_uuid.strip()}",
+                resource_descriptor=f"service account {service_account_uuid}",
+                resource_identity={
+                    "service_account_uuid": service_account_uuid,
+                    "organization_uuid": organization_uuid,
+                },
+                tool_name="delete_service_account",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
 
             try:
                 raw = await client.delete_service_account(
-                    organization_uuid=organization_uuid.strip(),
-                    service_account_uuid=service_account_uuid.strip(),
+                    organization_uuid=organization_uuid,
+                    service_account_uuid=service_account_uuid,
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_tool_graphql_error(

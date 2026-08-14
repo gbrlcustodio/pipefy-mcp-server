@@ -12,6 +12,7 @@ from pipefy_sdk import AutomationConditionInput, PipefyClient, PipefyGraphQLErro
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.automation_tools import AutomationTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -784,38 +785,35 @@ async def test_update_automation_error(
 
 
 @pytest.mark.anyio
-async def test_delete_automation_success(
-    automation_session, mock_automation_client, extract_payload
-):
+async def test_delete_automation_success(automation_session, mock_automation_client):
     mock_automation_client.delete_automation.return_value = {"success": True}
 
     async with automation_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_automation",
             {"automation_id": "rm-1", "confirm": True, "debug": False},
         )
 
-    assert result.is_error is False
     mock_automation_client.delete_automation.assert_awaited_once_with("rm-1")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
-async def test_delete_automation_error(
-    automation_session, mock_automation_client, extract_payload
-):
+async def test_delete_automation_error(automation_session, mock_automation_client):
     mock_automation_client.delete_automation.side_effect = PipefyGraphQLError(
         [{"message": "forbidden"}]
     )
 
     async with automation_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_automation",
             {"automation_id": "z", "confirm": True},
         )
 
-    assert extract_payload(result)["success"] is False
-    assert "forbidden" in tool_error_message(extract_payload(result))
+    assert payload["success"] is False
+    assert "forbidden" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

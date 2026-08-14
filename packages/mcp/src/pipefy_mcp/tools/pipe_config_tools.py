@@ -240,16 +240,18 @@ class PipeConfigTools:
             ctx: Context,
             pipe_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a pipe permanently.
 
             Without confirmation, returns a preview of the pipe and does not delete.
-            Always confirm the impact with the human user before calling with confirm=True.
+            Echo ``confirmation_token`` from the preview on step 2.
 
             Args:
                 pipe_id: Pipe ID to delete.
-                confirm: When True, performs the deletion after explicit user confirmation.
+                confirm: When True with the preview token, performs the deletion.
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -283,6 +285,9 @@ class PipeConfigTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"pipe '{pipe_name}' (ID: {pipe_id_str})",
+                resource_identity={"pipe_id": pipe_id_str},
+                tool_name="delete_pipe",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -726,20 +731,21 @@ class PipeConfigTools:
             phase_id: PipefyId,
             pipe_id: PipefyId | None = None,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a phase permanently.
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 phase_id: Phase ID to delete.
                 pipe_id: Pipe the phase belongs to; when set, the preview may list conditions,
                     automations targeting this phase, a card count, and phase field count
                     (``confirm=False`` only; extra API calls).
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -764,6 +770,9 @@ class PipeConfigTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"phase (ID: {phase_id})",
+                resource_identity={"phase_id": phase_id},
+                tool_name="delete_phase",
+                confirmation_token=confirmation_token,
                 dependents_resolver=_resolve_phase_deps,
             )
             if guard is not None:
@@ -992,6 +1001,7 @@ class PipeConfigTools:
             ctx: Context,
             field_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             pipe_uuid: str | None = None,
             pipe_id: PipefyId | None = None,
             phase_id: PipefyId | None = None,
@@ -999,9 +1009,8 @@ class PipeConfigTools:
         ) -> dict[str, Any]:
             """Delete a phase field permanently.
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             ``field_id`` is the field slug (e.g. ``"prioridade"``) or uuid.
             When the slug is shared across phases, pass ``pipe_uuid`` to
@@ -1022,7 +1031,8 @@ class PipeConfigTools:
             Args:
                 field_id: Field slug or uuid (from create_phase_field or get_phase_fields).
                     Discover via: ``get_phase_fields(phase_id)[].id`` or ``.uuid``.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 pipe_uuid: Pipe UUID for disambiguation when the slug is not unique across phases.
                 pipe_id: Numeric pipe ID; enables cascade-aware error diagnosis when set.
                     Discover via: ``search_pipes`` or ``get_organization``.
@@ -1077,6 +1087,9 @@ class PipeConfigTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"phase field (ID: {field_id})",
+                resource_identity={"field_id": field_id, "pipe_uuid": pipe_uuid},
+                tool_name="delete_phase_field",
+                confirmation_token=confirmation_token,
                 dependents_resolver=_resolve_deps,
             )
             if guard is not None:
@@ -1244,19 +1257,20 @@ class PipeConfigTools:
             label_id: PipefyId,
             pipe_id: PipefyId | None = None,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a label permanently.
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 label_id: Label ID to delete.
                 pipe_id: Pipe that owns the label; when set, the preview may include a sample
                     of cards using this label (``confirm=False`` only).
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -1296,6 +1310,9 @@ class PipeConfigTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"label (ID: {label_id})",
+                resource_identity={"label_id": label_id},
+                tool_name="delete_label",
+                confirmation_token=confirmation_token,
                 dependents_resolver=_resolve_deps,
             )
             if guard is not None:

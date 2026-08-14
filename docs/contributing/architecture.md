@@ -1,6 +1,6 @@
 # Architecture
 
-The toolkit gives a programmer, a script, and an LLM access to a Pipefy organization. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the code that serves all three, down to the layers inside one package. The map explains rather than instructs. Where a check enforces part of the map, the section names that check. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
+The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the code that serves all three, down to the layers inside one package. The map explains rather than instructs. Where a check enforces part of the map, the section names that check. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
 Four readers arrive here:
 
@@ -40,7 +40,7 @@ Three limits that this repository does not decide.
 
 ## Context and scope
 
-In domain terms, the toolkit acts on a Pipefy organization, and every call acts as a member or a service account of that organization. Inside it, a pipe holds the definition of a process and a card is one run of that process. A table holds records of the business entities that a process reads, and a record has no lifecycle of its own. Around those, the toolkit reaches portals, reports, members and roles, webhooks, files in storage, and the automations of a pipe. It also reaches the flows of the iPaaS, which run on a separate engine, and [`docs/ipaas.md`](../ipaas.md) defines those terms. The GraphQL schema stays the source of truth for entity shape.
+In domain terms, the toolkit acts on the Pipefy organizations that a caller can access. Every call acts as a member or a service account of one of them. Inside an organization, a pipe holds the definition of a process and a card is one run of that process. A table holds records of the business entities that a process reads, and a record has no lifecycle of its own. Around those, the toolkit reaches portals, reports, members and roles, webhooks, files in storage, and the automations of a pipe. It also reaches the flows of the iPaaS, which run on a separate engine, and [`docs/ipaas.md`](../ipaas.md) defines those terms. The GraphQL schema stays the source of truth for entity shape.
 
 The diagram draws the boundary in both directions, with the five packages inside it.
 

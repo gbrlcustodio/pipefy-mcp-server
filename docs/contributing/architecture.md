@@ -11,19 +11,16 @@ Four readers arrive here:
 
 ## Quality goals
 
-Each goal states a demand that a consumer of an application holds, in that consumer's terms. A goal and its mechanism each name the other.
+Each goal states a demand that a consumer of an application holds, in that consumer's terms. A `Served by` cell names a section of this document or a permanent rule ID, and that section names the goal back. A path or a symbol goes stale, so no cell holds one.
 
-**QG-1. An invalid request returns an error that tells the caller what to correct.** Every consumer holds it. The typed input contract at each application edge serves it, together with `VALID-2` and the parse rules in [`conventions.md`](conventions.md).
-
-**QG-2. A change in the toolkit or in a vendor API does not reach the consumer's code.** The SDK consumer holds it, and so does any script or agent that names a command or a tool. The [layer model](#layer-model) and the [ports](#ports-and-dependency-inversion) keep a vendor change inside the adapter that wraps it.
-
-**QG-3. When no human is present, a run never waits and never prompts.** The CLI consumer in a pipeline and the headless MCP consumer hold it. The client capability check decides whether elicitation can run. The CLI resolves a name only behind an explicit flag. Deterministic resolution stays in the SDK.
-
-**QG-4. A request runs as the caller that sent it, and never as another caller.** The MCP consumer under the remote profile holds it. [Identity lifetime](#identity-lifetime) states each identity shape. The import-linter contract bans a `settings` import from the `tools` layer. `pipefy-auth` validates the inbound bearer.
-
-**QG-5. An LLM calls by intent, not by endpoint.** The MCP consumer holds it. The outcome-shaped tool serves it, and [Known gaps](#known-gaps) records that the tool set does not express outcomes yet.
-
-**QG-6. A destructive operation declares itself and names what it affects before it runs.** The MCP consumer and the CLI consumer hold it. The `destructiveHint` annotation marks the tool. The guard in `packages/mcp` returns a preview, which lists the dependents before the deletion runs. Consent belongs to the client, because the client is where a human is.
+| ID | Demand | Held by | Served by |
+|---|---|---|---|
+| `QG-1` | An invalid request returns an error that tells the caller what to correct | Every consumer | `VALID-2`, [Composition root](#composition-root) |
+| `QG-2` | A change in the toolkit or in a vendor API does not reach the consumer's code | The SDK consumer, and any script or agent that names a command or a tool | [Layer model](#layer-model), [Ports](#ports-and-dependency-inversion) |
+| `QG-3` | When no human is present, a run never waits and never prompts | The CLI consumer in a pipeline, and the headless MCP consumer | [The three applications](#the-three-applications) |
+| `QG-4` | A request runs as the caller that sent it, and never as another caller | The MCP consumer under the remote profile | [Identity lifetime](#identity-lifetime) |
+| `QG-5` | An LLM calls by intent, not by endpoint | The MCP consumer | `SURF-1`, [Known gaps](#known-gaps) |
+| `QG-6` | A destructive operation declares itself and names what it affects before it runs | The MCP consumer and the CLI consumer | No section yet |
 
 This document does not rank the goals, because a rank decides whose demand wins, and that decision has an owner outside this document. These trades are real:
 
@@ -88,7 +85,7 @@ That match of application to consumer decides the layer split. The SDK executes.
 
 Each application decides its own identifier form, and there is no global choice. The SDK takes numeric identifiers first. The CLI takes deterministic identifiers. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. The canonical form per tool and per argument is in [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md).
 
-The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic.
+The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic, which is what `QG-3` requires.
 
 The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag.
 

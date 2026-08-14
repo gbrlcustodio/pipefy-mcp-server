@@ -2,7 +2,7 @@
 
 The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three, down to the layers inside one package.
 
-The map explains rather than instructs. Where a check enforces part of the map, the section names that check. Where a schema, a contract, or another document owns a fact, the section names that owner and does not restate the fact. Where the code does not match the map, [Known gaps](#known-gaps) names the difference. Every reader treats this document as current, so a restated fact here becomes a wrong instruction as soon as its owner moves.
+The map explains rather than instructs. Where a check enforces part of the map, the section names that check. Where a schema, a contract, or another document owns a fact, the section names that owner and does not restate the fact. Where the code does not match the map, [Known gaps](#known-gaps) names the difference. Each of those is a refusal to copy, and the reader pays one hop for it.
 
 These readers arrive here:
 

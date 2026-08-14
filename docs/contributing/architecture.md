@@ -11,11 +11,11 @@ Four readers arrive here:
 
 ## Quality requirements
 
-Each row states a demand that a consumer of an application holds, in that consumer's terms. A category alone is not a requirement, so every row carries its demand beside it. This section holds every requirement that has shaped a decision here, and not every quality the toolkit could be judged on.
+Each row states a demand that a consumer of an application holds, in that consumer's terms. A category alone is not a requirement, so every row carries its demand beside it. This section holds every requirement that shaped a decision here. A quality that shaped no decision has no row.
 
-The rows split by whether a requirement competes. A guarantee has nothing on the other side of the trade, so it carries no rank. A goal costs something we can choose not to spend, so it carries one. Where a requirement is served, the section that serves it names the requirement back. Where it is not served, or not yet on this map, [Known gaps](#known-gaps) names it.
+The rows split by whether a requirement competes. A guarantee has nothing on the other side of the trade, so it carries no rank. A goal costs something we can choose not to spend, so it carries one. A section that serves a requirement names that requirement back. If no section serves it, [Known gaps](#known-gaps) names it.
 
-**Guarantees.** Each one is a demand that no release trades away.
+**Guarantees.** Each one is a demand that no release trades.
 
 | ID | Category | Demand | Held by |
 |---|---|---|---|
@@ -23,10 +23,10 @@ The rows split by whether a requirement competes. A guarantee has nothing on the
 | `QR-4` | Security | A request acts as the caller that sent it, and never as another caller | The MCP consumer under the remote profile |
 | `QR-6` | Safety | A destructive operation names what it affects before it runs | The MCP consumer and the CLI consumer |
 | `QR-7` | Correctness | An ambiguous identifier never silently resolves to one match | Every consumer |
-| `QR-11` | Compatibility | A breaking change is announced before it ships | The SDK consumer, and any script or agent that names a command or a tool |
+| `QR-11` | Compatibility | An announcement precedes every breaking change | The SDK consumer, and any script or agent that names a command or a tool |
 | `QR-12` | Diagnosability | A partial result names what did not succeed | Every consumer |
 
-**Goals.** Ranked by what a consumer can do when the goal is not met.
+**Goals.** The rank states what a consumer can do when a goal fails.
 
 | Rank | ID | Category | Demand | Held by |
 |---|---|---|---|---|
@@ -37,9 +37,9 @@ The rows split by whether a requirement competes. A guarantee has nothing on the
 | 5 | `QR-5` | Efficiency | One user intent costs one call | The MCP consumer |
 | 6 | `QR-10` | Efficiency | A response carries only what the intent needs | The MCP consumer |
 
-`QR-8` and `QR-1` rank first, because a consumer who cannot see why a call failed cannot act at all. `QR-2` follows, because that consumer can act but pays for a change they did not make. The last three are costs a consumer can measure and plan around.
+`QR-8` and `QR-1` rank first. A consumer who cannot see why a call failed cannot act at all. `QR-2` follows, because that consumer can act, but pays for a change they did not make. The last three are costs that a consumer can measure and plan for.
 
-The three Efficiency rows are three separate costs, paid at different moments: the catalog once at connect, the calls per intent, and the payload per call. `QR-9` outranks the other two because its cost lands before the consumer asks for anything.
+The three Efficiency rows are three separate costs, and each one lands at a different moment. The catalog costs once at connect, the calls cost once per intent, and the payload costs once per call. `QR-9` outranks the other two, because its cost lands before the consumer asks for anything.
 
 These trades are real:
 

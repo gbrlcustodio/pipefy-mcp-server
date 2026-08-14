@@ -306,6 +306,50 @@ async def test_jsonrpc_error_from_tools_call_names_the_method(respx_mock, gatewa
 
 @pytest.mark.anyio
 @respx.mock
+async def test_mcp_session_list_then_call_posts_token_once(respx_mock, gateway):
+    """list_tools then call_tool inside one session run the OAuth handshake once."""
+    _mock_auth_chain(respx_mock)
+
+    def mcp_responder(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        method = body["method"]
+        if method == "initialize":
+            return httpx.Response(
+                200, json={"jsonrpc": "2.0", "id": body["id"], "result": {}}
+            )
+        if method == "tools/list":
+            return httpx.Response(
+                200,
+                json={"jsonrpc": "2.0", "id": body["id"], "result": {"tools": TOOLS}},
+            )
+        if method == "tools/call":
+            return httpx.Response(
+                200,
+                json={"jsonrpc": "2.0", "id": body["id"], "result": CALL_RESULT},
+            )
+        return httpx.Response(500)
+
+    respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=mcp_responder)
+
+    async with gateway.mcp_session("embed-jwt") as mcp:
+        tools = await mcp.list_tools()
+        result = await mcp.call_tool("demo_create_flow", {"name": "My flow"})
+
+    assert tools == TOOLS
+    assert result == CALL_RESULT
+    token_posts = [
+        call
+        for call in respx_mock.calls
+        if urlparse(str(call.request.url)).path == "/token"
+    ]
+    assert len(token_posts) == 1
+    assert not any(
+        key in vars(gateway) for key in ("access_token", "_cached_access_token")
+    )
+
+
+@pytest.mark.anyio
+@respx.mock
 async def test_call_tool_timeout_names_the_method_and_points_at_runs(
     respx_mock, gateway
 ):

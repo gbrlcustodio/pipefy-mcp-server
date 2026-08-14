@@ -26,6 +26,7 @@ gateway itself reads no settings.
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -74,6 +75,37 @@ def _step_field(step: str, body: dict[str, Any], key: str) -> Any:
         return body[key]
     except KeyError as exc:
         raise IpaasGatewayError(f"{step} returned a body without '{key}'.") from exc
+
+
+class _IpaasMcpSession:
+    """MCP list/call on one already-minted access token."""
+
+    def __init__(
+        self,
+        gateway: IpaasGateway,
+        http: httpx.AsyncClient,
+        access_token: str,
+    ) -> None:
+        self._gateway = gateway
+        self._http = http
+        self._access_token = access_token
+
+    async def list_tools(self) -> list[dict[str, Any]]:
+        result = await self._gateway._mcp_request(
+            self._http, self._access_token, "tools/list", {}
+        )
+        return result["tools"]
+
+    async def call_tool(
+        self, tool_name: str, arguments: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        return await self._gateway._mcp_request(
+            self._http,
+            self._access_token,
+            "tools/call",
+            {"name": tool_name, "arguments": arguments or {}},
+            CALL_TIMEOUT_SECONDS,
+        )
 
 
 @dataclass(frozen=True)
@@ -138,6 +170,19 @@ class IpaasGateway:
             params={"name": tool_name, "arguments": arguments or {}},
             timeout_seconds=CALL_TIMEOUT_SECONDS,
         )
+
+    @asynccontextmanager
+    async def mcp_session(self, advanced_automations_token: str):
+        """One OAuth handshake; list and call reuse that access token.
+
+        The token lives only on the yielded session and is dropped on exit.
+        The gateway itself stays stateless.
+        """
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS)
+        ) as http:
+            access_token = await self._access_token(http, advanced_automations_token)
+            yield _IpaasMcpSession(self, http, access_token)
 
     async def connection_auth_url(
         self, advanced_automations_token: str, piece_name: str

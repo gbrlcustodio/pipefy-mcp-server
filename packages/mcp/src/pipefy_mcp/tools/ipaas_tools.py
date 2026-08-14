@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
 from pipefy_mcp.core.ipaas_gateway import IpaasGateway, oauth_connection_value
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
@@ -42,6 +43,88 @@ _IPAAS_REQUEST_FAILED = (
 _ENV_REF_PREFIX = "PIPEFY_IPAAS_CONNECTION_"
 
 _SECRET_CONNECTION_TYPES = ("SECRET_TEXT", "BASIC_AUTH", "CUSTOM_AUTH")
+
+IPAAS_DESTRUCTIVE_NEEDLES = (
+    "delete",
+    "remove",
+    "destroy",
+    "drop",
+    "uninstall",
+    "revoke",
+)
+
+
+def ipaas_call_is_destructive(entry: dict | None, arguments: dict | None) -> bool:
+    """Whether a catalog call must take the two-step confirmation ticket.
+
+    Order (do not reorder): annotation true; ``operation`` needle-equality;
+    annotation false stops; else ``tool_name`` substring needles. ``entry`` is
+    the raw ``list_tools`` wire object, or ``None`` when the name is missing
+    (treated as no boolean).
+    """
+    hint = _catalog_destructive_hint(entry)
+    if hint is True:
+        return True
+    if _operation_equals_destructive_needle(arguments):
+        return True
+    if hint is False:
+        return False
+    name = _catalog_tool_name(entry)
+    folded = name.casefold()
+    return any(needle in folded for needle in IPAAS_DESTRUCTIVE_NEEDLES)
+
+
+def _catalog_destructive_hint(entry: dict | None) -> bool | None:
+    if entry is None:
+        return None
+    annotations = entry.get("annotations")
+    if not isinstance(annotations, dict):
+        return None
+    hint = annotations.get("destructiveHint")
+    return hint if isinstance(hint, bool) else None
+
+
+def _catalog_tool_name(entry: dict | None) -> str:
+    if entry is None:
+        return ""
+    name = entry.get("name")
+    return name if isinstance(name, str) else ""
+
+
+def _operation_equals_destructive_needle(arguments: dict | None) -> bool:
+    if arguments is None or "operation" not in arguments:
+        return False
+    value = arguments["operation"]
+    if not isinstance(value, str):
+        return False
+    return value.casefold() in IPAAS_DESTRUCTIVE_NEEDLES
+
+
+def _ipaas_call_resource_identity(
+    pipe_id: PipefyId, tool_name: str, arguments: dict[str, Any] | None
+) -> dict[str, Any]:
+    identity: dict[str, Any] = {"pipe_id": str(pipe_id), "tool_name": tool_name}
+    if arguments is not None and "operation" in arguments:
+        identity["operation"] = str(arguments["operation"]).casefold()
+    return identity
+
+
+def _ipaas_call_resource_descriptor(
+    pipe_id: PipefyId, tool_name: str, arguments: dict[str, Any] | None
+) -> str:
+    descriptor = f"iPaaS catalog tool '{tool_name}' on pipe {pipe_id}"
+    if arguments is None or "operation" not in arguments:
+        return descriptor
+    return f"{descriptor} (operation {arguments['operation']})"
+
+
+def _catalog_entry_named(
+    tools: list[dict[str, Any]], tool_name: str
+) -> dict[str, Any] | None:
+    for tool in tools:
+        if tool.get("name") == tool_name:
+            return tool
+    return None
 
 
 def _first_line(text: str | None) -> str:
@@ -149,6 +232,8 @@ class IpaasTools:
             tool_name: str,
             ctx: Context,
             arguments: dict[str, Any] | None = None,
+            confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict:
             """Invoke one iPaaS (Advanced Automations) tool in a pipe's workspace.
 
@@ -158,8 +243,13 @@ class IpaasTools:
             from its input schema — the iPaaS host validates them and its
             error messages are returned here verbatim.
 
-            The catalog includes destructive operations (deleting flows,
-            tables, or records): only call those on explicit user intent.
+            Destructive catalog calls need a preview token: annotation
+            ``true``, or ``arguments.operation`` equal to a delete-like needle
+            (case-insensitive equality), else a delete-like substring in the
+            catalog name. Call once to receive ``confirmation_token``, then
+            echo that token with ``confirm=True`` on step 2. Mixed manage
+            ADD/UPDATE stay one-shot. A token is replayable within its TTL.
+
             Prefer the read and validate tools while iterating, and for
             long-running executions (flow tests, retries) inspect progress
             with the run-listing tools rather than re-invoking.
@@ -173,10 +263,39 @@ class IpaasTools:
                     catalog.
                 arguments: Arguments matching the tool's input schema. Omit
                     for tools that take none.
+                confirm: Set to True with the preview token to run a
+                    destructive catalog call (step 2).
+                confirmation_token: Token from the preview response; echo it
+                    on step 2.
             """
 
             async def work(gateway: IpaasGateway, token: str) -> dict:
-                result = await gateway.call_tool(token, tool_name, arguments)
+                async with gateway.mcp_session(token) as mcp:
+                    catalog = await mcp.list_tools()
+                    entry = _catalog_entry_named(catalog, tool_name)
+                    judged = {"name": tool_name} if entry is None else entry
+                    # A leftover DELETE token must not authorize mixed ADD
+                    # (identity includes operation). ADD without a token stays
+                    # one-shot.
+                    if (
+                        ipaas_call_is_destructive(judged, arguments)
+                        or confirmation_token
+                    ):
+                        guard = await check_destructive_confirmation(
+                            ctx,
+                            confirm=confirm,
+                            resource_descriptor=_ipaas_call_resource_descriptor(
+                                pipe_id, tool_name, arguments
+                            ),
+                            resource_identity=_ipaas_call_resource_identity(
+                                pipe_id, tool_name, arguments
+                            ),
+                            tool_name="call_ipaas_tool",
+                            confirmation_token=confirmation_token,
+                        )
+                        if guard is not None:
+                            return guard
+                    result = await mcp.call_tool(tool_name, arguments)
                 return _call_result_payload(pipe_id, tool_name, result)
 
             return await _run_ipaas_tool(ctx, pipe_id, work)

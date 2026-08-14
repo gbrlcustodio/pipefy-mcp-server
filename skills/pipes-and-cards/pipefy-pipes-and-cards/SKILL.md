@@ -206,7 +206,7 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 | `update_label` | `pipefy label update <id>` | No | Rename or recolor. |
 | `delete_label` | `pipefy label delete <id>` | No | **Two-step destructive.** |
 
-These tools manage label definitions on the pipe. Applying a label to a card is `update_card(label_ids=[...])`, which replaces the card's whole label list. When the user wants a label applied **automatically** ("mark it late when it goes past the due date"), stop and read [Applying a label has no automation action](../../automations/pipefy-automations/SKILL.md#applying-a-label-has-no-automation-action): no automation action does it, and driving `update_card` over a set of cards makes the agent the runtime instead of the process.
+These tools manage label definitions on the pipe. Applying a pipe label to a card is `update_card(label_ids=[...])`, which **replaces** the card's whole label list: include every id that should remain; do not send only the new one. `get_card` does not return labels — read current ids via `execute_graphql` (`card(id: ...) { labels { id } }`), merge, then write. `field_updates` with `operation` ADD/REMOVE is for list-valued **fields**, not for card-attribute labels. When the user wants a label applied **automatically** ("mark it late when it goes past the due date"), stop and read [Applying a label has no automation action](../../automations/pipefy-automations/SKILL.md#applying-a-label-has-no-automation-action): no automation action does it, and driving `update_card` over a set of cards makes the agent the runtime instead of the process.
 
 ---
 

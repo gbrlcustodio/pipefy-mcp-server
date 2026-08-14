@@ -1226,12 +1226,12 @@ Usage: pipefy card [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get       Fetch a card by id.                                                │
+│ get       Fetch a card by id (title, phase, pipe; not labels or assignees).  │
 │ list      List cards in a pipe (get_cards): browse, filter, and paginate.    │
 │ find      Find cards in a pipe where a custom field equals a value.          │
 │ create    Create a card in a pipe (start-form or phase fields via --fields   │
 │           JSON when required).                                               │
-│ update    Update a card (title, assignees, labels, due date, and/or field    │
+│ update    Update a card (title, assignees, labels, due date, or field        │
 │           updates).                                                          │
 │ delete    Delete a card permanently.                                         │
 │ move      Move a card to another phase.                                      │
@@ -1376,7 +1376,7 @@ Usage: pipefy card find [OPTIONS]
 ### HELP card/get
 Usage: pipefy card get [OPTIONS] CARD_ID
 
- Fetch a card by id.
+ Fetch a card by id (title, phase, pipe; not labels or assignees).
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │ *    card_id      TEXT  Card id. [required]                                  │
@@ -1432,7 +1432,12 @@ Usage: pipefy card move [OPTIONS] CARD_ID
 ### HELP card/update
 Usage: pipefy card update [OPTIONS] CARD_ID
 
- Update a card (title, assignees, labels, due date, and/or field updates).
+ Update a card (title, assignees, labels, due date, or field updates).
+
+ --field-updates and the attribute flags are exclusive: if --field-updates is
+ set, --title / --assignee-ids / --label-ids / --due-date are discarded. Pipe
+ labels and assignees are card attributes (--label-ids / --assignee-ids,
+ replace-all), not list-valued fields; do not send them in --field-updates.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │ *    card_id      TEXT  Card id. [required]                                  │
@@ -1440,15 +1445,22 @@ Usage: pipefy card update [OPTIONS] CARD_ID
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --title          -t      TEXT                                                │
 │ --due-date               TEXT                                                │
-│ --assignee-ids           TEXT  Comma-separated assignee user ids.            │
-│ --label-ids              TEXT  Comma-separated label ids.                    │
+│ --assignee-ids           TEXT  Comma-separated assignee user ids (replaces   │
+│                                the card's whole assignee list).              │
+│ --label-ids              TEXT  Comma-separated label ids (replaces the       │
+│                                card's whole label list).                     │
 │ --field-updates          TEXT  JSON array of field update objects for        │
 │                                updateFieldsValues. Each object: {"field_id"  │
 │                                (or "fieldId"): "<slug>", "value": <v>,       │
 │                                "operation": "ADD"|"REMOVE"|"REPLACE"         │
-│                                (optional, default REPLACE)}. For             │
-│                                connector/connection fields, prefer           │
-│                                ADD/REMOVE with related card ids.             │
+│                                (optional, default REPLACE)}. For list-valued │
+│                                fields (connections, attachments,             │
+│                                checklists), prefer ADD/REMOVE; for           │
+│                                connectors, send related card ids. If set,    │
+│                                attribute flags (--title, --assignee-ids,     │
+│                                --label-ids, --due-date) are discarded. Pipe  │
+│                                labels and assignees are not fields: use      │
+│                                --label-ids / --assignee-ids.                 │
 │ --json           -j                                                          │
 │ --help                         Show this message and exit.                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯

@@ -2038,6 +2038,36 @@ class TestFillCardPhaseFieldsTool:
 
 
 @pytest.mark.anyio
+class TestCardAttributeVsFieldDescriptions:
+    async def test_tool_descriptions_do_not_route_labels_through_field_updates(
+        self, client_session
+    ):
+        """Pipe labels and assignees are card attributes, not list-valued fields."""
+        async with client_session as session:
+            listed = await session.list_tools()
+        by_name = {t.name: t.description or "" for t in listed.tools}
+
+        get_card = by_name["get_card"].lower()
+        assert "does not return labels" in get_card
+        assert "does not return labels or assignees" in get_card
+
+        field_doc = by_name["update_card_field"]
+        start = field_doc.find("List-valued fields (")
+        assert start != -1
+        end = field_doc.find(")", start)
+        parenthetical = field_doc[start : end + 1].lower()
+        assert "label" not in parenthetical
+        assert "assignee" not in parenthetical
+        assert "connection" in parenthetical
+        assert "label_ids" in field_doc
+
+        update_doc = by_name["update_card"].lower()
+        assert "discarded" in update_doc
+        assert "field_updates" in update_doc
+        assert "label_ids" in update_doc
+
+
+@pytest.mark.anyio
 class TestUpdateCardTool:
     async def test_update_card_field(
         self,

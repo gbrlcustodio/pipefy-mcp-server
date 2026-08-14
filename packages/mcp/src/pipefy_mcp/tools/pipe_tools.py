@@ -329,11 +329,15 @@ class PipeTools:
             include_fields: bool = False,
             debug: bool = False,
         ) -> dict:
-            """Load one card by ID for title, phase, assignees, labels, and optional field values.
+            """Load one card by ID for title, current phase, pipe, and optional field values.
 
             Use this to inspect a card before updates, after ``find_cards`` / ``get_cards``,
             or when the user references a card by ID. Set ``include_fields`` when you need
             custom field ``name``/``value`` pairs for forms or automation.
+
+            Does not return labels or assignees. Those are card attributes, not ``fields``.
+            Read current label ids via ``execute_graphql`` (``card(id: ...) { labels { id } }``)
+            before ``update_card(label_ids=...)``.
 
             Args:
                 card_id: Pipefy card ID (string or positive integer).
@@ -342,8 +346,8 @@ class PipeTools:
                 debug: When True, append GraphQL codes and correlation_id on errors.
 
             Returns:
-                dict: GraphQL ``card`` query payload (typically ``card`` with ``id``, ``title``,
-                ``phase``, ``assignees``, ``labels``, and—when requested—``fields``).
+                dict: GraphQL ``card`` payload with ``id``, ``uuid``, ``title``, ``pipe``,
+                ``current_phase``, and—when ``include_fields`` is true—``fields``.
             """
             client = get_pipefy_client(ctx)
             await ctx.debug(f"get_card: card_id={card_id}")
@@ -975,16 +979,19 @@ class PipeTools:
             Use this tool for simple, single-field updates. The entire field value
             will be replaced with the new value provided.
 
-            **List-valued fields (connections, attachments, checklists, labels, assignees):**
+            **List-valued fields (connections, attachments, checklists):**
             never assume append. Prefer ``update_card`` with ``field_updates`` and
             ``operation`` ``"ADD"`` or ``"REMOVE"`` (``updateFieldsValues``) so you only send
             the item(s) to add or remove. This tool's ``new_value`` replaces the **entire**
-            list. For connector/connection fields the list must be related card **ids**, not
-            display titles; ``get_card(include_fields=true)`` returns connector ``value`` as
-            display titles only (not ids), so do not rebuild from that ``value`` — read ids via
-            ``get_card_relations`` (or GraphQL ``array_value``). Concurrent full-list rewrites
-            can still drop items. To *write* links through a pipe relation (not a connector
-            field), use ``create_card_relation`` / ``delete_card_relation``.
+            list. Pipe labels and assignees are card attributes (``update_card``
+            ``label_ids`` / ``assignee_ids``), not fields — ``field_updates`` cannot
+            address them. For connector/connection fields the list must be related card
+            **ids**, not display titles; ``get_card(include_fields=true)`` returns connector
+            ``value`` as display titles only (not ids), so do not rebuild from that
+            ``value`` — read ids via ``get_card_relations`` (or GraphQL ``array_value``).
+            Concurrent full-list rewrites can still drop items. To *write* links through a
+            pipe relation (not a connector field), use ``create_card_relation`` /
+            ``delete_card_relation``.
 
             **Not for automations:** if/then rules that stamp or copy dynamic values on cards
             (``%{id}``, ``%{created_at}``, ``%{automation_event_execution_datetime}``, etc.) belong in
@@ -1037,6 +1044,11 @@ class PipeTools:
 
             **Field Mode** (uses `updateFieldsValues` mutation):
             For updating custom fields via field_updates list.
+
+            The two modes are exclusive: if ``field_updates`` is present, Field Mode
+            runs and ``title``, ``assignee_ids``, ``label_ids``, and ``due_date`` are
+            discarded. Pipe labels and assignees are card attributes, not list-valued
+            fields — pass ``label_ids`` / ``assignee_ids``, not ``field_updates``.
 
             If field_updates is empty or omitted, only card attributes will be updated.
 

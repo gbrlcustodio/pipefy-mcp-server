@@ -65,6 +65,7 @@ async def check_destructive_confirmation(
     tool_name: str,
     confirmation_token: str | None = None,
     dependents_resolver: DependentsResolver | None = None,
+    irreversible_sentence: str | None = None,
 ) -> DestructivePreviewPayload | None:
     """Gate a destructive operation behind ``confirm=True`` and a verified token.
 
@@ -85,6 +86,9 @@ async def check_destructive_confirmation(
             empty dict to skip enrichment. Invoked on every preview path;
             never invoked when proceeding. Exceptions are swallowed so the
             base preview is still returned.
+        irreversible_sentence: Optional first preview sentence. Defaults to
+            ``Deleting {resource_descriptor} is permanent...``. Pass a custom
+            sentence when the operation is not a deletion of that descriptor.
 
     Returns:
         ``None`` when ``confirm=True`` and the token verifies. The caller
@@ -121,6 +125,7 @@ async def check_destructive_confirmation(
         resource_descriptor,
         confirmation_token=minted,
         token_status=token_status,
+        irreversible_sentence=irreversible_sentence,
     )
     if dependents_resolver is not None:
         try:
@@ -137,9 +142,11 @@ def _build_preview_payload(
     *,
     confirmation_token: str,
     token_status: ConfirmationTokenFailure | None = None,
+    irreversible_sentence: str | None = None,
 ) -> DestructivePreviewPayload:
     sentences = [
-        f"⚠️ Deleting {resource_descriptor} is permanent and cannot be undone.",
+        irreversible_sentence
+        or f"⚠️ Deleting {resource_descriptor} is permanent and cannot be undone.",
     ]
     if token_status == "missing":
         sentences.append("The confirmation token is missing.")

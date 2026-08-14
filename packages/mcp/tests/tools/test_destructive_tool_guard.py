@@ -86,6 +86,7 @@ async def _check(
     tool_name=TOOL_NAME,
     confirmation_token=None,
     dependents_resolver=None,
+    irreversible_sentence=None,
 ):
     return await check_destructive_confirmation(
         ctx,
@@ -95,6 +96,7 @@ async def _check(
         tool_name=tool_name,
         confirmation_token=confirmation_token,
         dependents_resolver=dependents_resolver,
+        irreversible_sentence=irreversible_sentence,
     )
 
 
@@ -104,6 +106,18 @@ class TestNoElicitation:
         ctx = _make_ctx(can_elicit=False)
         payload = await _check(ctx, confirm=False)
         _assert_preview(payload)
+        assert payload["message"].startswith(f"⚠️ Deleting {RESOURCE}")
+        ctx.elicit.assert_not_called()
+
+    async def test_custom_irreversible_sentence_is_first_preview_sentence(self):
+        ctx = _make_ctx(can_elicit=False)
+        sentence = (
+            "⚠️ This GraphQL mutation's effects are permanent and cannot be undone."
+        )
+        payload = await _check(ctx, confirm=False, irreversible_sentence=sentence)
+        _assert_preview(payload)
+        assert payload["message"].startswith(sentence)
+        assert not payload["message"].startswith("⚠️ Deleting")
         ctx.elicit.assert_not_called()
 
 

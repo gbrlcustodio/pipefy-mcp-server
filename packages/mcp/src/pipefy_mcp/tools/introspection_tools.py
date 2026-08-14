@@ -210,6 +210,10 @@ class IntrospectionTools:
                     ctx,
                     confirm=confirm,
                     resource_descriptor="GraphQL mutation",
+                    irreversible_sentence=(
+                        "⚠️ This GraphQL mutation's effects are permanent "
+                        "and cannot be undone."
+                    ),
                     resource_identity={
                         "document": hashlib.sha256(query.encode("utf-8")).hexdigest(),
                         "variables": hashlib.sha256(

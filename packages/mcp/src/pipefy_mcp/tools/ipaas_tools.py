@@ -281,11 +281,16 @@ class IpaasTools:
                         ipaas_call_is_destructive(judged, arguments)
                         or confirmation_token
                     ):
+                        descriptor = _ipaas_call_resource_descriptor(
+                            pipe_id, tool_name, arguments
+                        )
                         guard = await check_destructive_confirmation(
                             ctx,
                             confirm=confirm,
-                            resource_descriptor=_ipaas_call_resource_descriptor(
-                                pipe_id, tool_name, arguments
+                            resource_descriptor=descriptor,
+                            irreversible_sentence=(
+                                f"⚠️ Running {descriptor} is permanent "
+                                "and cannot be undone."
                             ),
                             resource_identity=_ipaas_call_resource_identity(
                                 pipe_id, tool_name, arguments

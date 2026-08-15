@@ -8,7 +8,7 @@ These readers arrive here:
 - A reviewer wants an ID. A convention ID names how we write code, and [`conventions.md`](conventions.md) is the reference. An `FR` ID names a function the toolkit delivers, and [Requirements overview](#requirements-overview) is the list. A `QR` ID names a demand the code must meet, and [Quality requirements](#quality-requirements) is the table.
 - A consumer of one application wants its interface instead of the layer model, in [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), or [`docs/sdk`](../sdk/README.md).
 
-The map explains rather than instructs. It points at the owner of a fact rather than repeat it: a check, a schema, or a record under [`adr/`](adr/README.md). The reader pays one hop for that. A copy appears here only where the argument on this page depends on it.
+The map explains rather than instructs. It points at the owner of a fact rather than repeat it: a check, a schema, or a record under [`adr/`](adr/README.md). The reader pays one hop for that. A copy appears here only where the argument on this page depends on it, and [`authoring.md`](authoring.md) states the rule for every document under `docs/`.
 
 Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 

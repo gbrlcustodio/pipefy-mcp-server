@@ -1,4 +1,4 @@
-"""Guard-level tests for optional ``dependents_resolver`` (REQ-1)."""
+"""Guard-level tests for optional ``dependents_resolver``."""
 
 from unittest.mock import AsyncMock, MagicMock
 

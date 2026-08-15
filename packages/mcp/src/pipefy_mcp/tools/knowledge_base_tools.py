@@ -305,8 +305,7 @@ class KnowledgeBaseTools:
             """Delete a pipe-scoped knowledge base plain text permanently. This action is irreversible.
 
             Two-step operation: preview with ``confirm=False`` (default), then echo
-            ``confirmation_token`` from the preview on step 2. Elicitation does not
-            authorize deletion (only ``confirm=True`` does). Requires manage_ai_agents
+            ``confirmation_token`` from the preview on step 2. Requires manage_ai_agents
             on the pipe.
 
             Args:
@@ -503,8 +502,7 @@ class KnowledgeBaseTools:
             """Delete a pipe-scoped knowledge base document permanently. This action is irreversible.
 
             Two-step operation: preview with ``confirm=False`` (default), then echo
-            ``confirmation_token`` from the preview on step 2. Elicitation does not
-            authorize deletion (only ``confirm=True`` does). Requires manage_ai_agents
+            ``confirmation_token`` from the preview on step 2. Requires manage_ai_agents
             on the pipe.
 
             Args:
@@ -730,8 +728,7 @@ class KnowledgeBaseTools:
             """Delete a pipe-scoped knowledge base data lookup permanently. This action is irreversible.
 
             Two-step operation: preview with ``confirm=False`` (default), then echo
-            ``confirmation_token`` from the preview on step 2. Elicitation does not
-            authorize deletion (only ``confirm=True`` does). Requires manage_ai_agents
+            ``confirmation_token`` from the preview on step 2. Requires manage_ai_agents
             on the pipe.
 
             Args:

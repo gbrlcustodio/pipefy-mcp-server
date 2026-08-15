@@ -235,8 +235,7 @@ class PortalTools:
             """Delete a portal interface (irreversible).
 
             Two-step operation: preview with ``confirm=False`` (default), then echo
-            ``confirmation_token`` from the preview on step 2. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 portal_uuid: Portal interface UUID to delete.

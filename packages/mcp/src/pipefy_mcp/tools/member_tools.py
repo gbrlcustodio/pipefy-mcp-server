@@ -188,8 +188,7 @@ class MemberTools:
             """Permanently remove one or more users from a pipe.
 
             Two-step operation: preview with ``confirm=False`` (default), then echo
-            ``confirmation_token`` from the preview on step 2. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 pipe_id: ID of the pipe.

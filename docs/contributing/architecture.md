@@ -180,7 +180,7 @@ A tool module does not construct a concrete client. It receives what it needs fr
 
 ## Response shape
 
-`PARSE-5` says the direction of the data does not change the rule, so a response is parsed on the same terms as an argument. This section is that rule applied outward.
+This section is `PARSE-5` in [`conventions.md`](conventions.md) applied to what a tool returns.
 
 One shape carries both outcomes, so a consumer reads success and failure the same way. A migrated MCP tool returns `success` and `data`, with `message` and `pagination` when they apply.
 

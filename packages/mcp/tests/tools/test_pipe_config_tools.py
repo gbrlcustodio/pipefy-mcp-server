@@ -1107,6 +1107,38 @@ async def test_delete_phase_field_confirm_true_skips_enrichment(
 
 
 @pytest.mark.anyio
+async def test_delete_phase_field_confirm_omitting_advisory_phase_id_proceeds(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.delete_phase_field.return_value = {
+        "deletePhaseField": {"success": True},
+    }
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {"fieldConditions": []}
+    }
+
+    async with pipe_config_session as session:
+        preview = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": 100, "phase_id": 50},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        result = await session.call_tool(
+            "delete_phase_field",
+            {
+                "field_id": 100,
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+
+    mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(
+        "100", pipe_uuid=None
+    )
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
 async def test_delete_phase_field_success_with_string_slug(
     pipe_config_session, mock_pipe_config_client
 ):
@@ -1148,7 +1180,9 @@ async def test_delete_phase_field_rejects_token_when_pipe_uuid_differs(
                 "confirmation_token": token,
             },
         )
-        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mismatch_payload = extract_payload(mismatch)
+        assert mismatch_payload["requires_confirmation"] is True
+        assert "expired" not in mismatch_payload["message"].lower()
         mock_pipe_config_client.delete_phase_field.assert_not_awaited()
 
         matched = await confirm_after_preview(

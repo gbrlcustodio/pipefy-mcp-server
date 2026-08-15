@@ -32,15 +32,40 @@ def _assert_preview(payload, *, resource=RESOURCE):
     assert token
     assert token.startswith("v1.")
     assert token in payload["message"]
+    assert "cannot be undone" in payload["message"]
     _assert_approval_before_confirm(payload["message"])
     return token
 
 
-def _assert_token_required_wording(message):
-    lowered = message.lower()
-    assert "token" in lowered
+_MISSING_TOKEN_SENTENCE = "The confirmation token is missing."
+_INVALID_OR_EXPIRED_TOKEN_SENTENCE = (
+    "The previous confirmation token was invalid or expired."
+)
+_IDENTITY_MISMATCH_TOKEN_SENTENCE = (
+    "The previous confirmation token does not match this tool and resource identity."
+)
+
+
+def _assert_missing_token_wording(message):
+    assert _MISSING_TOKEN_SENTENCE in message
+    assert _INVALID_OR_EXPIRED_TOKEN_SENTENCE not in message
+    assert _IDENTITY_MISMATCH_TOKEN_SENTENCE not in message
     assert "confirm=True" in message
-    assert any(word in lowered for word in ("missing", "invalid", "expired"))
+
+
+def _assert_invalid_or_expired_token_wording(message):
+    assert _INVALID_OR_EXPIRED_TOKEN_SENTENCE in message
+    assert _MISSING_TOKEN_SENTENCE not in message
+    assert _IDENTITY_MISMATCH_TOKEN_SENTENCE not in message
+    assert "confirm=True" in message
+
+
+def _assert_identity_mismatch_token_wording(message):
+    assert _IDENTITY_MISMATCH_TOKEN_SENTENCE in message
+    assert _MISSING_TOKEN_SENTENCE not in message
+    assert _INVALID_OR_EXPIRED_TOKEN_SENTENCE not in message
+    assert "expired" not in message.lower()
+    assert "confirm=True" in message
 
 
 def _make_ctx(*, can_elicit=False, request=None):
@@ -154,7 +179,7 @@ class TestTokenAwareConfirmation:
             dependents_resolver=resolver,
         )
         _assert_preview(payload)
-        _assert_token_required_wording(payload["message"])
+        _assert_missing_token_wording(payload["message"])
         resolver.assert_awaited()
         ctx.elicit.assert_not_called()
 
@@ -205,7 +230,7 @@ class TestTokenAwareConfirmation:
         )
         token = _assert_preview(payload)
         assert token != "not-a-token"
-        _assert_token_required_wording(payload["message"])
+        _assert_invalid_or_expired_token_wording(payload["message"])
 
     async def test_expired_token_previews_with_fresh_token(self, monkeypatch):
         ctx = _make_ctx(can_elicit=False)
@@ -223,7 +248,7 @@ class TestTokenAwareConfirmation:
         fresh = _assert_preview(payload)
         assert payload is not None
         assert fresh != token
-        _assert_token_required_wording(payload["message"])
+        _assert_invalid_or_expired_token_wording(payload["message"])
 
     async def test_dependents_invoked_on_failed_token_preview(self):
         ctx = _make_ctx(can_elicit=False)
@@ -236,6 +261,28 @@ class TestTokenAwareConfirmation:
         )
         _assert_preview(payload)
         resolver.assert_awaited()
+
+    async def test_empty_token_previews_as_missing(self):
+        ctx = _make_ctx(can_elicit=False)
+        payload = await _check(ctx, confirm=True, confirmation_token="")
+        _assert_preview(payload)
+        _assert_missing_token_wording(payload["message"])
+
+    async def test_identity_mismatch_previews_without_claiming_expiration(self):
+        ctx = _make_ctx(can_elicit=False)
+        preview = await _check(ctx, confirm=False)
+        token = _assert_preview(preview)
+
+        payload = await _check(
+            ctx,
+            confirm=True,
+            resource_identity={"phase_id": "99"},
+            confirmation_token=token,
+        )
+        fresh = _assert_preview(payload)
+        assert payload is not None
+        assert fresh != token
+        _assert_identity_mismatch_token_wording(payload["message"])
 
 
 @pytest.mark.anyio

@@ -24,13 +24,13 @@ from typing_extensions import NotRequired, TypedDict
 
 from pipefy_mcp.auth.request_identity import require_request_bearer
 from pipefy_mcp.tools.destructive_confirmation_token import (
+    ConfirmationTokenFailure,
+    classify_confirmation_token_failure,
     mint_confirmation_token,
     verify_confirmation_token,
 )
 
 _PROCESS_SIGNING_KEY = secrets.token_bytes(32)
-
-_TokenStatus = Literal["missing", "invalid_or_expired"]
 
 
 class DestructivePreviewPayload(TypedDict):
@@ -103,9 +103,14 @@ async def check_destructive_confirmation(
     ):
         return None
 
-    token_status: _TokenStatus | None = None
+    token_status: ConfirmationTokenFailure | None = None
     if confirm:
-        token_status = "missing" if confirmation_token is None else "invalid_or_expired"
+        token_status = classify_confirmation_token_failure(
+            confirmation_token,
+            tool_name=tool_name,
+            resource_identity=identity,
+            key=key,
+        )
     minted = mint_confirmation_token(
         tool_name=tool_name,
         resource_identity=identity,
@@ -131,7 +136,7 @@ def _build_preview_payload(
     resource_descriptor: str,
     *,
     confirmation_token: str,
-    token_status: _TokenStatus | None = None,
+    token_status: ConfirmationTokenFailure | None = None,
 ) -> DestructivePreviewPayload:
     sentences = [
         f"⚠️ Deleting {resource_descriptor} is permanent and cannot be undone.",
@@ -140,6 +145,10 @@ def _build_preview_payload(
         sentences.append("The confirmation token is missing.")
     elif token_status == "invalid_or_expired":
         sentences.append("The previous confirmation token was invalid or expired.")
+    elif token_status == "identity_mismatch":
+        sentences.append(
+            "The previous confirmation token does not match this tool and resource identity."
+        )
     sentences.append(
         "Show this preview to the user and get their explicit approval before continuing."
     )
@@ -160,5 +169,4 @@ __all__ = [
     "DependentsResolver",
     "DestructivePreviewPayload",
     "check_destructive_confirmation",
-    "signing_key_for",
 ]

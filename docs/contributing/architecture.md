@@ -116,7 +116,7 @@ The MCP server takes the human intent as the primary input. When the client decl
 
 A destructive operation carries the same split. `QR-6` asks that the operation name what it affects before it runs, and `QR-3` asks that no run block on an answer when no human is present. Together they leave the choice to the declared capability, exactly as ambiguity does above.
 
-The path that holds today does not read that capability. A tool declares itself with `destructiveHint`, the first call returns a preview of the resource and its dependents, and only an explicit `confirm` on a second call deletes. The CLI takes `--yes`, or it prompts when a human is present. One explicit answer therefore serves the interactive case and the ambient case alike, and [Known gaps](#known-gaps) carries the design question. Two limits hold meanwhile, and [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md) records both. The guard protects against accident and not against intent, because a caller can send `confirm` on the first call. Authorization stays the API's.
+The path that holds today does not read that capability. A destructive tool previews what it affects, and it acts only after an explicit confirmation from the caller. One explicit answer therefore serves the interactive case and the ambient case alike, and [Known gaps](#known-gaps) carries the design question. [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md) owns the protocol, and it records two limits. The guard protects against accident and not against intent, because a caller can confirm without a preview. Authorization stays the API's.
 
 The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag.
 
@@ -136,7 +136,7 @@ The machinery is this large because the catalog is. The tool names copy the API 
 
 Three applications and two shared libraries. The graph is in the diagram above. The MCP server and the CLI never depend on each other, and a shared library never depends on an application. That is the reason for the split.
 
-The diagram draws what each package declares. Each package also carries its own ruff `TID251` ban list, with one message per banned package, and that list holds the edges that must never appear. `pipefy_infra` declares itself a leaf and bans the other four. `pipefy_auth` bans all three applications. `pipefy_sdk` bans the MCP server and the CLI. Each of those two bans the other and the private modules of the SDK.
+The diagram draws what each package declares. Each package also carries its own ruff `TID251` ban list, with one message per banned package. That list holds the edges that must never appear, and two rules produce every entry. An import never runs against the direction of the diagram. The MCP server and the CLI also never import each other, or the private modules of the SDK. Each package's own `pyproject.toml` holds its list.
 
 What each package depends on, and why, is in [`dependencies.md`](dependencies.md).
 
@@ -180,7 +180,7 @@ These are the ports the repository owns today. `GraphQLExecutor` in the SDK is a
 
 The composition root does two jobs at startup: it parses raw input into decisions, and it builds effects once. Raw input means the environment, a config file, and the startup flags. Parsed types cost no I/O, so we construct them freely. At startup an effect happens only here: a keychain read, a network call, or the construction of a client. Downstream code then receives a decision it can rely on, and never a raw value it must re-read. That parse is `QR-1` applied to configuration, under `VALID-2` in [`conventions.md`](conventions.md), so an invalid value fails at startup and not in the code that later reads it.
 
-There is one composition root per application, not one for the repo. Each one parses its startup input at its entry point. The MCP server then centralizes the wiring in `core/runtime.py` (`McpRuntime.for_profile`). The CLI wires at its entry point, without a single runtime module. Where the wiring lives is a per-application choice.
+There is one composition root per application, not one for the repo. Each one parses its startup input at its entry point. The MCP server then centralizes the wiring in `core/runtime.py`. The CLI wires at its entry point, without a single runtime module. Where the wiring lives is a per-application choice.
 
 A tool module does not construct a concrete client. It receives what it needs from the composition root. A shared package exports parsed types and resolvers, not application wiring or effects. An application can wire eagerly and fail fast at boot, or it can keep effectful members lazy. That is a per-application choice.
 
@@ -196,7 +196,7 @@ A denial names the likely cause and the next step. A `debug` argument adds the v
 
 A partial result is not a failure. A read that the caller may perform in part returns what succeeded, plus a list naming what was denied, which is `QR-12`. One limit comes with it: `success` stays true on that response, so the list is the only signal and a consumer that reads `success` alone misses it.
 
-Two limits on reach. The envelope is the MCP application's shape, because the CLI prints the underlying payload instead, and [`docs/parity.md`](../parity.md) records where the two differ. And the shape arrives by wrapping rather than as a tool's own return type: a flag switches it, it covers migrated tools only, and it reaches an internal of the MCP SDK, which is why that dependency is pinned to one minor. The requirement is right and the mechanism is not settled, so [Known gaps](#known-gaps) carries it.
+Two limits on reach. The envelope is the MCP application's shape, because the CLI prints the underlying payload instead, and [`docs/parity.md`](../parity.md) records where the two differ. And the shape arrives by wrapping rather than as a tool's own return type. A flag switches it, it covers migrated tools only, and it reaches an internal of the MCP SDK. The requirement is right and the mechanism is not settled, so [Known gaps](#known-gaps) carries it.
 
 ## Identity lifetime
 
@@ -206,7 +206,7 @@ A credential is resolved once per process, or once per request.
 
 Resolved once per process. The SDK takes its credential from settings or from the embedding program. The CLI resolves one user's credential per invocation, with the precedence in [`docs/cli/auth.md`](../cli/auth.md). The MCP local profile reads one startup credential. In all three, the process belongs to one caller.
 
-Resolved once per request. The MCP remote profile holds no caller credential at startup, and `session_for_request` snapshots the bearer off each request. The `pipefy-auth` package then validates that bearer in the resource-server role. `StartupIdentity` and `RequestScopedIdentity` are the two shapes in code, and both delegate to `pipefy-auth`.
+Resolved once per request. The MCP remote profile holds no caller credential at startup, and it snapshots the bearer off each request. The `pipefy-auth` package then validates that bearer in the resource-server role. The startup identity and the request-scoped identity are the two shapes in code, and both delegate to `pipefy-auth`.
 
 One rule follows, and it is what `QR-4` requires of any application here. With a per-process identity, downstream code can hold what it received. With a per-request identity, nothing caches it, and process-global state never answers a question about the caller. That is why the import-linter contract bans a `settings` import from the `tools` layer, and the full reasoning is in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 
@@ -237,6 +237,6 @@ These names carry a second meaning elsewhere, so each one is fixed here.
 - Contract. Qualified at each use. The typed input contract is the parsed model at the edge of an application. The import-linter contract is the layer order in `packages/mcp/pyproject.toml`.
 - Application. A package that a consumer uses, and one that owns a driving port. The SDK, the CLI, and the MCP server are the three, and a shared library is not one. The code labels the same concept `surface`, in `ClientSurface` and in a call such as `surface="mcp"`, and stamps it into the outbound `User-Agent`. This document says application instead, because the rest of the repository spends the word surface on the set of tools a deployment exposes.
 - Consumer. The party that uses an application: a program that imports the SDK, a person or a script at a terminal, or an LLM. This document never calls that party a client. The word client names two other things here: the program that speaks the MCP protocol, and a constructed object such as the GraphQL client.
-- Profile. Qualified at each use. A deployment profile is local or remote, it decides the transport default and the credential source, and [Identity lifetime](#identity-lifetime) turns on that difference. A tool profile is one of the six persona-shaped selections that [Tool surface](#tool-surface) describes, and `--toolsets` names it. A bare "profile" in this document means the deployment profile, because that is the sense the rest of the repository carries.
+- Profile. Qualified at each use. A deployment profile is local or remote, it decides the transport default and the credential source, and [Identity lifetime](#identity-lifetime) turns on that difference. A tool profile is a persona-shaped selection that [Tool surface](#tool-surface) describes, and `--toolsets` names it. A bare "profile" in this document means the deployment profile, because that is the sense the rest of the repository carries.
 - SDK. A bare "SDK" means the Pipefy SDK, the `pipefy` distribution. A third-party SDK is always named, for example the MCP SDK.
 - auth. `pipefy-auth` is the shared package. The `auth` layer is the driven adapter inside `pipefy-mcp-server`.

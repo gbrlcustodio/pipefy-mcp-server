@@ -8,7 +8,7 @@ These readers arrive here:
 - A reviewer wants the rule and the ID to cite, and both live in [`conventions.md`](conventions.md).
 - A consumer of one application wants its interface instead of the layer model, in [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), or [`docs/sdk`](../sdk/README.md).
 
-The map explains rather than instructs. It points at the owner of a fact rather than repeat it: a check, a schema, or a record under [`adr/`](adr/README.md). A copy appears only where the argument here depends on it. The reader pays one hop for that. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
+The map explains rather than instructs. It points at the owner of a fact rather than repeat it: a check, a schema, or a record under [`adr/`](adr/README.md). A copy appears only where the argument here depends on it. The reader pays one hop for that, and [`authoring.md`](authoring.md) states the rule for the whole tree. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
 ## Quality requirements
 

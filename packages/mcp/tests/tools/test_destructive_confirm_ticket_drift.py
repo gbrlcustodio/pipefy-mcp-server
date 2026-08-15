@@ -71,6 +71,52 @@ def assert_identity_covers_required(tool_name, identity, required_keys):
     assert not missing, f"{tool_name} resource_identity missing required keys {missing}"
 
 
+def _identity_value_matches_sentinel(got, sent):
+    if got == sent:
+        return True
+    if isinstance(sent, bool) or isinstance(got, bool):
+        return False
+    if isinstance(sent, (int, float)) and got == str(sent):
+        return True
+    if isinstance(got, (int, float)) and sent == str(got):
+        return True
+    if isinstance(sent, list) and isinstance(got, list):
+        return len(sent) == len(got) and all(
+            _identity_value_matches_sentinel(item_got, item_sent)
+            for item_got, item_sent in zip(got, sent, strict=True)
+        )
+    return False
+
+
+def assert_identity_values_match_sentinels(
+    tool_name, identity, arguments, required_keys
+):
+    mismatches = []
+    for key in sorted(required_keys):
+        sent = arguments[key]
+        got = identity[key]
+        if not _identity_value_matches_sentinel(got, sent):
+            mismatches.append(f"{key}: sent {sent!r} got {got!r}")
+    assert not mismatches, (
+        f"{tool_name} resource_identity values do not match sentinels: {mismatches}"
+    )
+
+
+def assert_preview_honors_guard(tool_name, result):
+    payload = _payload_or_result(result)
+    token = payload.get("confirmation_token") if isinstance(payload, dict) else None
+    requires = (
+        payload.get("requires_confirmation") if isinstance(payload, dict) else None
+    )
+    assert token == DRIFT_PREVIEW["confirmation_token"], (
+        f"{tool_name} discarded the guard preview; confirmation_token={token!r}, "
+        f"expected {DRIFT_PREVIEW['confirmation_token']!r}"
+    )
+    assert requires is True, (
+        f"{tool_name} discarded the guard preview; requires_confirmation={requires!r}"
+    )
+
+
 def _schema_type(spec):
     if not spec:
         return "string"
@@ -233,6 +279,18 @@ class TestDestructiveConfirmSchema:
                 f"{tool.name} must not list confirmation_token in input schema"
             )
 
+    def test_delete_and_remove_named_tools_carry_destructive_hint(self):
+        unhinted = [
+            tool.name
+            for tool in _listed_tools(_schema_server())
+            if tool.name.startswith(("delete_", "remove_"))
+            and not _is_destructive(tool)
+        ]
+        assert not unhinted, (
+            "tools named delete_* or remove_* must set destructiveHint=True: "
+            f"{unhinted}"
+        )
+
 
 class TestDestructiveConfirmIdentity:
     def test_incomplete_identity_fails_naming_the_missing_key(self):
@@ -268,8 +326,16 @@ class TestDestructiveConfirmIdentity:
                         f"{tool.name} never called check_destructive_confirmation; "
                         f"arguments={arguments!r} payload={_payload_or_result(result)!r}"
                     )
+                required_keys = _required_identity_keys(_input_schema(tool))
                 assert_identity_covers_required(
                     tool.name,
                     captured[tool.name],
-                    _required_identity_keys(_input_schema(tool)),
+                    required_keys,
                 )
+                assert_identity_values_match_sentinels(
+                    tool.name,
+                    captured[tool.name],
+                    arguments,
+                    required_keys,
+                )
+                assert_preview_honors_guard(tool.name, result)

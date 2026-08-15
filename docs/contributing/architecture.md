@@ -46,7 +46,7 @@ These trades are real:
 
 - A confirmation that the model must answer costs a second call, so `QR-6` spends what `QR-5` saves. A confirmation that the client answers costs `QR-5` nothing.
 - When no human is present, a consent dialog cannot run, so `QR-3` leaves the intent to an explicit flag.
-- The `power` branch holds the tool count at nine, and every call then routes through one meta-tool, so `QR-9` spends what `QR-5` saves.
+- The `power` branch holds the tool count constant, and every call then routes through a meta-tool, so `QR-9` spends what `QR-5` saves.
 
 ## Constraints
 
@@ -118,11 +118,11 @@ The MCP layer prefers a tool that expresses an outcome over one tool per API end
 
 A deployment decides how many tools a model sees, and that decision is separate from how many the catalog holds. `QR-9` is the requirement.
 
-Two axes classify the catalog. A domain is the one subject a tool is about, and the eight domains partition it, so every registered tool has exactly one. A tool profile is a journey-sized selection that crosses domains, and the six of them overlap. `--toolsets` and `PIPEFY_MCP_TOOLSETS` name either kind, or one of four keywords. `all` and `default` mean no curation, and `power` and `architect` name the same branch. An unknown name is a usage error.
+Two axes classify the catalog. A domain is the one subject a tool is about, and the domains partition it, so every registered tool has exactly one. A tool profile is a journey-sized selection that crosses domains, and profiles overlap. `--toolsets` and `PIPEFY_MCP_TOOLSETS` name either kind, or a reserved keyword, and [`docs/config.md`](../config.md) is the reference for those names and their precedence.
 
-The remote profile applies a default-deny floor before any selection runs. Selection only removes, so it narrows within the floor and never widens past it. The `power` branch takes a different route. It withdraws the curated tools from the listing and registers four catalog meta-tools over them, alongside the raw GraphQL tools. The model-facing set is then nine tools whatever the catalog holds, which is `QR-9` met at its strongest.
+The remote profile applies a default-deny floor before any selection runs. Selection only removes, so it narrows within the floor and never widens past it. The `power` branch takes a different route. It withdraws the curated tools from the listing and registers the catalog meta-tools over them, alongside the raw GraphQL tools. The model-facing set is then a constant, whatever the catalog holds, which is `QR-9` met at its strongest.
 
-A build-time guard keys the partition to the registered tool names, with no count written down, so a new tool with no domain fails the build. That is why the partition cannot go stale.
+A build-time guard keys the partition to the registered tool names, so a new tool with no domain fails the build. The guard also holds the domains disjoint, and it writes no tool count down. It reads names and not subjects, so a tool filed under the wrong domain still passes.
 
 The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and tool profile boundaries, and the reasoning behind them, are in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 

@@ -125,7 +125,7 @@ pipefy introspect schema search automation --kind INPUT_OBJECT --json
 
    > **Mutations:** the CLI exits with code 2 unless `--yes` is passed (guardrail for agents and scripts).
 
-5. **Execute the mutation (MCP):** two-step. The first call returns a preview with `confirmation_token` and does not mutate. Echo that token on the second call.
+5. **Execute the mutation (MCP):** two-step. The first call returns a preview with `confirmation_token` and does not mutate. Resend the call unchanged with `confirm=true` and the token; if the document changed, the response is a fresh preview whose token is bound to the new document.
 
    ```
    execute_graphql query="mutation CreateLabel($input: CreateLabelInput!) { createLabel(input: $input) { label { id name } } }" variables='{"input": {"pipe_id": 67890, "name": "Urgent", "color": "#FF0000"}}'
@@ -192,7 +192,7 @@ execute_graphql query='query($id: ID!) { pipe(id: $id) { organization { id uuid 
 
 ### Recipe 6 — Update a select field's options after creation
 
-`create_phase_field` does not accept options. Create first, then update. MCP mutations are two-step: preview, then `confirm=true` plus `confirmation_token`. CLI `--yes` can stay one-shot.
+`create_phase_field` does not accept options. Create first, then update. MCP mutations are two-step: preview, then `confirm=true` plus `confirmation_token`. Resend the call unchanged with `confirm=true` and the token; if the document changed, the response is a fresh preview whose token is bound to the new document. CLI `--yes` can stay one-shot.
 
 ```
 execute_graphql query='mutation($id: ID!, $options: [String!]) { updatePhaseField(input: { id: $id, options: $options }) { phase_field { id label options } } }' variables='{"id":"<field-id>","options":["High","Medium","Low"]}'

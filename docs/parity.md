@@ -21,7 +21,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | **deferred** | Not targeted for the initial CLI parity wave; see **Notes**. |
 | **N/A** | MCP- or IDE-oriented surface with no first-class CLI twin planned. |
 
-MCP destructive tools use a two-step `confirmation_token` (see [Destructive operations](mcp/tools/cross-cutting.md#destructive-operations)). A one-shot MCP `confirm=true` without that token still previews. CLI deletes stay `--yes` (or an interactive prompt). `unpublish_sub_portal` is ungated.
+MCP destructive tools use a two-step `confirmation_token` (see [Destructive operations](mcp/tools/cross-cutting.md#destructive-operations)). A one-shot MCP `confirm=true` without that token still previews. CLI deletes confirm with `--yes` (or an interactive prompt). `unpublish_sub_portal` is ungated.
 
 ## Parity matrix
 

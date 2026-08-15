@@ -120,7 +120,7 @@ When setting up an iPaaS (Advanced Automations) flow that runs under a **service
 - **`invite_members` fails with "user not found":** verify the email address is correct.
 - **`send_inbox_email` fails:** the card must have an inbox enabled in the pipe settings.
 - **Webhook never fires:** verify the pipe events match the configured `actions` list; check that the endpoint URL is publicly reachable (not localhost).
-- **`delete_webhook` first call returns preview:** expected. Show the preview, then call with `confirm=true` and the preview's `confirmation_token`.
+- **`delete_webhook` first call returns preview:** expected. Show the preview to the user and get their approval, then call with `confirm=true` and the preview's `confirmation_token`.
 
 ## See also
 

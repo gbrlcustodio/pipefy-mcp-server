@@ -25,4 +25,4 @@ Link processes and cards across workflows. **8 tools.**
 | `delete_pipe_relation` | No | Permanently deletes a pipe relation (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |
 | `create_card_relation` | No | Links a child card to a parent card via `source_id` (pipe relation ID); optional `extra_input` for `CreateCardRelationInput`. Mutations support `debug=true` on errors. |
 | `get_card_relations` | Yes | Lists `child_relations` and `parent_relations` for a card (linked cards and pipes). |
-| `delete_card_relation` | No | Removes a card link (`destructiveHint=True`). Public GraphQL may not expose the underlying delete mutation on all tenants. |
+| `delete_card_relation` | No | Removes a card link (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). Public GraphQL may not expose the underlying delete mutation on all tenants. |

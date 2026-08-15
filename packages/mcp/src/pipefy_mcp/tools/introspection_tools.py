@@ -190,7 +190,7 @@ class IntrospectionTools:
             Mutations need a preview token: call once to receive ``confirmation_token``,
             then echo that token with ``confirm=True`` on step 2. A token is replayable
             within its TTL, so a non-idempotent mutation can run twice if the caller
-            resends it. Prefer dedicated tools.
+            resends it.
 
             On ambiguous write failure (``success: false`` with empty or unclear message),
             re-read counts/ids before retrying; do not blind-retry creates.

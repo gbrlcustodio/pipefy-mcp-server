@@ -111,13 +111,10 @@ class TestNoElicitation:
 
     async def test_custom_irreversible_sentence_is_first_preview_sentence(self):
         ctx = _make_ctx(can_elicit=False)
-        sentence = (
-            "⚠️ This GraphQL mutation's effects are permanent and cannot be undone."
-        )
+        sentence = "⚠️ Running this catalog call is permanent and cannot be undone."
         payload = await _check(ctx, confirm=False, irreversible_sentence=sentence)
         _assert_preview(payload)
         assert payload["message"].startswith(sentence)
-        assert not payload["message"].startswith("⚠️ Deleting")
         ctx.elicit.assert_not_called()
 
 

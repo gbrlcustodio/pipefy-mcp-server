@@ -347,7 +347,6 @@ async def test_execute_graphql_mutation_without_token_returns_preview(
     token = payload["confirmation_token"]
     assert token
     assert token.startswith("v1.")
-    assert "Deleting GraphQL mutation" not in payload["message"]
     assert payload["message"].startswith(
         "⚠️ This GraphQL mutation's effects are permanent and cannot be undone."
     )

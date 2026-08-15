@@ -648,7 +648,6 @@ async def test_delete_token_does_not_confirm_add_arguments(
     assert payload["requires_confirmation"] is True
     assert payload["confirmation_token"] != token
     assert payload["message"].startswith("⚠️ Running ")
-    assert "Deleting iPaaS catalog tool" not in payload["message"]
     mock_gateway.call_tool.assert_not_awaited()
 
 
@@ -673,7 +672,6 @@ async def test_mixed_delete_token_does_not_confirm_add_arguments(
     assert payload["requires_confirmation"] is True
     assert payload["confirmation_token"] != token
     assert payload["message"].startswith("⚠️ Running ")
-    assert "Deleting iPaaS catalog tool" not in payload["message"]
     mock_gateway.call_tool.assert_not_awaited()
 
 

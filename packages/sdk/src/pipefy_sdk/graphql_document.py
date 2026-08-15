@@ -11,9 +11,6 @@ def document_contains_mutation(document: str) -> bool:
 
     Syntax errors are not treated as mutations, so CLI ``--yes`` is not required
     for a document that will fail to parse.
-
-    Args:
-        document: GraphQL document string (query, mutation, subscription, or mixed).
     """
     try:
         doc = parse(document)

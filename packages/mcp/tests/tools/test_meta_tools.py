@@ -126,7 +126,7 @@ async def test_execute_tool_passes_destructive_two_step_through(extract_payload)
         for tool in server._tool_manager.list_tools()
         if tool.name == "delete_webhook"
     }
-    assert catalog, "delete_webhook not registered"
+    assert catalog
     register_meta_tools(server, catalog)
 
     async with create_client_session(
@@ -158,5 +158,5 @@ async def test_execute_tool_passes_destructive_two_step_through(extract_payload)
             },
         )
         confirmed = extract_payload(confirm_result)
-        assert confirmed.get("success") is True, confirmed
+        assert confirmed["success"] is True
         client.delete_webhook.assert_awaited_once_with("wh-1")

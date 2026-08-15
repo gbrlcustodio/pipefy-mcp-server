@@ -2,13 +2,13 @@
 
 The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three, down to the layers inside one package.
 
-The map explains rather than instructs. It restates no fact that something else owns, and it names that owner instead. A check owns what it enforces, and a schema or another document owns its own subject. The reader pays one hop for that. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
-
 These readers arrive here:
 
 - A contributor who changes code starts at [Package decomposition](#package-decomposition) and reads inward from there.
 - A reviewer wants the rule and the ID to cite, and both live in [`conventions.md`](conventions.md).
 - A consumer of one application wants its interface instead of the layer model, in [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), or [`docs/sdk`](../sdk/README.md).
+
+The map explains rather than instructs. It restates no fact that something else owns, and it names that owner instead. A check owns what it enforces, and a schema or another document owns its own subject. The reader pays one hop for that. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
 ## Quality requirements
 

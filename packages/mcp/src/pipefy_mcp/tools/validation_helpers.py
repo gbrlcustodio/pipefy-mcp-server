@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
@@ -11,15 +10,6 @@ from pipefy_mcp.core.tool_error_envelope import tool_error
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
-
-
-def format_json_preview(data: Any) -> str:
-    """Pretty-print arbitrary data for MCP confirmation summaries (UTF-8, non-ASCII preserved).
-
-    Args:
-        data: Any JSON-serializable or stringifiable structure.
-    """
-    return json.dumps(data, indent=2, default=str, ensure_ascii=False)
 
 
 def valid_repo_id(value: object) -> bool:
@@ -147,7 +137,6 @@ def mutation_error_if_not_optional_dict(
 
 __all__ = [
     "UUID_RE",
-    "format_json_preview",
     "mutation_error_if_not_optional_dict",
     "valid_repo_id",
     "validate_optional_tool_id",

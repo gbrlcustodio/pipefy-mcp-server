@@ -6,9 +6,14 @@ import base64
 import hashlib
 import hmac
 import json
-from typing import Any
+import re
+from typing import Any, Literal
 
 DESTRUCTIVE_CONFIRMATION_TTL_SECONDS = 300
+_TOKEN_VERSION = "v1"
+_B64URL_SEGMENT_RE = re.compile(r"[A-Za-z0-9_-]*")
+
+ConfirmationTokenFailure = Literal["missing", "invalid_or_expired", "identity_mismatch"]
 
 
 def mint_confirmation_token(
@@ -31,8 +36,10 @@ def mint_confirmation_token(
         identity=_canonical_identity(resource_identity),
         exp=now + DESTRUCTIVE_CONFIRMATION_TTL_SECONDS,
     )
-    mac = hmac.new(key, payload_bytes, hashlib.sha256).digest()
-    return "v1." + _b64url_nopad(payload_bytes) + "." + _b64url_nopad(mac)
+    mac = hmac.new(key, _mac_message(payload_bytes), hashlib.sha256).digest()
+    return (
+        f"{_TOKEN_VERSION}." + _b64url_nopad(payload_bytes) + "." + _b64url_nopad(mac)
+    )
 
 
 def verify_confirmation_token(
@@ -57,16 +64,8 @@ def verify_confirmation_token(
     try:
         if not isinstance(token, str):
             return False
-        parts = token.split(".")
-        if len(parts) != 3 or parts[0] != "v1":
-            return False
-        payload_bytes = _b64url_decode(parts[1])
-        given_mac = _b64url_decode(parts[2])
-        expected_mac = hmac.new(key, payload_bytes, hashlib.sha256).digest()
-        if not hmac.compare_digest(given_mac, expected_mac):
-            return False
-        payload = json.loads(payload_bytes)
-        if not isinstance(payload, dict):
+        payload = _authenticated_payload(token, key)
+        if payload is None:
             return False
         exp = payload.get("exp")
         if isinstance(exp, bool) or not isinstance(exp, int) or exp <= now:
@@ -76,6 +75,54 @@ def verify_confirmation_token(
         return payload.get("identity") == _canonical_identity(resource_identity)
     except Exception:  # noqa: BLE001
         return False
+
+
+def classify_confirmation_token_failure(
+    token: str | None,
+    *,
+    tool_name: str,
+    resource_identity: dict[str, Any],
+    key: bytes,
+) -> ConfirmationTokenFailure:
+    """Say why verify would fail. Never use this to authorize proceed.
+
+    Decoding and MAC checks here are diagnostic only. Proceed remains behind
+    :func:`verify_confirmation_token`.
+    """
+    if token is None or token == "":
+        return "missing"
+    payload = _authenticated_payload(token, key)
+    if payload is None:
+        return "invalid_or_expired"
+    if payload.get("tool") != tool_name:
+        return "identity_mismatch"
+    if payload.get("identity") != _canonical_identity(resource_identity):
+        return "identity_mismatch"
+    return "invalid_or_expired"
+
+
+def _authenticated_payload(token: str, key: bytes) -> dict[str, Any] | None:
+    try:
+        parts = token.split(".")
+        if len(parts) != 3 or parts[0] != _TOKEN_VERSION:
+            return None
+        payload_bytes = _b64url_decode(parts[1])
+        given_mac = _b64url_decode(parts[2])
+        expected_mac = hmac.new(
+            key, _mac_message(payload_bytes), hashlib.sha256
+        ).digest()
+        if not hmac.compare_digest(given_mac, expected_mac):
+            return None
+        payload = json.loads(payload_bytes)
+        if not isinstance(payload, dict):
+            return None
+        return payload
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _mac_message(payload_bytes: bytes) -> bytes:
+    return f"{_TOKEN_VERSION}.".encode("ascii") + payload_bytes
 
 
 def _canonical_identity(resource_identity: dict[str, Any]) -> dict[str, Any]:
@@ -107,6 +154,7 @@ def _payload_bytes(*, tool_name: str, identity: dict[str, Any], exp: int) -> byt
         {"exp": exp, "identity": identity, "tool": tool_name},
         sort_keys=True,
         separators=(",", ":"),
+        default=str,
     ).encode("utf-8")
 
 
@@ -115,5 +163,13 @@ def _b64url_nopad(data: bytes) -> str:
 
 
 def _b64url_decode(part: str) -> bytes:
+    """Decode one token segment, accepting only the base64url alphabet.
+
+    Rejects whitespace and the standard-alphabet ``+`` and ``/`` so a segment
+    has exactly one textual form. Raises on anything else; callers treat a
+    raised decode as a failed verification.
+    """
+    if not _B64URL_SEGMENT_RE.fullmatch(part):
+        raise ValueError("token segment is not canonical base64url")
     padding = "=" * ((4 - len(part) % 4) % 4)
     return base64.urlsafe_b64decode(part + padding)

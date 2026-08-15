@@ -1,6 +1,8 @@
-"""Contract tests for the destructive confirmation token planner (REQ-1)."""
+"""Contract tests for minting and verifying HMAC confirmation tokens."""
 
 import base64
+import hashlib
+import hmac
 import json
 from unittest.mock import MagicMock
 
@@ -123,6 +125,45 @@ def test_wrong_key_fails():
     )
 
 
+def test_spliced_payload_and_mac_from_same_key_fails():
+    identity_b = {"field_id": "2", "pipe_uuid": "abc"}
+    token_a = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity=IDENTITY,
+        key=KEY,
+        now=NOW,
+    )
+    token_b = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity=identity_b,
+        key=KEY,
+        now=NOW,
+    )
+    _, payload_a, _ = token_a.split(".")
+    _, _, mac_b = token_b.split(".")
+    spliced = f"v1.{payload_a}.{mac_b}"
+    assert (
+        verify_confirmation_token(
+            spliced,
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+            now=NOW + 1,
+        )
+        is False
+    )
+    assert (
+        verify_confirmation_token(
+            spliced,
+            tool_name=TOOL,
+            resource_identity=identity_b,
+            key=KEY,
+            now=NOW + 1,
+        )
+        is False
+    )
+
+
 def test_tool_mismatch_fails():
     token = mint_confirmation_token(
         tool_name="delete_phase_field",
@@ -235,6 +276,64 @@ def test_garbage_or_none_token_returns_false(token):
     )
 
 
+def test_whitespace_in_token_part_fails():
+    token = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity=IDENTITY,
+        key=KEY,
+        now=NOW,
+    )
+    version, payload_b64, mac_b64 = token.split(".")
+    spaced = f"{version}.{payload_b64} .{mac_b64}"
+    assert (
+        verify_confirmation_token(
+            spaced,
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+            now=NOW + 1,
+        )
+        is False
+    )
+
+
+def test_standard_base64_alphabet_in_token_part_fails():
+    # Non-ASCII identity so the payload segment carries base64url "-" or "_";
+    # swapping those for the standard "+" and "/" decodes to identical bytes,
+    # so only an alphabet check rejects it.
+    identity = {"pipe_id": "çãé~ÿþ"}
+    token = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity=identity,
+        key=KEY,
+        now=NOW,
+    )
+    version, payload_b64, mac_b64 = token.split(".")
+    assert "-" in payload_b64 or "_" in payload_b64
+    standard = f"{version}.{payload_b64.replace('-', '+').replace('_', '/')}.{mac_b64}"
+    assert standard != token
+    assert (
+        verify_confirmation_token(
+            standard,
+            tool_name=TOOL,
+            resource_identity=identity,
+            key=KEY,
+            now=NOW + 1,
+        )
+        is False
+    )
+    assert (
+        verify_confirmation_token(
+            token,
+            tool_name=TOOL,
+            resource_identity=identity,
+            key=KEY,
+            now=NOW + 1,
+        )
+        is True
+    )
+
+
 def test_minted_token_wire_format():
     token = mint_confirmation_token(
         tool_name=TOOL,
@@ -252,6 +351,26 @@ def test_minted_token_wire_format():
     assert payload_raw
     assert mac_raw
     json.loads(payload_raw)
+    expected_mac = hmac.new(KEY, b"v1." + payload_raw, hashlib.sha256).digest()
+    assert hmac.compare_digest(mac_raw, expected_mac)
+    payload_only_mac = hmac.new(KEY, payload_raw, hashlib.sha256).digest()
+    assert not hmac.compare_digest(mac_raw, payload_only_mac)
+
+
+def test_mint_stringifies_non_json_identity_values():
+    class NotJson:
+        def __str__(self):
+            return "not-json"
+
+    token = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity={"field_id": NotJson()},
+        key=KEY,
+        now=NOW,
+    )
+    assert token.startswith("v1.")
+    payload = json.loads(_b64url_decode(token.split(".")[1]))
+    assert payload["identity"]["field_id"] == "not-json"
 
 
 def test_verify_uses_hmac_compare_digest(monkeypatch):
@@ -260,10 +379,7 @@ def test_verify_uses_hmac_compare_digest(monkeypatch):
     from pipefy_mcp.tools import destructive_confirmation_token as planner
 
     spy = MagicMock(wraps=hmac_mod.compare_digest)
-    if hasattr(planner, "hmac"):
-        monkeypatch.setattr(planner.hmac, "compare_digest", spy)
-    else:
-        monkeypatch.setattr(planner, "compare_digest", spy)
+    monkeypatch.setattr(planner.hmac, "compare_digest", spy)
 
     token = mint_confirmation_token(
         tool_name=TOOL,

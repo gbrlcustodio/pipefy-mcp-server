@@ -328,7 +328,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
 - **Ghost agents.** An agent listed by `get_ai_agents` may return "Agent not found" on `get_ai_agent` — a Pipefy backend artifact, persists across sessions, do not retry.
 - **GraphQL error hints.** When a dedicated read tool returns permission-denied or not-found, the `error.message` may cite concrete tools (e.g. `"Use 'get_ai_agents' to list agents..."`). Trust the hint; don't improvise alternative flows.
 - **Validation rejections.** Common issues: invalid `trigger_event`, prompt too long, missing required action config. Read the `errors` field per behavior.
-- **`delete_ai_agent` first call returns preview.** Expected. Show the preview, then call with `confirm=true` and the preview's `confirmation_token`.
+- **`delete_ai_agent` first call returns preview.** Expected. Show the preview to the user and get their approval, then call with `confirm=true` and the preview's `confirmation_token`.
 
 ## See also
 

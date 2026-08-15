@@ -236,7 +236,7 @@ Do not hide a required field — MCP rejects `hide`/`hidden` on `required=true` 
 - **`create_card` / write reports failure (empty or unclear message):** do not blind-retry. Re-read `get_cards` / `get_phase_cards_count` (or pipe `cards_count`) before any retry — see [Ambiguous write failure](../../api-troubleshoot/pipefy-api-fallback/SKILL.md#ambiguous-write-failure-re-read-before-retry).
 - **Connections missing after a connector field update:** `update_card_field` is replace-all — writing one related card id drops the rest (same replace-all applies to other list-valued fields: attachments, checklists, labels, assignees). Prefer `update_card` / CLI `card update --field-updates` with `operation` ADD/REMOVE and related **card ids**. Do not rebuild a full list from `get_card` `value` (display titles only); for REMOVE or a safe full rewrite, get current related-card ids from `get_card_relations` (or GraphQL `array_value`). For *writes* via a pipe relation (not a connector field), use `create_card_relation` / `delete_card_relation` — see `skills/relations/`.
 - **`create_phase_field` rejects type:** call `introspect_type type_name="CreatePhaseFieldInput"` to get valid values.
-- **Delete fails with preview error:** expected. Show the preview, then call again with `confirm=true` and the preview's `confirmation_token`. CLI uses `--yes`.
+- **Delete fails with preview error:** expected. Show the preview to the user and get their approval, then call again with `confirm=true` and the preview's `confirmation_token`. CLI uses `--yes`.
 
 ## See also
 

@@ -82,7 +82,7 @@ Link processes and cards across workflows. **8 MCP tools.**
 
 - **`create_card_relation` fails with "relation not found":** `source_id` must be the **pipe relation ID** (from `get_pipe_relations`), not the pipe ID. These are different values.
 - **Table relations return empty:** `get_table_relations` requires table-relation IDs, not table IDs. Get table-relation IDs from the table's connection config.
-- **`delete_pipe_relation` first call returns preview:** expected. Show the preview, then call with `confirm=true` and the preview's `confirmation_token`.
+- **`delete_pipe_relation` first call returns preview:** expected. Show the preview to the user and get their approval, then call with `confirm=true` and the preview's `confirmation_token`.
 
 ## See also
 

@@ -1,6 +1,6 @@
 """Two-step confirmation helper for destructive MCP tool tests."""
 
-from tools.conftest import _extract_payload_impl
+from tools.conftest import extract_tool_payload
 
 
 async def confirm_after_preview(session, tool_name, arguments):
@@ -11,7 +11,7 @@ async def confirm_after_preview(session, tool_name, arguments):
     preview_args = {
         key: value for key, value in arguments.items() if key != "confirmation_token"
     }
-    preview = _extract_payload_impl(await session.call_tool(tool_name, preview_args))
+    preview = extract_tool_payload(await session.call_tool(tool_name, preview_args))
     token = preview.get("confirmation_token")
     if not token:
         raise AssertionError(
@@ -21,4 +21,4 @@ async def confirm_after_preview(session, tool_name, arguments):
         tool_name,
         {**preview_args, "confirm": True, "confirmation_token": token},
     )
-    return _extract_payload_impl(confirm_result)
+    return extract_tool_payload(confirm_result)

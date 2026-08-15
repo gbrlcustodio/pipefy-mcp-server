@@ -14,9 +14,11 @@ The map explains rather than instructs. It points at the owner of a fact rather 
 
 Each row states a demand that a consumer of an application holds, in that consumer's terms. A category alone is not a requirement, so every row carries its demand beside it. This section holds every requirement that shaped a decision here. A quality that shaped no decision has no row.
 
-The rows split by whether a requirement competes. A guarantee has nothing on the other side of the trade, so it carries no rank. A goal costs something we can choose not to spend, so it carries one. A section that serves a requirement names that requirement back. If no section serves it, [Known gaps](#known-gaps) names it.
+One question decides the table for a new row. Can a release break this demand? A release never breaks a guarantee, so a guarantee carries no rank. A release can break a goal, so a goal carries one. The goal with rank 1 breaks last.
 
-**Guarantees.** Each one is a demand that no release trades.
+Each section names the requirement that it serves. If no section serves it, [Known gaps](#known-gaps) names it.
+
+**Guarantees.** Each one is a demand that every release keeps.
 
 | ID | Category | Demand | Held by |
 |---|---|---|---|
@@ -27,7 +29,7 @@ The rows split by whether a requirement competes. A guarantee has nothing on the
 | `QR-11` | Compatibility | An announcement precedes every breaking change | The SDK consumer, and any script or agent that names a command or a tool |
 | `QR-12` | Diagnosability | A partial result names what did not succeed | Every consumer |
 
-**Goals.** The rank states what a consumer can do when a goal fails.
+**Goals.** The rank states what a consumer can do when a goal breaks.
 
 | Rank | ID | Category | Demand | Held by |
 |---|---|---|---|---|

@@ -681,7 +681,10 @@ async def test_mixed_delete_token_does_not_confirm_add_arguments(
     payload = extract_payload(mismatch)
     assert payload["requires_confirmation"] is True
     assert payload["confirmation_token"] != token
-    assert payload["message"].startswith("⚠️ Running ")
+    # The classifier clears ADD, so the re-check must not claim it destroys.
+    assert payload["message"].startswith("Running ")
+    assert "is not classified as destructive" in payload["message"]
+    assert "cannot be undone" not in payload["message"]
     mock_gateway.opened_session.call_tool.assert_not_awaited()
 
 

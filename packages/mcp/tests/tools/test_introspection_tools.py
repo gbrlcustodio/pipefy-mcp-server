@@ -349,8 +349,30 @@ async def test_execute_graphql_mutation_without_token_returns_preview(
     assert token
     assert token.startswith("v1.")
     assert payload["message"].startswith(
-        "⚠️ This GraphQL mutation's effects are permanent and cannot be undone."
+        "⚠️ Executing GraphQL mutation __typename is permanent and cannot be undone."
     )
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_previews_name_the_mutation_they_would_run(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    """Two pending mutations must not render the same approval text."""
+    async with introspection_session as session:
+        first = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation DeleteThing { deleteCard { id } }"},
+        )
+        second = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation CreateThing { createCard { id } }"},
+        )
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    first_message = extract_payload(first)["message"]
+    second_message = extract_payload(second)["message"]
+    assert "DeleteThing" in first_message
+    assert "CreateThing" in second_message
+    assert first_message != second_message
 
 
 @pytest.mark.anyio
@@ -519,7 +541,9 @@ async def test_execute_graphql_too_nested_document_is_error_envelope(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload.get("requires_confirmation") is not True
-    assert "nested" in tool_error_message(payload).lower()
+    message = tool_error_message(payload).lower()
+    assert "nested" in message
+    assert "nothing was sent" in message
 
 
 @pytest.mark.anyio

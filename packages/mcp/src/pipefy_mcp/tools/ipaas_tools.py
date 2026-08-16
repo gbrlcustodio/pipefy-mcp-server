@@ -305,9 +305,12 @@ class IpaasTools:
                                 "and cannot be undone."
                             )
                         else:
+                            # The classifier cleared this call, so no warning
+                            # glyph: the token is what pulled it into the guard.
                             irreversible = (
-                                f"⚠️ Running {descriptor} is being "
-                                "re-checked against its confirmation token."
+                                f"Running {descriptor} is not classified as "
+                                "destructive, and the confirmation token "
+                                "supplied with it is being re-checked."
                             )
                         guard = await check_destructive_confirmation(
                             ctx,

@@ -210,7 +210,9 @@ class IntrospectionTools:
             inspection = inspect_graphql_document(query)
             if inspection.too_nested:
                 return build_error_payload(
-                    "GraphQL document is too deeply nested to parse."
+                    "This document is too deeply nested to parse, so it cannot "
+                    "be classified as a query or a mutation; nothing was sent. "
+                    "Reduce the nesting and retry."
                 )
             if inspection.contains_mutation:
                 guard = await check_destructive_confirmation(
@@ -218,8 +220,8 @@ class IntrospectionTools:
                     confirm=confirm,
                     resource_descriptor=inspection.mutation_descriptor,
                     irreversible_sentence=(
-                        "⚠️ This GraphQL mutation's effects are permanent "
-                        "and cannot be undone."
+                        f"⚠️ Executing {inspection.mutation_descriptor} is "
+                        "permanent and cannot be undone."
                     ),
                     resource_identity={
                         "document": hashlib.sha256(query.encode("utf-8")).hexdigest(),

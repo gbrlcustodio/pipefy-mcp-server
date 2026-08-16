@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import uuid
@@ -54,13 +56,15 @@ IPAAS_DESTRUCTIVE_NEEDLES = (
 )
 
 
-def ipaas_call_is_destructive(entry: dict | None, arguments: dict | None) -> bool:
+def ipaas_call_is_destructive(
+    entry: dict[str, Any], arguments: dict[str, Any] | None
+) -> bool:
     """Whether a catalog call must take the two-step confirmation ticket.
 
     Order (do not reorder): annotation true; ``operation`` needle-equality;
     annotation false stops; else ``tool_name`` substring needles. ``entry`` is
-    the raw ``list_tools`` wire object, or ``None`` when the name is missing
-    (treated as no boolean).
+    the raw ``list_tools`` wire object; a missing catalog name is passed as
+    ``{"name": tool_name}`` (treated as no boolean).
     """
     hint = _catalog_destructive_hint(entry)
     if hint is True:
@@ -74,9 +78,7 @@ def ipaas_call_is_destructive(entry: dict | None, arguments: dict | None) -> boo
     return any(needle in folded for needle in IPAAS_DESTRUCTIVE_NEEDLES)
 
 
-def _catalog_destructive_hint(entry: dict | None) -> bool | None:
-    if entry is None:
-        return None
+def _catalog_destructive_hint(entry: dict[str, Any]) -> bool | None:
     annotations = entry.get("annotations")
     if not isinstance(annotations, dict):
         return None
@@ -84,14 +86,12 @@ def _catalog_destructive_hint(entry: dict | None) -> bool | None:
     return hint if isinstance(hint, bool) else None
 
 
-def _catalog_tool_name(entry: dict | None) -> str:
-    if entry is None:
-        return ""
+def _catalog_tool_name(entry: dict[str, Any]) -> str:
     name = entry.get("name")
     return name if isinstance(name, str) else ""
 
 
-def _operation_equals_destructive_needle(arguments: dict | None) -> bool:
+def _operation_equals_destructive_needle(arguments: dict[str, Any] | None) -> bool:
     if arguments is None or "operation" not in arguments:
         return False
     value = arguments["operation"]
@@ -100,10 +100,25 @@ def _operation_equals_destructive_needle(arguments: dict | None) -> bool:
     return value.casefold() in IPAAS_DESTRUCTIVE_NEEDLES
 
 
+def _arguments_digest(arguments: dict[str, Any] | None) -> str:
+    canonical: dict[str, Any] = dict(arguments or {})
+    if "operation" in canonical and isinstance(canonical["operation"], str):
+        canonical["operation"] = canonical["operation"].casefold()
+    return hashlib.sha256(
+        json.dumps(
+            canonical, sort_keys=True, separators=(",", ":"), default=str
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def _ipaas_call_resource_identity(
     pipe_id: PipefyId, tool_name: str, arguments: dict[str, Any] | None
 ) -> dict[str, Any]:
-    identity: dict[str, Any] = {"pipe_id": str(pipe_id), "tool_name": tool_name}
+    identity: dict[str, Any] = {
+        "pipe_id": str(pipe_id),
+        "tool_name": tool_name,
+        "arguments": _arguments_digest(arguments),
+    }
     if arguments is not None and "operation" in arguments:
         identity["operation"] = str(arguments["operation"]).casefold()
     return identity
@@ -113,9 +128,10 @@ def _ipaas_call_resource_descriptor(
     pipe_id: PipefyId, tool_name: str, arguments: dict[str, Any] | None
 ) -> str:
     descriptor = f"iPaaS catalog tool '{tool_name}' on pipe {pipe_id}"
-    if arguments is None or "operation" not in arguments:
+    if not arguments:
         return descriptor
-    return f"{descriptor} (operation {arguments['operation']})"
+    rendered = json.dumps(arguments, sort_keys=True, separators=(",", ":"), default=str)
+    return f"{descriptor} ({rendered})"
 
 
 def _catalog_entry_named(
@@ -248,7 +264,8 @@ class IpaasTools:
             (case-insensitive equality), else a delete-like substring in the
             catalog name. Call once to receive ``confirmation_token``, then
             echo that token with ``confirm=True`` on step 2. Mixed manage
-            ADD/UPDATE stay one-shot. A token is replayable within its TTL.
+            ADD/UPDATE stay one-shot unless a confirmation token is supplied.
+            A token is replayable within its TTL.
 
             Prefer the read and validate tools while iterating, and for
             long-running executions (flow tests, retries) inspect progress
@@ -270,28 +287,36 @@ class IpaasTools:
             """
 
             async def work(gateway: IpaasGateway, token: str) -> dict:
-                async with gateway.mcp_session(token) as mcp:
-                    catalog = await mcp.list_tools()
+                async with gateway.mcp_session(token) as ipaas_session:
+                    catalog = await ipaas_session.list_tools()
                     entry = _catalog_entry_named(catalog, tool_name)
                     judged = {"name": tool_name} if entry is None else entry
+                    destructive = ipaas_call_is_destructive(judged, arguments)
                     # A leftover DELETE token must not authorize mixed ADD
                     # (identity includes operation). ADD without a token stays
                     # one-shot.
-                    if (
-                        ipaas_call_is_destructive(judged, arguments)
-                        or confirmation_token
-                    ):
+                    if destructive or confirmation_token:
                         descriptor = _ipaas_call_resource_descriptor(
                             pipe_id, tool_name, arguments
                         )
+                        if destructive:
+                            irreversible = (
+                                f"⚠️ Running {descriptor} is permanent "
+                                "and cannot be undone."
+                            )
+                        else:
+                            # The classifier cleared this call, so no warning
+                            # glyph: the token is what pulled it into the guard.
+                            irreversible = (
+                                f"Running {descriptor} is not classified as "
+                                "destructive, and the confirmation token "
+                                "supplied with it is being re-checked."
+                            )
                         guard = await check_destructive_confirmation(
                             ctx,
                             confirm=confirm,
                             resource_descriptor=descriptor,
-                            irreversible_sentence=(
-                                f"⚠️ Running {descriptor} is permanent "
-                                "and cannot be undone."
-                            ),
+                            irreversible_sentence=irreversible,
                             resource_identity=_ipaas_call_resource_identity(
                                 pipe_id, tool_name, arguments
                             ),
@@ -300,7 +325,7 @@ class IpaasTools:
                         )
                         if guard is not None:
                             return guard
-                    result = await mcp.call_tool(tool_name, arguments)
+                    result = await ipaas_session.call_tool(tool_name, arguments)
                 return _call_result_payload(pipe_id, tool_name, result)
 
             return await _run_ipaas_tool(ctx, pipe_id, work)

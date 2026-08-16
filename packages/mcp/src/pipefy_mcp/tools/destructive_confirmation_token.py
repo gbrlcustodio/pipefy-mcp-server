@@ -133,6 +133,14 @@ def _canonical_identity(resource_identity: dict[str, Any]) -> dict[str, Any]:
 
 
 def _canonical_value(value: Any) -> Any:
+    """Reduce one identity value to a JSON-native, order-stable form.
+
+    Numbers and any other non-JSON type become their string form, so ``1`` and
+    ``"1"`` bind the same token. Canonicalising here rather than at serialisation
+    keeps mint and verify on one definition: a value that reaches the payload as
+    a string must also compare as a string, or the minted token could never
+    verify and the caller would preview forever.
+    """
     if isinstance(value, dict):
         return {key: _canonical_value(value[key]) for key in sorted(value)}
     if isinstance(value, list):
@@ -140,9 +148,9 @@ def _canonical_value(value: Any) -> Any:
         return sorted(items, key=_list_sort_key)
     if isinstance(value, bool) or value is None:
         return value
-    if isinstance(value, int | float):
-        return str(value)
-    return value
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
 def _list_sort_key(item: Any) -> str:
@@ -154,7 +162,6 @@ def _payload_bytes(*, tool_name: str, identity: dict[str, Any], exp: int) -> byt
         {"exp": exp, "identity": identity, "tool": tool_name},
         sort_keys=True,
         separators=(",", ":"),
-        default=str,
     ).encode("utf-8")
 
 
@@ -165,9 +172,10 @@ def _b64url_nopad(data: bytes) -> str:
 def _b64url_decode(part: str) -> bytes:
     """Decode one token segment, accepting only the base64url alphabet.
 
-    Rejects whitespace and the standard-alphabet ``+`` and ``/`` so a segment
-    has exactly one textual form. Raises on anything else; callers treat a
-    raised decode as a failed verification.
+    Rejects whitespace and the standard-alphabet ``+`` and ``/``. Base64 leaves
+    trailing bits free, so a segment still has more than one accepted spelling;
+    the MAC comparison is what settles authenticity. Raises on anything else,
+    and callers treat a raised decode as a failed verification.
     """
     if not _B64URL_SEGMENT_RE.fullmatch(part):
         raise ValueError("token segment is not canonical base64url")

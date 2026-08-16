@@ -1,5 +1,6 @@
 """Tests for GraphQL introspection MCP tools (mocked PipefyClient)."""
 
+import json
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -348,8 +349,30 @@ async def test_execute_graphql_mutation_without_token_returns_preview(
     assert token
     assert token.startswith("v1.")
     assert payload["message"].startswith(
-        "⚠️ This GraphQL mutation's effects are permanent and cannot be undone."
+        "⚠️ Executing GraphQL mutation __typename is permanent and cannot be undone."
     )
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_previews_name_the_mutation_they_would_run(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    """Two pending mutations must not render the same approval text."""
+    async with introspection_session as session:
+        first = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation DeleteThing { deleteCard { id } }"},
+        )
+        second = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation CreateThing { createCard { id } }"},
+        )
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    first_message = extract_payload(first)["message"]
+    second_message = extract_payload(second)["message"]
+    assert "DeleteThing" in first_message
+    assert "CreateThing" in second_message
+    assert first_message != second_message
 
 
 @pytest.mark.anyio
@@ -450,6 +473,77 @@ async def test_execute_graphql_token_from_variables_a_does_not_execute_variables
     payload = extract_payload(mismatch)
     assert payload["requires_confirmation"] is True
     assert payload["confirmation_token"] != token
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_mutation_previews_name_the_operation(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    async with introspection_session as session:
+        preview_a = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation DeletePipe { deletePipe(id: 999) { id } }"},
+        )
+        preview_b = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation DeleteCard { deleteCard(id: 111) { id } }"},
+        )
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    payload_a = extract_payload(preview_a)
+    payload_b = extract_payload(preview_b)
+    assert payload_a["resource"] != payload_b["resource"]
+    assert "DeletePipe" in payload_a["resource"]
+    assert "DeleteCard" in payload_b["resource"]
+
+
+@pytest.mark.anyio
+async def test_execute_graphql_preview_does_not_leak_signing_key(
+    introspection_session, mock_introspection_client, extract_payload, monkeypatch
+):
+    canary = b"leak-canary-signing-key-bytes!!"
+    monkeypatch.setattr(
+        "pipefy_mcp.tools.destructive_tool_guard.signing_key_for",
+        lambda _ctx: canary,
+    )
+    async with introspection_session as session:
+        preview = await session.call_tool(
+            "execute_graphql",
+            {"query": "mutation { __typename }"},
+        )
+        invalid = await session.call_tool(
+            "execute_graphql",
+            {
+                "query": "mutation { __typename }",
+                "confirm": True,
+                "confirmation_token": "not-a-token",
+            },
+        )
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    for result in (preview, invalid):
+        blob = json.dumps(extract_payload(result), default=str)
+        assert canary.decode() not in blob
+        assert canary.hex() not in blob
+        assert str(canary) not in blob
+
+
+_TOO_NESTED_QUERY = "{a" * 400 + "}" * 400
+_TOO_NESTED_MUTATION = "mutation { " + "a { " * 400 + "x " + "} " * 401
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("query", [_TOO_NESTED_QUERY, _TOO_NESTED_MUTATION])
+async def test_execute_graphql_too_nested_document_is_error_envelope(
+    introspection_session, mock_introspection_client, extract_payload, query
+):
+    async with introspection_session as session:
+        result = await session.call_tool("execute_graphql", {"query": query})
+    mock_introspection_client.execute_graphql.assert_not_awaited()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload.get("requires_confirmation") is not True
+    message = tool_error_message(payload).lower()
+    assert "nested" in message
+    assert "nothing was sent" in message
 
 
 @pytest.mark.anyio

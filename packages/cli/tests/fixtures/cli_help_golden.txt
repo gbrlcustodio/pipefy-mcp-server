@@ -1785,9 +1785,10 @@ Usage: pipefy graphql exec [OPTIONS]
 
  Pass variables as JSON with ``--vars '{"key":"value"}'`` (not
  ``--variables``).
- Mutations are rejected unless ``--yes`` is set (exit code 2). Pair with
- ``pipefy introspect`` to discover operation shapes (see
- docs/cli/self-healing.md).
+ Mutations are rejected unless ``--yes`` is set (exit code 2). A document too
+ deeply nested to parse is rejected outright, because its operation type cannot
+ be determined. Pair with ``pipefy introspect`` to discover operation shapes
+ (see docs/cli/self-healing.md).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --query  -q      TEXT  GraphQL document string (query or mutation).       │

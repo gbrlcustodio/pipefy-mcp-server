@@ -123,7 +123,7 @@ pipefy introspect schema search automation --kind INPUT_OBJECT --json
    pipefy graphql exec --query "mutation …" --vars '{"input":{…}}' --yes --json
    ```
 
-   > **Mutations:** the CLI exits with code 2 unless `--yes` is passed (guardrail for agents and scripts).
+   > **Mutations:** the CLI exits with code 2 unless `--yes` is passed (guardrail for agents and scripts). It also exits 2, with or without `--yes`, when the document is too deeply nested to parse: nothing is sent, because a document that cannot be classified could carry an unconfirmed mutation. `execute_graphql` refuses the same document with an error payload.
 
 5. **Execute the mutation (MCP):** two-step. The first call returns a preview with `confirmation_token` and does not mutate. Resend the call unchanged with `confirm=true` and the token; if the document changed, the response is a fresh preview whose token is bound to the new document.
 

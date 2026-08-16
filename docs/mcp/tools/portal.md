@@ -109,7 +109,7 @@ Fifteen values accepted by `create_portal_element` / `update_portal_element` (SD
 | `delete_portal` | No | Irreversible; MCP two-step with `confirmation_token`; CLI `--yes`. |
 | `create_portal_page` | No | `interface_uuid` + `title`; optional `description`, `index`, `elements`. |
 | `update_portal_page` | No | Page metadata; at least one field. |
-| `delete_portal_page` | No | Irreversible; destructive hints / `--yes`. |
+| `delete_portal_page` | No | Irreversible; MCP two-step with `confirmation_token`; CLI `--yes`. |
 | `sort_portal_pages` | No | `page_ids` ordered list. |
 | `update_portal_page_layout` | No | `page_id` + `layout` JSON only (no portal UUID on wire). |
 | `create_portal_element` | No | `page_id`, `type`, `metadata`; optional `data_sources`. |

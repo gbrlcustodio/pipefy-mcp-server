@@ -10,6 +10,7 @@ import pytest
 
 from pipefy_mcp.tools.destructive_confirmation_token import (
     DESTRUCTIVE_CONFIRMATION_TTL_SECONDS,
+    classify_confirmation_token_failure,
     mint_confirmation_token,
     verify_confirmation_token,
 )
@@ -371,6 +372,149 @@ def test_mint_stringifies_non_json_identity_values():
     assert token.startswith("v1.")
     payload = json.loads(_b64url_decode(token.split(".")[1]))
     assert payload["identity"]["field_id"] == "not-json"
+
+
+def test_non_json_identity_value_round_trips_to_verify():
+    """A stringified identity must still verify, or the caller previews forever."""
+
+    class NotJson:
+        def __str__(self):
+            return "not-json"
+
+    token = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity={"field_id": NotJson()},
+        key=KEY,
+        now=NOW,
+    )
+    assert (
+        verify_confirmation_token(
+            token,
+            tool_name=TOOL,
+            resource_identity={"field_id": NotJson()},
+            key=KEY,
+            now=NOW + 1,
+        )
+        is True
+    )
+
+
+def test_old_format_token_signed_over_payload_only_is_rejected():
+    """A token whose MAC omits the version prefix predates the version binding."""
+    payload_bytes = json.dumps(
+        {"exp": NOW + 300, "identity": IDENTITY, "tool": TOOL},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    legacy_mac = hmac.new(KEY, payload_bytes, hashlib.sha256).digest()
+    legacy_token = (
+        "v1."
+        + base64.urlsafe_b64encode(payload_bytes).rstrip(b"=").decode("ascii")
+        + "."
+        + base64.urlsafe_b64encode(legacy_mac).rstrip(b"=").decode("ascii")
+    )
+
+    assert (
+        verify_confirmation_token(
+            legacy_token,
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+            now=NOW + 1,
+        )
+        is False
+    )
+
+
+@pytest.mark.parametrize("token", [None, ""])
+def test_classify_reports_missing_for_absent_token(token):
+    assert (
+        classify_confirmation_token_failure(
+            token,
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+        )
+        == "missing"
+    )
+
+
+def test_classify_reports_invalid_for_a_token_signed_with_another_key():
+    token = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity=IDENTITY,
+        key=OTHER_KEY,
+        now=NOW,
+    )
+
+    assert (
+        classify_confirmation_token_failure(
+            token,
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+        )
+        == "invalid_or_expired"
+    )
+
+
+def test_classify_reports_identity_mismatch_for_another_tool():
+    token = mint_confirmation_token(
+        tool_name="delete_label",
+        resource_identity=IDENTITY,
+        key=KEY,
+        now=NOW,
+    )
+
+    assert (
+        classify_confirmation_token_failure(
+            token,
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+        )
+        == "identity_mismatch"
+    )
+
+
+def test_classify_reports_identity_mismatch_for_another_resource():
+    token = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity={"field_id": "99", "pipe_uuid": "abc"},
+        key=KEY,
+        now=NOW,
+    )
+
+    assert (
+        classify_confirmation_token_failure(
+            token,
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+        )
+        == "identity_mismatch"
+    )
+
+
+def test_tampered_version_prefix_is_rejected():
+    token = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity=IDENTITY,
+        key=KEY,
+        now=NOW,
+    )
+    tampered = "v2." + token.split(".", 1)[1]
+
+    assert (
+        verify_confirmation_token(
+            tampered,
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+            now=NOW + 1,
+        )
+        is False
+    )
 
 
 def test_verify_uses_hmac_compare_digest(monkeypatch):

@@ -22,7 +22,7 @@ from pipefy_mcp.core.ipaas_gateway import IpaasGateway
 from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.registry import ToolRegistry
-from tools.conftest import _extract_payload_impl
+from tools.conftest import extract_tool_payload
 
 PROTOCOL_KEYS = frozenset({"confirm", "confirmation_token", "debug"})
 FAKE_IPAAS_TOOL_NAME = "demo_delete_flow"
@@ -233,7 +233,7 @@ def _install_identity_capture(monkeypatch):
 
 def _payload_or_result(result):
     try:
-        return _extract_payload_impl(result)
+        return extract_tool_payload(result)
     except AssertionError:
         return result
 

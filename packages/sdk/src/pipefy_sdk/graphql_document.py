@@ -23,7 +23,23 @@ class GraphqlDocumentInspection:
 
 
 def inspect_graphql_document(document: str) -> GraphqlDocumentInspection:
-    """Parse ``document`` once for mutation detection and preview naming."""
+    """Parse ``document`` once for mutation detection and preview naming.
+
+    Two unparseable documents are reported differently, on purpose. A syntax
+    error is invalid everywhere, so the API rejects it too and callers may send
+    it: it cannot turn out to be a mutation that runs unconfirmed. A document
+    that exhausts the parser's recursion is only unparseable *here*, and the
+    API may well accept it, so it comes back with ``too_nested`` set and callers
+    refuse it rather than send a document they could not classify.
+
+    The recursion ceiling is whatever stack headroom is left when this runs, not
+    a fixed nesting depth. Measurements put it near 246 levels called directly
+    and near 232 through the MCP tool path, dropping by roughly one level per
+    four frames already on the stack. So the same document can classify one way
+    from the CLI and another from a server with deeper middleware, and neither
+    result is wrong. Callers must treat ``too_nested`` as a refusal to judge,
+    never as a property of the document.
+    """
     try:
         doc = parse(document)
     except GraphQLSyntaxError:

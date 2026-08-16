@@ -1,5 +1,6 @@
 """Tests for the reusable destructive tool confirmation guard."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -333,3 +334,35 @@ class TestMissingBearer:
         payload = await _check(ctx, confirm=False)
         _assert_preview(payload)
         ctx.elicit.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_signing_key_is_absent_from_preview_and_token_error_envelopes(
+    monkeypatch,
+):
+    canary = b"leak-canary-signing-key-bytes!!"
+    monkeypatch.setattr(guard_mod, "signing_key_for", lambda _ctx: canary)
+    ctx = _make_ctx(can_elicit=False)
+
+    def assert_key_absent(payload):
+        blob = json.dumps(payload, default=str)
+        assert canary.decode() not in blob
+        assert canary.hex() not in blob
+        assert str(canary) not in blob
+
+    preview = await _check(ctx, confirm=False)
+    assert_key_absent(preview)
+
+    missing = await _check(ctx, confirm=True, confirmation_token=None)
+    assert_key_absent(missing)
+
+    invalid = await _check(ctx, confirm=True, confirmation_token="not-a-token")
+    assert_key_absent(invalid)
+
+    mismatch = await _check(
+        ctx,
+        confirm=True,
+        confirmation_token=preview["confirmation_token"],
+        resource_identity={"phase_id": "other"},
+    )
+    assert_key_absent(mismatch)

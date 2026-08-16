@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
-from pipefy_sdk.graphql_document import document_contains_mutation
+from pipefy_sdk.graphql_document import inspect_graphql_document
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
@@ -194,8 +194,10 @@ class IntrospectionTools:
 
             On ambiguous write failure (``success: false`` with empty or unclear message),
             re-read counts/ids before retrying; do not blind-retry creates.
-            Returns ``result`` (pretty-printed JSON string).  Set ``include_parsed=True``
-            to also get a ``data`` dict for programmatic access.
+            Queries and step-2 executions return ``result`` (pretty-printed JSON
+            string). The step-1 mutation preview has no ``result`` key; it
+            returns ``confirmation_token``. Set ``include_parsed=True`` to also
+            get a ``data`` dict on executed responses.
 
             Args:
                 query: Full GraphQL document (query or mutation).
@@ -205,11 +207,16 @@ class IntrospectionTools:
                 confirmation_token: Token from the preview response; echo it on step 2.
             """
             client = get_pipefy_client(ctx)
-            if document_contains_mutation(query):
+            inspection = inspect_graphql_document(query)
+            if inspection.too_nested:
+                return build_error_payload(
+                    "GraphQL document is too deeply nested to parse."
+                )
+            if inspection.contains_mutation:
                 guard = await check_destructive_confirmation(
                     ctx,
                     confirm=confirm,
-                    resource_descriptor="GraphQL mutation",
+                    resource_descriptor=inspection.mutation_descriptor,
                     irreversible_sentence=(
                         "⚠️ This GraphQL mutation's effects are permanent "
                         "and cannot be undone."

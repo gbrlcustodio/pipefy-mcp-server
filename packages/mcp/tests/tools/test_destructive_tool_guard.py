@@ -69,6 +69,13 @@ def _assert_identity_mismatch_token_wording(message):
     assert "confirm=True" in message
 
 
+def _assert_no_token_status_wording(message):
+    """A first look has no earlier token, so it must not report one as faulty."""
+    assert _MISSING_TOKEN_SENTENCE not in message
+    assert _INVALID_OR_EXPIRED_TOKEN_SENTENCE not in message
+    assert _IDENTITY_MISMATCH_TOKEN_SENTENCE not in message
+
+
 def _make_ctx(*, can_elicit=False, request=None):
     ctx = MagicMock()
     ctx.session.client_params.capabilities.elicitation = can_elicit
@@ -117,6 +124,12 @@ class TestNoElicitation:
         _assert_preview(payload)
         assert payload["message"].startswith(sentence)
         ctx.elicit.assert_not_called()
+
+    async def test_first_look_preview_reports_no_token_status(self):
+        ctx = _make_ctx(can_elicit=False)
+        payload = await _check(ctx, confirm=False)
+        _assert_preview(payload)
+        _assert_no_token_status_wording(payload["message"])
 
 
 @pytest.mark.anyio

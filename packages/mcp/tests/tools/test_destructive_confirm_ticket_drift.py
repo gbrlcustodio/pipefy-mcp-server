@@ -21,10 +21,24 @@ from pipefy_mcp.auth import RequestScopedIdentity
 from pipefy_mcp.core.ipaas_gateway import IpaasGateway
 from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.settings import settings
+from pipefy_mcp.tools.ipaas_tools import IPAAS_DESTRUCTIVE_NEEDLES
 from pipefy_mcp.tools.registry import ToolRegistry
 from tools.conftest import extract_tool_payload
 
 PROTOCOL_KEYS = frozenset({"confirm", "confirmation_token", "debug"})
+# A destructive needle in the name that the tool does not act on. Keep empty
+# unless a tool genuinely reads as destructive while doing something else.
+DESTRUCTIVELY_NAMED_BUT_NOT_DESTRUCTIVE = frozenset()
+# The reads every destructive tool is allowed to run before consulting the
+# guard, so a preview can describe what would be destroyed.
+PRE_GUARD_CLIENT_READS = frozenset(
+    {
+        "get_pipe",
+        "get_card",
+        "get_table",
+        "get_advanced_automations_token",
+    }
+)
 FAKE_IPAAS_TOOL_NAME = "demo_delete_flow"
 SENTINEL_UUID = "00000000-0000-4000-8000-000000000001"
 DRIFT_PREVIEW = {
@@ -279,16 +293,21 @@ class TestDestructiveConfirmSchema:
                 f"{tool.name} must not list confirmation_token in input schema"
             )
 
-    def test_delete_and_remove_named_tools_carry_destructive_hint(self):
+    def test_destructively_named_tools_carry_destructive_hint(self):
+        """Every frozen needle, in any position, not only the two prefixes.
+
+        A tool named for destruction but registered without the hint is
+        invisible to every other check here, since they all walk the hinted set.
+        """
         unhinted = [
             tool.name
             for tool in _listed_tools(_schema_server())
-            if tool.name.startswith(("delete_", "remove_"))
+            if any(needle in tool.name.lower() for needle in IPAAS_DESTRUCTIVE_NEEDLES)
+            and tool.name not in DESTRUCTIVELY_NAMED_BUT_NOT_DESTRUCTIVE
             and not _is_destructive(tool)
         ]
         assert not unhinted, (
-            "tools named delete_* or remove_* must set destructiveHint=True: "
-            f"{unhinted}"
+            f"tools named for destruction must set destructiveHint=True: {unhinted}"
         )
 
 
@@ -339,3 +358,34 @@ class TestDestructiveConfirmIdentity:
                     required_keys,
                 )
                 assert_preview_honors_guard(tool.name, result)
+
+    @pytest.mark.anyio
+    async def test_no_destructive_tool_writes_before_consulting_the_guard(self):
+        """A preview must describe the deletion, never perform part of it.
+
+        The identity walk proves the guard was consulted and its verdict
+        returned. It cannot see a tool that deletes first and previews after,
+        which would pass every other check here.
+        """
+        client = _fake_client()
+        mcp = _identity_server(client, _fake_ipaas_gateway())
+        destructive = [tool for tool in _listed_tools(mcp) if _is_destructive(tool)]
+        assert destructive, "no destructiveHint=True tools registered"
+        async with create_client_session(
+            mcp,
+            read_timeout_seconds=timedelta(seconds=10),
+            raise_exceptions=True,
+        ) as session:
+            for tool in destructive:
+                client.reset_mock()
+                arguments = sentinel_arguments(tool.name, _input_schema(tool))
+                await session.call_tool(tool.name, arguments)
+                called = {
+                    name.split(".")[0] for name, _args, _kwargs in client.mock_calls
+                }
+                unexpected = {name for name in called if name} - PRE_GUARD_CLIENT_READS
+                assert not unexpected, (
+                    f"{tool.name} called {sorted(unexpected)} on the default "
+                    "confirm=False preview; a preview must not reach the API "
+                    "beyond the reads that describe the resource"
+                )

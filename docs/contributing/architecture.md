@@ -1,14 +1,16 @@
 # Architecture
 
-The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three, down to the layers inside one package.
+The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three.
 
 These readers arrive here:
 
 - A contributor who changes code starts at [Package decomposition](#package-decomposition) and reads inward from there.
-- A reviewer wants the rule and the ID to cite, and both live in [`conventions.md`](conventions.md).
+- A reviewer wants an ID. A convention ID names how we write code, and [`conventions.md`](conventions.md) is the reference. A `QR` ID names what a consumer is owed, and [Quality requirements](#quality-requirements) is the table.
 - A consumer of one application wants its interface instead of the layer model, in [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), or [`docs/sdk`](../sdk/README.md).
 
-The map explains rather than instructs. It points at the owner of a fact rather than repeat it: a check, a schema, or another document. A copy appears only where the argument here depends on it. The reader pays one hop for that. Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
+The map explains rather than instructs. It points at the owner of a fact rather than repeat it: a check, a schema, or another document. The reader pays one hop for that. A copy appears here only where the argument on this page depends on it.
+
+Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
 ## Quality requirements
 

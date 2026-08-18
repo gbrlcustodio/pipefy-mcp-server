@@ -5,9 +5,11 @@ coverage captures ``resource_identity`` at the bound call site rather than
 declaring an expected mapping.
 """
 
+import ast
 import sys
 from contextlib import asynccontextmanager
 from datetime import timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -26,6 +28,10 @@ from pipefy_mcp.tools.registry import ToolRegistry
 from tools.conftest import extract_tool_payload
 
 PROTOCOL_KEYS = frozenset({"confirm", "confirmation_token", "debug"})
+# Optional selectors that reach a mutation are not in this set; bind them in
+# resource_identity (today: delete_phase_field.pipe_uuid). "Required" here is
+# the schema required list, so an optional selector is invisible to the walk.
+
 # A destructive needle in the name that the tool does not act on. Keep empty
 # unless a tool genuinely reads as destructive while doing something else.
 DESTRUCTIVELY_NAMED_BUT_NOT_DESTRUCTIVE = frozenset()
@@ -46,6 +52,100 @@ DRIFT_PREVIEW = {
     "requires_confirmation": True,
     "confirmation_token": "drift",
 }
+_TOOLS_DIR = Path(__file__).resolve().parents[2] / "src" / "pipefy_mcp" / "tools"
+_GUARD_CALL = "check_destructive_confirmation"
+_CLIENT_CALL = "get_pipefy_client"
+_IPAAS_PREAMBLE = "_run_ipaas_tool"
+
+
+def _call_name(node):
+    func = node.func
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return None
+
+
+def _iter_direct_calls(func_node):
+    def walk(node):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            return
+        if isinstance(node, ast.Call):
+            yield node
+        for child in ast.iter_child_nodes(node):
+            yield from walk(child)
+
+    for stmt in func_node.body:
+        yield from walk(stmt)
+
+
+def _first_direct_call_lineno(func_node, name):
+    for call in _iter_direct_calls(func_node):
+        if _call_name(call) == name:
+            return call.lineno
+    return None
+
+
+def _parents(tree):
+    mapping = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            mapping[child] = node
+    return mapping
+
+
+def _enclosing_functions(node, parents):
+    funcs = []
+    current = parents.get(node)
+    while current is not None:
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            funcs.append(current)
+        current = parents.get(current)
+    return funcs
+
+
+def _tool_modules():
+    return sorted(
+        path for path in _TOOLS_DIR.glob("*.py") if path.name != "__init__.py"
+    )
+
+
+def _run_ipaas_tool_function():
+    path = _TOOLS_DIR / "ipaas_tools.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == _IPAAS_PREAMBLE
+        ):
+            return node
+    raise AssertionError(f"{_IPAAS_PREAMBLE} not found in {path}")
+
+
+def _guard_sites_without_prior_client():
+    offenders = []
+    for path in _tool_modules():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        parents = _parents(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or _call_name(node) != _GUARD_CALL:
+                continue
+            enclosing = _enclosing_functions(node, parents)
+            if not enclosing:
+                offenders.append(f"{path.name}:{node.lineno} (no enclosing function)")
+                continue
+            innermost = enclosing[0]
+            client_line = _first_direct_call_lineno(innermost, _CLIENT_CALL)
+            if client_line is not None and client_line < node.lineno:
+                continue
+            if any(
+                _first_direct_call_lineno(func, _IPAAS_PREAMBLE) is not None
+                for func in enclosing
+            ):
+                continue
+            offenders.append(f"{path.name}:{innermost.name}:{node.lineno}")
+    return offenders
 
 
 def _schema_server():
@@ -389,3 +489,32 @@ class TestDestructiveConfirmIdentity:
                     "confirm=False preview; a preview must not reach the API "
                     "beyond the reads that describe the resource"
                 )
+
+    def test_gated_call_sites_resolve_the_client_before_the_guard(self):
+        """Hosted signing is sha256(bearer); the process-key fallback is dead
+        only because every gated tool calls get_pipefy_client first.
+
+        Move a guard call above that resolve and a preview minted on one
+        replica fails to verify on another, reported as invalid_or_expired.
+        """
+        offenders = _guard_sites_without_prior_client()
+        assert not offenders, (
+            "check_destructive_confirmation must follow get_pipefy_client "
+            f"in the same function, or sit behind _run_ipaas_tool: {offenders}"
+        )
+
+    def test_ipaas_preamble_resolves_the_client_before_work(self):
+        """call_ipaas_tool's nested work() has no get_pipefy_client of its own.
+
+        That is only safe while _run_ipaas_tool still resolves the client
+        before invoking work.
+        """
+        preamble = _run_ipaas_tool_function()
+        client_line = _first_direct_call_lineno(preamble, "get_pipefy_client")
+        work_line = _first_direct_call_lineno(preamble, "work")
+        assert client_line is not None, "_run_ipaas_tool never calls get_pipefy_client"
+        assert work_line is not None, "_run_ipaas_tool never calls work"
+        assert client_line < work_line, (
+            f"_run_ipaas_tool calls work at line {work_line} before "
+            f"get_pipefy_client at line {client_line}"
+        )

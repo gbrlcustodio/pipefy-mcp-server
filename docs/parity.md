@@ -60,34 +60,34 @@ MCP destructive tools use a two-step `confirmation_token` (see [Destructive oper
 | `create_table_field` | `pipefy table field create` | shipped | — |
 | `create_table_record` | `pipefy record create` | shipped | — |
 | `create_webhook` | `pipefy webhook create` | shipped | — |
-| `delete_ai_agent` | `pipefy agent delete` | shipped | AI Agents domain. MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_ai_automation` | `pipefy ai-automation delete` | shipped | AI Automations domain. MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup delete` | shipped | Knowledge bases; pipe-scoped (`--id`, `--pipe-uuid`). MCP two-step with `confirmation_token`; CLI `--yes` (or interactive prompt). |
-| `delete_ai_knowledge_base_document` | `pipefy kb document delete` | shipped | Knowledge bases; pipe-scoped (`--id`, `--pipe-uuid`). MCP two-step with `confirmation_token`; CLI `--yes` (or interactive prompt). |
-| `delete_ai_knowledge_base_plain_text` | `pipefy kb plain-text delete` | shipped | Knowledge bases; pipe-scoped (`--id`, `--pipe-uuid`). MCP two-step with `confirmation_token`; CLI `--yes` (or interactive prompt). |
+| `delete_ai_agent` | `pipefy agent delete` | shipped | AI Agents domain. MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_ai_automation` | `pipefy ai-automation delete` | shipped | AI Automations domain. MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup delete` | shipped | Knowledge bases; pipe-scoped (`--id`, `--pipe-uuid`). MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_ai_knowledge_base_document` | `pipefy kb document delete` | shipped | Knowledge bases; pipe-scoped (`--id`, `--pipe-uuid`). MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_ai_knowledge_base_plain_text` | `pipefy kb plain-text delete` | shipped | Knowledge bases; pipe-scoped (`--id`, `--pipe-uuid`). MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `delete_automation` | `pipefy automation delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `delete_card` | `pipefy card delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
-| `delete_card_relation` | `pipefy relation card delete` | shipped | requires OAuth (internal API); MCP two-step with `confirmation_token`; CLI `--yes`. |
+| `delete_card_relation` | `pipefy relation card delete` | shipped | requires OAuth (internal API); MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `delete_comment` | `pipefy card comment delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `delete_field_condition` | `pipefy field-condition delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
-| `delete_label` | `pipefy label delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_llm_provider` | `pipefy ai-provider delete` | shipped | Custom (BYOM) provider; MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_organization_report` | `pipefy report-org delete` | shipped | Organization reports. MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_phase` | `pipefy phase delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_phase_field` | `pipefy field delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`. |
+| `delete_label` | `pipefy label delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_llm_provider` | `pipefy ai-provider delete` | shipped | Custom (BYOM) provider; MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_organization_report` | `pipefy report-org delete` | shipped | Organization reports. MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_phase` | `pipefy phase delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_phase_field` | `pipefy field delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `delete_pipe` | `pipefy pipe delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
-| `delete_pipe_relation` | `pipefy relation pipe delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_pipe_report` | `pipefy report-pipe delete` | shipped | Reports domain. MCP two-step with `confirmation_token`; CLI `--yes`. |
+| `delete_pipe_relation` | `pipefy relation pipe delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_pipe_report` | `pipefy report-pipe delete` | shipped | Reports domain. MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `delete_portal` | `pipefy portal delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `delete_portal_page` | `pipefy portal page delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt; positional portal + page UUIDs. |
 | `delete_portal_element` | `pipefy portal element delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt; positional element + page UUIDs. |
-| `delete_service_account` | `pipefy service-account delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`; org + service account UUIDs; revokes the account's credentials. |
-| `delete_sub_portal` | `pipefy portal sub-portal delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`; internal_api `deleteSubPortalInterface` (irreversible). |
-| `delete_sub_portal_element` | `pipefy portal sub-portal detach` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`; internal_api `deleteSubPortalElement` (removes element wiring). |
-| `delete_table` | `pipefy table delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_table_field` | `pipefy table field delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`; `--table` required. |
-| `delete_table_record` | `pipefy record delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`. |
-| `delete_webhook` | `pipefy webhook delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`. |
+| `delete_service_account` | `pipefy service-account delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt; org + service account UUIDs; revokes the account's credentials. |
+| `delete_sub_portal` | `pipefy portal sub-portal delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt; internal_api `deleteSubPortalInterface` (irreversible). |
+| `delete_sub_portal_element` | `pipefy portal sub-portal detach` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt; internal_api `deleteSubPortalElement` (removes element wiring). |
+| `delete_table` | `pipefy table delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_table_field` | `pipefy table field delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt; `--table` required. |
+| `delete_table_record` | `pipefy record delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
+| `delete_webhook` | `pipefy webhook delete` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `duplicate_portal_element` | `pipefy portal element duplicate` | shipped | `--element-id`, `--portal-uuid` (portal that owns the page), `--page-id` (page containing the element). |
 | `execute_graphql` | `pipefy graphql exec` | shipped | MCP mutations two-step with `confirmation_token` (queries ungated). CLI mutations require `--yes` (exit 2 without). |
 | `export_automation_jobs` | `pipefy export automation-jobs` (also `pipefy automation export jobs`) | shipped | (`--organization`, `--period`). |
@@ -166,7 +166,7 @@ MCP destructive tools use a two-step `confirmation_token` (see [Destructive oper
 | `list_portals` | `pipefy portal list` | shipped | `--organization-uuid`; at most one main portal per org. |
 | `move_card_to_phase` | `pipefy card move` | shipped | (`--phase`). On required-field failures MCP may return `success: false` naming the field (and an optional hide hint); CLI still returns the raw SDK / GraphQL error (known MCP-ahead behavior). |
 | `publish_sub_portal` | `pipefy portal sub-portal publish` | shipped | internal_api `updateSubPortalElement` on a templated `forms` element; check `subPortals[].published` via `get_portal`. |
-| `remove_member_from_pipe` | `pipefy member remove` | shipped | MCP two-step with `confirmation_token`; CLI `--yes`. |
+| `remove_member_from_pipe` | `pipefy member remove` | shipped | MCP two-step with `confirmation_token`; CLI `--yes` or interactive prompt. |
 | `reset_default_llm_provider` | `pipefy ai-provider default reset` | shipped | Organization-scoped; clears the org default (`--org-id`). |
 | `search_pipes` | `pipefy pipe list` | shipped | (`--name`, `--max-per-org`). |
 | `search_schema` | `pipefy introspect schema search` | shipped | (optional `--kind`). |

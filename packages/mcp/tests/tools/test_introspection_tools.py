@@ -349,8 +349,11 @@ async def test_execute_graphql_mutation_without_token_returns_preview(
     assert token
     assert token.startswith("v1.")
     assert payload["message"].startswith(
-        "⚠️ Executing GraphQL mutation __typename is permanent and cannot be undone."
+        "Executing GraphQL mutation __typename needs approval because "
+        "this server cannot tell what the mutation changes."
     )
+    assert "permanent" not in payload["message"]
+    assert "cannot be undone" not in payload["message"]
 
 
 @pytest.mark.anyio

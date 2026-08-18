@@ -144,6 +144,8 @@ def test_ipaas_call_is_destructive_operation_equality_gates_even_when_annotated_
     entry = _MIXED_WIDGETS
     assert ipaas_call_is_destructive(entry, {"operation": "DELETE"}) is True
     assert ipaas_call_is_destructive(entry, {"operation": "delete"}) is True
+    assert ipaas_call_is_destructive(entry, {"operation": "DELETE "}) is True
+    assert ipaas_call_is_destructive(entry, {"operation": " delete"}) is True
     assert ipaas_call_is_destructive(entry, {"operation": "ADD"}) is False
     assert ipaas_call_is_destructive(entry, {"operation": "UNDELETE"}) is False
     assert ipaas_call_is_destructive(entry, {"operation": 1}) is False
@@ -169,10 +171,9 @@ def test_ipaas_call_is_destructive_no_boolean_uses_name_substring():
     assert ipaas_call_is_destructive({"name": "demo_list_flows"}, None) is False
 
 
-def test_ipaas_call_is_destructive_catalog_miss_falls_back_to_operation():
-    # A catalog miss reaches the classifier as {"name": tool_name}, so there is
-    # no annotation to short-circuit on and the operation needle decides. The
-    # name-substring half of that fallback is covered by the test above.
+def test_ipaas_call_is_destructive_catalog_miss_is_not_classified_here():
+    # A catalog miss is gated at the call site, not by inventing a name-only
+    # entry for this classifier. Name-only objects still mean "no annotation".
     assert (
         ipaas_call_is_destructive({"name": "unknown"}, {"operation": "DELETE"}) is True
     )
@@ -453,7 +454,7 @@ async def test_call_tool_passes_non_text_content_through(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "demo_get_run"},
+            {"pipe_id": "303088927", "tool_name": "demo_list_flows"},
         )
 
     payload = extract_payload(result)
@@ -776,6 +777,78 @@ async def test_delete_token_confirms_case_variant_operation(
 
 
 @pytest.mark.anyio
+async def test_delete_token_confirms_whitespace_variant_operation(
+    mock_client, mock_gateway, extract_payload
+):
+    """Trailing space on ``operation`` is not part of what the caller approved.
+
+    The classifier strips then casefolds, and the identity carries the
+    normalized value, so a token minted for ``DELETE `` must confirm ``DELETE``.
+    """
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        preview = await _call_ipaas(
+            session,
+            "demo_manage_widgets",
+            {"operation": "DELETE ", "id": "resource-a"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        confirmed = await _call_ipaas(
+            session,
+            "demo_manage_widgets",
+            {"operation": "DELETE", "id": "resource-a"},
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    payload = extract_payload(confirmed)
+    assert payload["success"] is True
+    mock_gateway.opened_session.call_tool.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_trailing_space_operation_previews_without_calling(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(
+            session, "demo_manage_widgets", {"operation": "DELETE "}
+        )
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_catalog_miss_is_unclassifiable_and_previews(
+    mock_client, mock_gateway, extract_payload
+):
+    """A name with no needle, missing from the catalog page, must not one-shot.
+
+    ``demo_archive_everything`` carries no destructive needle. If the
+    classifier saw only that name it would return False. A catalog miss
+    (pagination, or a tool the first page omitted) therefore has to fail
+    closed at the call site.
+    """
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[_wire_entry("demo_list_flows", destructive_hint=False)]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_archive_everything")
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    assert "could not be classified" in payload["message"]
+    assert "permanent" not in payload["message"]
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
 async def test_read_like_call_with_token_does_not_claim_permanent(
     mock_client, mock_gateway, extract_payload
 ):
@@ -890,7 +963,7 @@ async def test_list_tools_failure_is_error_envelope_and_does_not_call(
 
 
 @pytest.mark.anyio
-async def test_missing_catalog_benign_name_still_calls(
+async def test_missing_catalog_benign_name_previews(
     mock_client, mock_gateway, extract_payload
 ):
     mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
@@ -899,10 +972,9 @@ async def test_missing_catalog_benign_name_still_calls(
         result = await _call_ipaas(session, "demo_list_widgets")
 
     payload = extract_payload(result)
-    assert payload["success"] is True
-    mock_gateway.opened_session.call_tool.assert_awaited_once_with(
-        "demo_list_widgets", None
-    )
+    assert payload["requires_confirmation"] is True
+    assert "could not be classified" in payload["message"]
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
 
 
 @pytest.mark.anyio

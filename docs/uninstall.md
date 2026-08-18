@@ -141,7 +141,7 @@ Without a receipt the run is in **heuristic mode**, which is permanent rather th
 
 ## Switching channels
 
-There are three ways to run the Pipefy MCP server: the **hosted** HTTPS endpoint, a **local** install (`install.sh`, `uv tool`, or `uvx`), and the **Claude Code plugin**. Register exactly one of them at a time — a duplicate registration under a second name shadows the one you meant to use, and precedence runs local → project → user → plugin-provided → connectors, with the whole entry taken from the winning source and no merging across scopes.
+There are four ways to run the Pipefy MCP server: the **hosted** HTTPS endpoint, a **local** install (`install.sh`, `uv tool`, or `uvx`), the **Claude Code plugin**, and the **Cursor Marketplace plugin**. Register exactly one of them at a time — a duplicate registration under a second name shadows the one you meant to use, and precedence runs local → project → user → plugin-provided → connectors, with the whole entry taken from the winning source and no merging across scopes.
 
 Switching is *remove the old channel, then add the new one*. Scan first to find what is actually registered, since it may not be called `pipefy`:
 
@@ -188,6 +188,16 @@ pipefy auth login
 
 Remove the hosted or hand-wired registration first, for the same precedence reason.
 
+### To the Cursor Marketplace plugin
+
+In Cursor, the Marketplace plugin and any user-config Pipefy MCP entry (including `install.sh --client cursor`) both occupy the MCP list. Keep exactly one. This path has no `/install` or `/pipefy-login` commands (those files belong to Claude Code, where they surface namespaced as `/pipefy:install` and `/pipefy:pipefy-login`). Skills may appear as `/pipefy-*` palette entries.
+
+1. If `~/.cursor/mcp.json` (Windows: `%USERPROFILE%\.cursor\mcp.json`) has a matching server, delete that key and save the file. The name is free text — `./uninstall.sh --scan` prints it.
+2. Install **Pipefy** from the Cursor Marketplace once the listing is published (it is submitted from `main`). Until then, from a checkout, copy the plugin files into `~/.cursor/plugins/local/pipefy` as a real directory and fully restart Cursor. Cursor rejects a symlink whose target is outside `~/.cursor/plugins/local`. The copy commands are in the root README, [Cursor Marketplace plugin](../README.md#6-cursor-marketplace-plugin).
+3. Complete Cursor's browser sign-in. Do not run `pipefy auth login` or `/pipefy:pipefy-login` on this path.
+
+`./uninstall.sh --scan` still reports a leftover **user-config** `mcp.pipefy.com` or `pipefy-mcp-server` registration. A Marketplace-only install does not write `~/.cursor/mcp.json`. A clean scan (exit `0`) means no **user-config** registration was found in the sources the scan inspects; it does not mean the machine is free of Pipefy state. The scan does not read `<project>/.cursor/mcp.json`, and it does not clear the Cursor-held OAuth credential (sign out from Cursor's MCP pane, the same one that ran the sign-in; `pipefy auth logout` does not apply on a path with no CLI). Disable or uninstall the plugin itself from Cursor's plugin pane when leaving this path. The two panes are separate: signing out does not remove the plugin, and removing the plugin does not clear the credential.
+
 ## Removing pieces by hand
 
 The scan prints this list too, filled in with the names it found:
@@ -197,6 +207,7 @@ The scan prints this list too, filled in with the names it found:
 | local install | `uv tool uninstall pipefy-cli pipefy-mcp-server` |
 | Claude Code MCP | `claude mcp remove <name> -s user` (also `-s local`) |
 | Claude Code plugin | `/plugin uninstall pipefy@pipefy`, then `/plugin marketplace remove pipefy` |
+| Cursor Marketplace plugin | uninstall from Cursor Plugins; remove `~/.cursor/plugins/local/pipefy` if you copied or linked a checkout (`rm` a symlink, `rm -rf` a copy) |
 | other clients | delete the `mcpServers.<name>` key, or the `[mcp_servers.<name>]` section for Codex |
 | credentials | `pipefy auth logout` |
 | hosted OAuth token | `claude mcp logout <name>` |

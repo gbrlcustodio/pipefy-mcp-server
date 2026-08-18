@@ -223,7 +223,7 @@ Use a **disposable page** for element/layout experiments on a shared org main po
 
 1. **`create_portal_page`** with a unique title (e.g. `Agent smoke 2026-06-01`).
 2. Run **`create_portal_element`**, **`update_portal_element`**, **`duplicate_portal_element`**, **`update_portal_page_layout`** on that page only.
-3. **`delete_portal_page`** with MCP preview then `confirm=true`, or CLI **`--yes`**.
+3. **`delete_portal_page`** with MCP two-step (`confirmation_token` from the preview, then `confirm=true`), or CLI **`--yes`**.
 
 **`duplicate_portal_element`:** `element_id`, `portal_uuid`, and `page_id` must refer to the **same page** that already contains the source element (duplicate on the same page, not cross-page).
 
@@ -243,6 +243,12 @@ Use a **disposable page** for element/layout experiments on a shared org main po
 
 ---
 
+## Two-step destructive deletes
+
+MCP deletes (`delete_portal`, `delete_portal_page`, `delete_portal_element`, `delete_sub_portal`, `delete_sub_portal_element`) return a preview with `confirmation_token`. Echo that token with `confirm=true` on the second call. CLI uses `--yes`. `unpublish_sub_portal` is not gated.
+
+---
+
 ## Steps — unpublish or remove sub-portal
 
 **Unpublish** (keeps sub-portal entity; visitors lose access):
@@ -257,13 +263,17 @@ CLI:
 pipefy portal sub-portal unpublish <MAIN_PORTAL_UUID> <FORMS_ELEMENT_ID>
 ```
 
-**Detach** element wiring (destructive — preview/confirm on MCP, `--yes` on CLI):
+**Detach** element wiring (destructive: MCP two-step with `confirmation_token`, `--yes` on CLI):
 
 MCP:
 ```
 delete_sub_portal_element portal_uuid="<MAIN_PORTAL_UUID>" element_id="<FORMS_ELEMENT_ID>" confirm=false
 ```
-Then after approval: `confirm=true`.
+Then after approval, echo the preview's `confirmation_token`:
+
+```
+delete_sub_portal_element portal_uuid="<MAIN_PORTAL_UUID>" element_id="<FORMS_ELEMENT_ID>" confirm=true confirmation_token="<token from preview>"
+```
 
 CLI:
 ```bash
@@ -272,7 +282,7 @@ pipefy portal sub-portal detach <MAIN_PORTAL_UUID> <FORMS_ELEMENT_ID> --yes
 
 **Delete sub-portal interface** (irreversible):
 
-MCP two-step `delete_sub_portal` / CLI:
+MCP two-step `delete_sub_portal` (echo `confirmation_token`) / CLI:
 ```bash
 pipefy portal sub-portal delete <SUB_PORTAL_UUID> --yes
 ```
@@ -285,7 +295,7 @@ pipefy portal sub-portal delete <SUB_PORTAL_UUID> --yes
 - GraphQL/transport failures → `{ success: false, error: { message: "..." } }` — do not treat transport errors as success.
 - **`PERMISSION_DENIED`** on portal tools usually names **`create_portal`** or **`manage_portals`**. Re-check org id, token, and SA **`joinAsAdmin`** (see [Confirm access](#confirm-access-before-writes)).
 - Only **`PERMISSION_DENIED`** is rewritten to the portal permission hint; other GraphQL codes surface as generic errors with the API message.
-- Destructive deletes: default **`confirm=false`** returns a preview (`requires_confirmation: true`); call again with **`confirm=true`** only after explicit human approval.
+- Destructive deletes: default **`confirm=false`** returns a preview (`requires_confirmation: true`, `confirmation_token`); call again with **`confirm=true`** and that token only after explicit human approval.
 
 CLI `--json` prints the raw SDK payload (no `success` wrapper).
 

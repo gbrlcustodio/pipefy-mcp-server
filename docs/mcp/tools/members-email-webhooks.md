@@ -10,7 +10,7 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 |------|-----------|------|
 | `invite_members` | No | Invite one or more users to a pipe by email; `members` is a list of dicts with `email` and `role_name`. |
 | `add_service_account_to_pipe` | No | Attach an existing organization service account to a pipe by `email` (iPaaS setup); `role_name` defaults to `admin`. Wraps `inviteMembers` and verifies membership afterwards, so an incomplete setup is not reported as success. |
-| `remove_member_from_pipe` | No | Permanently remove one or more users from a pipe (`destructiveHint=True` — confirm with the user first). |
+| `remove_member_from_pipe` | No | Permanently remove one or more users from a pipe (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |
 | `set_role` | No | Set a member's role on a pipe (`member_id`, `role_name`). |
 
 ## Email tools
@@ -31,4 +31,4 @@ Hard stop: creating, editing and deleting email templates is not part of the API
 | `get_webhooks` | Yes | Lists webhooks for a pipe (`id`, `name`, `url`, `actions`, `headers`, `email`). |
 | `create_webhook` | No | Register a webhook for pipe events; `url` must be HTTPS; `actions` is a list of event names (e.g. `['card.move', 'card.create']`). Use `introspect_type('WebhookActions')` for valid actions. |
 | `update_webhook` | No | Patch an existing webhook (`webhook_id`, optional `name`, `url`, `actions`, `headers`). |
-| `delete_webhook` | No | Permanently delete a webhook by ID (`destructiveHint=True` — confirm with the user first). |
+| `delete_webhook` | No | Permanently delete a webhook by ID (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |

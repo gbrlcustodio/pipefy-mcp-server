@@ -21,6 +21,7 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, att
 - `extra_input` merges extra API keys (camelCase); keys that duplicate primary arguments are ignored.
 - **Phase connections are UI-only.** Creating or reordering phases does not wire Phase Connections / `allowed_phases`. Configure edges in the Pipefy UI; use `get_phase_allowed_move_targets` before moves. The API cannot add transition edges.
 - **Verify-after-write.** After create/update, re-read with the matching get tool (`get_pipe`, `get_card`, `get_phase_fields`, etc.) before reporting success. Do not treat the write response alone as proof.
+- **Destructive MCP deletes** are two-step: the preview includes `confirmation_token`; echo it with `confirm=true` on the second call. CLI uses `--yes`.
 
 ---
 
@@ -216,7 +217,7 @@ These tools manage label definitions on the pipe. Applying a pipe label to a car
 |------------|-----|---------|
 | `get_field_conditions` | `pipefy field-condition list --phase <id>` | List all field conditions on a phase. |
 | `get_field_condition` | `pipefy field-condition get` | Load one field condition by ID. |
-| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. After create, verifies the rule on the requested phase (`verified: true`); missing/wrong phase → `success: false` with `error.details.condition_id` (delete via `delete_field_condition` with `confirm=true` before recreating); if verify reads are inconclusive, may return success with a warning (verification unavailable). |
+| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. After create, verifies the rule on the requested phase (`verified: true`); missing/wrong phase → `success: false` with `error.details.condition_id` (two-step `delete_field_condition` with `confirmation_token` before recreating); if verify reads are inconclusive, may return success with a warning (verification unavailable). |
 | `update_field_condition` | `pipefy field-condition update` | Update condition action or rule (MCP rejects required+hide when top-level `actions` is set; `actions` in `extra_input` → `INVALID_ARGUMENTS`; CLI still raw). |
 | `delete_field_condition` | `pipefy field-condition delete` | **Two-step destructive.** |
 
@@ -232,12 +233,12 @@ Do not hide a required field — MCP rejects `hide`/`hidden` on `required=true` 
 
 ## Failure modes
 
-- **`create_field_condition` fails with missing/wrong phase:** use `error.details.condition_id` (or the id in the message) with `delete_field_condition` and `confirm=true` before recreating; do not blind-retry create on the same requested phase.
+- **`create_field_condition` fails with missing/wrong phase:** use `error.details.condition_id` (or the id in the message) with two-step `delete_field_condition` (echo `confirmation_token`) before recreating; do not blind-retry create on the same requested phase.
 - **`create_card` fails with missing required fields:** call `get_start_form_fields` first to discover required `field_id` values.
 - **`create_card` / write reports failure (empty or unclear message):** do not blind-retry. Re-read `get_cards` / `get_phase_cards_count` (or pipe `cards_count`) before any retry — see [Ambiguous write failure](../../api-troubleshoot/pipefy-api-fallback/SKILL.md#ambiguous-write-failure-re-read-before-retry).
 - **Connections missing after a connector field update:** `update_card_field` is replace-all — writing one related card id drops the rest (same replace-all applies to other list-valued fields: attachments, checklists). Prefer `update_card` / CLI `card update --field-updates` with `operation` ADD/REMOVE and related **card ids**. Do not rebuild a full list from `get_card` `value` (display titles only); for REMOVE or a safe full rewrite, get current related-card ids from `get_card_relations` (or GraphQL `array_value`). For *writes* via a pipe relation (not a connector field), use `create_card_relation` / `delete_card_relation` — see `skills/relations/`. Pipe labels and assignees are not fields: use `update_card(label_ids=)` / `assignee_ids` (replace-all); `field_updates` ADD cannot address them.
 - **`create_phase_field` rejects type:** call `introspect_type type_name="CreatePhaseFieldInput"` to get valid values.
-- **Delete fails with preview error:** expected — call without `confirm=true` first, show user the preview, then call with `confirm=true`.
+- **Delete fails with preview error:** expected. Show the preview to the user and get their approval, then call again with `confirm=true` and the preview's `confirmation_token`. CLI uses `--yes`.
 
 ## See also
 

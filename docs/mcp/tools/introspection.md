@@ -12,7 +12,7 @@ Prefer dedicated tools for standard operations. Use these when the schema shifts
 | `introspect_query` | Yes | Query arguments and return type. Optional `max_depth`. |
 | `introspect_mutation` | Yes | Mutation arguments and return type. Optional `max_depth`. |
 | `search_schema` | Yes | Keyword search on type names/descriptions. Optional `kind` filter. |
-| `execute_graphql` | **No** | Arbitrary document (syntax-checked). Hints query/mutation mismatch on errors. **Prefer dedicated tools.** |
+| `execute_graphql` | **No** | Arbitrary document (syntax-checked). Hints query/mutation mismatch on errors. **Prefer dedicated tools.** Mutations use the [two-step](cross-cutting.md#destructive-operations) with `confirmation_token` (queries ungated). |
 
 Responses: `success` / `result` or `error`; transport GraphQL errors are surfaced clearly.
 

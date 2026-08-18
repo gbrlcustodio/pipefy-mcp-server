@@ -21,7 +21,7 @@ Ten tools manage Pipefy traditional automations: if/then rules bound to a pipe v
 | `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. Optional first-class typed `condition` (see [Condition contract](#condition-contract-condition)); other fields via `extra_input`. |
 | `create_send_task_automation` | No | Creates a send-a-task automation (`pipe_id`, trigger, task title, recipients). Created active; disable via `update_automation`. |
 | `update_automation` | No | Patches a rule: first-class typed `condition` (see [Condition contract](#condition-contract-condition)) and/or `extra_input` (`UpdateAutomationInput` fields). Requires at least one. |
-| `delete_automation` | No | Permanently deletes a rule (`destructiveHint=True` — confirm with the user first). |
+| `delete_automation` | No | Permanently deletes a rule (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |
 
 **Catalog limit: no action applies a label.** The action catalog has no label action, so an if/then rule that labels a card cannot be created through the API or MCP. `get_automation_actions(pipe_id)` is the dynamic source of truth for what a pipe offers; read it instead of assuming. The durable path for that intent is a rule configured in Pipefy itself, where it lives in the process and keeps running unattended. Record that manual step in the plan given to the user, and confirm in the product what is available for that trigger. `update_card(label_ids=[...])` **replaces** the whole label list on a single card as a one-off correction: include every id that should remain, not only the new one. Something has to run the call each time and nothing persists as process behavior, so it does not stand in for the missing action. `create_label` / `update_label` / `delete_label` manage label definitions on the pipe, not label assignment on cards.
 
@@ -147,7 +147,7 @@ AI automations are separate from traditional rules above. They are prompt-driven
 | `update_ai_automation` | No | Change name, `active`, prompt, `field_ids`, or `condition`. |
 | `get_ai_automation` | Yes | Loads one AI automation by id (same GraphQL read path as `get_automation`). |
 | `get_ai_automations` | Yes | Lists **only** `generate_with_ai` automations for the pipe (optional org resolution). |
-| `delete_ai_automation` | No | Permanently deletes an AI automation (`destructiveHint=True` — two-step confirm). |
+| `delete_ai_automation` | No | Permanently deletes an AI automation (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |
 | `validate_ai_automation_prompt` | Yes | Pre-flight validation: field refs in the prompt, `field_ids`, optional `event_id`, and `pipe.preferences.aiAgentsEnabled`. |
 
 ### `create_ai_automation`: `condition` (contract)
@@ -228,7 +228,7 @@ Use `get_ai_agents` with the pipe's `uuid` (same as `repo_uuid`) before `create_
 | `get_ai_agent` | Yes | Loads one agent by UUID: name, instruction, behaviors. |
 | `get_ai_agents` | Yes | Lists agents for a pipe (`repo_uuid` = pipe UUID). |
 | `validate_ai_agent_behaviors` | Yes | Dry-runs behaviors against a pipe (fields, phases, relations); use before create/update. |
-| `delete_ai_agent` | No | Permanently deletes an agent (`destructiveHint=True` — confirm with the user first). |
+| `delete_ai_agent` | No | Permanently deletes an agent (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |
 
 ---
 

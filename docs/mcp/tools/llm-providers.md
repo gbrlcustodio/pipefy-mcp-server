@@ -15,7 +15,7 @@ These are the counterpart to the `providerId` / `systemProviderId` fields on AI 
 | `validate_llm_provider_access` | Yes | Probes whether the current credential can read the organization's providers, classifying failures into structured problems (permission denied / not found / invalid arguments) instead of opaque errors. |
 | `create_llm_provider` | No | Creates a custom (BYOM) provider. Configuration comes from a local JSON file (`configuration_file_path`), never inline; the created provider is returned without its configuration. |
 | `update_llm_provider` | No | Updates a custom provider with a full replacement configuration (from a local JSON file). Redaction placeholders preserve stored secrets — see [The update flow](#the-update-flow). |
-| `delete_llm_provider` | No | Deletes a custom provider permanently. Two-step `confirm`. Check dependencies first. |
+| `delete_llm_provider` | No | Deletes a custom provider permanently. [Two-step](cross-cutting.md#destructive-operations) with `confirmation_token`. Check dependencies first. |
 | `set_llm_provider_active_status` | No | Activates or deactivates a custom provider (`active`). No organization argument — the org is resolved from the session. |
 | `set_default_llm_provider` | No | Sets the organization's default provider. Exactly one of `provider_id` (custom) / `system_provider_id` (system). |
 | `reset_default_llm_provider` | No | Clears the organization's default provider assignment. Reversible via `set_default_llm_provider`. |
@@ -91,7 +91,7 @@ Keep your provider's configuration file as the client-side source of truth: beca
 
 ## Deletes and dependencies
 
-`delete_llm_provider` is permanent and requires confirmation (MCP `confirm=True`; CLI prompts unless `--yes`). Before deleting or deactivating a provider, run `get_llm_provider_dependencies` — owners that still reference it are blockers.
+`delete_llm_provider` is permanent and requires the [MCP two-step](cross-cutting.md#destructive-operations) with `confirmation_token` (CLI prompts unless `--yes`). Before deleting or deactivating a provider, run `get_llm_provider_dependencies`. Owners that still reference it are blockers.
 
 ## Configuration redaction
 

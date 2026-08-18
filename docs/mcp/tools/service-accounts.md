@@ -9,7 +9,7 @@ Create and delete organization **service accounts** — OAuth2 machine identitie
 | Tool | Read-only | Role |
 |------|-----------|------|
 | `create_service_account` | No | Create an org service account (`organization_uuid`, `name` ≤20 chars, `role`; optional `description`, `expiration_unit` + `expiration_value`). Returns the OAuth2 `client { id secret }` and `token { endpoint }` **once**. Optional `pipe_ids` adds the new account to those pipes immediately (with `pipe_role`, default `admin`), returning a `pipe_memberships` summary. |
-| `delete_service_account` | No | Permanently delete a service account (`organization_uuid`, `service_account_uuid`). `destructiveHint=True` — two-step `confirm`. Revokes the account's credentials. |
+| `delete_service_account` | No | Permanently delete a service account (`organization_uuid`, `service_account_uuid`). `destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`. Revokes the account's credentials. |
 
 ## Secrets contract
 
@@ -28,7 +28,7 @@ A service account has **no pipe access** when created. The full setup is:
 1. `create_service_account(organization_uuid, name, role)` → capture `client.id`, `client.secret`, `token.endpoint`. Pass `pipe_ids=[...]` to fold step 2 into this call (adds the account to those pipes with `pipe_role`, default `admin`, and returns a `pipe_memberships` summary).
 2. `add_service_account_to_pipe(pipe_id, email)` for **each** target pipe (role defaults to `admin`) — pipe-scoped calls under the account's identity fail with a permission error until it is a member.
 3. Authenticate as the account (client-credentials grant at `token.endpoint`) to act on those pipes.
-4. `delete_service_account(organization_uuid, service_account_uuid)` when it is no longer needed.
+4. Two-step `delete_service_account(organization_uuid, service_account_uuid)` with `confirmation_token` from the preview when it is no longer needed.
 
 ## Notes
 

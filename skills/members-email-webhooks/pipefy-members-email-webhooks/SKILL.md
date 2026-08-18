@@ -18,7 +18,7 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 |------------|-----|-----------|---------|
 | `invite_members` | `pipefy member invite` | No | Invite one or more users by email + role. |
 | `add_service_account_to_pipe` | `pipefy member add-service-account` | No | Attach an existing org **service account** to a pipe by email + role (iPaaS setup). Verifies membership afterwards. |
-| `remove_member_from_pipe` | `pipefy member remove` | No | **Two-step destructive.** Verifies afterwards and warns if the member is still present (org-level permissions can override pipe removal). |
+| `remove_member_from_pipe` | `pipefy member remove` | No | **Two-step destructive.**[^mcp-confirm] Verifies afterwards and warns if the member is still present (org-level permissions can override pipe removal). |
 | `set_role` | `pipefy member set-role` | No | Change a member's pipe role (`member_id` = user id). |
 
 List existing members with `get_pipe_members` from [skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md](../../pipes-and-cards/pipefy-pipes-and-cards/SKILL.md). Id forms: [`docs/mcp/tools/identifiers.md#members-email-webhooks`](../../../docs/mcp/tools/identifiers.md#members-email-webhooks).
@@ -55,7 +55,7 @@ When setting up an iPaaS (Advanced Automations) flow that runs under a **service
 
    CLI: `pipefy member add-service-account --pipe 67890 --email svc-automations@your-org.pipefy-service.com`
 
-   The **MCP tool** verifies membership afterwards: it returns an error if the account is not a member of the pipe once the invite is processed, so an incomplete setup is not reported as success. The **CLI** does not verify — it prints the raw invite result, so check `inviteMembers.errors` (or run `pipefy member list --pipe <id>`) to confirm the account was actually added. This attaches an existing service account — create one first with `create_service_account` if you don't have one, and delete a throwaway with `delete_service_account(organization_uuid, service_account_uuid)` when done. See [docs/mcp/tools/service-accounts.md](../../../docs/mcp/tools/service-accounts.md).
+   The **MCP tool** verifies membership afterwards: it returns an error if the account is not a member of the pipe once the invite is processed, so an incomplete setup is not reported as success. The **CLI** does not verify — it prints the raw invite result, so check `inviteMembers.errors` (or run `pipefy member list --pipe <id>`) to confirm the account was actually added. This attaches an existing service account — create one first with `create_service_account` if you don't have one, and delete a throwaway with two-step `delete_service_account` (echo `confirmation_token`) when done. See [docs/mcp/tools/service-accounts.md](../../../docs/mcp/tools/service-accounts.md).
 
 ---
 
@@ -91,7 +91,9 @@ When setting up an iPaaS (Advanced Automations) flow that runs under a **service
 | `get_webhooks` | `pipefy webhook list --pipe <id>` | Yes | List all webhooks for a pipe. |
 | `create_webhook` | `pipefy webhook create` | No | Register a new webhook endpoint. |
 | `update_webhook` | `pipefy webhook update <id>` | No | Change URL, headers, or events. |
-| `delete_webhook` | `pipefy webhook delete <id>` | No | **Two-step destructive.** |
+| `delete_webhook` | `pipefy webhook delete <id>` | No | **Two-step destructive.**[^mcp-confirm] |
+
+[^mcp-confirm]: MCP two-step: echo `confirmation_token` from the preview with `confirm=true`. CLI: `--yes`.
 
 ### Steps — create a webhook
 
@@ -120,7 +122,7 @@ When setting up an iPaaS (Advanced Automations) flow that runs under a **service
 - **`invite_members` fails with "user not found":** verify the email address is correct.
 - **`send_inbox_email` fails:** the card must have an inbox enabled in the pipe settings.
 - **Webhook never fires:** verify the pipe events match the configured `actions` list; check that the endpoint URL is publicly reachable (not localhost).
-- **`delete_webhook` first call returns preview:** expected — show preview, then call with `confirm=true`.
+- **`delete_webhook` first call returns preview:** expected. Show the preview to the user and get their approval, then call with `confirm=true` and the preview's `confirmation_token`.
 
 ## See also
 

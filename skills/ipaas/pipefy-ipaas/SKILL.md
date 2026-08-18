@@ -62,7 +62,7 @@ Never expand more than the entry you are about to call, and read the entry's own
 - **iPaaS data tables** — list tables, query records, create tables and fields, insert/update/delete records, delete a table.
 - **AI** — list configured AI providers and models for agent-style steps.
 
-Destructive entries (delete flow, delete table, delete records, delete step) are permanent and have no preview. Reserve them for explicit user intent.
+Destructive catalog **calls** need the MCP confirmation token when the call is judged destructive, in this order: catalog `annotations.destructiveHint` true, then `arguments.operation` needle-equality after strip and casefold against `delete` / `remove` / `destroy` / `drop` / `uninstall` / `revoke`, then annotation false stops (do not fall through to name needles), else the catalog name is matched as a substring against those needles. A catalog miss (the name was not on the page this server read) is unclassifiable and takes the two-step as well. Mixed manage with `operation=DELETE` is two-step; `ADD` / `UPDATE` stay one-shot unless a `confirmation_token` is supplied, which routes any call through the guard. Show the preview to the user and get their approval, then call again with `confirm=true`, the preview's `confirmation_token`, and the same `arguments` as step 1 (`operation` may differ in case or surrounding whitespace; any other change returns a fresh preview). Do not invent extra needles.
 
 ## Steps — build and test a flow
 
@@ -117,7 +117,7 @@ For a single task ("send one Slack message", "check my inbox"), the catalog has 
 - **`PERMISSION_DENIED` on pipe operations under a service account.** The service account the flow runs under is not a member of the pipe. Attach it with `add_service_account_to_pipe(pipe_id, email, role_name)` and confirm with `get_pipe_members`.
 - **Dropdown resolution times out.** Large external workspaces can time out. Ask the user for the ID and pass it literally.
 - **`$env` rejected under remote profile.** Secret references are local-only. Pass credentials through `create_ipaas_connection`, not inline `$env`.
-- **Accidental destruction.** Delete entries (flow, table, records) are permanent and have no preview. Confirm intent first; prefer updating a step over deleting it (delete destroys sample data).
+- **Accidental destruction.** A destructive catalog call returns a preview with `confirmation_token`. Show the preview to the user and get their approval, then call again with `confirm=true` and the preview's `confirmation_token`. Judgement order: annotation `true`, then `arguments.operation` needle-equality, then annotation `false` stops (a false annotation does **not** fall through to name needles), else name substring needles. Mixed `operation=DELETE` is two-step; `ADD`/`UPDATE` are not. Prefer updating a step over deleting it.
 
 ## See also
 

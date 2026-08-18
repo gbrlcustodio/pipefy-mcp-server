@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
+from pipefy_sdk.graphql_document import inspect_graphql_document
 
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
@@ -175,22 +179,66 @@ class IntrospectionTools:
             ctx: Context,
             variables: dict[str, Any] | None = None,
             include_parsed: bool = False,
+            confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict:
             """Run arbitrary GraphQL against Pipefy (queries or mutations).
 
             Prefer dedicated tools when available. Use this as a fallback when no specific
             tool exists. Always introspect the mutation's input shape before executing.
+
+            Mutations need a preview token: call once to receive ``confirmation_token``,
+            then echo that token with ``confirm=True`` on step 2. A token is replayable
+            within its TTL, so a non-idempotent mutation can run twice if the caller
+            resends it.
+
             On ambiguous write failure (``success: false`` with empty or unclear message),
             re-read counts/ids before retrying; do not blind-retry creates.
-            Returns ``result`` (pretty-printed JSON string).  Set ``include_parsed=True``
-            to also get a ``data`` dict for programmatic access.
+            Queries and step-2 executions return ``result`` (pretty-printed JSON
+            string). The step-1 mutation preview has no ``result`` key; it
+            returns ``confirmation_token``. Set ``include_parsed=True`` to also
+            get a ``data`` dict on executed responses.
 
             Args:
                 query: Full GraphQL document (query or mutation).
                 variables: Optional variable map for the operation.
                 include_parsed: When True, include ``data`` dict alongside ``result``.
+                confirm: Set to True with the preview token to execute a mutation (step 2).
+                confirmation_token: Token from the preview response; echo it on step 2.
             """
             client = get_pipefy_client(ctx)
+            inspection = inspect_graphql_document(query)
+            if inspection.too_nested:
+                return build_error_payload(
+                    "This document is too deeply nested to parse, so it cannot "
+                    "be classified as a query or a mutation; nothing was sent. "
+                    "Reduce the nesting and retry."
+                )
+            if inspection.contains_mutation:
+                guard = await check_destructive_confirmation(
+                    ctx,
+                    confirm=confirm,
+                    resource_descriptor=inspection.mutation_descriptor,
+                    irreversible_sentence=(
+                        f"Executing {inspection.mutation_descriptor} needs "
+                        "approval because this server cannot tell what the "
+                        "mutation changes."
+                    ),
+                    resource_identity={
+                        "document": hashlib.sha256(query.encode("utf-8")).hexdigest(),
+                        "variables": hashlib.sha256(
+                            json.dumps(
+                                variables or {},
+                                sort_keys=True,
+                                separators=(",", ":"),
+                            ).encode("utf-8")
+                        ).hexdigest(),
+                    },
+                    tool_name="execute_graphql",
+                    confirmation_token=confirmation_token,
+                )
+                if guard is not None:
+                    return guard
             try:
                 result = await client.execute_graphql(query, variables)
             except Exception as exc:  # noqa: BLE001

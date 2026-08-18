@@ -26,6 +26,8 @@ gateway itself reads no settings.
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -76,6 +78,53 @@ def _step_field(step: str, body: dict[str, Any], key: str) -> Any:
         raise IpaasGatewayError(f"{step} returned a body without '{key}'.") from exc
 
 
+def _tools_from_list_result(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """The ``tools`` list from a ``tools/list`` result, or a step-named error."""
+    tools = _step_field("iPaaS tools/list", result, "tools")
+    if not isinstance(tools, list):
+        raise IpaasGatewayError(
+            "iPaaS tools/list returned a body whose 'tools' field is not a list."
+        )
+    for index, entry in enumerate(tools):
+        if not isinstance(entry, dict):
+            raise IpaasGatewayError(
+                "iPaaS tools/list returned a catalog entry that is not an "
+                f"object (index {index})."
+            )
+    return tools
+
+
+class IpaasMcpSession:
+    """MCP list/call on one already-minted access token."""
+
+    def __init__(
+        self,
+        gateway: IpaasGateway,
+        http: httpx.AsyncClient,
+        access_token: str,
+    ) -> None:
+        self._gateway = gateway
+        self._http = http
+        self._access_token = access_token
+
+    async def list_tools(self) -> list[dict[str, Any]]:
+        result = await self._gateway._mcp_request(
+            self._http, self._access_token, "tools/list", {}
+        )
+        return _tools_from_list_result(result)
+
+    async def call_tool(
+        self, tool_name: str, arguments: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        return await self._gateway._mcp_request(
+            self._http,
+            self._access_token,
+            "tools/call",
+            {"name": tool_name, "arguments": arguments or {}},
+            CALL_TIMEOUT_SECONDS,
+        )
+
+
 @dataclass(frozen=True)
 class IpaasGateway:
     """Stateless client for one iPaaS deployment (see module docstring)."""
@@ -104,40 +153,22 @@ class IpaasGateway:
         result = await self._authed_mcp_request(
             advanced_automations_token, "tools/list", params={}
         )
-        return result["tools"]
+        return _tools_from_list_result(result)
 
-    async def call_tool(
-        self,
-        advanced_automations_token: str,
-        tool_name: str,
-        arguments: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Invoke one tool in the pipe's iPaaS workspace and return its raw result.
+    @asynccontextmanager
+    async def mcp_session(
+        self, advanced_automations_token: str
+    ) -> AsyncIterator[IpaasMcpSession]:
+        """One OAuth handshake; list and call reuse that access token.
 
-        The return value is the wire-format ``tools/call`` result
-        (``content`` list plus ``isError``); interpreting or reshaping it is
-        the caller's concern. Like :meth:`list_tools`, each call runs the full
-        stateless auth chain; only the invocation hop itself gets the longer
-        :data:`CALL_TIMEOUT_SECONDS` budget, since a called tool may execute a
-        real flow.
-
-        Args:
-            advanced_automations_token: Pipe-scoped token from
-                ``PipefyClient.get_advanced_automations_token``.
-            tool_name: Exact catalog name (see :meth:`list_tools`).
-            arguments: Tool arguments, forwarded verbatim; the iPaaS host
-                validates them against its own input schema.
-
-        Raises:
-            IpaasGatewayError: When any step of the chain is refused by the
-                iPaaS host; the message names the step.
+        The token lives only on the yielded session and is dropped on exit.
+        The gateway itself stays stateless.
         """
-        return await self._authed_mcp_request(
-            advanced_automations_token,
-            "tools/call",
-            params={"name": tool_name, "arguments": arguments or {}},
-            timeout_seconds=CALL_TIMEOUT_SECONDS,
-        )
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS)
+        ) as http:
+            access_token = await self._access_token(http, advanced_automations_token)
+            yield IpaasMcpSession(self, http, access_token)
 
     async def connection_auth_url(
         self, advanced_automations_token: str, piece_name: str
@@ -533,4 +564,9 @@ def _parse_mcp_response(response: httpx.Response) -> dict[str, Any]:
     )
 
 
-__all__ = ["IpaasGateway", "IpaasGatewayError", "oauth_connection_value"]
+__all__ = [
+    "IpaasGateway",
+    "IpaasGatewayError",
+    "IpaasMcpSession",
+    "oauth_connection_value",
+]

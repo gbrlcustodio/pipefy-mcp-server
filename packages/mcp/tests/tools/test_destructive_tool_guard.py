@@ -1,5 +1,6 @@
 """Tests for the reusable destructive tool confirmation guard."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -93,6 +94,7 @@ async def _check(
     tool_name=TOOL_NAME,
     confirmation_token=None,
     dependents_resolver=None,
+    irreversible_sentence=None,
 ):
     return await check_destructive_confirmation(
         ctx,
@@ -102,6 +104,7 @@ async def _check(
         tool_name=tool_name,
         confirmation_token=confirmation_token,
         dependents_resolver=dependents_resolver,
+        irreversible_sentence=irreversible_sentence,
     )
 
 
@@ -111,6 +114,15 @@ class TestNoElicitation:
         ctx = _make_ctx(can_elicit=False)
         payload = await _check(ctx, confirm=False)
         _assert_preview(payload)
+        assert payload["message"].startswith(f"⚠️ Deleting {RESOURCE}")
+        ctx.elicit.assert_not_called()
+
+    async def test_custom_irreversible_sentence_is_first_preview_sentence(self):
+        ctx = _make_ctx(can_elicit=False)
+        sentence = "⚠️ Running this catalog call is permanent and cannot be undone."
+        payload = await _check(ctx, confirm=False, irreversible_sentence=sentence)
+        _assert_preview(payload)
+        assert payload["message"].startswith(sentence)
         ctx.elicit.assert_not_called()
 
     async def test_first_look_preview_reports_no_token_status(self):
@@ -335,3 +347,35 @@ class TestMissingBearer:
         payload = await _check(ctx, confirm=False)
         _assert_preview(payload)
         ctx.elicit.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_signing_key_is_absent_from_preview_and_token_error_envelopes(
+    monkeypatch,
+):
+    canary = b"leak-canary-signing-key-bytes!!"
+    monkeypatch.setattr(guard_mod, "signing_key_for", lambda _ctx: canary)
+    ctx = _make_ctx(can_elicit=False)
+
+    def assert_key_absent(payload):
+        blob = json.dumps(payload, default=str)
+        assert canary.decode() not in blob
+        assert canary.hex() not in blob
+        assert str(canary) not in blob
+
+    preview = await _check(ctx, confirm=False)
+    assert_key_absent(preview)
+
+    missing = await _check(ctx, confirm=True, confirmation_token=None)
+    assert_key_absent(missing)
+
+    invalid = await _check(ctx, confirm=True, confirmation_token="not-a-token")
+    assert_key_absent(invalid)
+
+    mismatch = await _check(
+        ctx,
+        confirm=True,
+        confirmation_token=preview["confirmation_token"],
+        resource_identity={"phase_id": "other"},
+    )
+    assert_key_absent(mismatch)

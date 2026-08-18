@@ -369,6 +369,32 @@ def test_graphql_exec_mutation_with_yes_calls_sdk(
     mock_client.execute_graphql.assert_awaited_once()
 
 
+def test_graphql_exec_too_nested_document_exit_2(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """A document the parser cannot classify is refused, ``--yes`` included.
+
+    The parser reports neither query nor mutation for it, so ``--yes`` has no
+    mutation to acknowledge. ``execute_graphql`` answers the same document with
+    an error envelope and never calls the API; the CLI must not send it either.
+    """
+    oauth_env("gql_nested")
+    nested = "mutation M { " + "a { " * 400 + "x " + "} " * 401
+    mock_client = MagicMock()
+    mock_client.execute_graphql = AsyncMock(return_value={"ok": True})
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        for argv in (
+            ["graphql", "exec", "--query", nested, "--json"],
+            ["graphql", "exec", "--query", nested, "--yes", "--json"],
+        ):
+            result = runner.invoke(app, argv)
+            assert result.exit_code == 2, argv
+    mock_client.execute_graphql.assert_not_called()
+
+
 def test_graphql_exec_invalid_vars_exit_2(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):

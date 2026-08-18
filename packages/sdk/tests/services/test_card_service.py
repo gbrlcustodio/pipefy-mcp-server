@@ -409,6 +409,30 @@ async def test_update_card_field_mode_uses_update_fields_values_shape():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_update_card_field_updates_discards_attribute_args():
+    """field_updates wins: label_ids and sibling attributes never reach updateCard."""
+    service, executor = _make_service({"updateFieldsValues": {"success": True}})
+    await service.update_card(
+        12345,
+        title="keep me",
+        assignee_ids=[1],
+        label_ids=[2],
+        due_date="2026-01-01",
+        field_updates=[{"field_id": "status", "value": "done"}],
+    )
+
+    variables = executor.execute_query.call_args[0][1]
+    payload = variables["input"]
+    assert "label_ids" not in payload
+    assert "assignee_ids" not in payload
+    assert "title" not in payload
+    assert "due_date" not in payload
+    assert payload["nodeId"] == "12345"
+    assert payload["values"][0]["fieldId"] == "status"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_comment_variable_shape_and_return_passthrough():
     """Test create_comment sends correct input shape and returns response unchanged."""
     card_id = 12345

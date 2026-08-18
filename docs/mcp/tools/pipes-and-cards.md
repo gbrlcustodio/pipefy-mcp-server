@@ -41,7 +41,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | Tool | Role |
 |------|------|
 | `get_cards` | List cards in a pipe. Use `include_fields` for custom field name/value on each card. |
-| `get_card` | Load a single card by ID. |
+| `get_card` | Load a single card by ID (title, phase, pipe; not labels or assignees). |
 | `find_cards` | Search cards by title or field values. |
 
 ## Pipe building (structure & labels)
@@ -65,12 +65,12 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | `delete_comment` | Delete a comment ([two-step](cross-cutting.md#destructive-operations) with `confirmation_token`; `destructiveHint=True`). |
 | `move_card_to_phase` | Move card to another phase. On failure for a required empty field, may return `success: false` naming that field; when a hide condition on the same required field is detected, the error may note that the field may be hidden while still required. |
 | `update_card_field` | Single-field update (`updateCardField`). |
-| `update_card` | Metadata (title, assignees, labels, due date) and/or multiple custom fields via `field_updates`. |
+| `update_card` | Metadata (title, assignees, labels, due date) **or** custom fields via `field_updates` (the two modes are exclusive). |
 | `delete_card` | [Two-step](cross-cutting.md#destructive-operations) with `confirmation_token`. `card_id` is a **string** in the API; pass `"…"` or a coerced positive integer (see [Pipefy IDs](#pipefy-ids-type-safety)). |
 | `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call**: to attach multiple files, call the tool once per file. Provide **exactly one source**: `file_path` (a local filesystem path the MCP server reads; supports `~` expansion; local profile only) or `file_url` (an HTTPS URL the server downloads under an SSRF guard — http only if the deployment enables insecure URLs; works on any profile). On the hosted server `file_path` is rejected — pass `file_url`. `file_name` is inferred from the source basename when omitted (supply it explicitly when a URL has none); optional `content_type` is inferred from `file_name`. Either source is rejected above **100 MiB** before the presigned request. **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid: using the uuid returns `RESOURCE_NOT_FOUND`. |
 | `create_attachment_presigned_url` | Mints an S3 upload target (`upload_url`, `storage_path` object key, `expires_in_seconds`) for an org + `file_name`, **without transferring bytes** — for attaching a file the server can't read (a local file on the hosted profile, or bytes too large to inline). The client PUTs the file to `upload_url` within the expiry, then sets an attachment field to `[storage_path]` via `update_card_field` / `set_table_record_field_value` (store the key, never the url). Remote-safe. |
 
-**Choosing card updates:** `update_card` + `field_updates` = several custom fields at once (prefer `operation` ADD/REMOVE for list-valued fields: connections, attachments, checklists, labels, assignees). `update_card_field` = one field, full replacement of the entire list — for connectors that means related-card **ids**; `get_card` field `value` is display titles only, so do not rebuild from it (read ids via `get_card_relations`, or GraphQL `array_value`). `update_card` with attribute args = metadata (combinable with `field_updates`).
+**Choosing card updates:** `update_card` + `field_updates` = several custom fields at once (prefer `operation` ADD/REMOVE for list-valued fields: connections, attachments, checklists). Pipe labels and assignees are card attributes (`label_ids` / `assignee_ids`, replace-all), not fields — `field_updates` cannot address them. `update_card_field` = one field, full replacement of the entire list — for connectors that means related-card **ids**; `get_card` field `value` is display titles only, so do not rebuild from it (read ids via `get_card_relations`, or GraphQL `array_value`). `update_card` with attribute args = metadata. The two modes are exclusive: if `field_updates` is present, `title` / `assignee_ids` / `label_ids` / `due_date` are discarded.
 
 ### Headless / agent clients
 

@@ -17,10 +17,12 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 
 | Tool | Read-only | Role |
 |------|-----------|------|
-| `get_email_templates` | Yes | List email templates for a pipe or table (`repo_id`); optional `filter_by_name`. Use before `send_email_with_template` to discover template IDs. |
+| `get_email_templates` | Yes | List email templates for a pipe or table (`repo_id`); optional `filter_by_name`. Use before `send_email_with_template` to discover template IDs. Lists only; it cannot create or change a template. |
 | `get_card_inbox_emails` | Yes | List emails (sent and received) for a card's inbox. Use `email_type: 'received'` to get only replies. |
 | `send_inbox_email` | No | Send an email from a card's inbox; requires the card to have an email inbox enabled. `from_` (sender) is required. |
-| `send_email_with_template` | No | Send an email using an existing template. Resolves placeholders (e.g. `{{card.title}}`). `card_id`, `email_template_id` required; optional `to`, `from_` to override defaults. |
+| `send_email_with_template` | No | Send an email using a template that already exists. Resolves placeholders (e.g. `{{card.title}}`). `card_id`, `email_template_id` required; optional `to`, `from_` to override defaults. |
+
+Hard stop: creating, editing and deleting email templates is not part of the API or MCP surface. The GraphQL schema has no template CRUD mutation, so the only path is the Pipefy UI. A flow that needs a new or edited template carries a manual UI step, and that step belongs in the plan handed to the user before any build starts.
 
 ## Webhook tools
 

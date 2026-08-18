@@ -178,6 +178,20 @@ Before `create_automation`, confirm the chosen `event_id` is listed in that acti
 
 **Known dead combo:** `field_updated` + `move_single_card` — create can succeed and the rule never executes. Do not use this pairing; pick a compatible event (for example `card_moved` when the action is a move) or a different action for field-update triggers.
 
+### Applying a label has no automation action
+
+**Hard stop:** no action in the catalog applies a label to a card. The **action** is what is missing, not the trigger: `sla_based` is in the event catalog, so "when the card goes overdue" is a perfectly good trigger with nothing to attach to. `get_automation_actions(pipe_id)` is the dynamic source of truth for what a given pipe offers; read it before planning a rule and do not assume a label action exists.
+
+What to do with that intent:
+
+1. **Send the intent to the product, not to a script.** A label rule belongs in the customer's process, where it keeps firing without anyone driving it. The API and MCP cannot create it, so hand the user a manual step: configure the rule in Pipefy and confirm there what the interface offers for that trigger. State that step in the plan or summary you hand the user, the same way you would for an email template.
+2. **Offer the rule that does exist, when it fits.** `update_card_field` accepts `sla_based`, so "when the card goes overdue, stamp a field on the card" is createable through `create_automation` today. A status or flag field carries the same signal as a label and keeps the rule inside the process. Discover a suitable destination field first with `get_start_form_fields` / `get_phase_fields`: many pipes have no field named Status, and the automation needs a real `internal_id`. Propose it, do not impose it: the user may want the label specifically.
+
+   `sla_based` takes its parameter as `event_params.kindOfSla`, **camelCase**, even though `get_automation_events` reports it as `kind_of_sla`. Values are capitalized: `Expired`, `Late`, `Overdue`. Sending the catalog spelling fails with "Field is not defined on AutomationEventParamsInput". Shape the action with the `field_map` recipe below, including `inputMode`.
+3. **`update_card(label_ids=[...])` is a one-off correction, not automation.** It **replaces** the card's whole label list: include every id that should remain; do not send only the new one. Something has to run the call every time. Nothing persists as process behavior once the session ends. Use it to fix specific cards the user points at, and say so plainly. **Do not call it across a set of cards to stand in for the rule**, and do not loop it on a schedule: that makes the agent the runtime instead of the process.
+4. **Label CRUD is a different thing.** `create_label`, `update_label` and `delete_label` manage the label definitions on a pipe (name, color). None of them applies a label to a card, and none of them is the automation action.
+5. **Do not offer an AI automation or agent behavior as the alternative.** Some organizations forbid AI in their processes, and the [consent rule](#ai-automations-prompt-driven) applies here: propose AI only when the user explicitly asked for it.
+
 ### `field_map` destination `fieldId`
 
 On `create_automation`, when `extra_input.action_params.field_map` is present, the SDK checks each `fieldId` against numeric `internal_id` values on the action pipe (`action_repo_id`, default `pipe_id`). Slug-shaped `fieldId` values and unknown numeric ids fail before GraphQL with `success: false` and the offending id. Recovery: `get_start_form_fields` / `get_phase_fields` → use `internal_id`, not slug.
@@ -204,6 +218,8 @@ Pick the right tool for "notification" intent:
 | "automação", "regra if/then" | `create_automation` | Generic rules engine. |
 
 Do NOT hand-build `action_params.taskParams` via `create_automation` when `create_send_task_automation` is the right tool.
+
+An automation that sends email depends on a template that already exists: template create, edit and delete have no API or MCP path, only the Pipefy UI. When the process needs a new or changed template, state that manual UI step in the plan or summary you give the user.
 
 ---
 
@@ -244,6 +260,7 @@ Use this pattern for approvals, financial decisions, content publication, and an
 - **`validate_ai_automation_prompt` returns `valid:false`.** Read `problems` (per-field) and `warnings`. Most common: prompt missing `%{internal_id}` reference, or `field_ids` overlap with prompt `%{id}` tokens.
 - **`create_automation` cycle detection.** Same-pipe `card_created` + `create_card` rejected with `"This automation can't be created! It would result in an endless card creation cycle."` Use a different trigger, target a different pipe, or use `update_card` instead.
 - **`create_automation` fails with unknown event/action.** Always run `get_automation_events` + `get_automation_actions` first; do not guess IDs.
+- **Planned a rule that applies a label.** No such action exists in the catalog. The trigger does: `sla_based` is available, so only the label action is missing. See [Applying a label has no automation action](#applying-a-label-has-no-automation-action) before offering anything else.
 - **Phase transition error on `move_single_card`.** Only `create_automation` preflights transitions. Read allowed phase ids in the error text or call `get_phase_allowed_move_targets`, then re-issue with a permitted destination. UI is the only edit surface for transition rules.
 - **Cross-pipe `PERMISSION_DENIED`.** SA must be member of both source and destination pipes for `create_connected_card` / cross-pipe `create_card`. Recovery: `get_pipe_members` + `invite_members`.
 - **`get_automation_logs_by_repo` returns empty.** Pipe has no traditional automation executions; not an error. AI agent executions are separate (see `get_ai_agent_logs`).

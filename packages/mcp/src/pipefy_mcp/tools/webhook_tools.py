@@ -41,7 +41,10 @@ class WebhookTools:
             """List email templates for a pipe or table.
 
             Use before send_email_with_template to discover template IDs.
-            Templates are created in the Pipefy UI; this query lists existing ones.
+
+            Hard stop: creating, editing and deleting email templates is not
+            available through the API or MCP. Only the Pipefy UI can do it, so
+            the template must already exist before any flow that uses it.
 
             Args:
                 repo_id: Pipe or table ID.
@@ -216,8 +219,12 @@ class WebhookTools:
             """Send an email from a card's inbox using an existing email template.
 
             Fetches the template with placeholders (e.g. {{card.title}}) resolved
-            for the card, then sends via createAndSendInboxEmail. Template must
-            exist (created in Pipefy UI). Use get_email_templates to find template IDs.
+            for the card, then sends via createAndSendInboxEmail. Use
+            get_email_templates to find template IDs.
+
+            Hard stop: there is no API or MCP path to create or change an email
+            template. A flow that needs a new or edited template requires a
+            manual step in the Pipefy UI; say so in the plan before building.
 
             Args:
                 card_id: ID of the card with inbox.

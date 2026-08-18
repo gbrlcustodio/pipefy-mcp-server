@@ -152,13 +152,13 @@ This returns valid `type` enum values and their descriptions.
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_card` | `pipefy card get <id>` | Yes | Card data, fields, and comments. |
+| `get_card` | `pipefy card get <id>` | Yes | Title, phase, pipe, optional fields. Does not return labels or assignees. |
 | `get_cards` | `pipefy card list --pipe <id>` | Yes | Paginated card list by pipe. |
 | `find_cards` | `pipefy card find --pipe <id>` | Yes | Filter by a single field value. |
 | `create_card` | `pipefy card create <pipe_id>` | No | Default: start form. Optional `--phase-id` / `phase_id` creates in that phase; interactive clients may elicit start-form fields unless `skip_elicitation=true`. |
 | `fill_card_phase_fields` | `pipefy card fill <id> --phase <id>` | No | Fill phase fields non-interactively; filters to editable IDs. Uses `--fields` JSON object; for ad-hoc updates use `card update --field-updates` (JSON array). |
-| `update_card` | `pipefy card update <id>` (`--field-updates` = `updateFieldsValues`) | No | Update title, assignee, due date, fields. For list-valued fields (connections, attachments, checklists, labels, assignees), prefer `--field-updates` / `field_updates` with `operation` ADD/REMOVE. For connectors, send related **card ids**. |
-| `update_card_field` | *(MCP only; no direct CLI twin — use `card update --field-updates`)* | No | Single-field `updateCardField`; list-valued fields are **replace-all**. For connectors, values are related **card ids** (not display titles). Do not rebuild from `get_card` `value` (titles only); read ids via `get_card_relations`. Prefer `update_card` + ADD/REMOVE instead. |
+| `update_card` | `pipefy card update <id>` (`--field-updates` = `updateFieldsValues`) | No | Update title, assignees, labels, due date, or fields. For list-valued **fields** (connections, attachments, checklists), prefer `--field-updates` / `field_updates` with `operation` ADD/REMOVE. Pipe labels and assignees are card attributes (`label_ids` / `assignee_ids`, replace-all), not fields — see Label operations. If `field_updates` is set, attribute args are discarded. For connectors, send related **card ids**. |
+| `update_card_field` | *(MCP only; no direct CLI twin — use `card update --field-updates`)* | No | Single-field `updateCardField`; list-valued fields are **replace-all**. For connectors, values are related **card ids** (not display titles). Do not rebuild from `get_card` `value` (titles only); read ids via `get_card_relations`. Prefer `update_card` + ADD/REMOVE for fields. Pipe labels use `label_ids`, not this tool. |
 | `move_card_to_phase` | `pipefy card move <card_id> --phase <id>` | No | Call `get_phase_allowed_move_targets` first. On required empty field, MCP may return `success: false` naming the field (optional hide hint). |
 | `delete_card` | `pipefy card delete <id>` | No | **Two-step destructive.** |
 | `add_card_comment` | `pipefy card comment add <id>` | No | Add a text comment to a card. |
@@ -207,6 +207,8 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 | `update_label` | `pipefy label update <id>` | No | Rename or recolor. |
 | `delete_label` | `pipefy label delete <id>` | No | **Two-step destructive.** |
 
+These tools manage label definitions on the pipe. Applying a pipe label to a card is `update_card(label_ids=[...])`, which **replaces** the card's whole label list: include every id that should remain; do not send only the new one. `get_card` does not return labels — read current ids via `execute_graphql` (`card(id: ...) { labels { id } }`), merge, then write. `field_updates` with `operation` ADD/REMOVE is for list-valued **fields**, not for card-attribute labels. When the user wants a label applied **automatically** ("mark it late when it goes past the due date"), stop and read [Applying a label has no automation action](../../automations/pipefy-automations/SKILL.md#applying-a-label-has-no-automation-action): no automation action does it, and driving `update_card` over a set of cards makes the agent the runtime instead of the process.
+
 ---
 
 ## Field condition operations
@@ -234,7 +236,7 @@ Do not hide a required field — MCP rejects `hide`/`hidden` on `required=true` 
 - **`create_field_condition` fails with missing/wrong phase:** use `error.details.condition_id` (or the id in the message) with two-step `delete_field_condition` (echo `confirmation_token`) before recreating; do not blind-retry create on the same requested phase.
 - **`create_card` fails with missing required fields:** call `get_start_form_fields` first to discover required `field_id` values.
 - **`create_card` / write reports failure (empty or unclear message):** do not blind-retry. Re-read `get_cards` / `get_phase_cards_count` (or pipe `cards_count`) before any retry — see [Ambiguous write failure](../../api-troubleshoot/pipefy-api-fallback/SKILL.md#ambiguous-write-failure-re-read-before-retry).
-- **Connections missing after a connector field update:** `update_card_field` is replace-all — writing one related card id drops the rest (same replace-all applies to other list-valued fields: attachments, checklists, labels, assignees). Prefer `update_card` / CLI `card update --field-updates` with `operation` ADD/REMOVE and related **card ids**. Do not rebuild a full list from `get_card` `value` (display titles only); for REMOVE or a safe full rewrite, get current related-card ids from `get_card_relations` (or GraphQL `array_value`). For *writes* via a pipe relation (not a connector field), use `create_card_relation` / `delete_card_relation` — see `skills/relations/`.
+- **Connections missing after a connector field update:** `update_card_field` is replace-all — writing one related card id drops the rest (same replace-all applies to other list-valued fields: attachments, checklists). Prefer `update_card` / CLI `card update --field-updates` with `operation` ADD/REMOVE and related **card ids**. Do not rebuild a full list from `get_card` `value` (display titles only); for REMOVE or a safe full rewrite, get current related-card ids from `get_card_relations` (or GraphQL `array_value`). For *writes* via a pipe relation (not a connector field), use `create_card_relation` / `delete_card_relation` — see `skills/relations/`. Pipe labels and assignees are not fields: use `update_card(label_ids=)` / `assignee_ids` (replace-all); `field_updates` ADD cannot address them.
 - **`create_phase_field` rejects type:** call `introspect_type type_name="CreatePhaseFieldInput"` to get valid values.
 - **Delete fails with preview error:** expected. Show the preview to the user and get their approval, then call again with `confirm=true` and the preview's `confirmation_token`. CLI uses `--yes`.
 

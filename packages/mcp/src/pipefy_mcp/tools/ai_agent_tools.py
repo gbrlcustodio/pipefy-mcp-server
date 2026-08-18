@@ -612,17 +612,20 @@ class AiAgentTools:
             meta=REMOTE,
         )
         async def delete_ai_agent(
-            ctx: Context, uuid: str, confirm: bool = False
+            ctx: Context,
+            uuid: str,
+            confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict:
             """Delete an AI Agent permanently. This action is irreversible.
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 uuid: Agent UUID.
-                confirm: Must be ``True`` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             agent_uuid = uuid.strip()
@@ -634,6 +637,9 @@ class AiAgentTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"AI agent (UUID: {agent_uuid})",
+                resource_identity={"uuid": agent_uuid},
+                tool_name="delete_ai_agent",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

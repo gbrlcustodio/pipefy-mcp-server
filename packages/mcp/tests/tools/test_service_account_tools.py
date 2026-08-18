@@ -13,6 +13,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.service_account_tools import ServiceAccountTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 ORG = "341c1327-261c-4766-bb96-7953e4c3970d"
 
@@ -426,14 +427,13 @@ async def test_delete_service_account_preview_does_not_call_mutation(
 
 
 @pytest.mark.anyio
-async def test_delete_service_account_confirmed(
-    sa_session, mock_sa_client, extract_payload
-):
+async def test_delete_service_account_confirmed(sa_session, mock_sa_client):
     mock_sa_client.delete_service_account.return_value = {
         "deleteServiceAccount": {"success": True}
     }
     async with sa_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_service_account",
             {
                 "organization_uuid": ORG,
@@ -441,11 +441,9 @@ async def test_delete_service_account_confirmed(
                 "confirm": True,
             },
         )
-    assert result.is_error is False
     mock_sa_client.delete_service_account.assert_awaited_once_with(
         organization_uuid=ORG, service_account_uuid="sa-uuid-1"
     )
-    payload = extract_payload(result)
     assert payload["success"] is True
 
 
@@ -459,11 +457,12 @@ async def test_delete_service_account_confirmed(
     ],
 )
 async def test_delete_service_account_soft_failure_is_not_reported_as_deleted(
-    sa_session, mock_sa_client, extract_payload, raw
+    sa_session, mock_sa_client, raw
 ):
     mock_sa_client.delete_service_account.return_value = raw
     async with sa_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_service_account",
             {
                 "organization_uuid": ORG,
@@ -471,10 +470,45 @@ async def test_delete_service_account_soft_failure_is_not_reported_as_deleted(
                 "confirm": True,
             },
         )
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "did not succeed" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+async def test_delete_service_account_rejects_token_when_organization_uuid_differs(
+    sa_session, mock_sa_client, extract_payload
+):
+    mock_sa_client.delete_service_account.return_value = {
+        "deleteServiceAccount": {"success": True}
+    }
+    async with sa_session as session:
+        preview = await session.call_tool(
+            "delete_service_account",
+            {"organization_uuid": "org-A", "service_account_uuid": "sa-uuid-1"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_service_account",
+            {
+                "organization_uuid": "org-B",
+                "service_account_uuid": "sa-uuid-1",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_sa_client.delete_service_account.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_service_account",
+            {"organization_uuid": "org-A", "service_account_uuid": "sa-uuid-1"},
+        )
+
+    mock_sa_client.delete_service_account.assert_awaited_once_with(
+        organization_uuid="org-A", service_account_uuid="sa-uuid-1"
+    )
+    assert matched["success"] is True
 
 
 @pytest.mark.anyio

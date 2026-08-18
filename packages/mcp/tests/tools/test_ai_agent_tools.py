@@ -25,6 +25,7 @@ from tools.conftest import (
     assert_invalid_arguments_envelope,
     build_tool_test_server,
 )
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -1283,17 +1284,15 @@ class TestDeleteAiAgent:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_ai_agent.return_value = {"success": True}
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_agent",
                 {"uuid": "to-delete", "confirm": True},
             )
-        assert result.is_error is False
         mock_pipefy_client.delete_ai_agent.assert_awaited_once_with("to-delete")
-        payload = extract_payload(result)
         assert payload["success"] is True
         assert isinstance(payload["message"], str)
         assert len(payload["message"]) > 0
@@ -1302,14 +1301,12 @@ class TestDeleteAiAgent:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_ai_agent.return_value = {"success": False}
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_ai_agent", {"uuid": "fail", "confirm": True}
+            payload = await confirm_after_preview(
+                session, "delete_ai_agent", {"uuid": "fail", "confirm": True}
             )
-        payload = extract_payload(result)
         assert payload["success"] is False
         assert "success=false" in tool_error_message(payload).lower()
 
@@ -1327,18 +1324,16 @@ class TestDeleteAiAgent:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_ai_agent.side_effect = PipefyGraphQLError(
             [{"message": "gone"}]
         )
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_agent",
                 {"uuid": "bad", "confirm": True},
             )
-        assert result.is_error is False
-        payload = extract_payload(result)
         assert payload["success"] is False
         assert "gone" in tool_error_message(payload)
 
@@ -1468,14 +1463,12 @@ class TestDeleteAiAgentConfirmationGuard:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_ai_agent.side_effect = RuntimeError("network")
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_ai_agent", {"uuid": "agent-uuid", "confirm": True}
+            payload = await confirm_after_preview(
+                session, "delete_ai_agent", {"uuid": "agent-uuid", "confirm": True}
             )
-        payload = extract_payload(result)
         assert payload["success"] is False
         assert "network" in tool_error_message(payload)
 

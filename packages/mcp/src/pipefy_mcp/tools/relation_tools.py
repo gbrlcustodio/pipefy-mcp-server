@@ -229,18 +229,19 @@ class RelationTools:
             ctx: Context,
             relation_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Permanently delete a pipe relation by ID.
 
             ``relation_id`` is the **pipe relation** id from ``get_pipe_relations`` (not a table relation id).
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 relation_id: Pipe relation ID to delete.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -252,6 +253,9 @@ class RelationTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"pipe relation (ID: {relation_id})",
+                resource_identity={"relation_id": relation_id},
+                tool_name="delete_pipe_relation",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

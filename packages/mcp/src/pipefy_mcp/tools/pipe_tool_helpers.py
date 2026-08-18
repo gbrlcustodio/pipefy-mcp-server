@@ -21,10 +21,7 @@ from pipefy_mcp.core.tool_error_envelope import (
     tool_error,
     tool_success,
 )
-from pipefy_mcp.tools.destructive_tool_guard import (
-    DestructiveCancelledPayload,
-    DestructivePreviewPayload,
-)
+from pipefy_mcp.tools.destructive_tool_guard import DestructivePreviewPayload
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 
 
@@ -130,7 +127,6 @@ class DeleteCardErrorPayload(TypedDict):
 
 DeleteCardPayload = (
     DestructivePreviewPayload
-    | DestructiveCancelledPayload
     | LegacyDeleteCardSuccessPayload
     | ToolSuccessPayload
     | DeleteCardErrorPayload

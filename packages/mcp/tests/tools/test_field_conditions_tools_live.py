@@ -31,6 +31,7 @@ from _shared.live_settings import pipefy_live_configured, require_live_creds
 
 from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 # Building the app now resolves the Pipefy credential (the runtime wires its
 # client at construction), so this credential-dependent module skips itself
@@ -132,12 +133,11 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
                 read_timeout_seconds=timedelta(seconds=120),
                 raise_exceptions=True,
             ) as session:
-                r_delete = await session.call_tool(
+                deleted = await confirm_after_preview(
+                    session,
                     "delete_field_condition",
                     {"condition_id": condition_id_created, "debug": True},
                 )
-        assert r_delete.is_error is False, r_delete
-        deleted = extract_payload(r_delete)
         assert deleted.get("success") is True, deleted
         deleted_successfully = True
     finally:
@@ -148,7 +148,8 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
                     read_timeout_seconds=timedelta(seconds=120),
                     raise_exceptions=True,
                 ) as session:
-                    await session.call_tool(
+                    await confirm_after_preview(
+                        session,
                         "delete_field_condition",
                         {"condition_id": condition_id_created, "debug": True},
                     )

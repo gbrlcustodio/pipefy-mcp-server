@@ -300,18 +300,19 @@ class KnowledgeBaseTools:
             plain_text_id: str,
             pipe_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a pipe-scoped knowledge base plain text permanently. This action is irreversible.
 
-            Two-step operation: preview with `confirm=False` (default), then execute
-            with `confirm=True` after explicit human approval. Elicitation does not
-            authorize deletion (only `confirm=True` does). Requires manage_ai_agents
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Requires manage_ai_agents
             on the pipe.
 
             Args:
                 plain_text_id: Plain text ID to delete (from `get_ai_knowledge_bases`).
                 pipe_uuid: Pipe UUID (not the numeric ID).
-                confirm: Must be `True` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             err = _blank_error(plain_text_id, "plain_text_id") or _blank_error(
@@ -326,6 +327,12 @@ class KnowledgeBaseTools:
                 resource_descriptor=(
                     f"knowledge base plain text (ID: {plain_text_id.strip()})"
                 ),
+                resource_identity={
+                    "plain_text_id": plain_text_id.strip(),
+                    "pipe_uuid": pipe_uuid.strip(),
+                },
+                tool_name="delete_ai_knowledge_base_plain_text",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -490,18 +497,19 @@ class KnowledgeBaseTools:
             document_id: str,
             pipe_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a pipe-scoped knowledge base document permanently. This action is irreversible.
 
-            Two-step operation: preview with `confirm=False` (default), then
-            execute with `confirm=True` after explicit human approval.
-            Elicitation does not authorize deletion (only `confirm=True` does).
-            Requires manage_ai_agents on the pipe.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Requires manage_ai_agents
+            on the pipe.
 
             Args:
                 document_id: Document ID to delete (from `get_ai_knowledge_bases`).
                 pipe_uuid: Pipe UUID (not the numeric ID).
-                confirm: Must be `True` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             err = _blank_error(document_id, "document_id") or _blank_error(
@@ -516,6 +524,12 @@ class KnowledgeBaseTools:
                 resource_descriptor=(
                     f"knowledge base document (ID: {document_id.strip()})"
                 ),
+                resource_identity={
+                    "document_id": document_id.strip(),
+                    "pipe_uuid": pipe_uuid.strip(),
+                },
+                tool_name="delete_ai_knowledge_base_document",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -709,18 +723,19 @@ class KnowledgeBaseTools:
             data_lookup_id: str,
             pipe_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a pipe-scoped knowledge base data lookup permanently. This action is irreversible.
 
-            Two-step operation: preview with `confirm=False` (default), then
-            execute with `confirm=True` after explicit human approval.
-            Elicitation does not authorize deletion (only `confirm=True` does).
-            Requires manage_ai_agents on the pipe.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Requires manage_ai_agents
+            on the pipe.
 
             Args:
                 data_lookup_id: Data lookup ID to delete (from `get_ai_knowledge_bases`).
                 pipe_uuid: Pipe UUID (not the numeric ID).
-                confirm: Must be `True` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             err = _blank_error(data_lookup_id, "data_lookup_id") or _blank_error(
@@ -735,6 +750,12 @@ class KnowledgeBaseTools:
                 resource_descriptor=(
                     f"knowledge base data lookup (ID: {data_lookup_id.strip()})"
                 ),
+                resource_identity={
+                    "data_lookup_id": data_lookup_id.strip(),
+                    "pipe_uuid": pipe_uuid.strip(),
+                },
+                tool_name="delete_ai_knowledge_base_data_lookup",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

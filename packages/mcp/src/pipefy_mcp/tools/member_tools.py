@@ -182,19 +182,20 @@ class MemberTools:
             pipe_id: PipefyId,
             user_ids: list[PipefyId],
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Permanently remove one or more users from a pipe.
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 pipe_id: ID of the pipe.
                 user_ids: User ids to remove. Prefer numeric ``user.id`` from
                     ``get_pipe_members``; a user UUID is also accepted.
-                confirm: Set to True to execute the removal (step 2).
+                confirm: Set to True with the preview token to execute the removal (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -214,6 +215,9 @@ class MemberTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"{len(user_ids)} member(s) from pipe {pipe_id}",
+                resource_identity={"pipe_id": pipe_id, "user_ids": user_ids},
+                tool_name="remove_member_from_pipe",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

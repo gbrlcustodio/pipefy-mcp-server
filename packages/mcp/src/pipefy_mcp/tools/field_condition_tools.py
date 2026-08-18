@@ -643,18 +643,19 @@ class FieldConditionTools:
             ctx: Context,
             condition_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a field condition permanently.
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 ctx: MCP context for debug logging.
                 condition_id: Field condition ID to delete.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -669,6 +670,9 @@ class FieldConditionTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"field condition (ID: {condition_id})",
+                resource_identity={"condition_id": cid_str},
+                tool_name="delete_field_condition",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

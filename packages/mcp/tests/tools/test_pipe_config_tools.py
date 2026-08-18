@@ -23,6 +23,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
 )
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.mark.unit
@@ -225,7 +226,7 @@ async def test_delete_pipe_preview_does_not_delete(
 
 @pytest.mark.anyio
 async def test_delete_pipe_confirm_calls_mutation(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     mock_pipe_config_client.get_pipe.return_value = {
         "pipe": {"id": "9", "name": "P1", "phases": []},
@@ -233,14 +234,9 @@ async def test_delete_pipe_confirm_calls_mutation(
     mock_pipe_config_client.delete_pipe.return_value = {"deletePipe": {"success": True}}
 
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_pipe",
-            {"pipe_id": 9, "confirm": True},
-        )
+        payload = await confirm_after_preview(session, "delete_pipe", {"pipe_id": 9})
 
-    assert result.is_error is False
     mock_pipe_config_client.delete_pipe.assert_awaited_once_with("9")
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["pipe_id"] == "9"
 
@@ -401,20 +397,16 @@ async def test_update_phase_requires_at_least_one_attr(
 
 
 @pytest.mark.anyio
-async def test_delete_phase_success(
-    pipe_config_session, mock_pipe_config_client, extract_payload
-):
+async def test_delete_phase_success(pipe_config_session, mock_pipe_config_client):
     mock_pipe_config_client.delete_phase.return_value = {
         "deletePhase": {"success": True},
     }
 
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_phase", {"phase_id": 55, "confirm": True}
-        )
+        payload = await confirm_after_preview(session, "delete_phase", {"phase_id": 55})
 
     mock_pipe_config_client.delete_phase.assert_awaited_once_with("55")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
@@ -459,9 +451,24 @@ async def test_delete_phase_confirm_true_skips_dependent_lookups(
         "deletePhase": {"success": True},
     }
     async with pipe_config_session as session:
+        preview = await session.call_tool(
+            "delete_phase",
+            {"phase_id": 55, "pipe_id": 1},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mock_pipe_config_client.get_field_conditions.reset_mock()
+        mock_pipe_config_client.get_automations.reset_mock()
+        mock_pipe_config_client.get_phase_cards_count.reset_mock()
+        mock_pipe_config_client.get_automation.reset_mock()
+        mock_pipe_config_client.get_phase_fields.reset_mock()
         result = await session.call_tool(
             "delete_phase",
-            {"phase_id": 55, "pipe_id": 1, "confirm": True},
+            {
+                "phase_id": 55,
+                "pipe_id": 1,
+                "confirm": True,
+                "confirmation_token": token,
+            },
         )
     assert extract_payload(result)["success"] is True
     mock_pipe_config_client.get_field_conditions.assert_not_called()
@@ -805,23 +812,20 @@ async def test_update_phase_field_rejects_blank_label(
 
 
 @pytest.mark.anyio
-async def test_delete_phase_field_success(
-    pipe_config_session, mock_pipe_config_client, extract_payload
-):
+async def test_delete_phase_field_success(pipe_config_session, mock_pipe_config_client):
     mock_pipe_config_client.delete_phase_field.return_value = {
         "deletePhaseField": {"success": True},
     }
 
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_phase_field",
-            {"field_id": 100, "confirm": True},
+        payload = await confirm_after_preview(
+            session, "delete_phase_field", {"field_id": 100}
         )
 
     mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(
         "100", pipe_uuid=None
     )
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
@@ -1075,11 +1079,26 @@ async def test_delete_phase_field_confirm_true_skips_enrichment(
     mock_pipe_config_client.delete_phase_field.return_value = {
         "deletePhaseField": {"success": True},
     }
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {"fieldConditions": []}
+    }
 
     async with pipe_config_session as session:
+        preview = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": 100, "phase_id": 50},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mock_pipe_config_client.get_field_conditions.reset_mock()
+        mock_pipe_config_client.get_phase_fields.reset_mock()
         result = await session.call_tool(
             "delete_phase_field",
-            {"field_id": 100, "phase_id": 50, "confirm": True},
+            {
+                "field_id": 100,
+                "phase_id": 50,
+                "confirm": True,
+                "confirmation_token": token,
+            },
         )
 
     mock_pipe_config_client.get_field_conditions.assert_not_called()
@@ -1088,7 +1107,58 @@ async def test_delete_phase_field_confirm_true_skips_enrichment(
 
 
 @pytest.mark.anyio
+async def test_delete_phase_field_confirm_omitting_advisory_phase_id_proceeds(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.delete_phase_field.return_value = {
+        "deletePhaseField": {"success": True},
+    }
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {"fieldConditions": []}
+    }
+
+    async with pipe_config_session as session:
+        preview = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": 100, "phase_id": 50},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        result = await session.call_tool(
+            "delete_phase_field",
+            {
+                "field_id": 100,
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+
+    mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(
+        "100", pipe_uuid=None
+    )
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
 async def test_delete_phase_field_success_with_string_slug(
+    pipe_config_session, mock_pipe_config_client
+):
+    mock_pipe_config_client.delete_phase_field.return_value = {
+        "deletePhaseField": {"success": True},
+    }
+
+    async with pipe_config_session as session:
+        payload = await confirm_after_preview(
+            session, "delete_phase_field", {"field_id": "detalhe_mcp"}
+        )
+
+    mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(
+        "detalhe_mcp", pipe_uuid=None
+    )
+    assert payload["success"] is True
+
+
+@pytest.mark.anyio
+async def test_delete_phase_field_rejects_token_when_pipe_uuid_differs(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
     mock_pipe_config_client.delete_phase_field.return_value = {
@@ -1096,15 +1166,35 @@ async def test_delete_phase_field_success_with_string_slug(
     }
 
     async with pipe_config_session as session:
-        result = await session.call_tool(
+        preview = await session.call_tool(
             "delete_phase_field",
-            {"field_id": "detalhe_mcp", "confirm": True},
+            {"field_id": "prioridade", "pipe_uuid": "A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_phase_field",
+            {
+                "field_id": "prioridade",
+                "pipe_uuid": "B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        mismatch_payload = extract_payload(mismatch)
+        assert mismatch_payload["requires_confirmation"] is True
+        assert "expired" not in mismatch_payload["message"].lower()
+        mock_pipe_config_client.delete_phase_field.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_phase_field",
+            {"field_id": "prioridade", "pipe_uuid": "A"},
         )
 
     mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(
-        "detalhe_mcp", pipe_uuid=None
+        "prioridade", pipe_uuid="A"
     )
-    assert extract_payload(result)["success"] is True
+    assert matched["success"] is True
 
 
 @pytest.mark.anyio
@@ -1202,20 +1292,16 @@ async def test_update_label_empty_color_returns_error(
 
 
 @pytest.mark.anyio
-async def test_delete_label_success(
-    pipe_config_session, mock_pipe_config_client, extract_payload
-):
+async def test_delete_label_success(pipe_config_session, mock_pipe_config_client):
     mock_pipe_config_client.delete_label.return_value = {
         "deleteLabel": {"success": True},
     }
 
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_label", {"label_id": 40, "confirm": True}
-        )
+        payload = await confirm_after_preview(session, "delete_label", {"label_id": 40})
 
     mock_pipe_config_client.delete_label.assert_awaited_once_with("40")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
@@ -1346,11 +1432,25 @@ async def test_delete_label_confirm_true_skips_resolver(
     mock_pipe_config_client.delete_label.return_value = {
         "deleteLabel": {"success": True},
     }
+    mock_pipe_config_client.get_cards.return_value = {
+        "cards": {"edges": [], "pageInfo": {"hasNextPage": False}}
+    }
 
     async with pipe_config_session as session:
+        preview = await session.call_tool(
+            "delete_label",
+            {"label_id": 40, "pipe_id": 2},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mock_pipe_config_client.get_cards.reset_mock()
         result = await session.call_tool(
             "delete_label",
-            {"label_id": 40, "pipe_id": 2, "confirm": True},
+            {
+                "label_id": 40,
+                "pipe_id": 2,
+                "confirm": True,
+                "confirmation_token": token,
+            },
         )
 
     mock_pipe_config_client.get_cards.assert_not_called()
@@ -1475,16 +1575,13 @@ async def test_update_phase_get_phase_fields_error_returns_failure__no_integrati
 
 @pytest.mark.anyio
 async def test_delete_phase_graphql_error_returns_failure__no_integration(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     mock_pipe_config_client.delete_phase.side_effect = PipefyGraphQLError(
         [{"message": "Cannot delete"}]
     )
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_phase", {"phase_id": 1, "confirm": True}
-        )
-    payload = extract_payload(result)
+        payload = await confirm_after_preview(session, "delete_phase", {"phase_id": 1})
     assert payload["success"] is False
     assert "Cannot delete" in tool_error_message(payload)
 
@@ -1525,24 +1622,22 @@ async def test_update_phase_field_graphql_error_returns_failure__no_integration(
 
 @pytest.mark.anyio
 async def test_delete_phase_field_graphql_error_returns_failure__no_integration(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     mock_pipe_config_client.delete_phase_field.side_effect = PipefyGraphQLError(
         [{"message": "Nope"}]
     )
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_phase_field",
-            {"field_id": 100, "confirm": True},
+        payload = await confirm_after_preview(
+            session, "delete_phase_field", {"field_id": 100}
         )
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "Nope" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
 async def test_delete_phase_field_cascade_diagnosis_with_pipe_id(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     """When the parent phase was deleted earlier in the session, Pipefy returns
     a generic ``INTERNAL_SERVER_ERROR``. With ``pipe_id`` supplied, the tool
@@ -1567,15 +1662,14 @@ async def test_delete_phase_field_cascade_diagnosis_with_pipe_id(
         ],
     }
     async with pipe_config_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_phase_field",
             {
                 "field_id": "gone_field",
-                "confirm": True,
                 "pipe_id": "77",
             },
         )
-    payload = extract_payload(result)
     assert payload["success"] is False
     msg = tool_error_message(payload)
     assert "no longer exists" in msg
@@ -1584,7 +1678,7 @@ async def test_delete_phase_field_cascade_diagnosis_with_pipe_id(
 
 @pytest.mark.anyio
 async def test_delete_phase_field_cascade_diagnosis_field_still_exists(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     """If the field is still present somewhere, the error is NOT a cascade —
     fall back to the generic upstream error instead of misleading the caller."""
@@ -1604,15 +1698,14 @@ async def test_delete_phase_field_cascade_diagnosis_field_still_exists(
         "fields": [{"id": "still_here", "uuid": "abc"}],
     }
     async with pipe_config_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_phase_field",
             {
                 "field_id": "still_here",
-                "confirm": True,
                 "pipe_id": "77",
             },
         )
-    payload = extract_payload(result)
     assert payload["success"] is False
     msg = tool_error_message(payload)
     assert "no longer exists" not in msg
@@ -1620,7 +1713,7 @@ async def test_delete_phase_field_cascade_diagnosis_field_still_exists(
 
 @pytest.mark.anyio
 async def test_delete_phase_field_cascade_diagnosis_skipped_without_pipe_id(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     """Without ``pipe_id`` the tool cannot diagnose; it preserves the raw error
     and does NOT perform the extra read-backs."""
@@ -1633,13 +1726,11 @@ async def test_delete_phase_field_cascade_diagnosis_skipped_without_pipe_id(
         ]
     )
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_phase_field",
-            {"field_id": "any_field", "confirm": True},
+        payload = await confirm_after_preview(
+            session, "delete_phase_field", {"field_id": "any_field"}
         )
     mock_pipe_config_client.get_pipe.assert_not_called()
     mock_pipe_config_client.get_phase_fields.assert_not_called()
-    payload = extract_payload(result)
     assert payload["success"] is False
 
 
@@ -1679,16 +1770,13 @@ async def test_update_label_graphql_error_returns_failure__no_integration(
 
 @pytest.mark.anyio
 async def test_delete_label_graphql_error_returns_failure__no_integration(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     mock_pipe_config_client.delete_label.side_effect = PipefyGraphQLError(
         [{"message": "Still in use"}]
     )
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_label", {"label_id": 40, "confirm": True}
-        )
-    payload = extract_payload(result)
+        payload = await confirm_after_preview(session, "delete_label", {"label_id": 40})
     assert payload["success"] is False
     assert "Still in use" in tool_error_message(payload)
 
@@ -2360,39 +2448,33 @@ async def test_update_field_condition_error(
 
 @pytest.mark.anyio
 async def test_delete_field_condition_success(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     mock_pipe_config_client.delete_field_condition.return_value = {"success": True}
 
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_field_condition",
-            {"condition_id": "cond-9", "confirm": True},
+        payload = await confirm_after_preview(
+            session, "delete_field_condition", {"condition_id": "cond-9"}
         )
 
-    assert result.is_error is False
     mock_pipe_config_client.delete_field_condition.assert_awaited_once_with("cond-9")
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload.get("message")
 
 
 @pytest.mark.anyio
 async def test_delete_field_condition_error(
-    pipe_config_session, mock_pipe_config_client, extract_payload
+    pipe_config_session, mock_pipe_config_client
 ):
     mock_pipe_config_client.delete_field_condition.side_effect = PipefyGraphQLError(
         [{"message": "Forbidden"}]
     )
 
     async with pipe_config_session as session:
-        result = await session.call_tool(
-            "delete_field_condition",
-            {"condition_id": "cond-x", "confirm": True},
+        payload = await confirm_after_preview(
+            session, "delete_field_condition", {"condition_id": "cond-x"}
         )
 
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "Forbidden" in tool_error_message(payload)
 

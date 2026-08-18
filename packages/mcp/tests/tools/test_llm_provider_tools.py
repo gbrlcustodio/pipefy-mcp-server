@@ -12,6 +12,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.llm_provider_tools import LlmProviderTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 BYOM_NODE = {
     "__typename": "LlmProvider",
@@ -513,37 +514,68 @@ async def test_delete_preview_without_confirm_does_not_delete(
 
 
 @pytest.mark.anyio
-async def test_delete_with_confirm_executes(
-    provider_session, mock_provider_client, extract_payload
-):
+async def test_delete_with_confirm_executes(provider_session, mock_provider_client):
     mock_provider_client.delete_llm_provider = AsyncMock(return_value={"success": True})
     async with provider_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_llm_provider",
             {"provider_id": "42", "organization_uuid": "org-uuid-1", "confirm": True},
         )
-    assert result.is_error is False
     mock_provider_client.delete_llm_provider.assert_awaited_once_with(
         "42", "org-uuid-1"
     )
-    assert extract_payload(result)["data"]["deleted_id"] == "42"
+    assert payload["data"]["deleted_id"] == "42"
 
 
 @pytest.mark.anyio
 async def test_delete_unconfirmed_by_api_is_tool_error(
-    provider_session, mock_provider_client, extract_payload
+    provider_session, mock_provider_client
 ):
     mock_provider_client.delete_llm_provider = AsyncMock(
         return_value={"success": False}
     )
     async with provider_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_llm_provider",
             {"provider_id": "42", "organization_uuid": "org-uuid-1", "confirm": True},
         )
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "did not confirm" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+async def test_delete_llm_provider_rejects_token_when_organization_uuid_differs(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.delete_llm_provider = AsyncMock(return_value={"success": True})
+    async with provider_session as session:
+        preview = await session.call_tool(
+            "delete_llm_provider",
+            {"provider_id": "42", "organization_uuid": "org-A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_llm_provider",
+            {
+                "provider_id": "42",
+                "organization_uuid": "org-B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_provider_client.delete_llm_provider.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_llm_provider",
+            {"provider_id": "42", "organization_uuid": "org-A"},
+        )
+
+    mock_provider_client.delete_llm_provider.assert_awaited_once_with("42", "org-A")
+    assert matched["success"] is True
 
 
 @pytest.mark.anyio

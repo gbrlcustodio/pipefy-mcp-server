@@ -2,7 +2,7 @@
 
 Exercises **create_ai_automation** without ``condition`` (default placeholder) through
 the full **pipefy_mcp.server.mcp** app (ToolRegistry + real **PipefyClient**), then
-tears down with **delete_automation** (``confirm=True``).
+tears down with **delete_automation** (preview, then confirm with token).
 
 Skips without **PIPEFY_*** OAuth or when **PIPE_AI_AUTOMATION_LIVE_PIPE_ID** /
 **PIPE_AI_AUTOMATION_LIVE_FIELD_ID** are unset.
@@ -36,6 +36,7 @@ from _shared.live_settings import pipefy_live_configured, require_live_creds
 
 from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 # Building the app now resolves the Pipefy credential (the runtime wires its
 # client at construction), so this credential-dependent module skips itself
@@ -96,10 +97,9 @@ async def test_live_create_ai_automation_omits_condition_uses_default_placeholde
             read_timeout_seconds=timedelta(seconds=120),
             raise_exceptions=True,
         ) as session:
-            delete_result = await session.call_tool(
+            del_payload = await confirm_after_preview(
+                session,
                 "delete_automation",
                 {"automation_id": automation_id, "confirm": True},
             )
-    assert delete_result.is_error is False, delete_result
-    del_payload = extract_payload(delete_result)
     assert del_payload.get("success") is True, del_payload

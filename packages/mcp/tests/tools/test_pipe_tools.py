@@ -28,6 +28,21 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
+
+
+def _assert_destructive_preview(payload, *, resource):
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    assert payload["resource"] == resource
+    message = payload["message"]
+    assert "confirm=True" in message
+    assert message.index("explicit approval") < message.index("confirm=True")
+    token = payload["confirmation_token"]
+    assert isinstance(token, str)
+    assert token.startswith("v1.")
+    assert token != "v1."
+
 
 # =============================================================================
 # Fixtures
@@ -1187,41 +1202,32 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         """delete_comment with valid comment_id returns success payload."""
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_comment",
-                {"comment_id": 456, "confirm": True},
+            payload = await confirm_after_preview(
+                session, "delete_comment", {"comment_id": 456}
             )
-        assert result.is_error is False
         mock_pipefy_client.delete_comment.assert_called_once_with("456")
-        payload = extract_payload(result)
         assert payload == {"success": True}
 
     async def test_delete_comment_zero_id_coerces_to_string_and_calls_api(
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         """delete_comment with comment_id=0 coerces to '0' via PipefyId and calls the API."""
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_comment",
-                {"comment_id": 0, "confirm": True},
+            payload = await confirm_after_preview(
+                session, "delete_comment", {"comment_id": 0}
             )
-        assert result.is_error is False
         mock_pipefy_client.delete_comment.assert_called_once_with("0")
-        payload = extract_payload(result)
         assert payload == {"success": True}
 
     async def test_delete_comment_api_exception_returns_mapped_error_payload(
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         """When delete_comment API raises, tool returns error payload with friendly message."""
 
@@ -1234,13 +1240,10 @@ class TestDirectToolCalls:
             ]
         )
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_comment",
-                {"comment_id": 12345, "confirm": True},
+            payload = await confirm_after_preview(
+                session, "delete_comment", {"comment_id": 12345}
             )
-        assert result.is_error is False
         mock_pipefy_client.delete_comment.assert_called_once_with("12345")
-        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert "permission" in tool_error_message(payload).lower()
@@ -1249,7 +1252,6 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         """When delete_comment API returns not found, tool returns friendly error payload."""
 
@@ -1257,13 +1259,10 @@ class TestDirectToolCalls:
             [{"message": "Record not found", "extensions": {}}]
         )
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_comment",
-                {"comment_id": 99999, "confirm": True},
+            payload = await confirm_after_preview(
+                session, "delete_comment", {"comment_id": 99999}
             )
-        assert result.is_error is False
         mock_pipefy_client.delete_comment.assert_called_once_with("99999")
-        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert "comment" in tool_error_message(
@@ -1276,18 +1275,9 @@ class TestDirectToolCalls:
         mock_pipefy_client,
         extract_payload,
     ):
-        """Destructive guard: default returns preview; confirm=True runs delete (step 2)."""
+        """Destructive guard: default returns preview; confirm=True with token runs delete."""
         comment_id = 42
         resource = f"comment (ID: {comment_id})"
-        expected_preview = {
-            "success": False,
-            "requires_confirmation": True,
-            "resource": resource,
-            "message": (
-                f"⚠️ You are about to permanently delete {resource}. "
-                "This action is irreversible. Set 'confirm=True' to proceed."
-            ),
-        }
 
         async with client_session as session:
             preview = await session.call_tool(
@@ -1296,11 +1286,16 @@ class TestDirectToolCalls:
             )
             assert preview.is_error is False
             mock_pipefy_client.delete_comment.assert_not_called()
-            assert extract_payload(preview) == expected_preview
+            preview_payload = extract_payload(preview)
+            _assert_destructive_preview(preview_payload, resource=resource)
 
             result = await session.call_tool(
                 "delete_comment",
-                {"comment_id": comment_id, "confirm": True},
+                {
+                    "comment_id": comment_id,
+                    "confirm": True,
+                    "confirmation_token": preview_payload["confirmation_token"],
+                },
             )
         assert result.is_error is False
         mock_pipefy_client.delete_comment.assert_called_once_with(str(comment_id))
@@ -2128,22 +2123,15 @@ class TestDeleteCardTool:
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
-            assert payload == {
-                "success": False,
-                "requires_confirmation": True,
-                "resource": "card 'Test Card' (ID: 12345) from pipe 'Test Pipe'",
-                "message": (
-                    "⚠️ You are about to permanently delete "
-                    "card 'Test Card' (ID: 12345) from pipe 'Test Pipe'. "
-                    "This action is irreversible. Set 'confirm=True' to proceed."
-                ),
-            }
+            _assert_destructive_preview(
+                payload,
+                resource="card 'Test Card' (ID: 12345) from pipe 'Test Pipe'",
+            )
 
     async def test_confirm_true_accepts_string_card_id(
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ) -> None:
         """String card_id is accepted (GraphQL IDs are strings)."""
         mock_pipefy_client.get_card.return_value = {
@@ -2152,15 +2140,11 @@ class TestDeleteCardTool:
         mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
 
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_card",
-                {"card_id": "12345", "confirm": True},
+            payload = await confirm_after_preview(
+                session, "delete_card", {"card_id": "12345"}
             )
 
-        assert result.is_error is False
-        mock_pipefy_client.get_card.assert_called_once_with("12345")
         mock_pipefy_client.delete_card.assert_called_once_with("12345")
-        payload = extract_payload(result)
         assert payload["success"] is True
 
     @pytest.mark.parametrize(
@@ -2190,16 +2174,10 @@ class TestDeleteCardTool:
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
-            assert payload == {
-                "success": False,
-                "requires_confirmation": True,
-                "resource": "card 'Test Card' (ID: 12345) from pipe 'Test Pipe'",
-                "message": (
-                    "⚠️ You are about to permanently delete "
-                    "card 'Test Card' (ID: 12345) from pipe 'Test Pipe'. "
-                    "This action is irreversible. Set 'confirm=True' to proceed."
-                ),
-            }
+            _assert_destructive_preview(
+                payload,
+                resource="card 'Test Card' (ID: 12345) from pipe 'Test Pipe'",
+            )
 
     async def test_invalid_card_id_returns_error(
         self,
@@ -2266,7 +2244,6 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ) -> None:
         """Test delete_card tool maps PERMISSION_DENIED GraphQL exception to friendly message."""
 
@@ -2289,15 +2266,12 @@ class TestDeleteCardTool:
         mock_pipefy_client.delete_card.side_effect = error
 
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_card",
-                {"card_id": 12345, "confirm": True},
+            payload = await confirm_after_preview(
+                session, "delete_card", {"card_id": 12345}
             )
 
-            assert result.is_error is False
             mock_pipefy_client.delete_card.assert_called_once_with("12345")
 
-            payload = extract_payload(result)
             expected_payload = cast(
                 DeleteCardErrorPayload,
                 tool_error(
@@ -2310,7 +2284,6 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ) -> None:
         """Test delete_card tool handles API returning success=False."""
         mock_pipefy_client.get_card.return_value = {
@@ -2324,15 +2297,12 @@ class TestDeleteCardTool:
         mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": False}}
 
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_card",
-                {"card_id": 12345, "confirm": True},
+            payload = await confirm_after_preview(
+                session, "delete_card", {"card_id": 12345}
             )
 
-            assert result.is_error is False
             mock_pipefy_client.delete_card.assert_called_once_with("12345")
 
-            payload = extract_payload(result)
             expected_payload = cast(
                 DeleteCardErrorPayload,
                 tool_error(
@@ -2350,23 +2320,19 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ) -> None:
-        """With confirm=True, delete runs without elicitation even if client supports it."""
+        """With confirm=True and a preview token, delete runs without elicitation."""
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }
         mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
 
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_card",
-                {"card_id": 12345, "confirm": True},
+            payload = await confirm_after_preview(
+                session, "delete_card", {"card_id": 12345}
             )
 
-        assert result.is_error is False
         mock_pipefy_client.delete_card.assert_called_once_with("12345")
-        payload = extract_payload(result)
         assert payload["success"] is True
 
     @pytest.mark.parametrize(
@@ -2427,7 +2393,6 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ) -> None:
         """When debug=True and client raises, error message includes codes and correlation_id."""
 
@@ -2444,11 +2409,9 @@ class TestDeleteCardTool:
         }
         mock_pipefy_client.delete_card.side_effect = error
         async with client_session as session:
-            result = await session.call_tool(
-                "delete_card", {"card_id": 12345, "confirm": True, "debug": True}
+            payload = await confirm_after_preview(
+                session, "delete_card", {"card_id": 12345, "debug": True}
             )
-        assert result.is_error is False
-        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert "codes=" in tool_error_message(
@@ -2583,39 +2546,28 @@ class TestDeleteCardRelation:
     ) -> None:
         child_id, parent_id, source_id = 1, 2, 3
         resource = f"card relation (child: {child_id}, parent: {parent_id}, source: {source_id})"
-        expected_preview = {
-            "success": False,
-            "requires_confirmation": True,
-            "resource": resource,
-            "message": (
-                f"⚠️ You are about to permanently delete {resource}. "
-                "This action is irreversible. Set 'confirm=True' to proceed."
-            ),
+        relation_args = {
+            "child_id": child_id,
+            "parent_id": parent_id,
+            "source_id": source_id,
         }
         mock_pipefy_client.delete_card_relation.return_value = {
             "deleteCardRelation": {"success": True}
         }
 
         async with client_session as session:
-            preview = await session.call_tool(
-                "delete_card_relation",
-                {
-                    "child_id": child_id,
-                    "parent_id": parent_id,
-                    "source_id": source_id,
-                },
-            )
+            preview = await session.call_tool("delete_card_relation", relation_args)
             assert preview.is_error is False
             mock_pipefy_client.delete_card_relation.assert_not_called()
-            assert extract_payload(preview) == expected_preview
+            preview_payload = extract_payload(preview)
+            _assert_destructive_preview(preview_payload, resource=resource)
 
             result = await session.call_tool(
                 "delete_card_relation",
                 {
-                    "child_id": child_id,
-                    "parent_id": parent_id,
-                    "source_id": source_id,
+                    **relation_args,
                     "confirm": True,
+                    "confirmation_token": preview_payload["confirmation_token"],
                 },
             )
         assert result.is_error is False
@@ -2630,7 +2582,6 @@ class TestDeleteCardRelation:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ) -> None:
         mock_pipefy_client.delete_card_relation.side_effect = PipefyGraphQLError(
             [
@@ -2641,17 +2592,15 @@ class TestDeleteCardRelation:
             ]
         )
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_card_relation",
                 {
                     "child_id": 10,
                     "parent_id": 20,
                     "source_id": 30,
-                    "confirm": True,
                 },
             )
-        assert result.is_error is False
-        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
 
@@ -2659,23 +2608,20 @@ class TestDeleteCardRelation:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ) -> None:
         mock_pipefy_client.delete_card_relation = AsyncMock(
             return_value={"deleteCardRelation": {"success": False}}
         )
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_card_relation",
                 {
                     "child_id": "a",
                     "parent_id": "b",
                     "source_id": "c",
-                    "confirm": True,
                 },
             )
-        assert result.is_error is False
-        payload = extract_payload(result)
         assert payload["success"] is False
         assert "did not succeed" in tool_error_message(payload).lower()
 
@@ -3203,7 +3149,7 @@ class TestElicitationWithoutABackChannel:
     ],
 )
 async def test_comment_and_card_mutations_emit_unstructured_content(
-    client_session, mock_pipefy_client, tool_name, args, prep
+    client_session, mock_pipefy_client, tool_name, args, prep, extract_payload
 ):
     """Tools keep their TypedDict return hints for callers, but
     ``structured_output=False`` prevents the ``{"result": {...}}`` wrap that
@@ -3218,7 +3164,18 @@ async def test_comment_and_card_mutations_emit_unstructured_content(
         }
         mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
     async with client_session as session:
-        result = await session.call_tool(tool_name, args)
+        call_args = args
+        if args.get("confirm"):
+            preview_args = {
+                key: value for key, value in args.items() if key != "confirm"
+            }
+            preview = extract_payload(await session.call_tool(tool_name, preview_args))
+            call_args = {
+                **preview_args,
+                "confirm": True,
+                "confirmation_token": preview["confirmation_token"],
+            }
+        result = await session.call_tool(tool_name, call_args)
     assert result.is_error is False
     # The tool body returns a plain success dict; structured_output=False
     # means no structuredContent is emitted on the MCP protocol side.

@@ -55,7 +55,7 @@ def envelope_flag(request, monkeypatch):
     return request.param
 
 
-def _extract_payload_impl(result):
+def extract_tool_payload(result):
     """Extract tool payload from CallToolResult across MCP SDK versions."""
     structured = getattr(result, "structuredContent", None)
     if structured is not None:
@@ -85,7 +85,7 @@ def _extract_payload_impl(result):
 @pytest.fixture
 def extract_payload():
     """Return the shared extractor as a callable fixture (back-compat)."""
-    return _extract_payload_impl
+    return extract_tool_payload
 
 
 def assert_invalid_arguments_envelope(result):
@@ -102,7 +102,7 @@ def assert_invalid_arguments_envelope(result):
         "Expected a tool-error envelope (isError=False), got a transport error: "
         f"{result}"
     )
-    payload = _extract_payload_impl(result)
+    payload = extract_tool_payload(result)
     assert payload.get("success") is False, (
         f"Expected envelope success=False, got payload: {payload!r}"
     )

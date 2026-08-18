@@ -16,6 +16,7 @@ from pipefy_sdk import (
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.knowledge_base_tools import KnowledgeBaseTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 PLAIN_TEXT_NODE = {
     "id": "kb-1",
@@ -243,22 +244,58 @@ async def test_delete_preview_without_confirm_does_not_delete(
 
 @pytest.mark.anyio
 async def test_delete_with_confirm_executes(
-    kb_session, mock_kb_client, unified_envelope, extract_payload
+    kb_session, mock_kb_client, unified_envelope
 ):
     mock_kb_client.delete_ai_knowledge_base_plain_text = AsyncMock(
         return_value={"success": True, "errors": []}
     )
     async with kb_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_ai_knowledge_base_plain_text",
             {"plain_text_id": "kb-1", "pipe_uuid": "pipe-uuid-1", "confirm": True},
         )
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is True
     mock_kb_client.delete_ai_knowledge_base_plain_text.assert_awaited_once_with(
         "kb-1", "pipe-uuid-1"
     )
+
+
+@pytest.mark.anyio
+async def test_delete_plain_text_rejects_token_when_pipe_uuid_differs(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.delete_ai_knowledge_base_plain_text = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+    async with kb_session as session:
+        preview = await session.call_tool(
+            "delete_ai_knowledge_base_plain_text",
+            {"plain_text_id": "kb-1", "pipe_uuid": "pipe-uuid-A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_ai_knowledge_base_plain_text",
+            {
+                "plain_text_id": "kb-1",
+                "pipe_uuid": "pipe-uuid-B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_kb_client.delete_ai_knowledge_base_plain_text.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_ai_knowledge_base_plain_text",
+            {"plain_text_id": "kb-1", "pipe_uuid": "pipe-uuid-A"},
+        )
+
+    mock_kb_client.delete_ai_knowledge_base_plain_text.assert_awaited_once_with(
+        "kb-1", "pipe-uuid-A"
+    )
+    assert matched["success"] is True
 
 
 @pytest.mark.anyio
@@ -558,22 +595,58 @@ async def test_delete_document_preview_without_confirm(
 
 @pytest.mark.anyio
 async def test_delete_document_with_confirm_executes(
-    kb_session, mock_kb_client, unified_envelope, extract_payload
+    kb_session, mock_kb_client, unified_envelope
 ):
     mock_kb_client.delete_ai_knowledge_base_document = AsyncMock(
         return_value={"success": True, "errors": []}
     )
     async with kb_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_ai_knowledge_base_document",
             {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-1", "confirm": True},
         )
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is True
     mock_kb_client.delete_ai_knowledge_base_document.assert_awaited_once_with(
         "kb-2", "pipe-uuid-1"
     )
+
+
+@pytest.mark.anyio
+async def test_delete_document_rejects_token_when_pipe_uuid_differs(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.delete_ai_knowledge_base_document = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+    async with kb_session as session:
+        preview = await session.call_tool(
+            "delete_ai_knowledge_base_document",
+            {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_ai_knowledge_base_document",
+            {
+                "document_id": "kb-2",
+                "pipe_uuid": "pipe-uuid-B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_kb_client.delete_ai_knowledge_base_document.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_ai_knowledge_base_document",
+            {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-A"},
+        )
+
+    mock_kb_client.delete_ai_knowledge_base_document.assert_awaited_once_with(
+        "kb-2", "pipe-uuid-A"
+    )
+    assert matched["success"] is True
 
 
 @pytest.mark.anyio
@@ -741,22 +814,58 @@ async def test_delete_data_lookup_preview_without_confirm(
 
 @pytest.mark.anyio
 async def test_delete_data_lookup_with_confirm_executes(
-    kb_session, mock_kb_client, unified_envelope, extract_payload
+    kb_session, mock_kb_client, unified_envelope
 ):
     mock_kb_client.delete_ai_knowledge_base_data_lookup = AsyncMock(
         return_value={"success": True, "errors": []}
     )
     async with kb_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_ai_knowledge_base_data_lookup",
             {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-1", "confirm": True},
         )
-    assert result.is_error is False
-    payload = extract_payload(result)
     assert payload["success"] is True
     mock_kb_client.delete_ai_knowledge_base_data_lookup.assert_awaited_once_with(
         "kb-3", "pipe-uuid-1"
     )
+
+
+@pytest.mark.anyio
+async def test_delete_data_lookup_rejects_token_when_pipe_uuid_differs(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.delete_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+    async with kb_session as session:
+        preview = await session.call_tool(
+            "delete_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_ai_knowledge_base_data_lookup",
+            {
+                "data_lookup_id": "kb-3",
+                "pipe_uuid": "pipe-uuid-B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_kb_client.delete_ai_knowledge_base_data_lookup.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-A"},
+        )
+
+    mock_kb_client.delete_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "kb-3", "pipe-uuid-A"
+    )
+    assert matched["success"] is True
 
 
 @pytest.mark.anyio

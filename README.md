@@ -33,7 +33,7 @@
 
 | Component | Package / path | Purpose |
 |-----------|----------------|---------|
-| **MCP server** | `pipefy-mcp-server` | Exposes **187** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others) when it runs locally. The hosted URL that the Cursor Marketplace plugin and Hosted MCP use serves **184**, see [MCP server](#mcp-server). |
+| **MCP server** | `pipefy-mcp-server` | Exposes the full local catalog to MCP clients (Cursor, Claude Desktop, Claude Code, and others). The hosted URL that the Cursor Marketplace plugin and Hosted MCP use serves the remote-safe floor instead; see [MCP server](#mcp-server). |
 | **CLI** | `pipefy-cli` | Terminal commands aligned with MCP capabilities; see [`docs/parity.md`](docs/parity.md). |
 | **SDK** | `pipefy` | Vendor GraphQL client, services, and models shared by MCP and CLI. |
 | **Skills** | [`skills/`](skills/) | Markdown playbooks (Anthropic Skills format) for common Pipefy workflows. |
@@ -55,14 +55,14 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 | Install path | MCP server runs on | Tools available | Auth | Also installs | Best for |
 |---|---|---|---|---|---|
-| **[Cursor Marketplace plugin](#6-cursor-marketplace-plugin)** | Pipefy cloud (HTTPS) | Remote-safe surface: **184** hosted tools; local-file tools withheld | In-client OAuth | nothing else | Fastest start in Cursor; zero local Python |
+| **[Cursor Marketplace plugin](#6-cursor-marketplace-plugin)** | Pipefy cloud (HTTPS) | Remote-safe surface; local-file tools withheld | In-client OAuth | nothing else | Fastest start in Cursor; zero local Python |
 | **[Hosted MCP](#1-hosted-mcp-claude-code)** | Pipefy cloud (HTTPS) | Remote-safe surface: all but the few local-file tools | In-client OAuth | nothing else | Fastest start in Claude Code; zero local Python |
 | **[Claude Code plugin](#2-claude-code-plugin)** | Your machine (`uvx` stdio) | Full [tool surface](#mcp-server) | `pipefy` CLI OAuth | slash commands + skills + CLI | Claude Code users who want the CLI, slash commands & the local-only tools |
 | **[Quick-install script](#3-quick-install-script)** | Your machine (stdio) | Full [tool surface](#mcp-server) | `pipefy auth login` | CLI + skills, wired into your client config | Local-file tools, CLI, Claude Desktop / Codex, or one-command full setup |
 | **[CLI only](#4-cli-only)** | — (no MCP) | CLI commands ([parity](docs/parity.md)) | login or service account | — | Terminal use, scripting, CI |
 | **[Skills only](#5-skills-only)** | — | — | — | markdown playbooks | Adding playbooks to any agent |
 
-> **Claude Code is the recommended client** and the most complete, best-tested path today. In Cursor, prefer the [Marketplace plugin](#6-cursor-marketplace-plugin) over the Quick-install script unless you need the local-file tools or the CLI. The Marketplace listing is submitted from `main` after this packaging is released; until it is live, contributors load a local copy (section 6) rather than treating a catalog 404 as a missing plugin. Claude Desktop and Codex still use the script.
+> **Claude Code is the recommended client** and the most complete, best-tested path today. In Cursor, prefer the [Marketplace plugin](#6-cursor-marketplace-plugin) over the Quick-install script unless you need the local-file tools or the CLI. The Marketplace listing tracks `main`. Contributors can always load a checkout as a local plugin (section 6). Claude Desktop and Codex still use the script.
 
 > **Register exactly one Pipefy MCP server** — do not mix the hosted HTTP server with a local stdio or plugin server, whatever they are named. To check a machine, including one this repository never installed for you:
 >
@@ -72,7 +72,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 >
 > That reports every registration and how each one is reached. It removes nothing, edits nothing, and exits `0` when it finds nothing, `1` when findings remain, `2` when a source could not be inspected. A registration is matched on what it **runs** — the `pipefy-mcp-server` command, a known runner invoking it, or the host `mcp.pipefy.com` — so one registered under any other name is still found. First-time setup checklist to hand your agent: [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](skills/onboarding/pipefy-toolkit-setup/SKILL.md). Removing a path, or moving between them: [Uninstalling](#uninstalling-and-switching-between-paths) and [`docs/uninstall.md`](docs/uninstall.md).
 
-> **Too many tools for your client?** The local paths can expose a subset instead of the whole catalog — by subject domain, by persona profile, or as four catalog meta-tools the agent searches on demand. See [Choosing a tool surface](#choosing-a-tool-surface). That selection (`PIPEFY_MCP_TOOLSETS`) applies to the local stdio path only. The Cursor Marketplace plugin and Hosted MCP always serve the hosted floor.
+> **Too many tools for your client?** The local paths can expose a subset instead of the whole catalog — by subject domain, by persona profile, or as four catalog meta-tools the agent searches on demand. See [Choosing a tool surface](#choosing-a-tool-surface). That selection (`PIPEFY_MCP_TOOLSETS`) applies to the local stdio path only. Any client on the hosted URL always receives the remote-safe floor.
 
 **Authentication** (for the local paths; the hosted server uses its own in-client OAuth):
 
@@ -146,9 +146,9 @@ Catalog and authoring guide: [`skills/README.md`](skills/README.md).
 
 ### 6. Cursor Marketplace plugin
 
-**Pick this when:** you're in Cursor and want the hosted MCP server with browser sign-in and no local Python. The plugin ships the skill catalog and points Cursor at `https://mcp.pipefy.com/mcp`. Cursor runs the OAuth flow. The surface is the hosted deployment's remote-safe floor: **184** tools as of 2026-08-17 (Cloud Agents against production). Withheld are the tools whose input is a file on your machine; attachment uploads still work from a URL or a presigned upload target. Per-client toolset selection (`PIPEFY_MCP_TOOLSETS`) does not apply to this URL — use the [Quick-install script](#3-quick-install-script) when you need that, or the local-file tools.
+**Pick this when:** you're in Cursor and want the hosted MCP server with browser sign-in and no local Python. The plugin ships the skill catalog and points Cursor at `https://mcp.pipefy.com/mcp`. Cursor runs the OAuth flow. The surface is the hosted deployment's remote-safe floor. Withheld are the tools whose input is a file on your machine; attachment uploads still work from a URL or a presigned upload target. Toolset selection (`PIPEFY_MCP_TOOLSETS`) does not apply to the hosted URL — use the [Quick-install script](#3-quick-install-script) when you need that, or the local-file tools.
 
-Install **Pipefy** from the Cursor Marketplace once the listing is published (it tracks `main`). Complete the browser sign-in when Cursor prompts, then fully restart Cursor before the first tool call. No `uv`, no CLI, no token paste. This path has no `/install` or `/pipefy-login` commands (those files belong to the [Claude Code plugin](#2-claude-code-plugin), where they surface namespaced as `/pipefy:install` and `/pipefy:pipefy-login`). Skills may appear in the slash palette as `/pipefy-*`.
+Install **Pipefy** from the Cursor Marketplace (the listing tracks `main`). Complete the browser sign-in when Cursor prompts, then fully restart Cursor before the first tool call. No `uv`, no CLI, no token paste. This path has no `/install` or `/pipefy-login` commands (those files belong to the [Claude Code plugin](#2-claude-code-plugin), where they surface namespaced as `/pipefy:install` and `/pipefy:pipefy-login`). Skills may appear in the slash palette as `/pipefy-*`.
 
 This path and any user-config Pipefy MCP entry (including one written by `install.sh --client cursor`) both occupy Cursor's MCP list. They are mutually exclusive — the same rule as mixing hosted HTTP with local stdio. The registration key is free text: delete the matching key from `~/.cursor/mcp.json` (Windows: `%USERPROFILE%\.cursor\mcp.json`) and keep the Marketplace plugin. `./uninstall.sh --scan` prints the name it found; the switch is in [`docs/uninstall.md`](docs/uninstall.md#to-the-cursor-marketplace-plugin).
 
@@ -208,28 +208,28 @@ Deprecation and semver (post-1.0): [`docs/DEPRECATION.md`](docs/DEPRECATION.md).
 
 ## MCP server
 
-The server registers **187 tools** across fourteen domains locally. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py). The Cursor Marketplace plugin and Hosted MCP path expose the hosted remote-safe floor instead: **184** tools as of 2026-08-17 (the three-tool gap is the local-file tools that URL withholds).
+The local server registers the full catalog. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py). The hosted URL (Marketplace plugin and Hosted MCP) serves the remote-safe floor instead: it withholds the tools whose input is a file on your machine.
 
 Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clients show to models). Per-area reference docs cover parameters, edge cases, and cross-cutting behavior.
 
 **Shared conventions** (pagination, IDs, permissions, error shape): [`docs/mcp/tools/cross-cutting.md`](docs/mcp/tools/cross-cutting.md).
 
-| Domain | Tools | Summary | Reference |
-|--------|:-----:|---------|-----------|
-| **Pipes & cards** | 41 | Pipes, phases, fields, labels, cards, field conditions, attachments. Phase inventory (`get_phase_cards`, `get_phase_cards_count`), move discovery (`get_phase_allowed_move_targets`), and `create_card(phase_id=…)` reduce raw GraphQL for agent seeding. | [docs](docs/mcp/tools/pipes-and-cards.md) |
-| **Database tables** | 17 | Tables, records, schema, table-record attachments. | [docs](docs/mcp/tools/database-tables.md) |
-| **Relations** | 8 | Pipe and card relations. | [docs](docs/mcp/tools/relations.md) |
-| **Reports** | 17 | Pipe and organization reports, async exports. | [docs](docs/mcp/tools/reports.md) |
-| **Automations & AI** | 23 | Automations, AI automations, AI agents, validators. | [docs](docs/mcp/tools/automations-and-ai.md) |
-| **LLM providers** | 11 | Discovery reads (custom + Pipefy-managed providers, vendor model lists, owner defaults, dependencies, read-access probe) plus custom-provider writes: create/update/delete, active-status toggle, and organization default set/reset. | [docs](docs/mcp/tools/llm-providers.md) |
-| **Knowledge bases** | 14 | Pipe-scoped AI knowledge bases: list all items, plain text / document (one-shot PDF upload) / data lookup CRUD, and a read-access probe. Attach sources to agents/behaviors via `dataSourceIds`. | [docs](docs/mcp/tools/knowledge-bases.md) |
-| **iPaaS** | 4 | Lazy discovery, invocation, and app-connection setup for a pipe's iPaaS (Advanced Automations) workspace (`get_ipaas_tools`, `call_ipaas_tool`, plus the connection meta-tools). | [docs](docs/mcp/tools/ipaas.md) |
-| **Observability** | 11 | Logs, usage, credits, execution metrics, job exports. | [docs](docs/mcp/tools/observability.md) |
-| **Members, email & webhooks** | 12 | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |
-| **Service accounts** | 2 | Create and delete organization service accounts (OAuth2 machine identities); attach them to pipes with `add_service_account_to_pipe`. | [docs](docs/mcp/tools/service-accounts.md) |
-| **Organization** | 2 | Organization metadata and discovery. | [docs](docs/mcp/tools/organization.md) |
-| **Portals** | 20 | Portal read/CRUD, pages, elements, sub-portals (publish/unpublish). | [docs](docs/mcp/tools/portal.md) |
-| **Introspection** | 5 | Schema discovery and raw GraphQL. | [docs](docs/mcp/tools/introspection.md) |
+| Domain | Summary | Reference |
+|--------|---------|-----------|
+| **Pipes & cards** | Pipes, phases, fields, labels, cards, field conditions, attachments. Phase inventory (`get_phase_cards`, `get_phase_cards_count`), move discovery (`get_phase_allowed_move_targets`), and `create_card(phase_id=…)` reduce raw GraphQL for agent seeding. | [docs](docs/mcp/tools/pipes-and-cards.md) |
+| **Database tables** | Tables, records, schema, table-record attachments. | [docs](docs/mcp/tools/database-tables.md) |
+| **Relations** | Pipe and card relations. | [docs](docs/mcp/tools/relations.md) |
+| **Reports** | Pipe and organization reports, async exports. | [docs](docs/mcp/tools/reports.md) |
+| **Automations & AI** | Automations, AI automations, AI agents, validators. | [docs](docs/mcp/tools/automations-and-ai.md) |
+| **LLM providers** | Discovery reads (custom + Pipefy-managed providers, vendor model lists, owner defaults, dependencies, read-access probe) plus custom-provider writes: create/update/delete, active-status toggle, and organization default set/reset. | [docs](docs/mcp/tools/llm-providers.md) |
+| **Knowledge bases** | Pipe-scoped AI knowledge bases: list all items, plain text / document (one-shot PDF upload) / data lookup CRUD, and a read-access probe. Attach sources to agents/behaviors via `dataSourceIds`. | [docs](docs/mcp/tools/knowledge-bases.md) |
+| **iPaaS** | Lazy discovery, invocation, and app-connection setup for a pipe's iPaaS (Advanced Automations) workspace (`get_ipaas_tools`, `call_ipaas_tool`, plus the connection meta-tools). | [docs](docs/mcp/tools/ipaas.md) |
+| **Observability** | Logs, usage, credits, execution metrics, job exports. | [docs](docs/mcp/tools/observability.md) |
+| **Members, email & webhooks** | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |
+| **Service accounts** | Create and delete organization service accounts (OAuth2 machine identities); attach them to pipes with `add_service_account_to_pipe`. | [docs](docs/mcp/tools/service-accounts.md) |
+| **Organization** | Organization metadata and discovery. | [docs](docs/mcp/tools/organization.md) |
+| **Portals** | Portal read/CRUD, pages, elements, sub-portals (publish/unpublish). | [docs](docs/mcp/tools/portal.md) |
+| **Introspection** | Schema discovery and raw GraphQL. | [docs](docs/mcp/tools/introspection.md) |
 
 ### Choosing a tool surface
 
@@ -241,7 +241,7 @@ Not every client wants every tool. Three independent controls decide what `tools
 | **Toolset selection** | `--toolsets` / `PIPEFY_MCP_TOOLSETS` | Narrows within that floor — by **subject domain** (`workflow`, `database`, `interfaces`, `automation`, `intelligence`, `analytics`, `governance`, `integration`) or by **persona profile** (`requester`, `operator`, `manager`, `builder`, `admin`, `auditor`), unioned. Selection never widens past the floor. |
 | **Power discovery** | `--toolsets power` | Replaces the curated tools with four catalog meta-tools (`get_tool_categories`, `search_tools`, `describe_tool`, `execute_tool`) plus the raw-GraphQL tools, so the working set stays small no matter how large the catalog grows. |
 
-The toolset names are a **different grouping from the table above**: that table is organized by documentation area (the reference docs you read), while subject domains partition tools by the job they serve — card relations land in `workflow`, table relations in `database`. Passing an unrecognized name is a startup error that prints the full list of valid ones. `--toolsets` / `PIPEFY_MCP_TOOLSETS` is a process-level switch: it applies to the local stdio server only, not to the Cursor Marketplace plugin or Hosted MCP URL.
+The toolset names are a **different grouping from the table above**: that table is organized by documentation area (the reference docs you read), while subject domains partition tools by the job they serve — card relations land in `workflow`, table relations in `database`. Passing an unrecognized name is a startup error that prints the full list of valid ones. `--toolsets` / `PIPEFY_MCP_TOOLSETS` is a process-level switch: it applies to the local stdio server only, not to the hosted URL.
 
 Per-name definitions and precedence: [`docs/config.md`](docs/config.md). Taxonomy rationale (why subject domains, why personas overlap): [`packages/mcp/AGENTS.md`](packages/mcp/AGENTS.md).
 

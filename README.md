@@ -55,7 +55,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 | Install path | MCP server runs on | Tools available | Auth | Also installs | Best for |
 |---|---|---|---|---|---|
-| **[Cursor Marketplace plugin](#6-cursor-marketplace-plugin)** | Pipefy cloud (HTTPS) | Remote-safe surface; local-file tools withheld | In-client OAuth | nothing else | Fastest start in Cursor; zero local Python |
+| **[Cursor Marketplace plugin](#6-cursor-marketplace-plugin)** | Pipefy cloud (HTTPS) | Remote-safe surface; local-file tools withheld | In-client OAuth | skills | Fastest start in Cursor; zero local Python |
 | **[Hosted MCP](#1-hosted-mcp-claude-code)** | Pipefy cloud (HTTPS) | Remote-safe surface: all but the few local-file tools | In-client OAuth | nothing else | Fastest start in Claude Code; zero local Python |
 | **[Claude Code plugin](#2-claude-code-plugin)** | Your machine (`uvx` stdio) | Full [tool surface](#mcp-server) | `pipefy` CLI OAuth | slash commands + skills + CLI | Claude Code users who want the CLI, slash commands & the local-only tools |
 | **[Quick-install script](#3-quick-install-script)** | Your machine (stdio) | Full [tool surface](#mcp-server) | `pipefy auth login` | CLI + skills, wired into your client config | Local-file tools, CLI, Claude Desktop / Codex, or one-command full setup |

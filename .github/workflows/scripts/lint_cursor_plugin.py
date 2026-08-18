@@ -206,21 +206,20 @@ def _lint_hosted_auth(rel: Path, name: str, server: dict[str, Any]) -> list[str]
 
     Unexpected keys are named but never echoed: an unenumerated key is exactly
     where a committed credential would sit, and this message reaches public CI
-    logs.
+    logs. Received field values are omitted for the same reason.
     """
     errors: list[str] = []
     auth = server.get("auth")
     if not isinstance(auth, dict):
         errors.append(
-            f"{rel} server {name!r} has auth={auth!r}, expected an object "
-            f"with CLIENT_ID {HOSTED_CLIENT_ID!r}"
+            f"{rel} server {name!r} has auth that is not an object, "
+            f"expected an object with CLIENT_ID {HOSTED_CLIENT_ID!r}"
         )
         return errors
     client_id = auth.get("CLIENT_ID")
     if client_id != HOSTED_CLIENT_ID:
         errors.append(
-            f"{rel} server {name!r} has auth.CLIENT_ID={client_id!r}, "
-            f"expected {HOSTED_CLIENT_ID!r}"
+            f"{rel} server {name!r} has auth.CLIENT_ID that is not {HOSTED_CLIENT_ID!r}"
         )
     for key in sorted(set(auth) - set(ALLOWED_MCP_AUTH_KEYS)):
         errors.append(
@@ -238,14 +237,11 @@ def _lint_mcp(root: Path, mcp_path: Path) -> list[str]:
     rel = _rel(root, mcp_path)
     if not isinstance(servers, dict):
         return [
-            f"{rel} mcpServers is {servers!r}, expected an object with exactly "
+            f"{rel} mcpServers is not an object, expected an object with exactly "
             "one server"
         ]
     if len(servers) != 1:
-        return [
-            f"{rel} declares {len(servers)} server(s) {list(servers)!r}, "
-            "expected exactly one"
-        ]
+        return [f"{rel} mcpServers has {len(servers)} server(s), expected exactly one"]
     errors: list[str] = []
     for key in sorted(set(loaded) - set(ALLOWED_MCP_TOP_LEVEL_KEYS)):
         errors.append(
@@ -255,16 +251,14 @@ def _lint_mcp(root: Path, mcp_path: Path) -> list[str]:
     name, server = next(iter(servers.items()))
     if not isinstance(server, dict):
         return [
-            f"{rel} server {name!r} is {server!r}, expected an object with a "
+            f"{rel} server {name!r} is not an object, expected an object with a "
             "url and no command, args, or env"
         ]
     if name != HOSTED_SERVER_NAME:
         errors.append(f"{rel} server key is {name!r}, expected {HOSTED_SERVER_NAME!r}")
     url = server.get("url")
     if url != HOSTED_MCP_URL:
-        errors.append(
-            f"{rel} server {name!r} has url={url!r}, expected {HOSTED_MCP_URL!r}"
-        )
+        errors.append(f"{rel} server {name!r} has url that is not {HOSTED_MCP_URL!r}")
     for key in sorted(set(server) - set(ALLOWED_MCP_SERVER_KEYS)):
         errors.append(
             f"{rel} server {name!r} has unexpected key {key!r}; expected only "

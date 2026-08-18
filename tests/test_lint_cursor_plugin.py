@@ -29,6 +29,14 @@ _HOSTED_MCP = {
         }
     }
 }
+_SENTINEL = "SENTINEL_NOT_A_REAL_SECRET_9471"
+
+
+def _assert_redacted_field_failure(errors, field_token):
+    assert errors, "expected the lint to fail"
+    blob = "\n".join(errors)
+    assert field_token in blob, errors
+    assert _SENTINEL not in blob, errors
 
 
 def _write_plugin(
@@ -265,14 +273,15 @@ def test_url_must_be_the_hosted_endpoint(tmp_path):
         mcp={
             "mcpServers": {
                 "pipefy": {
-                    "url": "http://evil.example/mcp",
+                    "url": f"https://evil.example/mcp?token={_SENTINEL}",
                     "auth": {"CLIENT_ID": "pipefy-mcp"},
                 }
             }
         },
     )
     errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
-    assert any("http://evil.example/mcp" in err for err in errors), errors
+    _assert_redacted_field_failure(errors, "url")
+    assert any("https://mcp.pipefy.com/mcp" in err for err in errors), errors
 
 
 def test_client_id_is_required(tmp_path):
@@ -288,7 +297,90 @@ def test_client_id_is_required(tmp_path):
         },
     )
     errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
-    assert any("auth.CLIENT_ID=" in err for err in errors), errors
+    assert errors, "expected the lint to fail"
+    assert any("auth.CLIENT_ID" in err for err in errors), errors
+
+
+def test_wrong_client_id_is_rejected_without_echoing_value(tmp_path):
+    _write_plugin(
+        tmp_path,
+        mcp={
+            "mcpServers": {
+                "pipefy": {
+                    "url": "https://mcp.pipefy.com/mcp",
+                    "auth": {"CLIENT_ID": _SENTINEL},
+                }
+            }
+        },
+    )
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    _assert_redacted_field_failure(errors, "auth.CLIENT_ID")
+    assert any("pipefy-mcp" in err for err in errors), errors
+
+
+def test_non_object_auth_is_rejected_without_echoing_value(tmp_path):
+    _write_plugin(
+        tmp_path,
+        mcp={
+            "mcpServers": {
+                "pipefy": {
+                    "url": "https://mcp.pipefy.com/mcp",
+                    "auth": _SENTINEL,
+                }
+            }
+        },
+    )
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    _assert_redacted_field_failure(errors, "auth")
+
+
+def test_non_object_server_is_rejected_without_echoing_value(tmp_path):
+    _write_plugin(
+        tmp_path,
+        mcp={"mcpServers": {"pipefy": _SENTINEL}},
+    )
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    _assert_redacted_field_failure(errors, "pipefy")
+
+
+def test_non_object_mcp_servers_is_rejected_without_echoing_value(tmp_path):
+    _write_plugin(tmp_path, mcp={"mcpServers": _SENTINEL})
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    _assert_redacted_field_failure(errors, "mcpServers")
+
+
+def test_zero_mcp_servers_are_rejected(tmp_path):
+    _write_plugin(
+        tmp_path,
+        mcp={
+            "mcpServers": {},
+            "note": _SENTINEL,
+        },
+    )
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    _assert_redacted_field_failure(errors, "0 server")
+    assert any("expected exactly one" in err for err in errors), errors
+
+
+def test_two_mcp_servers_are_rejected(tmp_path):
+    _write_plugin(
+        tmp_path,
+        mcp={
+            "mcpServers": {
+                "pipefy": {
+                    "url": "https://mcp.pipefy.com/mcp",
+                    "auth": {"CLIENT_ID": "pipefy-mcp"},
+                },
+                "extra": {
+                    "url": f"https://evil.example/{_SENTINEL}",
+                    "auth": {"CLIENT_ID": _SENTINEL},
+                },
+            }
+        },
+    )
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    _assert_redacted_field_failure(errors, "2 server")
+    assert any("expected exactly one" in err for err in errors), errors
 
 
 def test_server_key_must_be_pipefy(tmp_path):
@@ -376,6 +468,53 @@ def test_main_exits_one_when_packaging_errors_exist(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "FAILED" in captured.err
     assert "packaging error" in captured.err
+
+
+def test_main_stderr_does_not_echo_wrong_client_id(monkeypatch, tmp_path, capsys):
+    _write_plugin(
+        tmp_path,
+        mcp={
+            "mcpServers": {
+                "pipefy": {
+                    "url": "https://mcp.pipefy.com/mcp",
+                    "auth": {"CLIENT_ID": _SENTINEL},
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(_lint, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_lint, "_tracked_skill_md_paths", lambda root: [_SKILL_MD])
+    assert _lint.main() == 1
+    err = capsys.readouterr().err
+    assert "FAILED" in err
+    assert "auth.CLIENT_ID" in err
+    assert _SENTINEL not in err
+
+
+def test_main_stderr_does_not_echo_wrong_server_count(monkeypatch, tmp_path, capsys):
+    _write_plugin(
+        tmp_path,
+        mcp={
+            "mcpServers": {
+                "pipefy": {
+                    "url": "https://mcp.pipefy.com/mcp",
+                    "auth": {"CLIENT_ID": "pipefy-mcp"},
+                },
+                "extra": {
+                    "url": f"https://evil.example/{_SENTINEL}",
+                    "auth": {"CLIENT_ID": _SENTINEL},
+                },
+            }
+        },
+    )
+    monkeypatch.setattr(_lint, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_lint, "_tracked_skill_md_paths", lambda root: [_SKILL_MD])
+    assert _lint.main() == 1
+    err = capsys.readouterr().err
+    assert "FAILED" in err
+    assert "2 server" in err
+    assert "expected exactly one" in err
+    assert _SENTINEL not in err
 
 
 def test_main_exits_one_when_git_listing_fails(monkeypatch, capsys):

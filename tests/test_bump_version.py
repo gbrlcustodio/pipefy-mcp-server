@@ -162,11 +162,16 @@ def test_json_version_re_replaces_version(manifest: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "manifest", [_bump.PLUGIN_MANIFEST, _bump.MARKETPLACE_MANIFEST]
+    "manifest",
+    [
+        _bump.PLUGIN_MANIFEST,
+        _bump.MARKETPLACE_MANIFEST,
+        _bump.CURSOR_PLUGIN_MANIFEST,
+    ],
 )
 def test_json_manifest_version_matches_real_manifest(manifest: Path) -> None:
-    # Both Claude manifests carry the lockstep version; a lone "version" key must
-    # resolve and equal the SDK source of truth.
+    # Claude and Cursor manifests carry the lockstep version; a lone "version"
+    # key must resolve and equal the SDK source of truth.
     text = manifest.read_text(encoding="utf-8")
     m = _bump._sole_match(_bump.JSON_VERSION_RE, text)
     assert m is not None
@@ -174,14 +179,15 @@ def test_json_manifest_version_matches_real_manifest(manifest: Path) -> None:
 
 
 def test_json_manifests_cover_every_versioned_plugin_manifest() -> None:
-    # A .claude-plugin JSON that carries a "version" but is absent from
-    # JSON_MANIFESTS is exactly the drift this fix targets: it exists yet is
-    # bumped and verified by nothing. Deriving the expected set from the tree
-    # (not a hand-list) means neither dropping a manifest nor adding a future one
-    # can silently unwire it.
+    # A .claude-plugin or .cursor-plugin JSON that carries a "version" but is
+    # absent from JSON_MANIFESTS is exactly the drift this fix targets: it exists
+    # yet is bumped and verified by nothing. Deriving the expected set from the
+    # tree (not a hand-list) means neither dropping a manifest nor adding a
+    # future one can silently unwire it.
     versioned = {
         path
-        for path in (_bump.REPO_ROOT / ".claude-plugin").glob("*.json")
+        for directory in (".claude-plugin", ".cursor-plugin")
+        for path in (_bump.REPO_ROOT / directory).glob("*.json")
         if _bump.JSON_VERSION_RE.search(path.read_text(encoding="utf-8"))
     }
     assert versioned == set(_bump.JSON_MANIFESTS)

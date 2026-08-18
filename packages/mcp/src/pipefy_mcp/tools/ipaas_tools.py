@@ -61,10 +61,11 @@ def ipaas_call_is_destructive(
 ) -> bool:
     """Whether a catalog call must take the two-step confirmation ticket.
 
-    Order (do not reorder): annotation true; ``operation`` needle-equality;
-    annotation false stops; else ``tool_name`` substring needles. ``entry`` is
-    the raw ``list_tools`` wire object; a missing catalog name is passed as
-    ``{"name": tool_name}`` (treated as no boolean).
+    Order (do not reorder): annotation true; ``operation`` needle-equality
+    after strip and casefold; annotation false stops; else ``tool_name``
+    substring needles. ``entry`` is a found ``list_tools`` wire object. A
+    catalog miss is unclassifiable: the call site gates it instead of
+    passing ``{"name": tool_name}`` here.
     """
     hint = _catalog_destructive_hint(entry)
     if hint is True:
@@ -91,19 +92,23 @@ def _catalog_tool_name(entry: dict[str, Any]) -> str:
     return name if isinstance(name, str) else ""
 
 
+def _normalized_operation(value: str) -> str:
+    return value.strip().casefold()
+
+
 def _operation_equals_destructive_needle(arguments: dict[str, Any] | None) -> bool:
     if arguments is None or "operation" not in arguments:
         return False
     value = arguments["operation"]
     if not isinstance(value, str):
         return False
-    return value.casefold() in IPAAS_DESTRUCTIVE_NEEDLES
+    return _normalized_operation(value) in IPAAS_DESTRUCTIVE_NEEDLES
 
 
 def _arguments_digest(arguments: dict[str, Any] | None) -> str:
     canonical: dict[str, Any] = dict(arguments or {})
     if "operation" in canonical and isinstance(canonical["operation"], str):
-        canonical["operation"] = canonical["operation"].casefold()
+        canonical["operation"] = _normalized_operation(canonical["operation"])
     return hashlib.sha256(
         json.dumps(
             canonical, sort_keys=True, separators=(",", ":"), default=str
@@ -120,7 +125,7 @@ def _ipaas_call_resource_identity(
         "arguments": _arguments_digest(arguments),
     }
     if arguments is not None and "operation" in arguments:
-        identity["operation"] = str(arguments["operation"]).casefold()
+        identity["operation"] = _normalized_operation(str(arguments["operation"]))
     return identity
 
 
@@ -261,11 +266,13 @@ class IpaasTools:
 
             Destructive catalog calls need a preview token: annotation
             ``true``, or ``arguments.operation`` equal to a delete-like needle
-            (case-insensitive equality), else a delete-like substring in the
-            catalog name. Call once to receive ``confirmation_token``, then
-            echo that token with ``confirm=True`` on step 2. Mixed manage
-            ADD/UPDATE stay one-shot unless a confirmation token is supplied.
-            A token is replayable within its TTL.
+            (strip then case-insensitive equality), else a delete-like
+            substring in the catalog name. A catalog miss is unclassifiable
+            and takes the two-step as well. Call once to receive
+            ``confirmation_token``, then echo that token with ``confirm=True``
+            on step 2. Mixed manage ADD/UPDATE stay one-shot unless a
+            confirmation token is supplied. A token is replayable within
+            its TTL.
 
             Prefer the read and validate tools while iterating, and for
             long-running executions (flow tests, retries) inspect progress
@@ -290,8 +297,12 @@ class IpaasTools:
                 async with gateway.mcp_session(token) as ipaas_session:
                     catalog = await ipaas_session.list_tools()
                     entry = _catalog_entry_named(catalog, tool_name)
-                    judged = {"name": tool_name} if entry is None else entry
-                    destructive = ipaas_call_is_destructive(judged, arguments)
+                    if entry is None:
+                        catalog_miss = True
+                        destructive = True
+                    else:
+                        catalog_miss = False
+                        destructive = ipaas_call_is_destructive(entry, arguments)
                     # A leftover DELETE token must not authorize mixed ADD
                     # (identity includes operation). ADD without a token stays
                     # one-shot.
@@ -299,7 +310,13 @@ class IpaasTools:
                         descriptor = _ipaas_call_resource_descriptor(
                             pipe_id, tool_name, arguments
                         )
-                        if destructive:
+                        if catalog_miss:
+                            irreversible = (
+                                f"Running {descriptor} could not be classified "
+                                "because it was not in the catalog page this "
+                                "server read, so it needs approval."
+                            )
+                        elif destructive:
                             irreversible = (
                                 f"⚠️ Running {descriptor} is permanent "
                                 "and cannot be undone."

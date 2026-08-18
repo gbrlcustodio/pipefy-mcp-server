@@ -220,8 +220,9 @@ class IntrospectionTools:
                     confirm=confirm,
                     resource_descriptor=inspection.mutation_descriptor,
                     irreversible_sentence=(
-                        f"⚠️ Executing {inspection.mutation_descriptor} is "
-                        "permanent and cannot be undone."
+                        f"Executing {inspection.mutation_descriptor} needs "
+                        "approval because this server cannot tell what the "
+                        "mutation changes."
                     ),
                     resource_identity={
                         "document": hashlib.sha256(query.encode("utf-8")).hexdigest(),

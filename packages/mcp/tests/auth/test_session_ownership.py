@@ -44,6 +44,9 @@ from starlette.applications import Starlette
 from pipefy_mcp.auth import JwtTokenVerifier
 
 _ACCEPT = "application/json, text/event-stream"
+# The authority the requests present in `Host`. The client derives it from its
+# base_url; the hand-built scope in `_attach_status` has to state it.
+_AUTHORITY = "127.0.0.1:8000"
 _RESOURCE = "https://mcp.example.com/mcp"
 _ISSUER = "https://signin.example.com/realms/pipefy"
 _EXP = 1893456000
@@ -121,18 +124,31 @@ def _headers(token: str, session_id: str | None = None) -> dict[str, str]:
 
 
 @asynccontextmanager
-async def _served(
+async def _served_app(
     subjects: Mapping[str, Any] = _SUBJECTS,
-) -> AsyncIterator[httpx.AsyncClient]:
-    """A client speaking to the real app over ASGI, lifespan and all."""
+) -> AsyncIterator[tuple[httpx.AsyncClient, Starlette]]:
+    """The running app plus a client for it, for a test that needs both.
+
+    The ``GET`` cases drive the app directly rather than through the client, so
+    they need the app object; everything else goes through :func:`_served`.
+    """
     http_app = _build_http_app(subjects)
     with anyio.fail_after(10):
         async with http_app.router.lifespan_context(http_app):
             transport = httpx.ASGITransport(app=http_app)
             async with httpx.AsyncClient(
-                transport=transport, base_url="http://127.0.0.1:8000"
+                transport=transport, base_url=f"http://{_AUTHORITY}"
             ) as client:
-                yield client
+                yield client, http_app
+
+
+@asynccontextmanager
+async def _served(
+    subjects: Mapping[str, Any] = _SUBJECTS,
+) -> AsyncIterator[httpx.AsyncClient]:
+    """A client speaking to the real app over ASGI, lifespan and all."""
+    async with _served_app(subjects) as (client, _):
+        yield client
 
 
 async def _open_session(client: httpx.AsyncClient, token: str) -> str:
@@ -158,6 +174,59 @@ async def _ping(
         json={"jsonrpc": "2.0", "id": 2, "method": "ping"},
         headers=_headers(token, session_id),
     )
+
+
+async def _attach_status(app: Starlette, token: str, session_id: str) -> int:
+    """The status ``GET /mcp`` answers when ``token`` attaches to ``session_id``.
+
+    This drives the ASGI app directly instead of going through the client above,
+    because a successful attach is a stream that never ends and
+    ``httpx.ASGITransport`` runs the app to completion before it yields a
+    response. Reading the status off ``http.response.start`` and then cancelling
+    is what lets the accepted case be asserted at all; the refused one would
+    work either way.
+    """
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        # The hand-built scope carries no Host of its own, and the SDK's
+        # transport-security middleware answers 421 without one.
+        "headers": [
+            (key.encode(), value.encode())
+            for key, value in {
+                "host": _AUTHORITY,
+                **_headers(token, session_id),
+            }.items()
+        ],
+        "scheme": "http",
+        "path": "/mcp",
+        "raw_path": b"/mcp",
+        "query_string": b"",
+        "server": ("127.0.0.1", 8000),
+        "client": ("127.0.0.1", 50000),
+        "root_path": "",
+    }
+    started = anyio.Event()
+    statuses: list[int] = []
+
+    async def receive() -> dict[str, Any]:
+        # A GET has no body, and the stream must not be told to disconnect.
+        await anyio.sleep_forever()
+        raise AssertionError("unreachable")
+
+    async def send(message: dict[str, Any]) -> None:
+        if message["type"] == "http.response.start":
+            statuses.append(message["status"])
+            started.set()
+
+    async with anyio.create_task_group() as task_group:
+        task_group.start_soon(app, scope, receive, send)
+        await started.wait()
+        task_group.cancel_scope.cancel()
+
+    return statuses[0]
 
 
 # --- the discriminating property, through the real session manager -----------
@@ -189,6 +258,33 @@ async def test_the_creating_user_keeps_using_their_own_session() -> None:
 
     assert reused.status_code == 200
     assert reused.json()["id"] == 2
+
+
+@pytest.mark.anyio
+async def test_a_second_user_cannot_attach_to_the_session_sse_stream() -> None:
+    """The same refusal on ``GET /mcp``, which is a second way onto a session.
+
+    ``POST`` is not the only reader of the ownership check: ``GET /mcp`` opens the
+    standalone SSE stream, which is where server-initiated traffic (log
+    notifications, elicitation, resource updates) would reach the caller. It is a
+    distinct branch of the transport, so it is asserted rather than assumed to
+    follow from the ``POST`` case.
+    """
+    async with _served_app() as (client, app):
+        session_id = await _open_session(client, _TOKEN_A)
+        attached = await _attach_status(app, _TOKEN_B, session_id)
+
+    assert attached == 404
+
+
+@pytest.mark.anyio
+async def test_the_creating_user_can_attach_to_their_own_sse_stream() -> None:
+    """The control for the attach case: the owner's own stream still opens."""
+    async with _served_app() as (client, app):
+        session_id = await _open_session(client, _TOKEN_A)
+        attached = await _attach_status(app, _TOKEN_A, session_id)
+
+    assert attached == 200
 
 
 # --- the `sub` shapes, through the same manager -------------------------------

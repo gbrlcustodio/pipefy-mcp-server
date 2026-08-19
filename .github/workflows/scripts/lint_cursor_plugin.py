@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SKILL_TEMPLATE_PREFIX = "skills/_template/"
 
 PLUGIN_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
 PLACEHOLDER_RE = re.compile(r"\$\{[^}]*\}")
@@ -51,12 +50,10 @@ def _normalize_repo_rel(raw: str) -> str:
 
 
 def skill_dirs_from_ls_files(lines: list[str]) -> set[str]:
-    """Published skill directories: parents of tracked SKILL.md, minus the template."""
+    """Published skill directories: parents of tracked SKILL.md files."""
     dirs: set[str] = set()
     for line in lines:
         posix = line.replace("\\", "/")
-        if posix.startswith(SKILL_TEMPLATE_PREFIX):
-            continue
         dirs.add(_normalize_repo_rel(Path(posix).parent.as_posix()))
     return dirs
 
@@ -190,13 +187,13 @@ def _lint_skill_set(
         errors.append(
             f"skills array is missing {path!r}; expected the manifest to list "
             "every published skill directory from git ls-files "
-            "'skills/**/SKILL.md' excluding skills/_template/"
+            "'skills/**/SKILL.md'"
         )
     for path in sorted(declared - tree):
         errors.append(
             f"skills array lists {path!r}, which is not a tracked skill "
             "directory; expected a path from git ls-files "
-            "'skills/**/SKILL.md' excluding skills/_template/"
+            "'skills/**/SKILL.md'"
         )
     return errors
 
@@ -282,8 +279,7 @@ def _lint_mcp(root: Path, mcp_path: Path) -> list[str]:
 def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     """Return packaging errors for a plugin rooted at ``root``.
 
-    ``skill_md_paths`` is the ``git ls-files 'skills/**/SKILL.md'`` listing
-    (template rows included; they are dropped here).
+    ``skill_md_paths`` is the ``git ls-files 'skills/**/SKILL.md'`` listing.
     """
     manifest_path = root / ".cursor-plugin/plugin.json"
     mcp_path = root / "mcp.json"

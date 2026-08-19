@@ -15,11 +15,11 @@ Skills are Markdown-only — no Python, no `uv`, no test infrastructure required
 3. Copy the starter skill and rename it:
 
    ```bash
-   cp -R skills/_template/pipefy-skill-template \
+   cp -R .github/skill-template/pipefy-skill-template \
      skills/<domain>/pipefy-<domain>-<action>
    ```
 
-   Fill in [`SKILL.md`](skills/_template/pipefy-skill-template/SKILL.md) using the rules in [`skills/AGENTS.md`](skills/AGENTS.md) (and [`skills/_template/README.md`](skills/_template/README.md)).
+   Fill in [`SKILL.md`](.github/skill-template/pipefy-skill-template/SKILL.md) using the rules in [`skills/AGENTS.md`](skills/AGENTS.md) (and [`.github/skill-template/README.md`](.github/skill-template/README.md)).
 4. Run the reference linters locally (optional; CI runs the same checks). Stage new
    skill files first (`git add`); `lint_cursor_plugin.py` reads tracked files via
    `git ls-files`, so an unstaged skill makes the Cursor packaging lint print

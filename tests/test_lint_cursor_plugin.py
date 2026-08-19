@@ -20,7 +20,6 @@ _spec.loader.exec_module(_lint)
 
 _SKILL = "skills/onboarding/pipefy-toolkit-setup"
 _SKILL_MD = f"{_SKILL}/SKILL.md"
-_TEMPLATE_MD = "skills/_template/pipefy-skill-template/SKILL.md"
 _HOSTED_MCP = {
     "mcpServers": {
         "pipefy": {
@@ -77,14 +76,6 @@ def _write_plugin(
 def test_aligned_tree_passes(tmp_path):
     _write_plugin(tmp_path)
     assert _lint.collect_errors(tmp_path, [_SKILL_MD]) == []
-
-
-def test_template_skill_is_ignored_on_the_tree_side(tmp_path):
-    _write_plugin(tmp_path)
-    template = tmp_path / "skills/_template/pipefy-skill-template"
-    template.mkdir(parents=True)
-    (template / "SKILL.md").write_text("# template\n", encoding="utf-8")
-    assert _lint.collect_errors(tmp_path, [_SKILL_MD, _TEMPLATE_MD]) == []
 
 
 def test_unlisted_skill_is_named(tmp_path):

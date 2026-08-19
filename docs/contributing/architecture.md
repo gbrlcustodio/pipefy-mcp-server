@@ -33,46 +33,6 @@ Those functions act on the Pipefy capabilities below. Each name is a sub-domain 
 - Billing: read the AI credits an organization consumed.
 - System Integration: register a webhook, and reach an iPaaS flow.
 
-## Quality requirements
-
-Each row states a demand that a consumer of an application holds, in that consumer's terms. A category alone is not a requirement, so every row carries its demand beside it. This section holds every requirement that shaped a decision here. A quality that shaped no decision has no row.
-
-One question decides the table for a new row. Can a release break this demand? A release never breaks a guarantee, so a guarantee carries no rank. A release can break a goal, so a goal carries one. The goal with rank 1 breaks last.
-
-Each section names the requirement that it serves. If no section serves it, [Known gaps](#known-gaps) names it.
-
-**Guarantees.** Each one is a demand that every release keeps.
-
-| ID | Category | Demand | Held by |
-|---|---|---|---|
-| `QR-3` | Operability | When no human is present, a run never blocks on an answer | The CLI consumer in a pipeline, and the headless MCP consumer |
-| `QR-4` | Security | A request acts as the caller that sent it, and never as another caller | The MCP consumer under the remote profile |
-| `QR-6` | Safety | A destructive operation names what it affects before it runs | The MCP consumer and the CLI consumer |
-| `QR-7` | Correctness | An ambiguous identifier never silently resolves to one match | Every consumer |
-| `QR-11` | Compatibility | An announcement precedes every breaking change | The SDK consumer, and any script or agent that names a command or a tool |
-| `QR-12` | Diagnosability | A partial result names what did not succeed | Every consumer |
-
-**Goals.** The rank states what a consumer can do when a goal breaks.
-
-| Rank | ID | Category | Demand | Held by |
-|---|---|---|---|---|
-| 1 | `QR-8` | Diagnosability | A failure names its cause and whether a retry can succeed | Every consumer |
-| 2 | `QR-1` | Usability | An invalid request names the field and the rule it broke | Every consumer |
-| 3 | `QR-2` | Compatibility | A vendor API change does not reach the consumer's code | The SDK consumer, and any script that parses output |
-| 4 | `QR-9` | Efficiency | The tool list carries only what the consumer's work needs | The MCP consumer |
-| 5 | `QR-5` | Efficiency | One user intent costs one call | The MCP consumer |
-| 6 | `QR-10` | Efficiency | A response carries only what the intent needs | The MCP consumer |
-
-`QR-8` and `QR-1` rank first. A consumer who cannot see why a call failed cannot act at all. `QR-2` follows, because that consumer can act, but pays for a change they did not make. The last three are costs that a consumer can measure and plan for.
-
-The three Efficiency rows are three separate costs, and each one lands at a different moment. The catalog costs once at connect, the calls cost once per intent, and the payload costs once per call. `QR-9` outranks the other two, because its cost lands before the consumer asks for anything.
-
-These trades are real:
-
-- A confirmation that the model must answer costs a second call, so `QR-6` spends what `QR-5` saves. A confirmation that the client answers costs `QR-5` nothing.
-- When no human is present, a consent dialog cannot run, so `QR-3` leaves the intent to an explicit flag.
-- The `power` branch holds the tool count constant, and every call then routes through a meta-tool, so `QR-9` spends what `QR-5` saves.
-
 ## Constraints
 
 Limits that this repository does not decide.
@@ -236,6 +196,46 @@ Resolved once per request. The MCP remote profile holds no caller credential at 
 One rule follows, and it is what `QR-4` requires of any application here. With a per-process identity, downstream code can hold what it received. With a per-request identity, nothing caches it, and process-global state never answers a question about the caller. That is why the import-linter contract bans a `settings` import from the `tools` layer, and the full reasoning is in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 
 A caller can also carry state between calls, such as a vendor cursor or an export id. The API authorizes that value on each request. A handle that we mint ourselves obeys the same rule.
+
+## Quality requirements
+
+Each row states a demand that a consumer of an application holds, in that consumer's terms. A category alone is not a requirement, so every row carries its demand beside it. This section holds every requirement that shaped a decision here. A quality that shaped no decision has no row.
+
+One question decides the table for a new row. Can a release break this demand? A release never breaks a guarantee, so a guarantee carries no rank. A release can break a goal, so a goal carries one. The goal with rank 1 breaks last.
+
+Each section names the requirement that it serves. If no section serves it, [Known gaps](#known-gaps) names it.
+
+**Guarantees.** Each one is a demand that every release keeps.
+
+| ID | Category | Demand | Held by |
+|---|---|---|---|
+| `QR-3` | Operability | When no human is present, a run never blocks on an answer | The CLI consumer in a pipeline, and the headless MCP consumer |
+| `QR-4` | Security | A request acts as the caller that sent it, and never as another caller | The MCP consumer under the remote profile |
+| `QR-6` | Safety | A destructive operation names what it affects before it runs | The MCP consumer and the CLI consumer |
+| `QR-7` | Correctness | An ambiguous identifier never silently resolves to one match | Every consumer |
+| `QR-11` | Compatibility | An announcement precedes every breaking change | The SDK consumer, and any script or agent that names a command or a tool |
+| `QR-12` | Diagnosability | A partial result names what did not succeed | Every consumer |
+
+**Goals.** The rank states what a consumer can do when a goal breaks.
+
+| Rank | ID | Category | Demand | Held by |
+|---|---|---|---|---|
+| 1 | `QR-8` | Diagnosability | A failure names its cause and whether a retry can succeed | Every consumer |
+| 2 | `QR-1` | Usability | An invalid request names the field and the rule it broke | Every consumer |
+| 3 | `QR-2` | Compatibility | A vendor API change does not reach the consumer's code | The SDK consumer, and any script that parses output |
+| 4 | `QR-9` | Efficiency | The tool list carries only what the consumer's work needs | The MCP consumer |
+| 5 | `QR-5` | Efficiency | One user intent costs one call | The MCP consumer |
+| 6 | `QR-10` | Efficiency | A response carries only what the intent needs | The MCP consumer |
+
+`QR-8` and `QR-1` rank first. A consumer who cannot see why a call failed cannot act at all. `QR-2` follows, because that consumer can act, but pays for a change they did not make. The last three are costs that a consumer can measure and plan for.
+
+The three Efficiency rows are three separate costs, and each one lands at a different moment. The catalog costs once at connect, the calls cost once per intent, and the payload costs once per call. `QR-9` outranks the other two, because its cost lands before the consumer asks for anything.
+
+These trades are real:
+
+- A confirmation that the model must answer costs a second call, so `QR-6` spends what `QR-5` saves. A confirmation that the client answers costs `QR-5` nothing.
+- When no human is present, a consent dialog cannot run, so `QR-3` leaves the intent to an explicit flag.
+- The `power` branch holds the tool count constant, and every call then routes through a meta-tool, so `QR-9` spends what `QR-5` saves.
 
 ## Known gaps
 

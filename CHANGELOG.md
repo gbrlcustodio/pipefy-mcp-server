@@ -8,8 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cursor Marketplace plugin**: `.cursor-plugin/plugin.json` and root `mcp.json` package the skill catalog plus the hosted MCP server (`mcp.pipefy.com`) with in-client OAuth. The Cursor manifest declares `"commands": []` so the Claude Code files in `commands/` are not discovered. Version lockstep and CI packaging lint cover the new manifest. The listing is submitted from `main` after this packaging is released.
+
 ### Changed
 
+- **Skill authoring template**: the copyable `SKILL.md` starter lives at `.github/skill-template/` rather than under `skills/`, so the catalog directory is only published skills.
+- **Skills (`pipefy-ai-agents`)**: `create_ai_knowledge_base_document`, `create_llm_provider`, and `update_llm_provider` take a local file and are withheld on the hosted server. The skill now marks them local-profile-only so an agent on the Cursor Marketplace plugin (or any hosted URL) does not call tools the hosted floor omits.
 - **MCP (destructive confirmation):** every destructive preview now includes a required `confirmation_token` key, and 31 tool schemas gain an optional `confirmation_token` argument (29 dedicated destructive tools plus `execute_graphql` and `call_ipaas_tool`). A first call with `confirm=true` and no valid token returns that preview instead of mutating. Existing clients that ignore unknown keys still parse the preview, and clients that omit the new argument still get a preview rather than an execute, so neither change is a parse break; both change the published contract. GraphQL mutations through `execute_graphql` and destructive `call_ipaas_tool` calls follow the same two-step. The GraphQL preview names the mutation and does not claim it is irreversible (the server cannot tell create from delete). iPaaS `arguments.operation` is stripped then casefolded before needle equality, and a catalog miss is unclassifiable so it takes the two-step rather than running one-shot. The CLI takes no tokens and keeps confirming with `--yes` (or an interactive prompt).
 - **GraphQL (documents too nested to parse):** `execute_graphql` and `pipefy graphql exec` refuse a document whose nesting exhausts the parser, and send nothing. Such a document cannot be classified as a query or a mutation, so running it could execute a mutation with no confirmation. `pipefy graphql exec` exits 2 for it even with `--yes`, where it previously failed with an uncaught `RecursionError`.
 

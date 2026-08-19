@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, the Claude plugin and marketplace manifests, and root workspace meta.
+"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra,
+Claude and Cursor plugin manifests, the Claude marketplace manifest, and
+root workspace meta.
 
 After rewriting the version strings, runs ``uv lock`` so the workspace
 lockfile's ``pipefy-workspace`` entry tracks the new version.
@@ -22,9 +24,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
 MARKETPLACE_MANIFEST = REPO_ROOT / ".claude-plugin/marketplace.json"
+CURSOR_PLUGIN_MANIFEST = REPO_ROOT / ".cursor-plugin/plugin.json"
 
-# Both Claude manifests carry the release version, so both move with every bump.
-JSON_MANIFESTS: tuple[Path, ...] = (PLUGIN_MANIFEST, MARKETPLACE_MANIFEST)
+# Claude and Cursor manifests carry the release version, so they move with every bump.
+JSON_MANIFESTS: tuple[Path, ...] = (
+    PLUGIN_MANIFEST,
+    MARKETPLACE_MANIFEST,
+    CURSOR_PLUGIN_MANIFEST,
+)
 
 # The SDK distribution; its __version__ is the lockstep source of truth every
 # other version-bearing file is compared against.
@@ -91,12 +98,12 @@ VERSION_ASSIGN_RE = re.compile(
     re.MULTILINE,
 )
 
-# Matches a JSON "version" string in a Claude manifest. plugin.json holds it at
-# the top level; marketplace.json holds it on the plugin's catalog entry, which
-# is the version the plugin marketplace UI displays. Each manifest has exactly
-# one "version" key, so _sole_match / _sub_exactly_one target the right one and
-# a second key (e.g. a further catalog entry) fails loudly instead of being
-# silently rewritten.
+# Matches a JSON "version" string in a Claude or Cursor manifest. plugin.json
+# holds it at the top level; marketplace.json holds it on the plugin's catalog
+# entry, which is the version the plugin marketplace UI displays. Each manifest
+# has exactly one "version" key, so _sole_match / _sub_exactly_one target the
+# right one and a second key (e.g. a further catalog entry) fails loudly
+# instead of being silently rewritten.
 JSON_VERSION_RE = re.compile(
     r'(?P<prefix>"version"\s*:\s*")(?P<value>[^"]+)(?P<suffix>")',
 )
@@ -215,7 +222,7 @@ def write_version_to_all_files(new_version: str) -> None:
 
 
 def _write_json_manifest_version(path: Path, new_version: str) -> None:
-    """Rewrite the lone JSON ``"version"`` string in a Claude manifest."""
+    """Rewrite the lone JSON ``"version"`` string in a Claude or Cursor manifest."""
     text = path.read_text(encoding="utf-8")
     new_text = _sub_exactly_one(
         JSON_VERSION_RE,

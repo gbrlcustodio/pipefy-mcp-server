@@ -171,6 +171,8 @@ jobs:
       run: uv sync --locked --all-extras --dev
     - name: Verify package versions are in lockstep
       run: uv run python scripts/bump_version.py verify
+    - name: Lint Cursor plugin packaging
+      run: python3 .github/workflows/scripts/lint_cursor_plugin.py
     - name: Lint (full tree)
       run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src packages/infra/src
     - name: Check formatting

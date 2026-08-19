@@ -12,6 +12,27 @@ The map explains rather than instructs. It points at the owner of a fact rather 
 
 Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
+## Requirements overview
+
+These are the functions a consumer comes to the toolkit for. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
+
+- Persistent sign-in. One CLI command signs a consumer in through a browser, and every later call uses the stored session. The toolkit refreshes that session before it expires, and a logout revokes it.
+- Name resolution. The CLI and the MCP server find a resource from its name, and a mistyped or shortened name still finds it. The API filters by name, and ranking the matches is the toolkit's part.
+- Validation without execution. The toolkit checks a proposed change against the API's rules and reports what would fail, without applying it.
+- Escape hatch. The CLI and the MCP server expose a raw GraphQL operation and schema introspection, so what no tool wraps stays reachable. A pipe's iPaaS workspace is reachable too, and the toolkit performs the credential exchange that reaching it takes.
+
+Those functions act on the Pipefy capabilities below. Each name is a sub-domain of Pipefy's domain model, which lives outside this repository.
+
+- Work Execution, the core sub-domain: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email.
+- Process Modeling: create and change a pipe, its phases, its fields, its field conditions, its labels, and its automations. An AI automation is one kind of automation, and a builder configures an AI agent here, with the knowledge bases it reads.
+- Business Records: create and query a database table, its fields, and its records.
+- Request Intake: build a portal, its pages, and its elements, and publish a sub-portal.
+- Identity and Access Management: invite a member, set a role, and mint a service account.
+- Governance and Audit: export a pipe's audit log, read an AI agent's logs, and choose the model provider an agent may use.
+- Performance and Oversight: define a pipe or organization report, export it, and read usage and execution metrics.
+- Billing: read the AI credits an organization consumed.
+- System Integration: register a webhook, and reach an iPaaS flow.
+
 ## Quality requirements
 
 Each row states a demand that a consumer of an application holds, in that consumer's terms. A category alone is not a requirement, so every row carries its demand beside it. This section holds every requirement that shaped a decision here. A quality that shaped no decision has no row.
@@ -241,6 +262,7 @@ These names carry a second meaning elsewhere, so each one is fixed here.
 - Contract. Qualified at each use. The typed input contract is the parsed model at the edge of an application. The import-linter contract is the layer order in `packages/mcp/pyproject.toml`.
 - Application. A package that a consumer uses, and one that owns a driving port. The SDK, the CLI, and the MCP server are the three, and a shared library is not one. The code labels the same concept `surface`, in `ClientSurface` and in a call such as `surface="mcp"`, and stamps it into the outbound `User-Agent`. This document says application instead, because the rest of the repository spends the word surface on the set of tools a deployment exposes.
 - Consumer. The party that uses an application: a program that imports the SDK, a person or a script at a terminal, or an LLM. This document never calls that party a client. The word client names two other things here: the program that speaks the MCP protocol, and a constructed object such as the GraphQL client.
+- Domain. Qualified at each use. Pipefy's domain is the product, and all three applications expose it. A sub-domain is one area of it, and [Requirements overview](#requirements-overview) names them. A tool domain is the one subject a tool is about, which [Tool surface](#tool-surface) describes. The domain layer is the model free of transport and framework, which [Layer model](#layer-model) places.
 - Profile. Qualified at each use. A deployment profile is local or remote, it decides the transport default and the credential source, and [Identity lifetime](#identity-lifetime) turns on that difference. A tool profile is a persona-shaped selection that [Tool surface](#tool-surface) describes, and `--toolsets` names it. A bare "profile" in this document means the deployment profile, because that is the sense the rest of the repository carries.
 - SDK. A bare "SDK" means the Pipefy SDK, the `pipefy` distribution. A third-party SDK is always named, for example the MCP SDK.
 - auth. `pipefy-auth` is the shared package. The `auth` layer is the driven adapter inside `pipefy-mcp-server`.

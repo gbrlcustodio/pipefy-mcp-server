@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import subprocess
@@ -279,6 +280,76 @@ def _lint_mcp(root: Path, mcp_path: Path) -> list[str]:
     return errors
 
 
+def _skills_match_tree(skills: object, tree: set[str]) -> bool:
+    if not isinstance(skills, list) or not all(
+        isinstance(item, str) for item in skills
+    ):
+        return False
+    return {_normalize_repo_rel(item) for item in skills} == tree
+
+
+def _render_skills_array(paths: list[str]) -> str:
+    if not paths:
+        return "[]"
+    items = ",\n".join(f"    {json.dumps(path)}" for path in paths)
+    return f"[\n{items}\n  ]"
+
+
+def _replace_json_field_value(text: str, field: str, rendered: str) -> str | None:
+    needle = json.dumps(field)
+    decoder = json.JSONDecoder()
+    start = 0
+    while True:
+        found = text.find(needle, start)
+        if found < 0:
+            return None
+        after_key = text[found + len(needle) :].lstrip()
+        if after_key.startswith(":"):
+            colon = text.find(":", found + len(needle))
+            value_src = text[colon + 1 :].lstrip()
+            value_start = colon + 1 + (len(text[colon + 1 :]) - len(value_src))
+            try:
+                _, value_len = decoder.raw_decode(text[value_start:])
+            except json.JSONDecodeError:
+                return None
+            return text[:value_start] + rendered + text[value_start + value_len :]
+        start = found + 1
+
+
+def _rewrite_plugin_skills(root: Path, skill_md_paths: list[str]) -> None:
+    manifest_path = root / ".cursor-plugin/plugin.json"
+    loaded = _load_json(root, manifest_path)
+    if isinstance(loaded, str):
+        return
+    tree = skill_dirs_from_ls_files(skill_md_paths)
+    if _skills_match_tree(loaded.get("skills"), tree):
+        return
+    desired = [f"./{path}" for path in sorted(tree)]
+    try:
+        text = manifest_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return
+    new_text = _replace_json_field_value(text, "skills", _render_skills_array(desired))
+    if new_text is None:
+        loaded["skills"] = desired
+        new_text = json.dumps(loaded, indent=2, ensure_ascii=False) + "\n"
+    if new_text != text:
+        manifest_path.write_text(new_text, encoding="utf-8")
+
+
+def _parse_argv(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help=(
+            "Rewrite .cursor-plugin/plugin.json skills from tracked SKILL.md "
+            "paths, excluding skills/_template/"
+        ),
+    )
+    return parser.parse_args(argv)
+
+
 def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     """Return packaging errors for a plugin rooted at ``root``.
 
@@ -308,12 +379,16 @@ def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     return errors
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_argv([] if argv is None else argv)
     listing = _tracked_skill_md_paths(REPO_ROOT)
     if isinstance(listing, str):
         print("Cursor plugin packaging FAILED:", file=sys.stderr)
         print(f"  {listing}", file=sys.stderr)
         return 1
+
+    if args.fix:
+        _rewrite_plugin_skills(REPO_ROOT, listing)
 
     errors = collect_errors(REPO_ROOT, listing)
     if errors:
@@ -326,4 +401,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

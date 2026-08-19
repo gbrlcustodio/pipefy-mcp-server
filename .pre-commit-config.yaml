@@ -48,9 +48,3 @@ repos:
         language: system
         files: ^uninstall\.sh$
         pass_filenames: false
-      - id: cursor-plugin
-        name: Cursor plugin packaging
-        entry: python3 .github/workflows/scripts/lint_cursor_plugin.py --fix
-        language: system
-        files: '^(\.cursor-plugin/plugin\.json|mcp\.json|skills/.*/SKILL\.md)$'
-        pass_filenames: false

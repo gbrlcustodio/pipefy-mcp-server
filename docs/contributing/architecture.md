@@ -241,7 +241,7 @@ Each row carries the dimensions of the quality it instantiates, and [`quality.ar
 | `QR-14` | `#maintainable` | A merged change never breaks the layer order |
 | `QR-21` | `#flexible` `#usable` | A deployment picks which tools it exposes by configuration, and never by changing the source |
 
-Each section names the requirement that it serves. If no section serves it, [Known gaps](#known-gaps) names it.
+Each section names the requirement that it serves. Where another document owns the answer instead, the row names that document. If neither holds, [Known gaps](#known-gaps) names the row.
 
 Four of these are costs, and each one lands at a different moment. `QR-9` and `QR-23` are the catalog, which costs context once at connect, before the consumer asks for anything, and costs it in tool count and in words per tool. `QR-5` is the chain, which costs a model round trip per link. `QR-10` is the answer, which costs context once per call. A script pays the chain cost once and a model pays it every link.
 

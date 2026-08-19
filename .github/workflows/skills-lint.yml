@@ -39,10 +39,6 @@ jobs:
           errors = []
 
           for root, dirs, files in os.walk("skills"):
-              # Skip copyable starters under skills/_template/
-              dirs[:] = [d for d in dirs if d != "_template"]
-              if "_template" in root.split(os.sep):
-                  continue
               # Skip docs/ and top-level files
               if "SKILL.md" not in files:
                   continue
@@ -88,9 +84,6 @@ jobs:
           else:
               count = 0
               for root, dirs, files in os.walk("skills"):
-                  dirs[:] = [d for d in dirs if d != "_template"]
-                  if "_template" in root.split(os.sep):
-                      continue
                   if "SKILL.md" in files:
                       count += 1
               print(f"Skills validation passed — {count} skill(s) validated.")

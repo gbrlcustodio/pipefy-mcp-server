@@ -532,12 +532,41 @@ def test_dco_section_is_silent_when_every_commit_matches() -> None:
 
 
 def test_the_recovery_pull_request_body_demands_a_merge_commit() -> None:
-    body = _backmerge.recovery_pr_body("577", 9, ["abc1234 docs: fix"], True, [])
+    branch = _backmerge.recovery_branch_for("abc1234")
+    body = _backmerge.recovery_pr_body(
+        branch, "577", 9, ["abc1234 docs: fix"], True, []
+    )
     assert "Create a merge commit" in body
     assert "-s ours" in body
-    # The reviewer's one-line check that it really takes nothing.
-    assert "git diff origin/dev" in body
     assert "#577" in body
+
+
+def test_the_recovery_body_advertises_a_command_that_resolves() -> None:
+    # The verification command named a literal "<sha>" placeholder, so pasting
+    # it produced a missing ref rather than the empty diff it promises.
+    branch = _backmerge.recovery_branch_for("abc1234")
+    body = _backmerge.recovery_pr_body(
+        branch, "577", 9, ["abc1234 docs: fix"], True, []
+    )
+    assert "rc-dev/chore/back-merge-main-abc1234-ancestry" in body
+    assert "<sha>" not in body
+    assert f"git fetch origin {branch}" in body
+    assert "git diff origin/dev FETCH_HEAD" in body
+
+
+def test_both_bodies_share_one_checks_blurb() -> None:
+    # Two copies drifted apart once: the recovery arm dropped the remedy. The
+    # no-CI arm is the one CI never renders, so pin it here instead.
+    branch = _backmerge.recovery_branch_for("abc1234")
+    recovery = _backmerge.recovery_pr_body(
+        branch, "577", 9, ["abc1234 docs: fix"], False, []
+    )
+    ordinary = _backmerge.pr_body(["abc1234 docs: fix"], 9, False)
+    blurb = _backmerge.checks_blurb(False)
+    assert blurb in recovery
+    assert blurb in ordinary
+    assert "BACKMERGE_TOKEN" in blurb
+    assert _backmerge.checks_blurb(True) in _backmerge.pr_body(["a b"], 1, True)
 
 
 def test_a_pushed_branch_without_a_pull_request_is_not_pushed_again(

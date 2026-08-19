@@ -385,6 +385,27 @@ Nothing in this pull request causes it, and the check does not block the merge �
 """
 
 
+def checks_blurb(has_ci: bool) -> str:
+    """What the pull request says about its own checks.
+
+    Shared by both bodies. Two copies of this drifted apart once already, and
+    the arm that matters most is the one CI never renders: a recovery opened
+    without the secret has exactly the same hole as an ordinary back-merge.
+    """
+    if has_ci:
+        return (
+            "This pull request was opened by a token that triggers workflows, so "
+            "its checks run normally."
+        )
+    return (
+        "**This pull request carries no CI checks.** It was opened by `GITHUB_TOKEN`, and GitHub "
+        "deliberately does not trigger `on: pull_request` workflows for events raised by it — an "
+        "unchecked pull request that merely *looks* green would be worse. To run them, close and "
+        "reopen this pull request, or push any commit to its branch. Setting a `BACKMERGE_TOKEN` "
+        "secret makes checks run on their own; see RELEASE.md."
+    )
+
+
 def pr_body(
     commits: list[str],
     behind: int,
@@ -402,17 +423,7 @@ def pr_body(
         if ancestry_only
         else ""
     )
-    checks = (
-        "This pull request was opened by a token that triggers workflows, so its checks run normally."
-        if has_ci
-        else (
-            "**This pull request carries no CI checks.** It was opened by `GITHUB_TOKEN`, and GitHub "
-            "deliberately does not trigger `on: pull_request` workflows for events raised by it — an "
-            "unchecked pull request that merely *looks* green would be worse. To run them, close and "
-            "reopen this pull request, or push any commit to its branch. Setting a `BACKMERGE_TOKEN` "
-            "secret makes checks run on their own; see RELEASE.md."
-        )
-    )
+    checks = checks_blurb(has_ci)
     return f"""\
 `origin/{MAIN_BRANCH}` carries {behind} commit{plural} that `origin/{DEV_BRANCH}` does not. Until they are back-merged, `{DEV_BRANCH}` is missing work that has already shipped, and `release.py release-pr` refuses to cut a release at all.
 
@@ -593,20 +604,17 @@ def open_pr(
 
 
 def recovery_pr_body(
-    merged_pr: str, behind: int, commits: list[str], has_ci: bool, dco: list[str]
+    branch: str,
+    merged_pr: str,
+    behind: int,
+    commits: list[str],
+    has_ci: bool,
+    dco: list[str],
 ) -> str:
     """The body for the pull request that repairs a squashed back-merge."""
     plural = "" if behind == 1 else "s"
     listing = "\n".join(f"- `{line}`" for line in commits)
-    checks = (
-        "This pull request was opened by a token that triggers workflows, so its checks run normally."
-        if has_ci
-        else (
-            "**This pull request carries no CI checks.** It was opened by `GITHUB_TOKEN`, and GitHub "
-            "does not trigger `on: pull_request` workflows for events raised by it. To run them, close "
-            "and reopen this pull request, or push any commit to its branch."
-        )
-    )
+    checks = checks_blurb(has_ci)
     return f"""\
 Pull request #{merged_pr} is merged, yet `origin/{MAIN_BRANCH}` is still {behind} commit{plural} ahead of `origin/{DEV_BRANCH}`. That is what a squash or a rebase does to a back-merge: it applies every file and discards the second parent, so `{DEV_BRANCH}` gained the content but never the ancestry.
 
@@ -617,7 +625,8 @@ Pull request #{merged_pr} is merged, yet `origin/{MAIN_BRANCH}` is still {behind
 The merge is `-s ours`. It takes no files from `{MAIN_BRANCH}` and records it as a parent, because #{merged_pr} already delivered every file. Confirm with one command — it prints nothing:
 
 ```bash
-git diff origin/{DEV_BRANCH} {recovery_branch_for("<sha>")}
+git fetch origin {branch}
+git diff origin/{DEV_BRANCH} FETCH_HEAD
 ```
 
 A plain merge is the wrong tool here. With no shared ancestry, git reads one paragraph on each side as two independent additions and keeps both, so it duplicates text `{DEV_BRANCH}` already carries.
@@ -661,7 +670,7 @@ def open_recovery_pr(
             "--title",
             f"chore: restore {MAIN_BRANCH}'s ancestry on {DEV_BRANCH} after #{merged_pr}",
             "--body",
-            recovery_pr_body(merged_pr, behind, commits, has_ci, dco),
+            recovery_pr_body(branch, merged_pr, behind, commits, has_ci, dco),
         ]
     )
 

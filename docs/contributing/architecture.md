@@ -199,43 +199,46 @@ A caller can also carry state between calls, such as a vendor cursor or an expor
 
 ## Quality requirements
 
-Each row states a demand that a consumer of an application holds, in that consumer's terms. A category alone is not a requirement, so every row carries its demand beside it. This section holds every requirement that shaped a decision here. A quality that shaped no decision has no row.
+The architecture on this map exists to serve the demands below, so a section above can name what its decision answers, and a review can cite one ID instead of reopening the argument.
 
-One question decides the table for a new row. Can a release break this demand? A release never breaks a guarantee, so a guarantee carries no rank. A release can break a goal, so a goal carries one. The goal with rank 1 breaks last.
+Each row carries the dimensions of the quality it instantiates, and [`quality.arc42.org`](https://quality.arc42.org/) owns both. A dimension is a label over a catalog of qualities, so it overlaps with the others by design and it never holds one row alone.
+
+**Usage.** A demand that a caller holds while the system runs normally.
+
+| ID | Dimensions | Demand |
+|---|---|---|
+| `QR-1` | `#operable` `#reliable` | An invalid request names the field and the rule it broke |
+| `QR-3` | `#usable` `#operable` | When no human is present, a run never waits for an answer, and it either goes ahead with what it has or fails |
+| `QR-4` | `#secure` | A request acts as the person who sent it, and never as anyone else |
+| `QR-5` | `#efficient` | A request finishes without the model making a chain of calls to get there |
+| `QR-6` | `#safe` `#reliable` | A destructive operation names what it affects, and it waits for an explicit yes |
+| `QR-7` | `#usable` `#reliable` `#suitable` | A name that fits more than one thing never quietly picks one, and the caller gets the matches instead |
+| `QR-9` | `#usable` `#reliable` `#suitable` | A model sees only the tools the consumer's work needs |
+| `QR-10` | `#efficient` | A tool keeps its answer short, and a caller who needs more asks for more |
+
+**Failure.** A demand that a caller holds when a call cannot complete, or a component it needs fails.
+
+| ID | Dimensions | Demand |
+|---|---|---|
+| `QR-8` | `#operable` `#reliable` | A failure names its cause, whether a retry can succeed, and the next step |
+| `QR-12` | `#operable` `#reliable` | A partial result names what did not succeed |
+
+**Change.** A demand that a holder has when the system, or something it depends on, changes.
+
+| ID | Dimensions | Demand |
+|---|---|---|
+| `QR-2` | `#reliable` | A vendor API change does not reach the consumer's code |
+| `QR-11` | `#usable` `#operable` `#reliable` | An announcement precedes every breaking change |
 
 Each section names the requirement that it serves. If no section serves it, [Known gaps](#known-gaps) names it.
 
-**Guarantees.** Each one is a demand that every release keeps.
-
-| ID | Category | Demand | Held by |
-|---|---|---|---|
-| `QR-3` | Operability | When no human is present, a run never blocks on an answer | The CLI consumer in a pipeline, and the headless MCP consumer |
-| `QR-4` | Security | A request acts as the caller that sent it, and never as another caller | The MCP consumer under the remote profile |
-| `QR-6` | Safety | A destructive operation names what it affects before it runs | The MCP consumer and the CLI consumer |
-| `QR-7` | Correctness | An ambiguous identifier never silently resolves to one match | Every consumer |
-| `QR-11` | Compatibility | An announcement precedes every breaking change | The SDK consumer, and any script or agent that names a command or a tool |
-| `QR-12` | Diagnosability | A partial result names what did not succeed | Every consumer |
-
-**Goals.** The rank states what a consumer can do when a goal breaks.
-
-| Rank | ID | Category | Demand | Held by |
-|---|---|---|---|---|
-| 1 | `QR-8` | Diagnosability | A failure names its cause and whether a retry can succeed | Every consumer |
-| 2 | `QR-1` | Usability | An invalid request names the field and the rule it broke | Every consumer |
-| 3 | `QR-2` | Compatibility | A vendor API change does not reach the consumer's code | The SDK consumer, and any script that parses output |
-| 4 | `QR-9` | Efficiency | The tool list carries only what the consumer's work needs | The MCP consumer |
-| 5 | `QR-5` | Efficiency | One user intent costs one call | The MCP consumer |
-| 6 | `QR-10` | Efficiency | A response carries only what the intent needs | The MCP consumer |
-
-`QR-8` and `QR-1` rank first. A consumer who cannot see why a call failed cannot act at all. `QR-2` follows, because that consumer can act, but pays for a change they did not make. The last three are costs that a consumer can measure and plan for.
-
-The three Efficiency rows are three separate costs, and each one lands at a different moment. The catalog costs once at connect, the calls cost once per intent, and the payload costs once per call. `QR-9` outranks the other two, because its cost lands before the consumer asks for anything.
+Three of these are costs, and each one lands at a different moment. `QR-9` is the catalog, which costs context once at connect, before the consumer asks for anything. `QR-5` is the chain, which costs a model round trip per link. `QR-10` is the answer, which costs context once per call. A script pays the chain cost once and a model pays it every link.
 
 These trades are real:
 
-- A confirmation that the model must answer costs a second call, so `QR-6` spends what `QR-5` saves. A confirmation that the client answers costs `QR-5` nothing.
-- When no human is present, a consent dialog cannot run, so `QR-3` leaves the intent to an explicit flag.
-- The `power` branch holds the tool count constant, and every call then routes through a meta-tool, so `QR-9` spends what `QR-5` saves.
+- A question the model must answer costs a round trip, so `QR-6` spends what `QR-5` saves. A question the client fields costs `QR-5` nothing.
+- When no human is present, a consent dialog cannot run, so what `QR-6` would ask for becomes an explicit flag, and a run that has no flag fails rather than guessing.
+- The `power` branch in [Tool surface](#tool-surface) holds the tool count constant, and every call then routes through a meta-tool, so `QR-9` spends what `QR-5` saves.
 
 ## Known gaps
 

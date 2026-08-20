@@ -23,7 +23,7 @@ These are the functions a consumer comes to the toolkit for. Each one is work th
 
 Those functions act on the Pipefy capabilities below. Each name is a sub-domain of Pipefy's domain model, which lives outside this repository.
 
-- Work Execution, the core sub-domain: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email.
+- Work Execution: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email.
 - Process Modeling: create and change a pipe, its phases, its fields, its field conditions, its labels, and its automations. An AI automation is one kind of automation, and a builder configures an AI agent here, with the knowledge bases it reads.
 - Business Records: create and query a database table, its fields, and its records.
 - Request Intake: build a portal, its pages, and its elements, and publish a sub-portal.

@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
@@ -12,6 +12,7 @@ from pipefy_sdk import PipefyClient
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -44,7 +45,6 @@ def scenario_session(scenario_mcp, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("scenario_session", [None], indirect=True)
 async def test_scenario_discover_input_shape_then_execute_mutation_path(
     scenario_session, scenario_client, extract_payload
 ):
@@ -104,21 +104,23 @@ async def test_scenario_discover_input_shape_then_execute_mutation_path(
         t1 = await session.call_tool(
             "introspect_type", {"type_name": "CreateLabelInput"}
         )
-        ex = await session.call_tool(
+        p3 = await confirm_after_preview(
+            session,
             "execute_graphql",
             {
-                "query": "mutation M($input: CreateLabelInput!) { createLabel(input: $input) { label { id } } }",
+                "query": (
+                    "mutation M($input: CreateLabelInput!) { "
+                    "createLabel(input: $input) { label { id } } }"
+                ),
                 "variables": {"input": {"pipe_id": "1", "name": "From agent"}},
             },
         )
 
-    assert m1.isError is False
-    assert t1.isError is False
-    assert ex.isError is False
+    assert m1.is_error is False
+    assert t1.is_error is False
 
     p1 = extract_payload(m1)
     p2 = extract_payload(t1)
-    p3 = extract_payload(ex)
     assert p1["success"] and "createLabel" in p1["result"]
     assert p2["success"] and "CreateLabelInput" in p2["result"]
     assert p3["success"] and "lbl_1" in p3["result"]
@@ -130,7 +132,6 @@ async def test_scenario_discover_input_shape_then_execute_mutation_path(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("scenario_session", [None], indirect=True)
 async def test_scenario_search_then_introspect_type(
     scenario_session, scenario_client, extract_payload
 ):
@@ -156,7 +157,6 @@ async def test_scenario_search_then_introspect_type(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("scenario_session", [None], indirect=True)
 async def test_scenario_execute_graphql_error_surfaces_to_agent(
     scenario_session, scenario_client, extract_payload
 ):

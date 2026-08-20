@@ -129,7 +129,7 @@ class McpSettings(BaseSettings):
     log_level: McpLogLevel = Field(
         default="INFO",
         description=(
-            "Log level for the FastMCP root logger on stderr "
+            "Log level for the SDK root logger on stderr "
             "(env: PIPEFY_MCP_LOG_LEVEL). Hosted structured JSON events use a "
             "dedicated logger pinned at INFO and are not governed by this knob. "
             "Accepts DEBUG, INFO, WARNING, ERROR, or CRITICAL; normalized to "
@@ -327,7 +327,7 @@ class ResourceServerSettings(BaseSettings):
         default=None,
         description=(
             "Scopes a token must carry (env: PIPEFY_MCP_RS_REQUIRED_SCOPES as "
-            "JSON). FastMCP returns 403 when any is missing."
+            "JSON). The SDK returns 403 when any is missing."
         ),
     )
 

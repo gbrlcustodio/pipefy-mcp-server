@@ -5,10 +5,10 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from mcp.server.mcpserver import MCPServer
 from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.auth import RequestScopedIdentity
@@ -16,7 +16,12 @@ from pipefy_mcp.core.ipaas_gateway import IpaasGateway, IpaasGatewayError
 from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.settings import settings
-from pipefy_mcp.tools.ipaas_tools import IpaasTools
+from pipefy_mcp.tools.ipaas_tools import (
+    IPAAS_DESTRUCTIVE_NEEDLES,
+    IpaasTools,
+    ipaas_call_is_destructive,
+)
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 TOOLS = [
     {
@@ -33,7 +38,7 @@ TOOLS = [
 
 
 def build_ipaas_test_server(client, gateway, *, remote=False):
-    """A FastMCP server whose runtime serves ``client`` and ``gateway``.
+    """An MCPServer whose runtime serves ``client`` and ``gateway``.
 
     Mirrors ``build_tool_test_server`` (tools/conftest.py) and additionally
     plants the iPaaS gateway on the runtime (the property reads the instance
@@ -54,7 +59,7 @@ def build_ipaas_test_server(client, gateway, *, remote=False):
         runtime._ipaas_gateway = gateway
         yield runtime
 
-    mcp = FastMCP("Pipefy iPaaS Tools Test", lifespan=_lifespan)
+    mcp = MCPServer("Pipefy iPaaS Tools Test", lifespan=_lifespan)
     IpaasTools.register(mcp)
     return mcp
 
@@ -66,16 +71,115 @@ def mock_client():
     return client
 
 
+_CALL_OK = {
+    "content": [{"type": "text", "text": "ok"}],
+    "isError": False,
+}
+
+PIPE_ID = "303088927"
+
+
+def _wire_entry(name, *, destructive_hint=None, extra_annotations=None):
+    """Live-shaped list_tools wire object. Omit destructive_hint for no boolean."""
+    entry = {
+        "name": name,
+        "description": f"{name} catalog entry",
+        "inputSchema": {"type": "object"},
+    }
+    annotations = dict(extra_annotations or {})
+    if destructive_hint is not None:
+        annotations["destructiveHint"] = destructive_hint
+    if annotations:
+        entry["annotations"] = annotations
+    return entry
+
+
+_MIXED_WIDGETS = _wire_entry("demo_manage_widgets", destructive_hint=False)
+
+
 @pytest.fixture
 def mock_gateway():
     gateway = MagicMock(IpaasGateway)
     gateway.list_tools = AsyncMock(return_value=TOOLS)
+    opened_session = MagicMock()
+    opened_session.call_tool = AsyncMock(return_value=_CALL_OK)
+
+    @asynccontextmanager
+    async def mcp_session(token):
+        async def list_tools():
+            return await gateway.list_tools(token)
+
+        opened_session.list_tools = list_tools
+        yield opened_session
+
+    gateway.mcp_session = mcp_session
+    gateway.opened_session = opened_session
     return gateway
 
 
 def _session(server):
     return create_client_session(
         server, read_timeout_seconds=timedelta(seconds=10), raise_exceptions=True
+    )
+
+
+def test_ipaas_destructive_needles_are_the_frozen_six():
+    assert IPAAS_DESTRUCTIVE_NEEDLES == (
+        "delete",
+        "remove",
+        "destroy",
+        "drop",
+        "uninstall",
+        "revoke",
+    )
+
+
+def test_ipaas_call_is_destructive_annotation_true_wins_over_benign_name():
+    entry = _wire_entry("demo_archive_everything", destructive_hint=True)
+    assert ipaas_call_is_destructive(entry, None) is True
+    assert ipaas_call_is_destructive(entry, {"operation": "ADD"}) is True
+
+
+def test_ipaas_call_is_destructive_operation_equality_gates_even_when_annotated_false():
+    entry = _MIXED_WIDGETS
+    assert ipaas_call_is_destructive(entry, {"operation": "DELETE"}) is True
+    assert ipaas_call_is_destructive(entry, {"operation": "delete"}) is True
+    assert ipaas_call_is_destructive(entry, {"operation": "DELETE "}) is True
+    assert ipaas_call_is_destructive(entry, {"operation": " delete"}) is True
+    assert ipaas_call_is_destructive(entry, {"operation": "ADD"}) is False
+    assert ipaas_call_is_destructive(entry, {"operation": "UNDELETE"}) is False
+    assert ipaas_call_is_destructive(entry, {"operation": 1}) is False
+    assert ipaas_call_is_destructive(entry, {}) is False
+    assert ipaas_call_is_destructive(entry, None) is False
+
+
+def test_ipaas_call_is_destructive_annotation_false_does_not_fall_through_to_name():
+    entry = _wire_entry("demo_delete_flow", destructive_hint=False)
+    assert ipaas_call_is_destructive(entry, None) is False
+
+
+def test_ipaas_call_is_destructive_no_boolean_uses_name_substring():
+    named = {"name": "demo_delete_flow"}
+    assert ipaas_call_is_destructive(named, None) is True
+    assert (
+        ipaas_call_is_destructive(
+            _wire_entry("demo_list_flows", extra_annotations={"readOnlyHint": True}),
+            None,
+        )
+        is False
+    )
+    assert ipaas_call_is_destructive({"name": "demo_list_flows"}, None) is False
+
+
+def test_ipaas_call_is_destructive_catalog_miss_is_not_classified_here():
+    # A catalog miss is gated at the call site, not by inventing a name-only
+    # entry for this classifier. Name-only objects still mean "no annotation".
+    assert (
+        ipaas_call_is_destructive({"name": "unknown"}, {"operation": "DELETE"}) is True
+    )
+    assert (
+        ipaas_call_is_destructive({"name": "unknown"}, {"operation": "UNDELETE"})
+        is False
     )
 
 
@@ -87,7 +191,7 @@ async def test_compact_catalog_lists_names_and_first_lines(
     async with _session(server) as session:
         result = await session.call_tool("get_ipaas_tools", {"pipe_id": "303088927"})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     mock_client.get_advanced_automations_token.assert_awaited_once_with("303088927")
@@ -166,6 +270,43 @@ async def test_token_permission_error_becomes_error_payload(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_empty_exception_message_uses_fallback(
+    mock_client, mock_gateway, extract_payload, exc_message
+):
+    mock_client.get_advanced_automations_token = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool("get_ipaas_tools", {"pipe_id": "303088927"})
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "iPaaS request failed." in message
+    assert "do not blind-retry" in message
+    mock_gateway.list_tools.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_non_empty_exception_message_preserved(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_client.get_advanced_automations_token = AsyncMock(
+        side_effect=RuntimeError("token mint failed")
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool("get_ipaas_tools", {"pipe_id": "303088927"})
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "token mint failed" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
 async def test_gateway_error_becomes_error_payload(
     mock_client, mock_gateway, extract_payload
 ):
@@ -198,7 +339,7 @@ async def test_int_pipe_id_is_coerced_to_string(
 async def test_call_tool_forwards_arguments_and_relays_output(
     mock_client, mock_gateway, extract_payload
 ):
-    mock_gateway.call_tool = AsyncMock(
+    mock_gateway.opened_session.call_tool = AsyncMock(
         return_value={
             "content": [
                 {"type": "text", "text": "flow created"},
@@ -218,12 +359,13 @@ async def test_call_tool_forwards_arguments_and_relays_output(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     mock_client.get_advanced_automations_token.assert_awaited_once_with("303088927")
-    mock_gateway.call_tool.assert_awaited_once_with(
-        "embed-jwt", "demo_create_flow", {"name": "My flow"}
+    mock_gateway.list_tools.assert_awaited_once_with("embed-jwt")
+    mock_gateway.opened_session.call_tool.assert_awaited_once_with(
+        "demo_create_flow", {"name": "My flow"}
     )
     # Text segments are joined and relayed in full.
     assert "flow created" in payload["result"]
@@ -235,7 +377,7 @@ async def test_call_tool_forwards_arguments_and_relays_output(
 async def test_call_tool_arguments_default_to_none(
     mock_client, mock_gateway, extract_payload
 ):
-    mock_gateway.call_tool = AsyncMock(
+    mock_gateway.opened_session.call_tool = AsyncMock(
         return_value={"content": [{"type": "text", "text": "[]"}], "isError": False}
     )
     server = build_ipaas_test_server(mock_client, mock_gateway)
@@ -247,8 +389,8 @@ async def test_call_tool_arguments_default_to_none(
 
     payload = extract_payload(result)
     assert payload["success"] is True
-    mock_gateway.call_tool.assert_awaited_once_with(
-        "embed-jwt", "demo_list_flows", None
+    mock_gateway.opened_session.call_tool.assert_awaited_once_with(
+        "demo_list_flows", None
     )
 
 
@@ -256,7 +398,7 @@ async def test_call_tool_arguments_default_to_none(
 async def test_call_tool_maps_host_iserror_to_error_payload(
     mock_client, mock_gateway, extract_payload
 ):
-    mock_gateway.call_tool = AsyncMock(
+    mock_gateway.opened_session.call_tool = AsyncMock(
         return_value={
             "content": [{"type": "text", "text": "flow not found"}],
             "isError": True,
@@ -266,7 +408,7 @@ async def test_call_tool_maps_host_iserror_to_error_payload(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "demo_delete_flow"},
+            {"pipe_id": "303088927", "tool_name": "demo_create_flow"},
         )
 
     payload = extract_payload(result)
@@ -280,7 +422,7 @@ async def test_call_tool_null_result_becomes_error_payload_not_attribute_error(
 ):
     """A host `result: null` surfaces (via the gateway guard) as the standard
     envelope, never a bare `AttributeError` on a None result."""
-    mock_gateway.call_tool = AsyncMock(
+    mock_gateway.opened_session.call_tool = AsyncMock(
         side_effect=IpaasGatewayError("iPaaS tools/call returned a non-object result.")
     )
     server = build_ipaas_test_server(mock_client, mock_gateway)
@@ -299,7 +441,7 @@ async def test_call_tool_null_result_becomes_error_payload_not_attribute_error(
 async def test_call_tool_passes_non_text_content_through(
     mock_client, mock_gateway, extract_payload
 ):
-    mock_gateway.call_tool = AsyncMock(
+    mock_gateway.opened_session.call_tool = AsyncMock(
         return_value={
             "content": [
                 {"type": "text", "text": "done"},
@@ -312,7 +454,7 @@ async def test_call_tool_passes_non_text_content_through(
     async with _session(server) as session:
         result = await session.call_tool(
             "call_ipaas_tool",
-            {"pipe_id": "303088927", "tool_name": "demo_get_run"},
+            {"pipe_id": "303088927", "tool_name": "demo_list_flows"},
         )
 
     payload = extract_payload(result)
@@ -325,7 +467,7 @@ async def test_call_tool_passes_non_text_content_through(
 async def test_call_tool_gateway_error_becomes_error_payload(
     mock_client, mock_gateway, extract_payload
 ):
-    mock_gateway.call_tool = AsyncMock(
+    mock_gateway.opened_session.call_tool = AsyncMock(
         side_effect=IpaasGatewayError("iPaaS tools/call failed (HTTP 500): boom")
     )
     server = build_ipaas_test_server(mock_client, mock_gateway)
@@ -355,6 +497,509 @@ async def test_call_tool_unconfigured_gateway_reports_clearly(
     assert payload["success"] is False
     assert "disabled" in tool_error_message(payload)
     mock_client.get_advanced_automations_token.assert_not_awaited()
+
+
+async def _call_ipaas(session, tool_name, arguments=None, **extra):
+    payload = {
+        "pipe_id": PIPE_ID,
+        "tool_name": tool_name,
+        **extra,
+    }
+    if arguments is not None:
+        payload["arguments"] = arguments
+    return await session.call_tool("call_ipaas_tool", payload)
+
+
+@pytest.mark.anyio
+async def test_read_like_annotated_false_calls_tool_without_preview(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[_wire_entry("demo_list_flows", destructive_hint=False)]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_list_flows")
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload.get("requires_confirmation") is not True
+    mock_gateway.list_tools.assert_awaited_once_with("embed-jwt")
+    mock_gateway.opened_session.call_tool.assert_awaited_once_with(
+        "demo_list_flows", None
+    )
+
+
+@pytest.mark.anyio
+async def test_annotated_true_benign_name_previews_without_calling(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[_wire_entry("demo_archive_everything", destructive_hint=True)]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_archive_everything")
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    assert payload["confirmation_token"]
+    assert "demo_archive_everything" in payload["resource"]
+    assert PIPE_ID in payload["resource"]
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_no_boolean_delete_flow_name_previews(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[
+            _wire_entry("demo_delete_flow", extra_annotations={"readOnlyHint": False})
+        ]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_delete_flow")
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_mixed_operation_add_calls_tool(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_manage_widgets", {"operation": "ADD"})
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_gateway.opened_session.call_tool.assert_awaited_once_with(
+        "demo_manage_widgets", {"operation": "ADD"}
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("operation", ["DELETE", "delete"])
+async def test_mixed_operation_delete_previews_with_operation_identity(
+    mock_client, mock_gateway, extract_payload, monkeypatch, operation
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    captured = {}
+
+    async def capture_guard(_ctx, **kwargs):
+        captured["resource_identity"] = kwargs["resource_identity"]
+        captured["resource_descriptor"] = kwargs["resource_descriptor"]
+        captured["tool_name"] = kwargs["tool_name"]
+        return {
+            "success": False,
+            "requires_confirmation": True,
+            "confirmation_token": "v1.preview",
+            "resource": kwargs["resource_descriptor"],
+            "message": "preview",
+        }
+
+    monkeypatch.setattr(
+        "pipefy_mcp.tools.ipaas_tools.check_destructive_confirmation",
+        capture_guard,
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(
+            session, "demo_manage_widgets", {"operation": operation}
+        )
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+    assert captured["tool_name"] == "call_ipaas_tool"
+    identity = captured["resource_identity"]
+    assert identity["pipe_id"] == PIPE_ID
+    assert identity["tool_name"] == "demo_manage_widgets"
+    assert identity["operation"] == "delete"
+    digest = identity["arguments"]
+    assert isinstance(digest, str)
+    assert len(digest) == 64
+    assert all(c in "0123456789abcdef" for c in digest)
+    descriptor = captured["resource_descriptor"]
+    assert PIPE_ID in descriptor
+    assert "demo_manage_widgets" in descriptor
+    assert operation in descriptor
+
+
+@pytest.mark.anyio
+async def test_delete_token_does_not_confirm_add_arguments(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[_wire_entry("demo_archive_everything", destructive_hint=True)]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        preview = await _call_ipaas(
+            session, "demo_archive_everything", {"operation": "DELETE"}
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await _call_ipaas(
+            session,
+            "demo_archive_everything",
+            {"operation": "ADD"},
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    payload = extract_payload(mismatch)
+    assert payload["requires_confirmation"] is True
+    assert payload["confirmation_token"] != token
+    assert payload["message"].startswith("⚠️ Running ")
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_mixed_delete_token_does_not_confirm_add_arguments(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        preview = await _call_ipaas(
+            session, "demo_manage_widgets", {"operation": "DELETE"}
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await _call_ipaas(
+            session,
+            "demo_manage_widgets",
+            {"operation": "ADD"},
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    payload = extract_payload(mismatch)
+    assert payload["requires_confirmation"] is True
+    assert payload["confirmation_token"] != token
+    # The classifier clears ADD, so the re-check must not claim it destroys.
+    assert payload["message"].startswith("Running ")
+    assert "is not classified as destructive" in payload["message"]
+    assert "cannot be undone" not in payload["message"]
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_delete_token_does_not_confirm_swapped_arguments(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[_wire_entry("demo_delete_flow", destructive_hint=True)]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        preview_a = await _call_ipaas(session, "demo_delete_flow", {"id": "resource-a"})
+        preview_b = await _call_ipaas(session, "demo_delete_flow", {"id": "resource-b"})
+        token = extract_payload(preview_a)["confirmation_token"]
+        swapped = await _call_ipaas(
+            session,
+            "demo_delete_flow",
+            {"id": "resource-b"},
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    payload_a = extract_payload(preview_a)
+    payload_b = extract_payload(preview_b)
+    assert payload_a["resource"] != payload_b["resource"]
+    payload = extract_payload(swapped)
+    assert payload["requires_confirmation"] is True
+    assert payload["confirmation_token"] != token
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_delete_token_confirms_reordered_arguments(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[_wire_entry("demo_delete_flow", destructive_hint=True)]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        preview = await _call_ipaas(
+            session, "demo_delete_flow", {"z": "1", "id": "resource-a"}
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        confirmed = await _call_ipaas(
+            session,
+            "demo_delete_flow",
+            {"id": "resource-a", "z": "1"},
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    payload = extract_payload(confirmed)
+    assert payload["success"] is True
+    mock_gateway.opened_session.call_tool.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_delete_token_confirms_case_variant_operation(
+    mock_client, mock_gateway, extract_payload
+):
+    """The case of ``operation`` is not part of what the caller approved.
+
+    The classifier casefolds it and the identity carries it casefolded, so the
+    arguments digest has to casefold it too. Without that, the same call
+    written ``delete`` would fail to confirm a token minted for ``DELETE``.
+    """
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        preview = await _call_ipaas(
+            session,
+            "demo_manage_widgets",
+            {"operation": "DELETE", "id": "resource-a"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        confirmed = await _call_ipaas(
+            session,
+            "demo_manage_widgets",
+            {"operation": "delete", "id": "resource-a"},
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    payload = extract_payload(confirmed)
+    assert payload["success"] is True
+    mock_gateway.opened_session.call_tool.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_delete_token_confirms_whitespace_variant_operation(
+    mock_client, mock_gateway, extract_payload
+):
+    """Trailing space on ``operation`` is not part of what the caller approved.
+
+    The classifier strips then casefolds, and the identity carries the
+    normalized value, so a token minted for ``DELETE `` must confirm ``DELETE``.
+    """
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        preview = await _call_ipaas(
+            session,
+            "demo_manage_widgets",
+            {"operation": "DELETE ", "id": "resource-a"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        confirmed = await _call_ipaas(
+            session,
+            "demo_manage_widgets",
+            {"operation": "DELETE", "id": "resource-a"},
+            confirm=True,
+            confirmation_token=token,
+        )
+
+    payload = extract_payload(confirmed)
+    assert payload["success"] is True
+    mock_gateway.opened_session.call_tool.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_trailing_space_operation_previews_without_calling(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(
+            session, "demo_manage_widgets", {"operation": "DELETE "}
+        )
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_catalog_miss_is_unclassifiable_and_previews(
+    mock_client, mock_gateway, extract_payload
+):
+    """A name with no needle, missing from the catalog page, must not one-shot.
+
+    ``demo_archive_everything`` carries no destructive needle. If the
+    classifier saw only that name it would return False. A catalog miss
+    (pagination, or a tool the first page omitted) therefore has to fail
+    closed at the call site.
+    """
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[_wire_entry("demo_list_flows", destructive_hint=False)]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_archive_everything")
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    assert "could not be classified" in payload["message"]
+    assert "permanent" not in payload["message"]
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_read_like_call_with_token_does_not_claim_permanent(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(
+        return_value=[_wire_entry("demo_list_flows", destructive_hint=False)]
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(
+            session,
+            "demo_list_flows",
+            confirmation_token="v1.stale-or-stray",
+        )
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    assert "permanent" not in payload["message"]
+    assert "cannot be undone" not in payload["message"]
+    assert "confirmation token" in payload["message"]
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("needle", IPAAS_DESTRUCTIVE_NEEDLES)
+async def test_name_needle_gates_call_without_host(
+    mock_client, mock_gateway, extract_payload, needle
+):
+    name = f"demo_{needle}_item"
+    mock_gateway.list_tools = AsyncMock(return_value=[_wire_entry(name)])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, name)
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("needle", IPAAS_DESTRUCTIVE_NEEDLES)
+async def test_operation_needle_gates_mixed_call_without_host(
+    mock_client, mock_gateway, extract_payload, needle
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(
+            session, "demo_manage_widgets", {"operation": needle}
+        )
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_delete_token_confirms_matching_delete_arguments(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        payload = await confirm_after_preview(
+            session,
+            "call_ipaas_tool",
+            {
+                "pipe_id": PIPE_ID,
+                "tool_name": "demo_manage_widgets",
+                "arguments": {"operation": "DELETE"},
+                "confirm": True,
+            },
+        )
+
+    assert payload["success"] is True
+    mock_gateway.opened_session.call_tool.assert_awaited_once_with(
+        "demo_manage_widgets", {"operation": "DELETE"}
+    )
+
+
+@pytest.mark.anyio
+async def test_mixed_undelete_operation_is_ungated(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(
+            session, "demo_manage_widgets", {"operation": "UNDELETE"}
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_gateway.opened_session.call_tool.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_list_tools_failure_is_error_envelope_and_does_not_call(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(
+        side_effect=IpaasGatewayError("iPaaS tools/list failed (HTTP 500): boom")
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_delete_flow")
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload.get("requires_confirmation") is not True
+    assert "tools/list" in tool_error_message(payload)
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_missing_catalog_benign_name_previews(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_list_widgets")
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    assert "could not be classified" in payload["message"]
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_missing_catalog_delete_flow_is_gated(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.list_tools = AsyncMock(return_value=[_MIXED_WIDGETS])
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await _call_ipaas(session, "demo_delete_flow")
+
+    payload = extract_payload(result)
+    assert payload["requires_confirmation"] is True
+    mock_gateway.opened_session.call_tool.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_call_ipaas_tool_keeps_destructive_hint(mock_client, mock_gateway):
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        listed = await session.list_tools()
+
+    tool = next(t for t in listed.tools if t.name == "call_ipaas_tool")
+    assert tool.annotations is not None
+    assert tool.annotations.destructive_hint is True
 
 
 PIECE_NAME = "@example/piece-demo"
@@ -795,9 +1440,9 @@ async def test_connection_auth_url_is_not_read_only(mock_client, mock_gateway):
     by_name = {t.name: t for t in listed.tools}
     auth_url = by_name["get_ipaas_connection_auth_url"]
     assert auth_url.annotations is not None
-    assert auth_url.annotations.readOnlyHint is False
+    assert auth_url.annotations.read_only_hint is False
     # The discovery meta-tool stays a genuine read.
-    assert by_name["get_ipaas_tools"].annotations.readOnlyHint is True
+    assert by_name["get_ipaas_tools"].annotations.read_only_hint is True
 
 
 @pytest.mark.anyio

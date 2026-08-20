@@ -31,7 +31,7 @@ Pipe reports and organization reports: discovery, CRUD, and async exports. **17 
 | `get_pipe_report_filterable_fields` | `pipefy report-pipe filterable-fields` | Yes | Discover filterable fields for a report. |
 | `create_pipe_report` | `pipefy report-pipe create` | No | Create a new pipe report. |
 | `update_pipe_report` | `pipefy report-pipe update` | No | Update report name or filters. |
-| `delete_pipe_report` | `pipefy report-pipe delete` | No | **Two-step destructive.** |
+| `delete_pipe_report` | `pipefy report-pipe delete` | No | **Two-step destructive.**[^mcp-confirm] |
 | `export_pipe_report` | `pipefy report-pipe export` | No | Trigger async export. |
 
 ## Organization report tools
@@ -42,8 +42,10 @@ Pipe reports and organization reports: discovery, CRUD, and async exports. **17 
 | `get_organization_report` | `pipefy report-org get` | Yes | Single org report data. |
 | `create_organization_report` | `pipefy report-org create` | No | Create an org-wide report. |
 | `update_organization_report` | `pipefy report-org update` | No | Update report config. |
-| `delete_organization_report` | `pipefy report-org delete` | No | **Two-step destructive.** |
+| `delete_organization_report` | `pipefy report-org delete` | No | **Two-step destructive.**[^mcp-confirm] |
 | `export_organization_report` | `pipefy report-org export` | No | Trigger async export. |
+
+[^mcp-confirm]: MCP two-step: echo `confirmation_token` from the preview with `confirm=true`. CLI: `--yes`.
 
 ## Export status & download
 

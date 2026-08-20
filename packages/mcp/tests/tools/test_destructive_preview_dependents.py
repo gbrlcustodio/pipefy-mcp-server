@@ -1,4 +1,4 @@
-"""Guard-level tests for optional ``dependents_resolver`` (REQ-1)."""
+"""Guard-level tests for optional ``dependents_resolver``."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -7,6 +7,8 @@ import pytest
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 
 RESOURCE = "phase field (ID: 99)"
+TOOL_NAME = "delete_phase_field"
+IDENTITY = {"field_id": "99"}
 
 
 def _minimal_ctx():
@@ -16,19 +18,34 @@ def _minimal_ctx():
     return ctx
 
 
+async def _check(ctx, *, confirm, dependents_resolver=None, confirmation_token=None):
+    return await check_destructive_confirmation(
+        ctx,
+        confirm=confirm,
+        resource_descriptor=RESOURCE,
+        resource_identity=IDENTITY,
+        tool_name=TOOL_NAME,
+        confirmation_token=confirmation_token,
+        dependents_resolver=dependents_resolver,
+    )
+
+
 @pytest.mark.anyio
 async def test_no_resolver_shape_unchanged():
     ctx = _minimal_ctx()
-    payload = await check_destructive_confirmation(
-        ctx, confirm=False, resource_descriptor=RESOURCE
-    )
+    payload = await _check(ctx, confirm=False)
     assert payload is not None
     assert set(payload.keys()) == {
         "success",
         "requires_confirmation",
         "resource",
         "message",
+        "confirmation_token",
     }
+    token = payload["confirmation_token"]
+    assert isinstance(token, str)
+    assert token
+    assert token.startswith("v1.")
     assert "dependents" not in payload
 
 
@@ -39,12 +56,7 @@ async def test_resolver_returns_none_no_enrichment():
     async def resolver():
         return None
 
-    payload = await check_destructive_confirmation(
-        ctx,
-        confirm=False,
-        resource_descriptor=RESOURCE,
-        dependents_resolver=resolver,
-    )
+    payload = await _check(ctx, confirm=False, dependents_resolver=resolver)
     assert payload is not None
     assert "dependents" not in payload
 
@@ -56,12 +68,7 @@ async def test_resolver_returns_empty_dict_no_enrichment():
     async def resolver():
         return {}
 
-    payload = await check_destructive_confirmation(
-        ctx,
-        confirm=False,
-        resource_descriptor=RESOURCE,
-        dependents_resolver=resolver,
-    )
+    payload = await _check(ctx, confirm=False, dependents_resolver=resolver)
     assert payload is not None
     assert "dependents" not in payload
 
@@ -74,12 +81,7 @@ async def test_resolver_returns_dict_enriches_preview():
     async def resolver():
         return deps
 
-    payload = await check_destructive_confirmation(
-        ctx,
-        confirm=False,
-        resource_descriptor=RESOURCE,
-        dependents_resolver=resolver,
-    )
+    payload = await _check(ctx, confirm=False, dependents_resolver=resolver)
     assert payload is not None
     assert payload["dependents"] == deps
     assert payload["resource"] == RESOURCE
@@ -93,12 +95,7 @@ async def test_resolver_raises_degrades_silently():
     async def resolver():
         raise RuntimeError("boom")
 
-    payload = await check_destructive_confirmation(
-        ctx,
-        confirm=False,
-        resource_descriptor=RESOURCE,
-        dependents_resolver=resolver,
-    )
+    payload = await _check(ctx, confirm=False, dependents_resolver=resolver)
     assert payload is not None
     assert "dependents" not in payload
     assert payload["resource"] == RESOURCE
@@ -114,10 +111,15 @@ async def test_confirm_true_never_invokes_resolver():
         calls += 1
         return {"should_not": "appear"}
 
-    result = await check_destructive_confirmation(
+    preview = await _check(ctx, confirm=False, dependents_resolver=resolver)
+    assert preview is not None
+    token = preview["confirmation_token"]
+    calls = 0
+
+    result = await _check(
         ctx,
         confirm=True,
-        resource_descriptor=RESOURCE,
+        confirmation_token=token,
         dependents_resolver=resolver,
     )
     assert result is None

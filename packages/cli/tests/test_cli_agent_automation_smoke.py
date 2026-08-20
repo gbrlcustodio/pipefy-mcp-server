@@ -370,8 +370,12 @@ def test_agent_create_happy_path_chains_create_then_update(
     """``agent create`` runs preflight, then ``create_ai_agent`` + ``update_ai_agent``."""
     oauth_env("ag-create-ok")
     mock_client = MagicMock()
-    mock_client.create_ai_agent = AsyncMock(return_value={"agent_uuid": "uuid-1"})
-    mock_client.update_ai_agent = AsyncMock(return_value={})
+    mock_client.create_ai_agent = AsyncMock(
+        return_value={"agent_uuid": "uuid-1", "disabled_at": None}
+    )
+    mock_client.update_ai_agent = AsyncMock(
+        return_value={"agent_uuid": "uuid-1", "disabled_at": None}
+    )
 
     preflight_ok = {
         "success": True,
@@ -420,9 +424,15 @@ def test_agent_create_happy_path_chains_create_then_update(
         "success": True,
         "agent_uuid": "uuid-1",
         "message": "Created agent uuid-1",
+        "disabled_at": None,
+        "active": True,
     }
     mock_client.create_ai_agent.assert_awaited_once()
+    create_arg = mock_client.create_ai_agent.call_args.args[0]
+    assert create_arg.disabled_at is None
     mock_client.update_ai_agent.assert_awaited_once()
+    update_arg = mock_client.update_ai_agent.call_args.args[0]
+    assert update_arg.disabled_at is None
 
 
 def test_agent_update_invokes_field_ref_resolution_via_facade(

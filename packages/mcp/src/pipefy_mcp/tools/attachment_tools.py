@@ -6,8 +6,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     Attachment,
@@ -81,7 +80,7 @@ class AttachmentTools:
     """MCP tools for orchestrated attachment uploads (presigned URL, S3 PUT, field update)."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         def _upload_error_envelope(exc: AttachmentUploadError) -> dict[str, Any]:
             if exc.step == "file_read":
                 # Preserve the original LocalFileError message (no type prefix or
@@ -121,7 +120,7 @@ class AttachmentTools:
             meta=REMOTE,
         )
         async def upload_attachment_to_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             organization_id: PipefyId,
             card_id: PipefyId,
             field_id: PipefyId,
@@ -209,7 +208,7 @@ class AttachmentTools:
             meta=REMOTE,
         )
         async def upload_attachment_to_table_record(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             organization_id: PipefyId,
             table_record_id: PipefyId,
             field_id: PipefyId,
@@ -303,7 +302,7 @@ class AttachmentTools:
             meta=REMOTE,
         )
         async def create_attachment_presigned_url(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             organization_id: PipefyId,
             file_name: str,
             content_type: str | None = None,

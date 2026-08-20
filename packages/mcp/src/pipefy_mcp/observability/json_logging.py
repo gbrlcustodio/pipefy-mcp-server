@@ -13,7 +13,7 @@ ToolCallOutcome = Literal["ok", "error", "cancelled", "elicitation"]
 OBSERVABILITY_LOGGER_NAME = "pipefy_mcp.observability.structured"
 
 # Structured events always emit at INFO on this logger. PIPEFY_MCP_LOG_LEVEL
-# governs the FastMCP root logger (text) only, so quieting noisy text logs does
+# governs the SDK root logger (text) only, so quieting noisy text logs does
 # not silently drop hosted request/tool lines.
 STRUCTURED_LOG_LEVEL = logging.INFO
 
@@ -46,6 +46,19 @@ TOOL_CALL_EVENT_KEYS = frozenset(
     }
 )
 
+UNNAMED_TOOL = "<unnamed>"
+"""The ``tool`` label for a ``tools/call`` that named no tool.
+
+Middleware deliberately sees a request that will go on to fail request-layer
+validation, so a ``tools/call`` whose params carry no ``name`` reaches the chain and
+gets a line. Its ``tool_name`` is genuinely empty, but an empty label groups under a
+blank bucket in any dashboard that facets by tool, next to the real ones. The angle
+brackets cannot collide with a tool name (they are not valid in one), so the bucket
+reads as what it is. ``ctx.tool_name`` itself stays ``""``: it is the raw view of what
+the client sent, and a governance middleware matching on it must not see a name the
+client did not send.
+"""
+
 
 _LOG_LEVELS = {
     "DEBUG": logging.DEBUG,
@@ -76,7 +89,7 @@ def normalize_log_level(log_level: str) -> int:
 def configure_observability_logging() -> logging.Logger:
     """Attach a stderr JSON-line handler pinned at INFO (``propagate=False``).
 
-    Does not take ``PIPEFY_MCP_LOG_LEVEL``: that knob configures FastMCP's root
+    Does not take ``PIPEFY_MCP_LOG_LEVEL``: that knob configures the SDK's root
     logger only. Hosted structured lines stay at INFO so an operator can quiet
     text logs without losing request/tool debugging events.
     """

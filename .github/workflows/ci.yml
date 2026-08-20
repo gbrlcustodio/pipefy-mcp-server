@@ -36,6 +36,118 @@ jobs:
       if: steps.changed-files.outputs.any_changed == 'true'
       run: uv run ruff format --check ${{ steps.changed-files.outputs.changed_files }}
 
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+    # Both, because they disagree: /bin/sh is dash on Debian-family images and
+    # rejects constructs bash in POSIX mode forgives, which is what a
+    # contributor on macOS is checking against.
+    - name: POSIX syntax
+      run: |
+        for script in install.sh uninstall.sh; do
+          sh -n "$script"
+          dash -n "$script"
+        done
+    # The same release the pre-commit hook pins, from the same package, so the
+    # hook and the build cannot disagree about what passes.
+    - name: ShellCheck
+      run: uvx --from shellcheck-py==0.11.0.1 shellcheck --shell=sh install.sh uninstall.sh
+    - name: Deletions route through remove_path
+      run: python3 .github/workflows/scripts/check_deletion_guard.py
+    # Not a behavioural test: whether the producer is still writing when the
+    # consumer leaves depends on the pipe buffer, so an early exit reproduces
+    # on one platform and not another.
+    - name: Consumers of a streaming producer read to the end
+      run: python3 .github/workflows/scripts/check_pipe_drain.py
+
+  # The only check that proves completeness rather than the correctness of a
+  # step someone thought to write: install for real, tear down for real, and
+  # compare the filesystem with what was there before.
+  roundtrip:
+    name: install.sh then uninstall.sh
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+    # `npx skills add` writes into the working directory, not $HOME, whatever
+    # agent directories exist elsewhere. Both scripts therefore run from a
+    # scratch directory under $HOME: the skills land somewhere the snapshot
+    # covers, so a teardown that stopped removing them would fail this job.
+    # RUNNER_TEMP is under $HOME on hosted runners and is pruned as runner
+    # noise, which is why it is not that directory.
+    - name: Make the scratch directory both scripts run from
+      run: mkdir -p "$HOME/roundtrip" "$HOME/.claude"
+    - name: Snapshot HOME
+      run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/before.txt"
+    # Not the checkout: this repository's own git-tracked .mcp.json is a
+    # project-scope registration, and tearing down against one is a different
+    # scenario from a user's machine.
+    - name: Install
+      run: |
+        cd "$HOME/roundtrip"
+        sh "$GITHUB_WORKSPACE/install.sh" --yes --client cursor
+    - name: Snapshot HOME after the install
+      run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/installed.txt"
+    - name: The install is real
+      run: |
+        "$HOME/.local/bin/pipefy" --version
+        uv tool list | grep -q pipefy-cli
+        python3 -c "
+        import json, pathlib
+        config = json.loads(pathlib.Path.home().joinpath('.cursor/mcp.json').read_text())
+        assert config['mcpServers']['pipefy'] == {'command': 'pipefy-mcp-server'}, config
+        "
+        # Pins where the skills actually landed. If a future `skills add`
+        # chooses somewhere else, this fails here rather than quietly leaving
+        # the teardown assertion below with nothing to prove.
+        ls "$HOME/roundtrip/.claude/skills" | grep -q '^pipefy-'
+    # ubuntu-latest often has a session bus address but no Secret Service client.
+    # uninstall.sh then treats the keychain as uninspected and exits 2 even after
+    # a clean teardown. An empty probe matches the test stubs: no pipefy items.
+    # Keep the stub outside $HOME so check_roundtrip does not see it as drift.
+    - name: Stub an empty Secret Service probe
+      run: |
+        mkdir -p /tmp/pipefy-ci-bin
+        printf '%s\n' '#!/bin/sh' 'exit 0' > /tmp/pipefy-ci-bin/secret-tool
+        chmod +x /tmp/pipefy-ci-bin/secret-tool
+        echo /tmp/pipefy-ci-bin >> "$GITHUB_PATH"
+    - name: Uninstall
+      run: |
+        cd "$HOME/roundtrip"
+        sh "$GITHUB_WORKSPACE/uninstall.sh" --yes
+    - name: Snapshot HOME after the teardown
+      run: python3 .github/workflows/scripts/check_roundtrip.py snapshot "$RUNNER_TEMP/after.txt"
+    - name: Nothing the toolkit installed is still registered
+      run: |
+        if uv tool list | grep pipefy; then
+          echo "a uv tool survived the teardown" >&2
+          exit 1
+        fi
+        python3 -c "
+        import json, pathlib
+        config = json.loads(pathlib.Path.home().joinpath('.cursor/mcp.json').read_text())
+        assert 'pipefy' not in config.get('mcpServers', {}), config
+        "
+        # Stated outright rather than left to the filesystem diff, so the
+        # guarantee does not depend on which directories stay pruned.
+        left=$(find "$HOME" -maxdepth 6 -path '*/.claude/skills/pipefy-*' -print 2>/dev/null | head -5)
+        if [ -n "$left" ]; then
+          echo "skills survived the teardown:" >&2
+          printf '%s\n' "$left" >&2
+          exit 1
+        fi
+    - name: The filesystem is back where it started
+      run: |
+        python3 .github/workflows/scripts/check_roundtrip.py check \
+          "$RUNNER_TEMP/before.txt" "$RUNNER_TEMP/installed.txt" "$RUNNER_TEMP/after.txt"
+
   test:
     runs-on: ubuntu-latest
     env:
@@ -59,6 +171,8 @@ jobs:
       run: uv sync --locked --all-extras --dev
     - name: Verify package versions are in lockstep
       run: uv run python scripts/bump_version.py verify
+    - name: Lint Cursor plugin packaging
+      run: python3 .github/workflows/scripts/lint_cursor_plugin.py
     - name: Lint (full tree)
       run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src packages/infra/src
     - name: Check formatting
@@ -73,18 +187,19 @@ jobs:
       run: cd packages/mcp && uv run lint-imports
     - name: Build workspace wheels (packaging smoke)
       run: uv build --all-packages --wheel -o dist-packaging-smoke
-    # Mirrors the release workflow's smoke step. Both entry points are launched
-    # because this resolves dependencies from PyPI rather than uv.lock, so it is
-    # the only gate that sees an upstream release the lock pins us away from.
-    - name: Smoke install CLI and MCP wheels (clean venv)
+    # Resolves dependencies from PyPI rather than uv.lock, which is the only way
+    # to see an upstream release the lock pins us away from. This covers pushes
+    # and pull requests; packaging-smoke.yml runs the same check on a timer, for
+    # the window between them where no commit triggers anything at all.
+    - name: Smoke install workspace wheels (clean venv)
       run: |
+        # Membership is checked before the install, not after: an incomplete set
+        # is not an error for pip, which satisfies the absent member from the
+        # index through the sibling `==` pins. The smoke would then pass against
+        # a wheel this build never produced.
+        python scripts/smoke_entry_points.py --check-wheels dist-packaging-smoke
         python -m venv .venv-cli-smoke
-        .venv-cli-smoke/bin/pip install dist-packaging-smoke/pipefy_infra-*.whl \
-          dist-packaging-smoke/pipefy-*.whl \
-          dist-packaging-smoke/pipefy_auth-*.whl \
-          dist-packaging-smoke/pipefy_cli-*.whl \
-          dist-packaging-smoke/pipefy_mcp_server-*.whl
-        .venv-cli-smoke/bin/pipefy --help
-        .venv-cli-smoke/bin/pipefy-mcp-server --help
+        .venv-cli-smoke/bin/pip install dist-packaging-smoke/*.whl
+        .venv-cli-smoke/bin/python scripts/smoke_entry_points.py
     - name: Run tests
       run: uv run pytest -m "not integration"

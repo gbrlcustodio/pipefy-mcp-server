@@ -27,6 +27,71 @@ def test_map_portal_error_returns_portal_permission_message() -> None:
 
 
 @pytest.mark.unit
+def test_map_portal_error_blank_permission_message_uses_fallback():
+    message = map_portal_error_to_message(PortalPermissionError("  "))
+    assert "create_portal" in message
+    assert "manage_portals" in message
+    assert "Try again" not in message
+
+
+@pytest.mark.unit
+def test_map_portal_error_preserves_non_blank_permission_message():
+    assert (
+        map_portal_error_to_message(PortalPermissionError("real permission text"))
+        == "real permission text"
+    )
+
+
+@pytest.mark.unit
+def test_map_portal_error_blank_transport_uses_write_fallback_by_default() -> None:
+    message = map_portal_error_to_message(RuntimeError("  "))
+    assert "Portal operation failed." in message
+    assert "do not blind-retry" in message
+
+
+@pytest.mark.unit
+def test_map_portal_error_blank_transport_honors_read_empty_fallback() -> None:
+    message = map_portal_error_to_message(
+        RuntimeError(""), empty_fallback="Portal request failed."
+    )
+    assert message == "Portal request failed."
+    assert "do not blind-retry" not in message
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("exc_message", ["", "   "])
+def test_map_portal_error_whitespace_permission_denied_uses_guidance(
+    exc_message: str,
+) -> None:
+    exc = PipefyGraphQLError(
+        [
+            {
+                "message": exc_message,
+                "extensions": {"code": "PERMISSION_DENIED"},
+            }
+        ]
+    )
+    message = map_portal_error_to_message(exc, empty_fallback="Portal request failed.")
+    assert "create_portal" in message
+    assert "manage_portals" in message
+
+
+@pytest.mark.unit
+def test_map_portal_error_whitespace_graphql_message_uses_empty_fallback() -> None:
+    """Whitespace-only GraphQL messages must not bypass empty_fallback.
+
+    Empty ``message`` is already substituted to ``Unknown error`` when
+    ``PipefyGraphQLError`` is constructed; whitespace stays truthy there and
+    used to leak through ``extract_error_strings`` before the strip fix.
+    """
+    message = map_portal_error_to_message(
+        PipefyGraphQLError([{"message": "   "}]),
+        empty_fallback="Portal request failed.",
+    )
+    assert message == "Portal request failed."
+
+
+@pytest.mark.unit
 def test_map_portal_error_permission_denied_transport_query_error() -> None:
     """GraphQL PERMISSION_DENIED codes map to portal permission guidance."""
     exc = PipefyGraphQLError([{"message": "forbidden"}])

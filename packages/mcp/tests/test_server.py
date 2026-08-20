@@ -1,3 +1,4 @@
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -5,16 +6,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from _rs_fixtures import RS_ISSUER, RS_JWKS_URI, RS_RESOURCE, remote_rs_settings
-from mcp.server.fastmcp import FastMCP
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_auth import AuthSettings
+from _rs_fixtures import RS_ISSUER, RS_JWKS_URI, RS_RESOURCE, remote_rs_settings
+from mcp.server.mcpserver import MCPServer
+from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
-from pipefy_mcp.core.transport_security import build_transport_security
+from pipefy_mcp.core.transport_security import (
+    build_transport_security,
+    transport_security_for,
+)
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.server import (
     _make_lifespan,
@@ -24,7 +28,12 @@ from pipefy_mcp.server import (
     default_tool_middlewares,
     run_server,
 )
-from pipefy_mcp.settings import McpSettings, Settings, resolve_mcp_settings
+from pipefy_mcp.settings import (
+    McpSettings,
+    ResourceServerSettings,
+    Settings,
+    resolve_mcp_settings,
+)
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 from pipefy_mcp.tools.toolsets import DOMAINS, POWER_GRAPHQL_TOOLS
 
@@ -73,7 +82,6 @@ def mocked_runtime():
     runtime = MagicMock()
     runtime.session_for_request.return_value = MagicMock()
     runtime.inbound_auth = None
-    runtime.transport_security = None
     with patch("pipefy_mcp.server.McpRuntime.for_profile", return_value=runtime):
         yield runtime
 
@@ -102,13 +110,13 @@ async def test_register_tools(mocked_runtime):
 
 
 @pytest.mark.unit
-def test_build_pipefy_mcp_server_passes_log_level_to_fastmcp(mocked_runtime):
+def test_build_pipefy_mcp_server_passes_log_level_to_the_sdk(mocked_runtime):
     settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
         update={"mcp": McpSettings(log_level="WARNING")}
     )
-    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
+    with patch("pipefy_mcp.server.MCPServer") as mock_server:
         build_pipefy_mcp_server(settings)
-    assert mock_fastmcp.call_args.kwargs["log_level"] == "WARNING"
+    assert mock_server.call_args.kwargs["log_level"] == "WARNING"
 
 
 @pytest.mark.unit
@@ -241,7 +249,7 @@ async def test_extra_tool_middlewares_register_through_the_public_builder(
     """
 
     async def deny(ctx: ToolCallContext, call_next):
-        return short_circuit_error("blocked by consumer", code="DENIED")
+        return short_circuit_error(ctx, "blocked by consumer", code="DENIED")
 
     app = build_pipefy_mcp_server(
         _MINIMAL_PIPEFY_SETTINGS, extra_tool_middlewares=[deny]
@@ -254,7 +262,7 @@ async def test_extra_tool_middlewares_register_through_the_public_builder(
     async with session as s:
         result = await s.call_tool("get_organization", {})
 
-    assert result.isError is True
+    assert result.is_error is True
     assert json.loads(result.content[0].text)["error"]["code"] == "DENIED"
 
 
@@ -264,7 +272,7 @@ def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_runt
 
     The guard is ``check_for_name_collisions()``: the first pass already
     registered the Pipefy names on this app, so the second pass's preflight sees
-    them and raises. FastMCP's own ``add_tool`` would silently dedup duplicate
+    them and raises. the SDK's own ``add_tool`` would silently dedup duplicate
     names rather than raise, so the preflight is what makes re-registration safe
     to forbid. This is why registration runs once, at construction, and the
     lifespan (which Streamable HTTP re-enters per session) never re-registers.
@@ -282,7 +290,7 @@ async def test_lifespan_yields_the_runtime_without_registering(
     mocked_runtime,
 ):
     """The lifespan yields the app-scoped runtime and adds no tools."""
-    app = FastMCP("lifespan-resources-test")
+    app = MCPServer("lifespan-resources-test")
 
     @app.tool()
     async def foreign_mcp_tool() -> str:
@@ -308,7 +316,7 @@ async def test_repeat_lifespan_yields_the_same_runtime_and_leaves_tools_untouche
     client wired at construction) is shared across entries, and the tool table is
     never mutated.
     """
-    app = FastMCP("lifespan-repeat-test")
+    app = MCPServer("lifespan-repeat-test")
 
     @app.tool()
     async def foreign_mcp_tool() -> str:
@@ -375,7 +383,12 @@ def test_run_server_local_profile_over_http_serves_without_inbound_auth():
     assert built_settings.mcp.profile == "local"
     assert built_settings.mcp.host == "127.0.0.1"
     assert built_settings.mcp.port == 9200
-    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+    mock_anyio_run.assert_called_once_with(
+        _serve_streamable_http,
+        fake_app,
+        settings,
+        transport_security_for(settings),
+    )
 
 
 @pytest.mark.unit
@@ -396,7 +409,12 @@ def test_run_server_remote_profile_defaults_to_http_transport(
         )
         run_server(settings)
 
-    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+    mock_anyio_run.assert_called_once_with(
+        _serve_streamable_http,
+        fake_app,
+        settings,
+        transport_security_for(settings),
+    )
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.profile == "remote"
 
@@ -420,7 +438,12 @@ def test_run_server_http_builds_the_app_and_serves_over_streamable_http(remote_r
     assert built_settings.mcp.profile == "remote"
     assert built_settings.mcp.host == "127.0.0.1"
     assert built_settings.mcp.port == 9123
-    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+    mock_anyio_run.assert_called_once_with(
+        _serve_streamable_http,
+        fake_app,
+        settings,
+        transport_security_for(settings),
+    )
 
 
 @pytest.mark.anyio
@@ -441,10 +464,12 @@ async def test_serve_streamable_http_disables_uvicorn_access_log(remote_rs_env):
         patch("uvicorn.Server") as mock_server_cls,
     ):
         mock_server_cls.return_value.serve = AsyncMock()
-        await _serve_streamable_http(fake_app, settings)
+        await _serve_streamable_http(fake_app, settings, None)
 
     mock_configure.assert_called_once_with()
-    mock_wire.assert_called_once_with(fake_app)
+    mock_wire.assert_called_once_with(
+        fake_app, host="127.0.0.1", transport_security=None
+    )
     mock_config_cls.assert_called_once_with(
         mock_http_app,
         host="127.0.0.1",
@@ -540,7 +565,12 @@ def test_run_server_remote_serves_off_loopback_without_a_bind_guard(remote_rs_en
 
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.host == "0.0.0.0"
-    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+    mock_anyio_run.assert_called_once_with(
+        _serve_streamable_http,
+        fake_app,
+        settings,
+        transport_security_for(settings),
+    )
 
 
 # --- Resource-server role (OAuth 2.0 inbound bearer validation) --------------
@@ -548,17 +578,17 @@ def test_run_server_remote_serves_off_loopback_without_a_bind_guard(remote_rs_en
 
 @pytest.mark.unit
 def test_stdio_build_has_no_inbound_auth(mocked_runtime):
-    """The stdio profile builds with no inbound auth wired into FastMCP."""
+    """The stdio profile builds with no inbound auth wired into the SDK."""
     app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     assert app.settings.auth is None
 
 
 @pytest.mark.unit
 def test_build_with_resource_server_wires_inbound_auth():
-    """The remote profile with a configured RS wires FastMCP's auth + token verifier."""
+    """The remote profile with a configured RS wires the SDK's auth + token verifier."""
     app = build_pipefy_mcp_server(_REMOTE_RS_SETTINGS)
     assert app.settings.auth is not None
-    assert str(app.settings.auth.resource_server_url).rstrip("/") == RS_RESOURCE
+    assert str(app.settings.auth.resource_server_url) == RS_RESOURCE
 
 
 def _asgi_client(app):
@@ -567,7 +597,7 @@ def _asgi_client(app):
 
 
 @asynccontextmanager
-async def _serving_asgi_client(app):
+async def _serving_asgi_client(app, transport_security=None):
     """An ASGI client with the app's lifespan running.
 
     The transport's DNS-rebinding Host check sits behind the streamable-HTTP
@@ -576,7 +606,7 @@ async def _serving_asgi_client(app):
     context explicitly (the 401/metadata tests do not need this because they
     short-circuit before the session manager).
     """
-    asgi = app.streamable_http_app()
+    asgi = app.streamable_http_app(transport_security=transport_security)
     async with asgi.router.lifespan_context(asgi):
         transport = httpx.ASGITransport(app=asgi)
         async with httpx.AsyncClient(
@@ -603,18 +633,58 @@ async def test_http_unauthenticated_request_gets_401_challenge():
 
 @pytest.mark.unit
 async def test_http_serves_protected_resource_metadata():
-    """The RFC 9728 metadata route is served at the resource's well-known path."""
+    """The RFC 9728 metadata route is served at the resource's well-known path.
+
+    Both URLs are matched byte for byte: a client compares an issuer literally,
+    so a slash the SDK added or dropped between config and this document would
+    send it to an authorization server the JWT validator then rejects.
+    """
     app = build_pipefy_mcp_server(_REMOTE_RS_SETTINGS)
     async with _asgi_client(app) as client:
         resp = await client.get("/.well-known/oauth-protected-resource/mcp")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["resource"].rstrip("/") == RS_RESOURCE
-    advertised = [s.rstrip("/") for s in body["authorization_servers"]]
-    assert RS_ISSUER in advertised
+    assert body["resource"] == RS_RESOURCE
+    assert RS_ISSUER in body["authorization_servers"]
 
 
-# --- transport allowlist (DNS-rebinding) reaches FastMCP and the transport ----
+@pytest.mark.unit
+async def test_metadata_keeps_a_configured_trailing_slash_end_to_end():
+    """A trailing slash in config reaches the metadata document unchanged.
+
+    The builder-level test in ``auth/test_resource_server.py`` pins the same
+    property one layer down. This one runs it through ``ResourceServerSettings``
+    (which strips whitespace but deliberately not slashes) and out through the
+    served document, so a normalizer added anywhere in between fails here.
+    ``RS_RESOURCE`` and ``RS_ISSUER`` carry no slash, so they cannot catch it.
+
+    The slash also moves the well-known route, since the SDK derives that path
+    from the resource URL's own path: the document is served at
+    ``/.well-known/oauth-protected-resource/mcp/`` and the unslashed path answers
+    ``307``. That is the SDK's behavior, not something this package chooses, and it
+    is the reason a deployment should configure the URL exactly as it means to
+    advertise it.
+    """
+    settings = remote_rs_settings().model_copy(
+        update={
+            "rs": ResourceServerSettings(resource_server_url=f"{RS_RESOURCE}/"),
+            "jwt": JwtValidationSettings(
+                issuer_url=f"{RS_ISSUER}/", jwks_uri=RS_JWKS_URI
+            ),
+        }
+    )
+    app = build_pipefy_mcp_server(settings)
+    async with _asgi_client(app) as client:
+        unslashed = await client.get("/.well-known/oauth-protected-resource/mcp")
+        resp = await client.get("/.well-known/oauth-protected-resource/mcp/")
+    assert unslashed.status_code == 307
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["resource"] == f"{RS_RESOURCE}/"
+    assert f"{RS_ISSUER}/" in body["authorization_servers"]
+
+
+# --- transport allowlist (DNS-rebinding) reaches the transport ----
 
 _PUBLIC_HOST_PING = {
     "json": {"jsonrpc": "2.0", "method": "ping", "id": 1},
@@ -623,25 +693,37 @@ _PUBLIC_HOST_PING = {
 
 
 @pytest.mark.unit
-def test_build_passes_the_runtimes_none_transport_security_to_fastmcp(mocked_runtime):
-    """When the runtime built no allowlist, FastMCP keeps its own loopback default."""
-    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
-        build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
-    assert mock_fastmcp.call_args.kwargs["transport_security"] is None
+def test_unconfigured_allowlist_resolves_to_none(mocked_runtime):
+    """Nothing configured yields no allowlist, so the SDK keeps its loopback default.
+
+    The allowlist is not a constructor argument: the SDK takes it per transport, on
+    ``streamable_http_app()``. What the build must get right is the resolution, and
+    that a ``None`` reaches the transport unchanged so the SDK's own default applies.
+    """
+    assert transport_security_for(_MINIMAL_PIPEFY_SETTINGS) is None
 
 
 @pytest.mark.unit
-def test_build_passes_the_runtimes_allowlist_to_fastmcp(mocked_runtime):
-    """The allowlist the runtime built reaches the FastMCP constructor verbatim."""
-    mocked_runtime.transport_security = build_transport_security(
-        McpSettings(allowed_hosts=["mcp.pipefy.com"]), None
+def test_configured_allowlist_reaches_the_transport_call(mocked_runtime):
+    """A configured allowlist is resolved once and forwarded to the transport verbatim."""
+    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+        update={"mcp": McpSettings(allowed_hosts=["mcp.pipefy.com"])}
     )
-    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
-        build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
-    assert (
-        mock_fastmcp.call_args.kwargs["transport_security"]
-        is mocked_runtime.transport_security
-    )
+    resolved = transport_security_for(settings)
+    assert resolved is not None
+    assert "mcp.pipefy.com" in resolved.allowed_hosts
+
+    fake_app = MagicMock()
+    with (
+        patch("pipefy_mcp.server.configure_observability_logging"),
+        patch("pipefy_mcp.server.wire_hosted_observability") as mock_wire,
+        patch("uvicorn.Config"),
+        patch("uvicorn.Server") as mock_server_cls,
+    ):
+        mock_server_cls.return_value.serve = AsyncMock()
+        asyncio.run(_serve_streamable_http(fake_app, settings, resolved))
+
+    assert mock_wire.call_args.kwargs["transport_security"] is resolved
 
 
 @pytest.mark.unit
@@ -649,7 +731,7 @@ async def test_http_loopback_default_rejects_a_public_host(mocked_runtime):
     """The default (loopback-only) allowlist answers 421 to a public Host header.
 
     This is the behavior a fronted deployment hits before the allowlist is
-    configured: FastMCP auto-enables the loopback allowlist on the 127.0.0.1
+    configured: MCPServer auto-enables the loopback allowlist on the 127.0.0.1
     construction host, so a proxied public Host is a DNS-rebinding rejection.
     """
     app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
@@ -665,10 +747,10 @@ async def test_http_configured_allowlist_accepts_a_public_host(mocked_runtime):
     It no longer 421s; it reaches the transport handler (which then fails on the
     missing session, not on DNS-rebinding), proving the allowlist widened the gate.
     """
-    mocked_runtime.transport_security = build_transport_security(
+    allowlist = build_transport_security(
         McpSettings(allowed_hosts=["mcp.pipefy.com"]), None
     )
     app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
-    async with _serving_asgi_client(app) as client:
+    async with _serving_asgi_client(app, allowlist) as client:
         resp = await client.post("/mcp", **_PUBLIC_HOST_PING)
     assert resp.status_code != 421

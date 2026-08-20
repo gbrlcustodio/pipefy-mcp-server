@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.shared.exceptions import NoBackChannelError
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     CardSearch,
@@ -34,6 +34,7 @@ from pipefy_mcp.core.tool_error_envelope import (
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
+    ensure_non_empty_error_message,
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
     handle_tool_graphql_error,
@@ -46,6 +47,7 @@ from pipefy_mcp.tools.pagination_helpers import (
 )
 from pipefy_mcp.tools.phase_transition_helpers import (
     try_enrich_move_card_to_phase_failure,
+    try_enrich_required_field_move_failure,
 )
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
@@ -86,7 +88,7 @@ class PipeTools:
     """Declares tools to be used in the Pipe context."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register the tools in the MCP server"""
 
         @mcp.tool(
@@ -94,7 +96,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def create_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             title: str | None = None,
             fields: dict[str, Any] | None = None,
@@ -112,6 +114,20 @@ class PipeTools:
             When ``skip_elicitation`` is False (default) and the client supports
             elicitation, an interactive form is presented even if ``fields``
             carries pre-filled values — the human can review and adjust them.
+
+            On ambiguous failure (empty or unclear ``error.message``), re-read
+            ``get_cards`` / ``get_phase_cards_count`` before retrying; do not
+            blind-retry creates (``CreateCardInput`` has no ``idempotency_key``).
+
+            A form is only possible when the connection can carry a
+            server-to-client request. It cannot on protocol revision 2026-07-28,
+            on a stateless HTTP transport, or on a deployment serving
+            ``json_response=True`` (which the hosted server does). There the tool
+            takes the ``skip_elicitation`` path instead, without saying so in the
+            result: ``fields`` is sent as given, so an omitted ``fields`` sends no
+            values at all and the API decides whether its required fields were
+            satisfied. A caller that cannot be sure of the client's channel should
+            discover the fields first and pass every required value.
 
             Without ``phase_id``, discover start-form fields via
             ``get_start_form_fields`` and pass all required values.
@@ -153,6 +169,17 @@ class PipeTools:
             client = get_pipefy_client(ctx)
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            if not can_elicit and not skip_elicitation:
+                # Logged for the same reason the NoBackChannelError absorb in
+                # _elicit_field_details logs: a caller asked for a form and the
+                # result cannot say it never appeared.
+                await ctx.debug(
+                    "Elicitation unavailable: no interactive form for this "
+                    "connection; proceeding with the supplied fields"
+                )
+            # Stays None when elicitation is skipped or the connection turns out
+            # to have no back channel; either way the supplied fields are used.
+            elicited: dict[str, Any] | None = None
 
             if phase_id is not None:
                 phase_id_str, phase_err = validate_tool_id(phase_id, "phase_id")
@@ -200,6 +227,8 @@ class PipeTools:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
+
+                if elicited is not None:
                     merged_source = {**(fields or {}), **elicited}
                     card_data = _merge_phase_and_start_form_field_values(
                         merged_source,
@@ -231,7 +260,7 @@ class PipeTools:
 
                 if can_elicit and not skip_elicitation:
                     try:
-                        card_data = await PipeTools._elicit_field_details(
+                        elicited = await PipeTools._elicit_field_details(
                             message=f"Creating a card in pipe {pipe_id}",
                             prefilled_fields=fields,
                             expected_fields=expected_fields,
@@ -241,6 +270,9 @@ class PipeTools:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
+
+                if elicited is not None:
+                    card_data = elicited
                 elif expected_fields:
                     card_data = _filter_fields_by_definitions(
                         card_data, expected_fields
@@ -261,7 +293,13 @@ class PipeTools:
                 error_text = str(exc)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
-                return tool_error(error_text)
+                return tool_error(
+                    ensure_non_empty_error_message(
+                        error_text,
+                        "Failed to create card. Re-read get_cards or "
+                        "get_phase_cards_count before retrying; do not blind-retry.",
+                    )
+                )
             card_data_node = (result.get("createCard") or {}).get("card")
             card_id = (
                 card_data_node.get("id") if isinstance(card_data_node, dict) else None
@@ -286,16 +324,20 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             include_fields: bool = False,
             debug: bool = False,
         ) -> dict:
-            """Load one card by ID for title, phase, assignees, labels, and optional field values.
+            """Load one card by ID for title, current phase, pipe, and optional field values.
 
             Use this to inspect a card before updates, after ``find_cards`` / ``get_cards``,
             or when the user references a card by ID. Set ``include_fields`` when you need
             custom field ``name``/``value`` pairs for forms or automation.
+
+            Does not return labels or assignees. Those are card attributes, not ``fields``.
+            Read current label ids via ``execute_graphql`` (``card(id: ...) { labels { id } }``)
+            before ``update_card(label_ids=...)``.
 
             Args:
                 card_id: Pipefy card ID (string or positive integer).
@@ -304,8 +346,8 @@ class PipeTools:
                 debug: When True, append GraphQL codes and correlation_id on errors.
 
             Returns:
-                dict: GraphQL ``card`` query payload (typically ``card`` with ``id``, ``title``,
-                ``phase``, ``assignees``, ``labels``, and—when requested—``fields``).
+                dict: GraphQL ``card`` payload with ``id``, ``uuid``, ``title``, ``pipe``,
+                ``current_phase``, and—when ``include_fields`` is true—``fields``.
             """
             client = get_pipefy_client(ctx)
             await ctx.debug(f"get_card: card_id={card_id}")
@@ -330,7 +372,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_card_relations(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -394,7 +436,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def add_card_comment(
-            card_id: PipefyId, text: str, ctx: Context[ServerSession, None]
+            card_id: PipefyId, text: str, ctx: Context
         ) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
 
@@ -432,7 +474,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def update_comment(
-            comment_id: PipefyId, text: str, ctx: Context[ServerSession, None]
+            comment_id: PipefyId, text: str, ctx: Context
         ) -> UpdateCommentPayload:
             """Update an existing comment by its ID.
 
@@ -471,21 +513,20 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_comment(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             comment_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> DeleteCommentPayload:
             """Delete a comment from Pipefy.
 
-            Two-step operation:
-
-            1. **Preview** — call with ``confirm=False`` (default). Returns a preview payload;
-               nothing is deleted. Elicitation is **not** used to authorize deletion.
-            2. **Execute** — call again with ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 comment_id: The ID of the comment to delete.
-                confirm: Must be ``True`` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             try:
@@ -500,6 +541,9 @@ class PipeTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"comment (ID: {delete_input.comment_id})",
+                resource_identity={"comment_id": delete_input.comment_id},
+                tool_name="delete_comment",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -521,18 +565,18 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_card_relation(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             child_id: PipefyId,
             parent_id: PipefyId,
             source_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict:
             """Remove a link between two related cards.
 
             ``source_id`` is the **pipe relation** id from ``get_pipe_relations`` (same as
-            ``create_card_relation``). Two-step flow: preview with ``confirm=False`` (default),
-            then execute with ``confirm=True`` after explicit approval.
+            ``create_card_relation``). Echo ``confirmation_token`` from the preview on step 2.
 
             The ``deleteCardRelation`` mutation is only available on the Internal API,
             not the public GraphQL schema; it runs with the session's credential like
@@ -542,7 +586,8 @@ class PipeTools:
                 child_id: Child card ID in the relation.
                 parent_id: Parent card ID in the relation.
                 source_id: Pipe relation ID defining the pipe-to-pipe link.
-                confirm: Must be ``True`` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
 
             Returns:
@@ -570,6 +615,13 @@ class PipeTools:
                 resource_descriptor=(
                     f"card relation (child: {cid}, parent: {pid}, source: {sid})"
                 ),
+                resource_identity={
+                    "child_id": cid,
+                    "parent_id": pid,
+                    "source_id": sid,
+                },
+                tool_name="delete_card_relation",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -602,7 +654,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_cards(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             title: str | None = None,
             search: CardSearch | None = None,
@@ -680,7 +732,7 @@ class PipeTools:
             pipe_id: PipefyId,
             field_id: str,
             field_value: str,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             include_fields: bool = False,
             first: int | None = None,
             after: str | None = None,
@@ -740,7 +792,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_pipe(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -783,7 +835,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_labels(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -837,7 +889,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_pipe_members(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict:
@@ -878,13 +930,15 @@ class PipeTools:
         async def move_card_to_phase(
             card_id: PipefyId,
             destination_phase_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
         ) -> dict:
             """Move a card to a target phase (Kanban column) within the same pipe.
 
             Use this when the workflow should advance or regress a card. On failure, if the
             destination is not among allowed targets for the card's current phase, the tool may
             return ``success: false`` with ``valid_destinations`` instead of only the raw API error.
+            On required-field failures, it may return ``success: false`` naming the field (and a
+            hint when a field condition may hide that still-required field).
 
             Args:
                 card_id: The card to move.
@@ -896,7 +950,8 @@ class PipeTools:
             Returns:
                 dict: Pipefy move mutation response on success. On some validation failures,
                 a structured payload with ``success: false`` and ``valid_destinations`` when the
-                destination phase is not allowed from the current phase.
+                destination phase is not allowed from the current phase, or ``success: false``
+                naming a blocking required field when that pattern is detected.
             """
             client = get_pipefy_client(ctx)
             try:
@@ -909,6 +964,13 @@ class PipeTools:
                 )
                 if enriched is not None:
                     return enriched
+                required_enriched = await try_enrich_required_field_move_failure(
+                    client,
+                    card_id,
+                    str(exc),
+                )
+                if required_enriched is not None:
+                    return required_enriched
                 raise exc
 
         @mcp.tool(
@@ -919,13 +981,27 @@ class PipeTools:
             card_id: PipefyId,
             field_id: str,
             new_value: Any,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             debug: bool = False,
         ) -> dict:
             """Update a single field of a card.
 
             Use this tool for simple, single-field updates. The entire field value
             will be replaced with the new value provided.
+
+            **List-valued fields (connections, attachments, checklists):**
+            never assume append. Prefer ``update_card`` with ``field_updates`` and
+            ``operation`` ``"ADD"`` or ``"REMOVE"`` (``updateFieldsValues``) so you only send
+            the item(s) to add or remove. This tool's ``new_value`` replaces the **entire**
+            list. Pipe labels and assignees are card attributes (``update_card``
+            ``label_ids`` / ``assignee_ids``), not fields — ``field_updates`` cannot
+            address them. For connector/connection fields the list must be related card
+            **ids**, not display titles; ``get_card(include_fields=true)`` returns connector
+            ``value`` as display titles only (not ids), so do not rebuild from that
+            ``value`` — read ids via ``get_card_relations`` (or GraphQL ``array_value``).
+            Concurrent full-list rewrites can still drop items. To *write* links through a
+            pipe relation (not a connector field), use ``create_card_relation`` /
+            ``delete_card_relation``.
 
             **Not for automations:** if/then rules that stamp or copy dynamic values on cards
             (``%{id}``, ``%{created_at}``, ``%{automation_event_execution_datetime}``, etc.) belong in
@@ -962,7 +1038,7 @@ class PipeTools:
         )
         async def update_card(
             card_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             title: str | None = None,
             assignee_ids: list[PipefyId] | None = None,
             label_ids: list[PipefyId] | None = None,
@@ -978,6 +1054,11 @@ class PipeTools:
 
             **Field Mode** (uses `updateFieldsValues` mutation):
             For updating custom fields via field_updates list.
+
+            The two modes are exclusive: if ``field_updates`` is present, Field Mode
+            runs and ``title``, ``assignee_ids``, ``label_ids``, and ``due_date`` are
+            discarded. Pipe labels and assignees are card attributes, not list-valued
+            fields — pass ``label_ids`` / ``assignee_ids``, not ``field_updates``.
 
             If field_updates is empty or omitted, only card attributes will be updated.
 
@@ -1024,7 +1105,7 @@ class PipeTools:
         )
         async def get_start_form_fields(
             pipe_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             required_only: bool = False,
         ) -> dict:
             """Get the start form fields of a pipe.
@@ -1060,7 +1141,7 @@ class PipeTools:
         )
         async def get_phase_fields(
             phase_id: PipefyId,
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             required_only: bool = False,
         ) -> dict:
             """Get the fields available in a specific phase.
@@ -1096,7 +1177,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def fill_card_phase_fields(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             phase_id: PipefyId,
             fields: dict[str, Any] | None = None,
@@ -1112,6 +1193,14 @@ class PipeTools:
             When ``skip_elicitation`` is False (default) and the client supports
             elicitation, an interactive form is presented — ``fields`` pre-fills
             it so the human can review and adjust.
+
+            A form is only possible when the connection can carry a
+            server-to-client request. It cannot on protocol revision 2026-07-28,
+            on a stateless HTTP transport, or on a deployment serving
+            ``json_response=True`` (which the hosted server does). There the tool
+            takes the ``skip_elicitation`` path instead: only ``fields`` is sent,
+            so an omitted ``fields`` collects nothing and the result reports that
+            no values were collected rather than that the card was updated.
 
             Args:
                 card_id: The ID of the card to update.
@@ -1146,10 +1235,19 @@ class PipeTools:
 
             field_data = fields or {}
             can_elicit = supports_elicitation(ctx)
+            if not can_elicit and not skip_elicitation:
+                # Logged for the same reason the NoBackChannelError absorb in
+                # _elicit_field_details logs: a caller asked for a form and the
+                # result cannot say it never appeared.
+                await ctx.debug(
+                    "Elicitation unavailable: no interactive form for this "
+                    "connection; proceeding with the supplied fields"
+                )
 
+            elicited: dict[str, Any] | None = None
             if can_elicit and expected_fields and not skip_elicitation:
                 try:
-                    field_data = await PipeTools._elicit_field_details(
+                    elicited = await PipeTools._elicit_field_details(
                         message=f"Filling fields for phase '{phase_name}' (ID: {phase_id})",
                         prefilled_fields=fields,
                         expected_fields=expected_fields,
@@ -1159,13 +1257,31 @@ class PipeTools:
                     return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
+
+            if elicited is not None:
+                field_data = elicited
             elif expected_fields:
                 field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
             if not field_data:
+                if expected_fields:
+                    # The phase does have editable fields, so "No fields to
+                    # update." would be false: values were needed and none were
+                    # collected. Reachable when no form could be shown and the
+                    # caller passed no fields, or when every key it passed was
+                    # dropped by the editable-field filter. An agent reading only
+                    # the message must not conclude the card is complete.
+                    message = (
+                        "No field values were collected, so nothing was updated. "
+                        f"Phase '{phase_name}' has {len(expected_fields)} editable "
+                        "field(s); pass 'fields' keyed by the IDs from "
+                        "get_phase_fields(phase_id)."
+                    )
+                else:
+                    message = "No fields to update."
                 return {
                     "success": True,
-                    "message": "No fields to update.",
+                    "message": message,
                     "phase_id": phase_id,
                     "phase_name": phase_name,
                 }
@@ -1187,7 +1303,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def search_pipes(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_name: str | None = None,
             max_pipes_per_org: int = 500,
         ) -> dict:
@@ -1208,6 +1324,12 @@ class PipeTools:
             if ``pipesCount`` exceeds the number of pipes returned, or if ``pipesCount``
             is missing and the org returned ``max_pipes_per_org`` pipes (conservative:
             the full org list may be larger).
+
+            Results are also membership shaped: each organization returns only the
+            pipes the calling identity is a member of, so the list can fall below
+            the org-wide ``pipesCount`` even when nothing was truncated. Membership
+            and truncation are separate causes. See
+            ``docs/mcp/tools/organization.md``.
 
             Args:
                 pipe_name: Optional pipe name to search for (case-insensitive partial match).
@@ -1238,23 +1360,22 @@ class PipeTools:
             meta=REMOTE,
         )
         async def delete_card(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             card_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> DeleteCardPayload:
             """Delete a card from Pipefy.
 
-            Two-step operation:
-
-            1. **Preview** — call with ``confirm=False`` (default). Returns a preview payload;
-               nothing is deleted. Elicitation is **not** used to authorize deletion (automated
-               clients may auto-accept prompts).
-            2. **Execute** — call again with ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Elicitation is **not**
+            used to authorize deletion (automated clients may auto-accept prompts).
 
             Args:
                 card_id: The ID of the card to delete.
-                confirm: Must be ``True`` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When true, appends GraphQL error codes and correlation_id to the error message.
 
             Returns:
@@ -1291,6 +1412,9 @@ class PipeTools:
                 resource_descriptor=(
                     f"card '{card_title}' (ID: {card_id_str}) from pipe '{pipe_name}'"
                 ),
+                resource_identity={"card_id": card_id_str},
+                tool_name="delete_card",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -1333,18 +1457,42 @@ class PipeTools:
         message: str,
         prefilled_fields: dict[str, Any] | None,
         expected_fields: list,
-        ctx: Context[ServerSession, None],
-    ) -> dict:
-        """Handle interactive field elicitation."""
+        ctx: Context,
+    ) -> dict | None:
+        """Handle interactive field elicitation.
+
+        Returns the accepted field values, or ``None`` when the connection
+        cannot carry a server-initiated request. A caller that gets ``None``
+        proceeds with the values it was already given, exactly as it does for a
+        client that advertises no elicitation support.
+
+        ``supports_elicitation`` already gates on the back channel, so ``None``
+        is the residual case: the channel can also close between that check and
+        the request (the inbound request finishing closes its dispatch context),
+        and a session shape that does not expose ``can_send_request`` passes the
+        gate unmeasured. Letting ``NoBackChannelError`` escape instead would
+        leave the tool as a JSON-RPC protocol error rather than a tool result.
+
+        Raises:
+            MalformedFieldDefinitionError: ``expected_fields`` cannot be turned
+                into a form model.
+            UserCancelledError: The user declined or cancelled the form.
+        """
         DynamicFormModel = create_form_model(expected_fields, prefilled_fields)
         await ctx.debug(
             f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
         )
 
-        result = await ctx.elicit(
-            message=message,
-            schema=DynamicFormModel,
-        )
+        try:
+            result = await ctx.elicit(
+                message=message,
+                schema=DynamicFormModel,
+            )
+        except NoBackChannelError:
+            await ctx.debug(
+                "Elicitation skipped: connection has no server-to-client back channel"
+            )
+            return None
         await ctx.debug(f"Elicited result: {result}")
 
         if result.action != "accept":

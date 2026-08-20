@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 from pipefy_sdk.models.portal import (
@@ -36,12 +35,14 @@ from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
+_PORTAL_READ_FAILED = "Portal request failed."
+
 
 class PortalTools:
     """Registers MCP tools for portal read, metadata CRUD, and page operations."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register portal-related tools on the MCP server."""
 
         @mcp.tool(
@@ -49,7 +50,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def list_portals(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             organization_uuid: PipefyId,
             search_term: str | None = None,
         ) -> dict[str, Any]:
@@ -81,7 +82,9 @@ class PortalTools:
                     organization_uuid, search_term=search_term
                 )
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(
+                    map_portal_error_to_message(exc, empty_fallback=_PORTAL_READ_FAILED)
+                )
             return build_success_payload({"portals": portals}, include_parsed=True)
 
         @mcp.tool(
@@ -89,7 +92,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def get_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
         ) -> dict[str, Any]:
             """Fetch a portal by UUID with pages, elements, and sub-portals.
@@ -118,7 +121,9 @@ class PortalTools:
             try:
                 portal = await client.get_portal(portal_uuid)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(
+                    map_portal_error_to_message(exc, empty_fallback=_PORTAL_READ_FAILED)
+                )
             return build_success_payload(portal, include_parsed=True)
 
         @mcp.tool(
@@ -126,7 +131,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def create_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             organization_uuid: PipefyId,
         ) -> dict[str, Any]:
             """Create or fetch the organization's main portal (idempotent).
@@ -156,7 +161,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             name: str | None = None,
             visibility: PortalVisibility | None = None,
@@ -222,19 +227,20 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a portal interface (irreversible).
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 portal_uuid: Portal interface UUID to delete.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
@@ -245,6 +251,9 @@ class PortalTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"portal (UUID: {portal_uuid})",
+                resource_identity={"portal_uuid": portal_uuid},
+                tool_name="delete_portal",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -267,7 +276,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def create_portal_page(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             title: str,
             description: str | None = None,
@@ -322,7 +331,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_portal_page(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             page_id: str,
             title: str | None = None,
@@ -391,20 +400,22 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_portal_page(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             page_id: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a portal page (irreversible).
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 portal_uuid: Parent portal interface UUID.
                 page_id: Page UUID to delete.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
@@ -422,6 +433,9 @@ class PortalTools:
                 resource_descriptor=(
                     f"portal page (UUID: {page_id}) in portal (UUID: {portal_uuid})"
                 ),
+                resource_identity={"page_id": page_id, "portal_uuid": portal_uuid},
+                tool_name="delete_portal_page",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -444,7 +458,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def sort_portal_pages(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             page_ids: list[str],
         ) -> dict[str, Any]:
@@ -491,7 +505,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_portal_page_layout(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             page_id: str,
             layout: dict[str, Any],
         ) -> dict[str, Any]:
@@ -525,7 +539,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def create_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             page_id: str,
             type: PortalElementType,
             metadata: dict[str, Any],
@@ -598,7 +612,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             element_id: str,
             page_id: str,
             type: PortalElementType,
@@ -673,20 +687,22 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             element_id: str,
             page_id: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a portal page element (irreversible).
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute
-            with ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 element_id: Element UUID to delete.
                 page_id: Parent page UUID.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             element_id, err = validate_tool_id(element_id, "element_id")
@@ -704,6 +720,9 @@ class PortalTools:
                 resource_descriptor=(
                     f"portal element (UUID: {element_id}) on page (UUID: {page_id})"
                 ),
+                resource_identity={"element_id": element_id, "page_id": page_id},
+                tool_name="delete_portal_element",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -726,7 +745,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def duplicate_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             element_id: str,
             portal_uuid: str,
             page_id: str,
@@ -771,7 +790,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def create_sub_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             main_portal_uuid: str,
             name: str | None = None,
         ) -> dict[str, Any]:
@@ -810,7 +829,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def update_sub_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             element_id: str,
             sub_portal_uuid: str,
@@ -857,7 +876,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def publish_sub_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             element_id: str,
             sub_portal_uuid: str,
@@ -902,7 +921,7 @@ class PortalTools:
             meta=REMOTE,
         )
         async def unpublish_sub_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             element_id: str,
         ) -> dict[str, Any]:
@@ -946,21 +965,23 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_sub_portal_element(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             portal_uuid: str,
             element_id: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Detach sub-portal wiring from a main portal page element.
 
-            Two-step operation: preview with ``confirm=False`` (default), then
-            execute with ``confirm=True`` after explicit human approval. Uses
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2. Uses
             ``deleteSubPortalElement`` (internal API).
 
             Args:
                 portal_uuid: Main portal interface UUID.
                 element_id: Page element UUID to detach.
-                confirm: Set to True to execute the detach (step 2).
+                confirm: Set to True with the preview token to execute the detach (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             ids, err = validate_tool_ids(
@@ -979,6 +1000,12 @@ class PortalTools:
                     f"sub-portal element link (element UUID: {ids['element_id']}) "
                     f"in portal (UUID: {ids['portal_uuid']})"
                 ),
+                resource_identity={
+                    "element_id": ids["element_id"],
+                    "portal_uuid": ids["portal_uuid"],
+                },
+                tool_name="delete_sub_portal_element",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
@@ -1008,19 +1035,21 @@ class PortalTools:
             meta=REMOTE,
         )
         async def delete_sub_portal(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             sub_portal_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a sub-portal entity (irreversible).
 
-            Two-step operation: preview with ``confirm=False`` (default), then
-            execute with ``confirm=True`` after explicit human approval.
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
             Removes the sub-portal interface via ``deleteSubPortalInterface``.
 
             Args:
                 sub_portal_uuid: Sub-portal UUID to delete permanently.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             ids, err = validate_tool_ids({"sub_portal_uuid": sub_portal_uuid})
@@ -1033,6 +1062,9 @@ class PortalTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"sub-portal (UUID: {ids['sub_portal_uuid']})",
+                resource_identity={"sub_portal_uuid": ids["sub_portal_uuid"]},
+                tool_name="delete_sub_portal",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

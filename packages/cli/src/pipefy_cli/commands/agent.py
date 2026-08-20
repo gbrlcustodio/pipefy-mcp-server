@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import typer
@@ -109,6 +110,14 @@ def agent_create(
         "--data-sources",
         help="Optional JSON array of knowledge-source id strings.",
     ),
+    active: bool = typer.Option(
+        True,
+        "--active/--inactive",
+        help=(
+            "Create enabled (default) or inactive. --inactive sets disabled_at on "
+            "create and the chained update so the second step does not revive."
+        ),
+    ),
     strict_unknown: bool = typer.Option(
         True,
         "--strict/--no-strict",
@@ -121,7 +130,12 @@ def agent_create(
         False, "--json", "-j", help="Print machine-readable JSON to stdout."
     ),
 ) -> None:
-    """Create and configure an AI agent (``create_ai_agent`` + ``update_ai_agent`` chain)."""
+    """Create and configure an AI agent (``create_ai_agent`` + ``update_ai_agent`` chain).
+
+    Agents are active by default. Pass ``--inactive`` to start disabled. Confirm
+    status from the response ``disabled_at`` / ``active`` fields. To change status
+    later, use ``pipefy agent toggle`` (routine update preserves disabled state).
+    """
     behavior_list = _parse_behaviors_json(behaviors)
     ds_raw = parse_json_value(data_sources, "--data-sources") if data_sources else None
     data_source_ids: list[str] = []
@@ -131,6 +145,7 @@ def agent_create(
         data_source_ids = list(ds_raw)
 
     inst = normalize_pipefy_ai_instruction_tokens(instruction.strip())
+    disabled_at = None if active else datetime.now(timezone.utc).isoformat()
     try:
         expanded = expand_behaviors_placeholders(behavior_list)
         validated = CreateAiAgentInput(
@@ -139,6 +154,7 @@ def agent_create(
             instruction=inst,
             behaviors=expanded,
             data_source_ids=data_source_ids,
+            disabled_at=disabled_at,
         )
     except ValidationError as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -160,12 +176,17 @@ def agent_create(
             instruction=validated.instruction,
             behaviors=validated.behaviors,
             data_source_ids=validated.data_source_ids,
+            disabled_at=validated.disabled_at,
+            preserve_disabled_at=False,
         )
-        await client.update_ai_agent(update_input)
+        update_result = await client.update_ai_agent(update_input)
+        result_disabled_at = update_result.get("disabled_at")
         out: dict[str, Any] = {
             "success": True,
             "agent_uuid": agent_uuid,
             "message": f"Created agent {agent_uuid}",
+            "disabled_at": result_disabled_at,
+            "active": update_result.get("active", result_disabled_at is None),
         }
         if pre.get("warnings"):
             out["preflight"] = pre
@@ -196,6 +217,14 @@ def agent_update(
         "--data-sources",
         help="Optional JSON array of knowledge-source id strings.",
     ),
+    disabled_at: str | None = typer.Option(
+        None,
+        "--disabled-at",
+        help=(
+            "Optional ISO-8601 disabledAt from agent get. Pass through to skip the "
+            "preserve re-read; omit to let the SDK preserve."
+        ),
+    ),
     strict_unknown: bool = typer.Option(
         True,
         "--strict/--no-strict",
@@ -206,7 +235,14 @@ def agent_update(
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Replace AI agent configuration (``update_ai_agent``)."""
+    """Replace AI agent configuration (``update_ai_agent``).
+
+    Full-replace of behaviors; does not intentionally reactivate a disabled agent.
+    Pass ``--disabled-at`` from ``agent get`` (``disabledAt``) to preserve without an
+    extra read. Use ``pipefy agent toggle`` to change active status. Confirm status
+    from the response ``disabled_at`` / ``active`` fields. To re-read via ``agent get``,
+    use agent ``disabledAt`` (null means active).
+    """
     behavior_list = _parse_behaviors_json(behaviors)
     ds_raw = parse_json_value(data_sources, "--data-sources") if data_sources else None
     data_source_ids: list[str] = []
@@ -225,6 +261,7 @@ def agent_update(
             instruction=inst,
             behaviors=expanded,
             data_source_ids=data_source_ids,
+            disabled_at=disabled_at.strip() if disabled_at else None,
         )
     except ValidationError as exc:
         raise typer.BadParameter(str(exc)) from exc

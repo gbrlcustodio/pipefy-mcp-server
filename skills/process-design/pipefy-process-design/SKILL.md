@@ -22,8 +22,8 @@ This skill activates when the user wants **consulting help** to design a process
 |--------|----------|
 | "Help me design a process for X" | **Use this skill** — consulting mode. |
 | "What's the best structure for Y?" | **Use this skill** — architecture guidance. |
-| "Create a pipe for X" | **Skip this skill** — execute with `pipes-and-cards`. |
-| User provides phases, fields, or a spec | **Skip this skill** — the spec IS the plan. Build it. |
+| "Create a pipe for X" | **Skip this skill** — route via `pipefy-building`, then the domain skill. |
+| User provides phases, fields, or a spec | **Skip this skill** — the spec IS the plan. Route via `pipefy-building`, then build. |
 
 ---
 
@@ -115,6 +115,7 @@ Next step: [execute with pipes-and-cards skill? or more questions?]
 
 ## See also
 
+- [pipefy-building](../../building/pipefy-building/SKILL.md) — for execution / build asks, read the router then the domain skill (do not expand this consulting skill into a build playbook).
 - `skills/pipes-and-cards/` — execute the design once finalized.
 - `skills/automations/` — add automation rules to the new pipe.
 - `skills/process-intelligence/` — analyze an existing process for improvement (distinct from designing new).

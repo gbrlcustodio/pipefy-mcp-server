@@ -18,6 +18,7 @@ Link processes and cards across workflows. **8 MCP tools.**
 - **Pipe relations** define parent/child structure between pipes (who connects to whom, constraints, auto-fill). Use `get_pipe_relations` on a pipe to list relation IDs and metadata.
 - **Card relations** connect individual cards through an existing pipe relation: pass `source_id` = the pipe relation's ID (from `get_pipe_relations`). Default `sourceType` is `PipeRelation`; use `extra_input` (e.g., `sourceType: Field`) when the API requires a field-based link — see `introspect_type` on `CreateCardRelationInput`.
 - **Table relations** in GraphQL are loaded by table-relation ID, not by database table ID: `get_table_relations` takes a non-empty list of those IDs.
+- **Connector fields** are card fields (connection type), not pipe relations for *writes*. Prefer `update_card` + `field_updates` with `operation` ADD/REMOVE (related **card ids**). `update_card_field` is **replace-all** of the full id list; `get_card` `value` is display titles only — do not rebuild from it. This skill's `get_card_relations` still **reads** connector-field links (with card ids). `create_card_relation` / `delete_card_relation` write links through a pipe relation and are incremental — pick the surface that matches the link type.
 
 ---
 
@@ -28,11 +29,13 @@ Link processes and cards across workflows. **8 MCP tools.**
 | `get_pipe_relations` | `pipefy relation pipe list --pipe <id>` | Yes | List pipe-to-pipe relations for a pipe. |
 | `create_pipe_relation` | `pipefy relation pipe create` | No | Create a new pipe-to-pipe relation. |
 | `update_pipe_relation` | `pipefy relation pipe update <id>` | No | Change relation config (auto-fill, constraints). |
-| `delete_pipe_relation` | `pipefy relation pipe delete <id>` | No | **Two-step destructive.** |
+| `delete_pipe_relation` | `pipefy relation pipe delete <id>` | No | **Two-step destructive.**[^mcp-confirm] |
 | `get_table_relations` | `pipefy relation table list --ids <id,...>` | Yes | Load table relations by relation ID. |
 | `get_card_relations` | `pipefy relation card list --card <id>` | Yes | List all card-to-card relations on a card. |
 | `create_card_relation` | `pipefy relation card create` | No | Link two cards through an existing pipe relation. |
-| `delete_card_relation` | `pipefy relation card delete <id>` | No | **Two-step destructive.** |
+| `delete_card_relation` | `pipefy relation card delete <id>` | No | **Two-step destructive.**[^mcp-confirm] |
+
+[^mcp-confirm]: MCP two-step: echo `confirmation_token` from the preview with `confirm=true`. CLI: `--yes`.
 
 ---
 
@@ -79,9 +82,10 @@ Link processes and cards across workflows. **8 MCP tools.**
 
 - **`create_card_relation` fails with "relation not found":** `source_id` must be the **pipe relation ID** (from `get_pipe_relations`), not the pipe ID. These are different values.
 - **Table relations return empty:** `get_table_relations` requires table-relation IDs, not table IDs. Get table-relation IDs from the table's connection config.
-- **`delete_pipe_relation` first call returns preview:** expected — show preview to user, then call with `confirm=true`.
+- **`delete_pipe_relation` first call returns preview:** expected. Show the preview to the user and get their approval, then call with `confirm=true` and the preview's `confirmation_token`.
 
 ## See also
 
-- `skills/pipes-and-cards/` — create the pipes and cards before linking them.
+- `skills/pipes-and-cards/` — create the pipes and cards before linking them; connector field updates and `update_card_field` replace-all live there.
+- `docs/mcp/tools/identifiers.md` — which args expect slug vs numeric id for field and relation tools.
 - `skills/introspection/` — discover `CreateCardRelationInput` when non-standard `sourceType` is needed.

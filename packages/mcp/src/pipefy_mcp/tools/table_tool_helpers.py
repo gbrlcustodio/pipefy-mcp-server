@@ -10,7 +10,6 @@ from pipefy_mcp.core.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
-from pipefy_mcp.tools.validation_helpers import format_json_preview
 
 
 class TableReadSuccessPayload(TypedDict):
@@ -24,14 +23,6 @@ class TableMutationSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
     result: dict[str, Any]
-
-
-class DeleteTablePreviewPayload(TypedDict):
-    success: Literal[False]
-    requires_confirmation: Literal[True]
-    table_id: str | int
-    message: str
-    table_summary: str
 
 
 class DeleteTableSuccessPayload(TypedDict):
@@ -117,39 +108,6 @@ def build_table_mutation_success_payload(
     )
 
 
-def build_delete_table_preview_payload(
-    *,
-    table_id: str | int,
-    table_name: str,
-    table_data: dict[str, Any],
-) -> DeleteTablePreviewPayload:
-    """Two-step delete: preview before ``confirm=True``.
-
-    Args:
-        table_id: Target table id.
-        table_name: Display name for messaging.
-        table_data: Subset serialized into ``table_summary``.
-    """
-    return {
-        "success": False,
-        "requires_confirmation": True,
-        "table_id": table_id,
-        "table_summary": format_json_preview(
-            {
-                "id": table_data.get("id"),
-                "name": table_name,
-                "description": table_data.get("description"),
-                "table_fields": table_data.get("table_fields"),
-            }
-        ),
-        "message": (
-            "⚠️ You are about to permanently delete database table "
-            f"'{table_name}' (ID: {table_id}). "
-            "This cannot be undone. Confirm with the user, then call again with confirm=True."
-        ),
-    }
-
-
 def build_delete_table_success_payload(
     *, table_id: str | int
 ) -> DeleteTableSuccessPayload:
@@ -226,12 +184,10 @@ def handle_table_tool_graphql_error(
 
 __all__ = [
     "DeleteTableErrorPayload",
-    "DeleteTablePreviewPayload",
     "DeleteTableSuccessPayload",
     "TableMutationSuccessPayload",
     "TableReadSuccessPayload",
     "build_delete_table_error_payload",
-    "build_delete_table_preview_payload",
     "build_delete_table_success_payload",
     "build_table_error_payload",
     "build_table_mutation_error_payload",

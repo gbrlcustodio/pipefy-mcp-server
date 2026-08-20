@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import classify_exception
 
@@ -23,6 +23,7 @@ from pipefy_mcp.core.tool_error_envelope import (
     tool_success,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
     validate_page_size,
@@ -35,6 +36,11 @@ _PROVIDER_ID_DISCOVERY_HINT = (
     "Use 'get_llm_providers' to list provider IDs for the organization."
 )
 
+_PROVIDER_REQUEST_FAILED = (
+    "LLM provider request failed. Re-read provider state before retrying; "
+    "do not blind-retry."
+)
+
 
 def _provider_tool_error_from_exception(
     exc: BaseException, *, not_found_hint: bool = True
@@ -43,21 +49,27 @@ def _provider_tool_error_from_exception(
 
     Uses the shared SDK classifier (``pipefy_sdk.classify_exception``) so the
     kind/code the CLI and probes see is the same one reported here. A
-    transport-level failure with no GraphQL errors falls back to ``str(exc)``.
-    ``not_found_hint`` scopes the id-discovery hint to the per-id tools; the
-    list tool passes False so its own failure never tells the caller to retry
-    the call that just failed.
+    transport-level failure with no GraphQL errors falls back to ``str(exc)``
+    (or a stable non-empty fallback when blank). ``not_found_hint`` scopes the
+    id-discovery hint to the per-id tools; the list tool passes False so its
+    own failure never tells the caller to retry the call that just failed.
     """
     problem = classify_exception(exc)
     if problem is None:
-        return tool_error(str(exc))
+        return tool_error(
+            ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
+        )
     message = problem.message
     if not_found_hint and problem.kind.value == "not_found":
         message = f"{message} {_PROVIDER_ID_DISCOVERY_HINT}"
     details: dict[str, Any] = {"kind": problem.kind.value}
     if problem.correlation_id:
         details["correlation_id"] = problem.correlation_id
-    return tool_error(message, code=problem.code, details=details)
+    return tool_error(
+        ensure_non_empty_error_message(message, _PROVIDER_REQUEST_FAILED),
+        code=problem.code,
+        details=details,
+    )
 
 
 def _blank_error(value: str, field: str) -> dict[str, Any] | None:
@@ -95,7 +107,7 @@ class LlmProviderTools:
     """Declares MCP tools for LLM provider discovery, writes, and the access probe."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register LLM provider tools on the MCP server."""
 
         @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)
@@ -346,7 +358,9 @@ class LlmProviderTools:
                     configuration_file_path=configuration_file_path.strip(),
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _provider_tool_error_from_exception(exc)
             return _provider_success(
@@ -398,7 +412,9 @@ class LlmProviderTools:
                     name=name,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _provider_tool_error_from_exception(exc)
             return _provider_success(
@@ -414,19 +430,20 @@ class LlmProviderTools:
             provider_id: str,
             organization_uuid: str,
             confirm: bool = False,
+            confirmation_token: str | None = None,
         ) -> dict[str, Any]:
             """Delete a custom (BYOM) LLM provider permanently. This action is irreversible. Requires manage_ai_providers and an eligible plan.
 
-            Two-step operation: preview with `confirm=False` (default), then execute
-            with `confirm=True` after explicit human approval. Elicitation does not
-            authorize deletion (only `confirm=True` does). Check
+            Two-step operation: preview with `confirm=False` (default), then echo
+            `confirmation_token` from the preview on step 2. Check
             `get_llm_provider_dependencies` first — owners that still reference the
             provider are blockers.
 
             Args:
                 provider_id: Provider ID to delete (from `get_llm_providers`).
                 organization_uuid: Organization UUID (not the numeric ID).
-                confirm: Must be `True` to run the delete mutation.
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
             """
             client = get_pipefy_client(ctx)
             provider_id, id_err = validate_tool_id(provider_id, "provider_id")
@@ -435,18 +452,25 @@ class LlmProviderTools:
             err = _blank_error(organization_uuid, "organization_uuid")
             if err is not None:
                 return err
+            organization_uuid = organization_uuid.strip()
 
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"LLM provider (ID: {provider_id})",
+                resource_identity={
+                    "provider_id": provider_id,
+                    "organization_uuid": organization_uuid,
+                },
+                tool_name="delete_llm_provider",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard
 
             try:
                 result = await client.delete_llm_provider(
-                    provider_id, organization_uuid.strip()
+                    provider_id, organization_uuid
                 )
             except Exception as exc:  # noqa: BLE001
                 return _provider_tool_error_from_exception(exc)
@@ -535,7 +559,9 @@ class LlmProviderTools:
                     system_provider_id=system_provider_id,
                 )
             except ValueError as exc:
-                return tool_error(str(exc))
+                return tool_error(
+                    ensure_non_empty_error_message(str(exc), _PROVIDER_REQUEST_FAILED)
+                )
             except Exception as exc:  # noqa: BLE001
                 return _provider_tool_error_from_exception(exc)
             return _provider_success(

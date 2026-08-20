@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
 from pipefy_mcp.tools.remote_profile import REMOTE, REMOTE_META_KEY, is_remote_tool
@@ -315,15 +315,15 @@ REMOTE_SEED = frozenset(
 )
 
 
-def _registry_with_all_tools() -> tuple[ToolRegistry, FastMCP]:
-    """Register every Pipefy tool on a real FastMCP, as the lifespan does."""
-    mcp = FastMCP("remote-profile-test")
+def _registry_with_all_tools() -> tuple[ToolRegistry, MCPServer]:
+    """Register every Pipefy tool on a real MCPServer, as the lifespan does."""
+    mcp = MCPServer("remote-profile-test")
     registry = ToolRegistry(mcp=mcp)
     registry.register_tools()
     return registry, mcp
 
 
-def _registered_names(mcp: FastMCP) -> set[str]:
+def _registered_names(mcp: MCPServer) -> set[str]:
     return {tool.name for tool in mcp._tool_manager.list_tools()}
 
 

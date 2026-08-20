@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import AutomationConditionInput, PipefyClient, PipefyGraphQLError
@@ -12,6 +12,7 @@ from pipefy_sdk import AutomationConditionInput, PipefyClient, PipefyGraphQLErro
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.automation_tools import AutomationTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -51,7 +52,6 @@ def automation_session(automation_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -81,7 +81,7 @@ async def test_get_automation_success(
     async with automation_session as session:
         result = await session.call_tool("get_automation", {"automation_id": "a1"})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.get_automation.assert_awaited_once_with("a1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -92,7 +92,6 @@ async def test_get_automation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -103,14 +102,13 @@ async def test_get_automation_graphql_error(
     async with automation_session as session:
         result = await session.call_tool("get_automation", {"automation_id": "x"})
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     assert "not found" in tool_error_message(p)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_not_found_returns_empty_data_and_message(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -119,7 +117,7 @@ async def test_get_automation_not_found_returns_empty_data_and_message(
     async with automation_session as session:
         result = await session.call_tool("get_automation", {"automation_id": "999"})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"] == {}
@@ -127,7 +125,6 @@ async def test_get_automation_not_found_returns_empty_data_and_message(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_rejects_empty_automation_id(
     automation_session, mock_automation_client
 ):
@@ -139,7 +136,6 @@ async def test_get_automation_rejects_empty_automation_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_rejects_non_positive_int_id(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -151,7 +147,6 @@ async def test_get_automation_rejects_non_positive_int_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automations_rejects_empty_string_filters(
     automation_session, mock_automation_client
 ):
@@ -166,7 +161,6 @@ async def test_get_automations_rejects_empty_string_filters(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_rejects_empty_name(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -188,7 +182,6 @@ async def test_create_automation_rejects_empty_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_rejects_non_dict_extra_input(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -212,7 +205,6 @@ async def test_create_automation_rejects_non_dict_extra_input(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_delete_automation_rejects_invalid_id(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -224,7 +216,6 @@ async def test_delete_automation_rejects_invalid_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automations_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -236,7 +227,7 @@ async def test_get_automations_success(
             "get_automations", {"organization_id": None, "pipe_id": "p9"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.get_automations.assert_awaited_once_with(
         organization_id=None, pipe_id="p9"
     )
@@ -246,7 +237,6 @@ async def test_get_automations_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automations_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -265,7 +255,6 @@ async def test_get_automations_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_actions_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -277,14 +266,13 @@ async def test_get_automation_actions_success(
             "get_automation_actions", {"pipe_id": "pipe-1"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.get_automation_actions.assert_awaited_once_with("pipe-1")
     assert extract_payload(result)["success"] is True
     assert extract_payload(result)["data"] == actions
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_actions_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -302,7 +290,6 @@ async def test_get_automation_actions_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_events_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -312,14 +299,13 @@ async def test_get_automation_events_success(
     async with automation_session as session:
         result = await session.call_tool("get_automation_events", {"pipe_id": "pipe-2"})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.get_automation_events.assert_awaited_once_with("pipe-2")
     assert extract_payload(result)["success"] is True
     assert extract_payload(result)["data"] == events
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_events_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -338,7 +324,6 @@ async def test_get_automation_events_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_event_attributes_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -356,14 +341,13 @@ async def test_get_automation_event_attributes_success(
     async with automation_session as session:
         result = await session.call_tool("get_automation_event_attributes", {})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.get_automation_event_attributes.assert_awaited_once_with()
     assert extract_payload(result)["success"] is True
     assert extract_payload(result)["data"] == attributes
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_read_automation_tools_have_read_only_hint(automation_session):
     async with automation_session as session:
         listed = await session.list_tools()
@@ -378,12 +362,11 @@ async def test_read_automation_tools_have_read_only_hint(automation_session):
     for name in names:
         tool = by_name[name]
         assert tool.annotations is not None
-        assert tool.annotations.readOnlyHint is True
-        assert tool.annotations.destructiveHint is False
+        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.destructive_hint is False
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -407,7 +390,7 @@ async def test_create_automation_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.create_automation.assert_awaited_once_with(
         "p1",
         "Notify",
@@ -428,7 +411,6 @@ async def test_create_automation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_passes_typed_condition(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -449,7 +431,7 @@ async def test_create_automation_passes_typed_condition(
                 },
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     sent = mock_automation_client.create_automation.call_args.kwargs["condition"]
     assert isinstance(sent, AutomationConditionInput)
     assert sent.to_api_payload() == {
@@ -459,7 +441,6 @@ async def test_create_automation_passes_typed_condition(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_invalid_condition_returns_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -474,7 +455,7 @@ async def test_create_automation_invalid_condition_returns_error(
                 "condition": {"expressions": "not-a-list"},
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "condition" in tool_error_message(payload).lower()
@@ -482,7 +463,6 @@ async def test_create_automation_invalid_condition_returns_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_update_automation_passes_typed_condition(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -501,7 +481,7 @@ async def test_update_automation_passes_typed_condition(
                 },
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     sent = mock_automation_client.update_automation.call_args.kwargs["condition"]
     assert isinstance(sent, AutomationConditionInput)
     assert sent.to_api_payload() == {
@@ -510,7 +490,6 @@ async def test_update_automation_passes_typed_condition(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 @pytest.mark.parametrize("empty", [{}, {"expressions": []}])
 async def test_create_automation_rejects_expressionless_condition(
     automation_session, mock_automation_client, extract_payload, empty
@@ -526,7 +505,7 @@ async def test_create_automation_rejects_expressionless_condition(
                 "condition": empty,
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "expression" in tool_error_message(payload).lower()
@@ -534,14 +513,13 @@ async def test_create_automation_rejects_expressionless_condition(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_update_automation_rejects_no_op(
     automation_session, mock_automation_client, extract_payload
 ):
     """An update with neither condition nor extra_input changes nothing — rejected."""
     async with automation_session as session:
         result = await session.call_tool("update_automation", {"automation_id": "a7"})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "nothing to update" in tool_error_message(payload).lower()
@@ -549,7 +527,6 @@ async def test_update_automation_rejects_no_op(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_surfaces_preflight_error_as_envelope(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -584,7 +561,7 @@ async def test_create_automation_surfaces_preflight_error_as_envelope(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.create_automation.assert_awaited_once()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -592,7 +569,6 @@ async def test_create_automation_surfaces_preflight_error_as_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_surfaces_field_map_preflight_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -630,14 +606,13 @@ async def test_create_automation_surfaces_field_map_preflight_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "999999" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_passes_action_repo_id(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -665,7 +640,7 @@ async def test_create_automation_passes_action_repo_id(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.create_automation.assert_awaited_once_with(
         "p-parent",
         "Connected",
@@ -685,7 +660,6 @@ async def test_create_automation_passes_action_repo_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -709,7 +683,6 @@ async def test_create_automation_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_error_only_diagnostic_markers_uses_fallback(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -736,7 +709,6 @@ async def test_create_automation_error_only_diagnostic_markers_uses_fallback(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_error_only_markers_with_debug_keeps_fallback(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -763,7 +735,6 @@ async def test_create_automation_error_only_markers_with_debug_keeps_fallback(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_update_automation_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -783,7 +754,7 @@ async def test_update_automation_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.update_automation.assert_awaited_once_with(
         "a7",
         condition=None,
@@ -796,7 +767,6 @@ async def test_update_automation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_update_automation_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -815,55 +785,48 @@ async def test_update_automation_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
-async def test_delete_automation_success(
-    automation_session, mock_automation_client, extract_payload
-):
+async def test_delete_automation_success(automation_session, mock_automation_client):
     mock_automation_client.delete_automation.return_value = {"success": True}
 
     async with automation_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_automation",
             {"automation_id": "rm-1", "confirm": True, "debug": False},
         )
 
-    assert result.isError is False
     mock_automation_client.delete_automation.assert_awaited_once_with("rm-1")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
-async def test_delete_automation_error(
-    automation_session, mock_automation_client, extract_payload
-):
+async def test_delete_automation_error(automation_session, mock_automation_client):
     mock_automation_client.delete_automation.side_effect = PipefyGraphQLError(
         [{"message": "forbidden"}]
     )
 
     async with automation_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_automation",
             {"automation_id": "z", "confirm": True},
         )
 
-    assert extract_payload(result)["success"] is False
-    assert "forbidden" in tool_error_message(extract_payload(result))
+    assert payload["success"] is False
+    assert "forbidden" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_delete_automation_has_destructive_hint(automation_session):
     async with automation_session as session:
         listed = await session.list_tools()
     delete_tool = next(t for t in listed.tools if t.name == "delete_automation")
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is False
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is False
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_and_update_automation_tools_are_not_read_only(
     automation_session,
 ):
@@ -878,12 +841,11 @@ async def test_create_and_update_automation_tools_are_not_read_only(
     ):
         ann = by_name[name].annotations
         assert ann is not None
-        assert ann.readOnlyHint is False
-        assert ann.destructiveHint is not True
+        assert ann.read_only_hint is False
+        assert ann.destructive_hint is not True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_simulate_automation_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -913,7 +875,7 @@ async def test_simulate_automation_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.simulate_automation.assert_awaited_once_with(
         pipe_id="p1",
         action_id="generate_with_ai",
@@ -932,7 +894,6 @@ async def test_simulate_automation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_simulate_automation_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -955,7 +916,6 @@ async def test_simulate_automation_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_simulate_automation_rejects_invalid_pipe_id(
     automation_session, mock_automation_client
 ):
@@ -974,7 +934,6 @@ async def test_simulate_automation_rejects_invalid_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_send_task_automation_success(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -996,7 +955,7 @@ async def test_create_send_task_automation_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.create_send_task_automation.assert_awaited_once_with(
         "p1",
         "Notify owners",
@@ -1017,7 +976,6 @@ async def test_create_send_task_automation_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_send_task_automation_passes_event_params_and_condition(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -1043,7 +1001,7 @@ async def test_create_send_task_automation_passes_event_params_and_condition(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_automation_client.create_send_task_automation.assert_awaited_once_with(
         "p1",
         "R",
@@ -1058,7 +1016,6 @@ async def test_create_send_task_automation_passes_event_params_and_condition(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_send_task_automation_validation_blank_task_title(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -1080,7 +1037,6 @@ async def test_create_send_task_automation_validation_blank_task_title(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_send_task_automation_validation_scheduler(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -1103,7 +1059,6 @@ async def test_create_send_task_automation_validation_scheduler(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_send_task_automation_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -1128,14 +1083,13 @@ async def test_create_send_task_automation_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_send_task_automation_listed_not_read_only(automation_session):
     async with automation_session as session:
         listed = await session.list_tools()
     tool = next(t for t in listed.tools if t.name == "create_send_task_automation")
     assert tool.annotations is not None
-    assert tool.annotations.readOnlyHint is False
-    assert tool.annotations.destructiveHint is not True
+    assert tool.annotations.read_only_hint is False
+    assert tool.annotations.destructive_hint is not True
 
 
 ## ---------------------------------------------------------------------------
@@ -1144,7 +1098,6 @@ async def test_create_send_task_automation_listed_not_read_only(automation_sessi
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_create_automation_cross_pipe_permission_denied_enriches_error(
     automation_session, mock_automation_client, extract_payload
 ):
@@ -1184,7 +1137,6 @@ async def test_create_automation_cross_pipe_permission_denied_enriches_error(
 class TestCreateSendTaskAutomationActiveFlag:
     """Verify the ``active`` flag is forwarded to AutomationService.create_send_task_automation."""
 
-    @pytest.mark.parametrize("automation_session", [None], indirect=True)
     async def test_active_false_is_forwarded(
         self, automation_session, mock_automation_client, extract_payload
     ):
@@ -1205,11 +1157,10 @@ class TestCreateSendTaskAutomationActiveFlag:
                     "active": False,
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         kwargs = mock_automation_client.create_send_task_automation.await_args.kwargs
         assert kwargs["active"] is False
 
-    @pytest.mark.parametrize("automation_session", [None], indirect=True)
     async def test_default_active_true(
         self, automation_session, mock_automation_client, extract_payload
     ):
@@ -1229,7 +1180,7 @@ class TestCreateSendTaskAutomationActiveFlag:
                     "recipients": "a@b.c",
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         kwargs = mock_automation_client.create_send_task_automation.await_args.kwargs
         assert kwargs["active"] is True
 
@@ -1238,7 +1189,6 @@ class TestCreateSendTaskAutomationActiveFlag:
 class TestPipefyIdCoercion:
     """PipefyId coerces int IDs to str at the tool boundary."""
 
-    @pytest.mark.parametrize("automation_session", [None], indirect=True)
     async def test_get_automation_coerces_int_automation_id(
         self, automation_session, mock_automation_client, extract_payload
     ):
@@ -1247,5 +1197,5 @@ class TestPipefyIdCoercion:
         )
         async with automation_session as session:
             result = await session.call_tool("get_automation", {"automation_id": 500})
-        assert result.isError is False
+        assert result.is_error is False
         mock_automation_client.get_automation.assert_awaited_once_with("500")

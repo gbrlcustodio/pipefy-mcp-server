@@ -113,7 +113,7 @@ def card_get(
         help="Include custom field name/value pairs on the card.",
     ),
 ) -> None:
-    """Fetch a card by id."""
+    """Fetch a card by id (title, phase, pipe; not labels or assignees)."""
 
     async def factory(client: PipefyClient):
         return await client.get_card(card_id, include_fields=include_fields)
@@ -295,24 +295,35 @@ def card_update(
     assignee_ids: str | None = typer.Option(
         None,
         "--assignee-ids",
-        help="Comma-separated assignee user ids.",
+        help="Comma-separated assignee user ids (replaces the card's whole assignee list).",
     ),
     label_ids: str | None = typer.Option(
         None,
         "--label-ids",
-        help="Comma-separated label ids.",
+        help="Comma-separated label ids (replaces the card's whole label list).",
     ),
     field_updates_json: str | None = typer.Option(
         None,
         "--field-updates",
         help=(
             "JSON array of field update objects for updateFieldsValues. "
-            'Each object: {"field_id" (or "fieldId"): "<slug>", "value": <v>}.'
+            'Each object: {"field_id" (or "fieldId"): "<slug>", "value": <v>, '
+            '"operation": "ADD"|"REMOVE"|"REPLACE" (optional, default REPLACE)}. '
+            "For list-valued fields (connections, attachments, checklists), prefer "
+            "ADD/REMOVE; for connectors, send related card ids. If set, attribute "
+            "flags (--title, --assignee-ids, --label-ids, --due-date) are discarded. "
+            "Pipe labels and assignees are not fields: use --label-ids / --assignee-ids."
         ),
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Update a card (title, assignees, labels, due date, and/or field updates)."""
+    """Update a card (title, assignees, labels, due date, or field updates).
+
+    --field-updates and the attribute flags are exclusive: if --field-updates
+    is set, --title / --assignee-ids / --label-ids / --due-date are discarded.
+    Pipe labels and assignees are card attributes (--label-ids / --assignee-ids,
+    replace-all), not list-valued fields; do not send them in --field-updates.
+    """
 
     field_updates = _parse_field_updates_json(field_updates_json)
 

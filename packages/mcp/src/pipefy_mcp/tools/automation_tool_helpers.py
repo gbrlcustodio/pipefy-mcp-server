@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, cast
 
-from mcp.server.fastmcp import Context
+from mcp.server.mcpserver import Context
 from pipefy_sdk import (
     AutomationActionRow,
     AutomationEventRow,

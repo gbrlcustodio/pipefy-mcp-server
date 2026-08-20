@@ -209,6 +209,9 @@ class CardService:
         **Field Mode** (uses `updateFieldsValues` mutation):
         For updating custom fields via field_updates list.
 
+        The two modes are exclusive: if field_updates is present, Field Mode
+        runs and title, assignee_ids, label_ids, and due_date are discarded.
+
         If field_updates is empty or omitted, only card attributes will be updated.
         """
         if field_updates:

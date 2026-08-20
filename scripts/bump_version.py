@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, the Claude plugin and marketplace manifests, and root workspace meta.
+"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra,
+Claude and Cursor plugin manifests, the Claude marketplace manifest, and
+root workspace meta.
 
 After rewriting the version strings, runs ``uv lock`` so the workspace
 lockfile's ``pipefy-workspace`` entry tracks the new version.
@@ -22,9 +24,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
 MARKETPLACE_MANIFEST = REPO_ROOT / ".claude-plugin/marketplace.json"
+CURSOR_PLUGIN_MANIFEST = REPO_ROOT / ".cursor-plugin/plugin.json"
 
-# Both Claude manifests carry the release version, so both move with every bump.
-JSON_MANIFESTS: tuple[Path, ...] = (PLUGIN_MANIFEST, MARKETPLACE_MANIFEST)
+# Claude and Cursor manifests carry the release version, so they move with every bump.
+JSON_MANIFESTS: tuple[Path, ...] = (
+    PLUGIN_MANIFEST,
+    MARKETPLACE_MANIFEST,
+    CURSOR_PLUGIN_MANIFEST,
+)
 
 # The SDK distribution; its __version__ is the lockstep source of truth every
 # other version-bearing file is compared against.
@@ -91,12 +98,12 @@ VERSION_ASSIGN_RE = re.compile(
     re.MULTILINE,
 )
 
-# Matches a JSON "version" string in a Claude manifest. plugin.json holds it at
-# the top level; marketplace.json holds it on the plugin's catalog entry, which
-# is the version the plugin marketplace UI displays. Each manifest has exactly
-# one "version" key, so _sole_match / _sub_exactly_one target the right one and
-# a second key (e.g. a further catalog entry) fails loudly instead of being
-# silently rewritten.
+# Matches a JSON "version" string in a Claude or Cursor manifest. plugin.json
+# holds it at the top level; marketplace.json holds it on the plugin's catalog
+# entry, which is the version the plugin marketplace UI displays. Each manifest
+# has exactly one "version" key, so _sole_match / _sub_exactly_one target the
+# right one and a second key (e.g. a further catalog entry) fails loudly
+# instead of being silently rewritten.
 JSON_VERSION_RE = re.compile(
     r'(?P<prefix>"version"\s*:\s*")(?P<value>[^"]+)(?P<suffix>")',
 )
@@ -106,6 +113,25 @@ PRERELEASE_SUFFIX_RE = re.compile(
     r"^(a|alpha|b|beta|rc)\.?(\d+)$",
     re.IGNORECASE,
 )
+
+# A SemVer-style pre-release suffix (``-alpha.1``, ``.rc.2``); group 1 is the
+# separator. Distinguishes that form from the compact PEP 440 one (``a1``) so a
+# bump writes the suffix back in the style the file already uses.
+SEMVER_PRERELEASE_RE = re.compile(
+    r"^([-_.])(?:alpha|beta|rc|a|b)\.\d+$",
+    re.IGNORECASE,
+)
+
+# Each accepted track spelling mapped to its (compact, long) forms. Doubles as
+# the PEP 440 marker -> track-name lookup for ``prerelease_track``, since
+# ``Version.pre`` reports exactly the compact spellings keyed here.
+PRERELEASE_ALIASES: dict[str, tuple[str, str]] = {
+    "a": ("a", "alpha"),
+    "alpha": ("a", "alpha"),
+    "b": ("b", "beta"),
+    "beta": ("b", "beta"),
+    "rc": ("rc", "rc"),
+}
 
 
 def _sole_match(pattern: re.Pattern[str], text: str) -> re.Match[str] | None:
@@ -196,7 +222,7 @@ def write_version_to_all_files(new_version: str) -> None:
 
 
 def _write_json_manifest_version(path: Path, new_version: str) -> None:
-    """Rewrite the lone JSON ``"version"`` string in a Claude manifest."""
+    """Rewrite the lone JSON ``"version"`` string in a Claude or Cursor manifest."""
     text = path.read_text(encoding="utf-8")
     new_text = _sub_exactly_one(
         JSON_VERSION_RE,
@@ -325,20 +351,34 @@ def bump_patch(current: str) -> str:
     return f"{x}.{y}.{z + 1}"
 
 
+def prerelease_track(version: str) -> str | None:
+    """The pre-release track of ``version`` (``alpha``/``beta``/``rc``), or None if stable.
+
+    Reads PEP 440's normalized marker, so the SemVer-style ``0.5.0-alpha.1`` and
+    the compact ``0.5.0a1`` classify identically. Callers use this to decide
+    which branch a version may be released from, so it must not care about
+    spelling.
+    """
+    from packaging.version import Version
+
+    pre = Version(version).pre
+    if pre is None:
+        return None
+    _, track = PRERELEASE_ALIASES[pre[0]]
+    return track
+
+
 def _format_prerelease_suffix(kind: str, n: int, original_rest: str) -> str:
-    """Format the suffix after ``X.Y.Z``, preserving SemVer-style when present."""
-    kind_lower = kind.lower()
-    if kind_lower in ("alpha", "a"):
-        short, long = "a", "alpha"
-    elif kind_lower in ("beta", "b"):
-        short, long = "b", "beta"
-    else:
-        short, long = "rc", "rc"
+    """Format the suffix after ``X.Y.Z``, preserving SemVer-style when present.
 
-    if re.match(rf"^[-_.]({long}|{short})\.\d+$", original_rest, re.IGNORECASE):
-        separator = original_rest[0]
-        return f"{separator}{long}.{n}"
-
+    The track comes from ``kind`` and only the *style* from ``original_rest``, so
+    promoting ``-alpha.3`` to beta yields ``-beta.1`` rather than dropping to the
+    compact ``b1``.
+    """
+    short, long = PRERELEASE_ALIASES[kind.lower()]
+    m = SEMVER_PRERELEASE_RE.match(original_rest)
+    if m:
+        return f"{m.group(1)}{long}.{n}"
     return f"{short}{n}"
 
 
@@ -362,6 +402,30 @@ def bump_prerelease(current: str) -> str:
     kind, num_s = m.groups()
     n = int(num_s) + 1
     return f"{x}.{y}.{z}{_format_prerelease_suffix(kind, n, rest)}"
+
+
+def bump_beta(current: str) -> str:
+    """Promote an alpha to the first beta of the same ``X.Y.Z``.
+
+    The alpha line tested in staging off ``dev`` and the beta it ships as off
+    ``main`` share a core version, so promotion keeps ``X.Y.Z`` and resets the
+    counter: ``0.5.0-alpha.3 -> 0.5.0-beta.1``. PEP 440 orders ``0.5.0a3 <
+    0.5.0b1``, so the promotion is always an upgrade.
+
+    Refuses anything that is not an alpha: ``prerelease`` already walks an
+    existing beta line, and opening a new line is an explicit ``version=`` so
+    that no core bump is ever implied here.
+    """
+    if prerelease_track(current) != "alpha":
+        msg = (
+            f"Cannot promote {current!r} to beta: it is not an alpha. Use "
+            "'prerelease' to walk an existing beta line, or "
+            "'version=X.Y.Z-beta.N' to open one."
+        )
+        raise ValueError(msg)
+    x, y, z = parse_core(current)
+    suffix = _format_prerelease_suffix("beta", 1, suffix_after_core(current))
+    return f"{x}.{y}.{z}{suffix}"
 
 
 def parse_explicit_version(arg: str) -> str:
@@ -479,7 +543,8 @@ def verify_lockstep() -> int:
 def main() -> int:
     if len(sys.argv) != 2:
         print(
-            "Usage: bump_version.py <major|minor|patch|prerelease|version=X.Y.Z|verify>",
+            "Usage: bump_version.py "
+            "<major|minor|patch|prerelease|beta|version=X.Y.Z|verify>",
             file=sys.stderr,
         )
         return 2
@@ -495,6 +560,7 @@ def main() -> int:
         "minor": bump_minor,
         "patch": bump_patch,
         "prerelease": bump_prerelease,
+        "beta": bump_beta,
     }
 
     if token.lower().startswith("version="):
@@ -504,7 +570,7 @@ def main() -> int:
     else:
         print(
             f"Unknown argument {token!r}. "
-            "Use major, minor, patch, prerelease, version=X.Y.Z, or verify",
+            "Use major, minor, patch, prerelease, beta, version=X.Y.Z, or verify",
             file=sys.stderr,
         )
         return 2

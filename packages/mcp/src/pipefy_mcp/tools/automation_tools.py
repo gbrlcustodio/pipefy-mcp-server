@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     AutomationConditionInput,
@@ -73,7 +72,7 @@ class AutomationTools:
     """MCP tools for traditional (non-AI) pipe automations."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
             meta=REMOTE,
@@ -717,20 +716,21 @@ class AutomationTools:
             meta=REMOTE,
         )
         async def delete_automation(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             automation_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete an automation rule permanently.
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 automation_id: Automation rule ID to delete.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -742,6 +742,9 @@ class AutomationTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"automation (ID: {automation_id})",
+                resource_identity={"automation_id": rid},
+                tool_name="delete_automation",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

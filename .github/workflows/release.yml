@@ -14,6 +14,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history so the branch-provenance check below can resolve
+          # origin/dev and origin/main; a tag push checks out only the tag.
+          fetch-depth: 0
+      - name: Verify the tag is on the branch its track ships from
+        run: |
+          set -eu
+          ver="${GITHUB_REF_NAME#v}"
+          # Alphas are staging cuts that must come off dev; betas and stables
+          # ship from main. This is the server-side half of the same rule
+          # release.py enforces locally (release_branch_for) -- enforced here
+          # too, because this is the step that actually publishes, and a tag
+          # pushed by hand from the wrong branch would otherwise sail through.
+          # -i to agree with the release-notes step's own re.I match below, and
+          # with prerelease_track in scripts/bump_version.py.
+          if printf '%s' "$ver" | grep -Eiq '^[0-9]+\.[0-9]+\.[0-9]+[-_.]?(a|alpha)\.?[0-9]+$'; then
+            expected=dev
+          else
+            expected=main
+          fi
+          # Explicit refspec: a tag-push checkout has no reason to carry a
+          # branch ref, and `git fetch origin <branch>` alone only guarantees
+          # FETCH_HEAD.
+          git fetch --quiet origin \
+            "+refs/heads/$expected:refs/remotes/origin/$expected"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$expected"; then
+            echo "Tag $GITHUB_REF_NAME ($GITHUB_SHA) is not on origin/$expected." >&2
+            echo "An alpha must be tagged on dev; a beta or stable on main." >&2
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME is on origin/$expected."
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
         with:
@@ -40,6 +71,7 @@ jobs:
               sys.exit(1)
           PY
       - name: Build release notes body for this tag
+        id: notes
         run: |
           python <<'PY'
           import os
@@ -50,12 +82,31 @@ jobs:
           tag = os.environ["GITHUB_REF_NAME"]
           ver = tag.removeprefix("v")
           text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+          # Alpha tags are staging cuts off `dev`. They deliberately do not stamp
+          # the CHANGELOG -- consecutive alphas share one accumulating
+          # `## [Unreleased]` section, which the beta promotion on `main` later
+          # stamps in full -- so an alpha's body is that section. Every other tag
+          # must have its own stamped heading, and a missing one stays a hard
+          # failure.
+          is_alpha = bool(
+              re.fullmatch(r"\d+\.\d+\.\d+[-_.]?(a|alpha)\.?\d+", ver, re.I)
+          )
           pat = rf"(?ms)^## \[{re.escape(ver)}\][^\n]*\n.*?(?=^## |\Z)"
           m = re.search(pat, text)
+          if not m and is_alpha:
+              m = re.search(r"(?ms)^## \[Unreleased\][^\n]*\n.*?(?=^## |\Z)", text)
+              if m and not m.group(0).partition("\n")[2].strip():
+                  print(
+                      "'## [Unreleased]' is empty; an alpha needs release notes.",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
           if not m:
+              expected = "## [Unreleased]" if is_alpha else f"## [{ver}] ..."
               print(
                   f"No CHANGELOG section found for version {ver!r} "
-                  f"(expected a heading like ## [{ver}] ...).",
+                  f"(expected a heading like {expected}).",
                   file=sys.stderr,
               )
               sys.exit(1)
@@ -63,65 +114,54 @@ jobs:
               m.group(0).rstrip() + "\n",
               encoding="utf-8",
           )
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as fh:
+              fh.write(f"is_alpha={'true' if is_alpha else 'false'}\n")
           PY
       - name: Build wheels and sdist (all workspace packages)
         run: uv build --all-packages -o dist --wheel --sdist
       - name: Verify expected wheels in dist/
+        # One wheel per published member and no others, so a new workspace member
+        # cannot ship a partial release. The member list lives in the shared
+        # script, which is the one place that has to learn about a new package.
+        run: python scripts/smoke_entry_points.py --check-wheels dist
+      - name: Stage the PyPI upload set (wheels only)
+        # `dist/` also holds the sdists, which PyPI does not get. A plain copy of
+        # the set the step above bounded, so these are the same wheels the GitHub
+        # Release attaches.
         run: |
-          python <<'PY'
-          import sys
-          from pathlib import Path
+          mkdir -p dist-pypi
+          cp dist/*.whl dist-pypi/
+      - name: Smoke install staged wheels (clean venv)
+        # From files, not the index, so the sibling `==` pins resolve to the
+        # wheels this build produced.
+        run: |
+          python -m venv .venv-pypi-smoke
+          .venv-pypi-smoke/bin/python -m pip install --upgrade pip
+          .venv-pypi-smoke/bin/pip install dist-pypi/*.whl
+          .venv-pypi-smoke/bin/python scripts/smoke_entry_points.py
 
-          dist = Path("dist")
-          expected = ("pipefy", "pipefy_mcp_server", "pipefy_cli", "pipefy_auth", "pipefy_infra")
-          for prefix in expected:
-              wheels = list(dist.glob(f"{prefix}-*.whl"))
-              if len(wheels) != 1:
-                  print(
-                      f"expected exactly one wheel matching {prefix}-*.whl, got {wheels!r}",
-                      file=sys.stderr,
-                  )
-                  sys.exit(1)
-          # Bound the set: a new workspace member builds a wheel that is not in
-          # `expected` and so never gets staged for PyPI, shipping a partial
-          # release. Fail here so adding a package forces updating this list.
-          all_wheels = list(dist.glob("*.whl"))
-          if len(all_wheels) != len(expected):
-              print(
-                  f"expected exactly {len(expected)} wheels in dist/, got "
-                  f"{sorted(w.name for w in all_wheels)!r}",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-          PY
+      # --- Everything above validates; everything below publishes. ----------
+      # No step that publishes runs until the wheels have installed into a clean
+      # virtualenv and every entry point has launched, so a validation failure
+      # leaves only the tag -- unavoidable, being what triggers this workflow.
+      # `v0.4.0-beta.1` is what the other order cost: a published Release
+      # advertising a wheel that could not start, withdrawn by hand.
+      #
+      # New validation belongs above this line, never between the two steps
+      # below. PyPI goes last of the two, because an upload cannot be taken back
+      # while a GitHub Release can be deleted -- so a failing upload leaves a
+      # Release with no matching PyPI artifacts, the cheaper of the two gaps.
+      # ----------------------------------------------------------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.whl
           body_path: CHANGELOG_RELEASE_BODY.md
-      - name: Stage PyPI wheels (SDK + CLI + MCP + Auth + Infra)
-        run: |
-          mkdir -p dist-pypi
-          shopt -s nullglob
-          sdk=(dist/pipefy-*.whl)
-          cli=(dist/pipefy_cli-*.whl)
-          mcp=(dist/pipefy_mcp_server-*.whl)
-          auth=(dist/pipefy_auth-*.whl)
-          infra=(dist/pipefy_infra-*.whl)
-          if [ "${#sdk[@]}" -ne 1 ] || [ "${#cli[@]}" -ne 1 ] || [ "${#mcp[@]}" -ne 1 ] || [ "${#auth[@]}" -ne 1 ] || [ "${#infra[@]}" -ne 1 ]; then
-            echo "Expected one SDK, one CLI, one MCP, one Auth, and one Infra wheel in dist/"
-            echo "sdk=${#sdk[@]} cli=${#cli[@]} mcp=${#mcp[@]} auth=${#auth[@]} infra=${#infra[@]}"
-            ls -la dist || true
-            exit 1
-          fi
-          cp "${sdk[0]}" "${cli[0]}" "${mcp[0]}" "${auth[0]}" "${infra[0]}" dist-pypi/
-      - name: Smoke install staged wheels (clean venv)
-        run: |
-          python -m venv .venv-pypi-smoke
-          .venv-pypi-smoke/bin/python -m pip install --upgrade pip
-          .venv-pypi-smoke/bin/pip install dist-pypi/*.whl
-          .venv-pypi-smoke/bin/pipefy --help
-          .venv-pypi-smoke/bin/pipefy-mcp-server --help
+          # Flag only alphas, so the "Latest" badge stays on the newest beta.
+          # install.sh filters by tag shape rather than this flag, so the two are
+          # independent; this is what makes the GitHub UI honest about staging
+          # cuts.
+          prerelease: ${{ steps.notes.outputs.is_alpha == 'true' }}
       - name: Upload to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

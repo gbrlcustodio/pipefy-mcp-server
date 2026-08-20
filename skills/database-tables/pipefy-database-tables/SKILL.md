@@ -97,7 +97,7 @@ Tables, records (rows), schema columns (table fields), and attachments for Pipef
 
 ## Two-step destructive previews
 
-Always call without `confirm=true` first, surface the preview to the user, then call again with `confirm=true` after explicit approval. Preview content per tool:
+Always call without `confirm=true` first, surface the preview (including `confirmation_token`) to the user, then call again with `confirm=true` and that token after explicit approval. CLI uses `--yes` (no token). Preview content per tool:
 
 - **`delete_table`** — show table **name**, **field count**, and **record count**. Deleting a table destroys all rows and schema.
 - **`delete_table_record`** — show record **title** and **key field values** so the user can identify which row will vanish.

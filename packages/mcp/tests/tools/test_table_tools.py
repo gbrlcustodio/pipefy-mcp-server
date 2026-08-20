@@ -4,15 +4,29 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _shared.pagination_test_defaults import DEFAULT_FIRST
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.pagination_test_defaults import DEFAULT_FIRST
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.table_tools import TableTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
+
+
+def _assert_destructive_preview(payload, *, resource):
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    assert payload["resource"] == resource
+    message = payload["message"]
+    assert "confirm=True" in message
+    assert message.index("explicit approval") < message.index("confirm=True")
+    token = payload["confirmation_token"]
+    assert isinstance(token, str)
+    assert token.startswith("v1.")
+    assert token != "v1."
 
 
 @pytest.fixture
@@ -56,7 +70,6 @@ def table_session(table_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_success(table_session, mock_table_client, extract_payload):
     mock_table_client.get_table.return_value = {
         "table": {"id": "1", "name": "Catalog"},
@@ -65,7 +78,7 @@ async def test_get_table_success(table_session, mock_table_client, extract_paylo
     async with table_session as session:
         result = await session.call_tool("get_table", {"table_id": 1})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_table_client.get_table.assert_awaited_once_with("1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -73,7 +86,6 @@ async def test_get_table_success(table_session, mock_table_client, extract_paylo
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -84,27 +96,25 @@ async def test_get_table_graphql_error(
     async with table_session as session:
         result = await session.call_tool("get_table", {"table_id": 9})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_tables_success(table_session, mock_table_client, extract_payload):
     mock_table_client.get_tables.return_value = {"tables": []}
 
     async with table_session as session:
         result = await session.call_tool("get_tables", {"table_ids": [1, 2]})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_table_client.get_tables.assert_awaited_once_with(["1", "2"])
     assert extract_payload(result)["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_tables_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -118,7 +128,6 @@ async def test_get_tables_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_success_and_pagination(
     table_session, mock_table_client, extract_payload, legacy_envelope
 ):
@@ -146,7 +155,6 @@ async def test_get_table_records_success_and_pagination(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_unified_envelope_pagination(
     table_session, mock_table_client, extract_payload, unified_envelope
 ):
@@ -174,7 +182,6 @@ async def test_get_table_records_unified_envelope_pagination(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -192,7 +199,6 @@ async def test_get_table_records_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_record_success(
     table_session, mock_table_client, extract_payload
 ):
@@ -208,7 +214,6 @@ async def test_get_table_record_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_record_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -223,7 +228,6 @@ async def test_get_table_record_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_find_records_success(
     table_session, mock_table_client, extract_payload, unified_envelope
 ):
@@ -254,7 +258,6 @@ async def test_find_records_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_find_records_unified_pagination_with_first(
     table_session, mock_table_client, extract_payload, unified_envelope
 ):
@@ -279,7 +282,6 @@ async def test_find_records_unified_pagination_with_first(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_find_records_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -297,7 +299,6 @@ async def test_find_records_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_extra", [[], "not-an-object", 99])
 async def test_create_table_rejects_non_object_extra_input(
     table_session, mock_table_client, extract_payload, bad_extra
@@ -316,7 +317,6 @@ async def test_create_table_rejects_non_object_extra_input(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_extra", [{}, "bad", [1]])
 async def test_update_table_rejects_non_object_extra_input(
     table_session, mock_table_client, extract_payload, bad_extra
@@ -342,7 +342,6 @@ async def test_update_table_rejects_non_object_extra_input(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_extra", ["x", []])
 async def test_create_table_record_rejects_non_object_extra_input(
     table_session, mock_table_client, extract_payload, bad_extra
@@ -364,7 +363,6 @@ async def test_create_table_record_rejects_non_object_extra_input(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_extra", [1, "extra", ["a"]])
 async def test_create_table_field_rejects_non_object_extra_input(
     table_session, mock_table_client, extract_payload, bad_extra
@@ -387,7 +385,6 @@ async def test_create_table_field_rejects_non_object_extra_input(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_field_omitted_extra_input_ok(
     table_session, mock_table_client, extract_payload
 ):
@@ -408,7 +405,6 @@ async def test_update_table_field_omitted_extra_input_ok(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_extra", ["bad", []])
 async def test_update_table_field_rejects_non_object_extra_input(
     table_session, mock_table_client, extract_payload, bad_extra
@@ -430,7 +426,6 @@ async def test_update_table_field_rejects_non_object_extra_input(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_record_rejects_unsupported_field_keys_only(
     table_session, mock_table_client, extract_payload
 ):
@@ -448,7 +443,6 @@ async def test_update_table_record_rejects_unsupported_field_keys_only(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_record_rejects_list_entry_missing_field_keys(
     table_session, mock_table_client, extract_payload
 ):
@@ -466,7 +460,6 @@ async def test_create_table_record_rejects_list_entry_missing_field_keys(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_record_rejects_non_dict_list_entry(
     table_session, mock_table_client, extract_payload
 ):
@@ -483,7 +476,6 @@ async def test_create_table_record_rejects_non_dict_list_entry(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_success(table_session, mock_table_client, extract_payload):
     mock_table_client.create_table.return_value = {
         "createTable": {"table": {"id": "9", "name": "T"}},
@@ -502,7 +494,6 @@ async def test_create_table_success(table_session, mock_table_client, extract_pa
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -520,7 +511,6 @@ async def test_create_table_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_success(table_session, mock_table_client, extract_payload):
     mock_table_client.update_table.return_value = {"updateTable": {"table": {}}}
 
@@ -535,7 +525,6 @@ async def test_update_table_success(table_session, mock_table_client, extract_pa
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -553,7 +542,6 @@ async def test_update_table_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_delete_table_preview(table_session, mock_table_client, extract_payload):
     mock_table_client.get_table.return_value = {
         "table": {"id": "5", "name": "Cat", "table_fields": []},
@@ -567,50 +555,35 @@ async def test_delete_table_preview(table_session, mock_table_client, extract_pa
 
     mock_table_client.delete_table.assert_not_called()
     payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload["requires_confirmation"] is True
-    assert payload["resource"] == "table 'Cat' (ID: 5)"
+    _assert_destructive_preview(payload, resource="table 'Cat' (ID: 5)")
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
-async def test_delete_table_confirm_success(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_confirm_success(table_session, mock_table_client):
     mock_table_client.get_table.return_value = {"table": {"id": "5", "name": "Cat"}}
     mock_table_client.delete_table.return_value = {"deleteTable": {"success": True}}
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table",
-            {"table_id": 5, "confirm": True},
-        )
+        payload = await confirm_after_preview(session, "delete_table", {"table_id": 5})
 
     mock_table_client.delete_table.assert_awaited_once_with("5")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
-async def test_delete_table_graphql_error_on_confirm(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_graphql_error_on_confirm(table_session, mock_table_client):
     mock_table_client.get_table.return_value = {"table": {"id": "1", "name": "X"}}
     mock_table_client.delete_table.side_effect = PipefyGraphQLError(
         [{"message": "cannot"}]
     )
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table",
-            {"table_id": 1, "confirm": True},
-        )
+        payload = await confirm_after_preview(session, "delete_table", {"table_id": 1})
 
-    assert extract_payload(result)["success"] is False
+    assert payload["success"] is False
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_record_success(
     table_session, mock_table_client, extract_payload
 ):
@@ -632,7 +605,6 @@ async def test_create_table_record_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_record_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -650,7 +622,6 @@ async def test_create_table_record_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_record_success(
     table_session, mock_table_client, extract_payload
 ):
@@ -669,7 +640,6 @@ async def test_update_table_record_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_record_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -687,43 +657,35 @@ async def test_update_table_record_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
-async def test_delete_table_record_success(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_record_success(table_session, mock_table_client):
     mock_table_client.delete_table_record.return_value = {
         "deleteTableRecord": {"success": True},
     }
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table_record",
-            {"record_id": 99, "confirm": True},
+        payload = await confirm_after_preview(
+            session, "delete_table_record", {"record_id": 99}
         )
 
     mock_table_client.delete_table_record.assert_awaited_once_with("99")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
-async def test_delete_table_record_graphql_error(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_record_graphql_error(table_session, mock_table_client):
     mock_table_client.delete_table_record.side_effect = PipefyGraphQLError(
         [{"message": "no"}]
     )
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table_record", {"record_id": 1, "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_table_record", {"record_id": 1}
         )
 
-    assert extract_payload(result)["success"] is False
+    assert payload["success"] is False
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_set_table_record_field_value_success(
     table_session, mock_table_client, extract_payload
 ):
@@ -744,7 +706,6 @@ async def test_set_table_record_field_value_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_set_table_record_field_value_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -762,7 +723,6 @@ async def test_set_table_record_field_value_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_field_success(
     table_session, mock_table_client, extract_payload
 ):
@@ -783,7 +743,6 @@ async def test_create_table_field_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_field_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -801,7 +760,6 @@ async def test_create_table_field_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_field_success(
     table_session, mock_table_client, extract_payload
 ):
@@ -822,7 +780,6 @@ async def test_update_table_field_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_field_graphql_error(
     table_session, mock_table_client, extract_payload
 ):
@@ -840,43 +797,39 @@ async def test_update_table_field_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
-async def test_delete_table_field_success(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_field_success(table_session, mock_table_client):
     mock_table_client.delete_table_field.return_value = {
         "deleteTableField": {"success": True},
     }
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table_field", {"field_id": 88, "table_id": "tbl_1", "confirm": True}
+        payload = await confirm_after_preview(
+            session,
+            "delete_table_field",
+            {"field_id": 88, "table_id": "tbl_1"},
         )
 
     mock_table_client.delete_table_field.assert_awaited_once_with("88", "tbl_1")
-    assert extract_payload(result)["success"] is True
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
-async def test_delete_table_field_graphql_error(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_field_graphql_error(table_session, mock_table_client):
     mock_table_client.delete_table_field.side_effect = PipefyGraphQLError(
         [{"message": "nope"}]
     )
 
     async with table_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_table_field",
-            {"field_id": "x", "table_id": "tbl_1", "confirm": True},
+            {"field_id": "x", "table_id": "tbl_1"},
         )
 
-    assert extract_payload(result)["success"] is False
+    assert payload["success"] is False
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_search_tables_without_name_calls_client_with_none(
     table_session, mock_table_client
 ):
@@ -887,12 +840,11 @@ async def test_search_tables_without_name_calls_client_with_none(
     async with table_session as session:
         result = await session.call_tool("search_tables", {})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_table_client.search_tables.assert_awaited_once_with(None, first=100)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_search_tables_with_name_passes_it_to_client(
     table_session, mock_table_client
 ):
@@ -901,12 +853,11 @@ async def test_search_tables_with_name_passes_it_to_client(
     async with table_session as session:
         result = await session.call_tool("search_tables", {"table_name": "Clients"})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_table_client.search_tables.assert_awaited_once_with("Clients", first=100)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_search_tables_returns_client_response(
     table_session, mock_table_client, extract_payload, legacy_envelope
 ):
@@ -929,7 +880,6 @@ async def test_search_tables_returns_client_response(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_search_tables_unified_envelope(
     table_session, mock_table_client, extract_payload, unified_envelope
 ):
@@ -956,7 +906,6 @@ async def test_search_tables_unified_envelope(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_search_tables_unified_has_more_stays_false_even_with_aggregate_has_next_page(
     table_session, mock_table_client, extract_payload, unified_envelope
 ):
@@ -999,7 +948,6 @@ async def test_search_tables_unified_has_more_stays_false_even_with_aggregate_ha
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_invalid_table_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1013,7 +961,6 @@ async def test_get_table_invalid_table_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_empty_table_id(table_session, mock_table_client):
     async with table_session as session:
         result = await session.call_tool("get_table", {"table_id": ""})
@@ -1028,7 +975,6 @@ async def test_get_table_empty_table_id(table_session, mock_table_client):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_tables_empty_list(table_session, mock_table_client, extract_payload):
     async with table_session as session:
         result = await session.call_tool("get_tables", {"table_ids": []})
@@ -1045,7 +991,6 @@ async def test_get_tables_empty_list(table_session, mock_table_client, extract_p
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_invalid_table_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1061,7 +1006,6 @@ async def test_get_table_records_invalid_table_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_first_too_small(
     table_session, mock_table_client, extract_payload, envelope_flag
 ):
@@ -1078,7 +1022,6 @@ async def test_get_table_records_first_too_small(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_first_too_large(
     table_session, mock_table_client, extract_payload, envelope_flag
 ):
@@ -1096,7 +1039,6 @@ async def test_get_table_records_first_too_large(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_search_tables_out_of_bounds_returns_invalid_arguments(
     table_session, mock_table_client, extract_payload, envelope_flag
 ):
@@ -1115,7 +1057,6 @@ async def test_search_tables_out_of_bounds_returns_invalid_arguments(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_record_invalid_record_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1134,7 +1075,6 @@ async def test_get_table_record_invalid_record_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_find_records_invalid_table_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1151,7 +1091,6 @@ async def test_find_records_invalid_table_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_find_records_blank_field_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1168,7 +1107,6 @@ async def test_find_records_blank_field_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_find_records_blank_field_value(
     table_session, mock_table_client, extract_payload, unified_envelope
 ):
@@ -1198,7 +1136,6 @@ async def test_find_records_blank_field_value(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_record_invalid_record_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1215,7 +1152,6 @@ async def test_update_table_record_invalid_record_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_record_empty_fields(
     table_session, mock_table_client, extract_payload
 ):
@@ -1236,7 +1172,6 @@ async def test_update_table_record_empty_fields(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_delete_table_record_invalid_record_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1253,7 +1188,6 @@ async def test_delete_table_record_invalid_record_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_delete_table_record_preview_without_confirm(
     table_session, mock_table_client, extract_payload
 ):
@@ -1265,8 +1199,7 @@ async def test_delete_table_record_preview_without_confirm(
 
     mock_table_client.delete_table_record.assert_not_called()
     payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload.get("requires_confirmation") is True
+    _assert_destructive_preview(payload, resource="table record (ID: 99)")
 
 
 # ---------------------------------------------------------------------------
@@ -1275,7 +1208,6 @@ async def test_delete_table_record_preview_without_confirm(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_set_table_record_field_value_invalid_record_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1292,7 +1224,6 @@ async def test_set_table_record_field_value_invalid_record_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_set_table_record_field_value_invalid_field_id_zero(
     table_session, mock_table_client, extract_payload
 ):
@@ -1309,7 +1240,6 @@ async def test_set_table_record_field_value_invalid_field_id_zero(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_set_table_record_field_value_blank_field_id(
     table_session, mock_table_client
 ):
@@ -1329,7 +1259,6 @@ async def test_set_table_record_field_value_blank_field_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_field_invalid_table_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1346,7 +1275,6 @@ async def test_create_table_field_invalid_table_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_field_empty_label(
     table_session, mock_table_client, extract_payload
 ):
@@ -1363,7 +1291,6 @@ async def test_create_table_field_empty_label(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_field_empty_field_type(
     table_session, mock_table_client, extract_payload
 ):
@@ -1385,7 +1312,6 @@ async def test_create_table_field_empty_field_type(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_field_invalid_field_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1407,7 +1333,6 @@ async def test_update_table_field_invalid_field_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_delete_table_field_invalid_field_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1424,7 +1349,6 @@ async def test_delete_table_field_invalid_field_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_delete_table_field_preview_without_confirm(
     table_session, mock_table_client, extract_payload
 ):
@@ -1436,8 +1360,43 @@ async def test_delete_table_field_preview_without_confirm(
 
     mock_table_client.delete_table_field.assert_not_called()
     payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload.get("requires_confirmation") is True
+    _assert_destructive_preview(payload, resource="table field (ID: slug-1)")
+
+
+@pytest.mark.anyio
+async def test_delete_table_field_rejects_token_when_table_id_differs(
+    table_session, mock_table_client, extract_payload
+):
+    mock_table_client.delete_table_field.return_value = {
+        "deleteTableField": {"success": True},
+    }
+
+    async with table_session as session:
+        preview = await session.call_tool(
+            "delete_table_field",
+            {"field_id": "prioridade", "table_id": "tbl_A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_table_field",
+            {
+                "field_id": "prioridade",
+                "table_id": "tbl_B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_table_client.delete_table_field.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_table_field",
+            {"field_id": "prioridade", "table_id": "tbl_A"},
+        )
+
+    mock_table_client.delete_table_field.assert_awaited_once_with("prioridade", "tbl_A")
+    assert matched["success"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -1446,7 +1405,6 @@ async def test_delete_table_field_preview_without_confirm(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_record_empty_dict_fields(
     table_session, mock_table_client, extract_payload
 ):
@@ -1463,7 +1421,6 @@ async def test_create_table_record_empty_dict_fields(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_record_empty_list_fields(
     table_session, mock_table_client, extract_payload
 ):
@@ -1485,7 +1442,6 @@ async def test_create_table_record_empty_list_fields(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_blank_name(
     table_session, mock_table_client, extract_payload
 ):
@@ -1502,7 +1458,6 @@ async def test_create_table_blank_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_invalid_organization_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1524,7 +1479,6 @@ async def test_create_table_invalid_organization_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_invalid_table_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1541,7 +1495,6 @@ async def test_update_table_invalid_table_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_no_changes(
     table_session, mock_table_client, extract_payload
 ):
@@ -1563,7 +1516,6 @@ async def test_update_table_no_changes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_delete_table_invalid_table_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1586,7 +1538,6 @@ async def test_delete_table_invalid_table_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_create_table_record_invalid_table_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1608,7 +1559,6 @@ async def test_create_table_record_invalid_table_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_set_table_record_field_value_null_value(
     table_session, mock_table_client, extract_payload
 ):
@@ -1630,7 +1580,6 @@ async def test_set_table_record_field_value_null_value(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_delete_table_graphql_error_on_lookup(
     table_session, mock_table_client, extract_payload
 ):
@@ -1655,20 +1604,13 @@ async def test_delete_table_graphql_error_on_lookup(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
-async def test_delete_table_confirm_returns_false(
-    table_session, mock_table_client, extract_payload
-):
+async def test_delete_table_confirm_returns_false(table_session, mock_table_client):
     mock_table_client.get_table.return_value = {"table": {"id": "5", "name": "T"}}
     mock_table_client.delete_table.return_value = {"deleteTable": {"success": False}}
 
     async with table_session as session:
-        result = await session.call_tool(
-            "delete_table",
-            {"table_id": 5, "confirm": True},
-        )
+        payload = await confirm_after_preview(session, "delete_table", {"table_id": 5})
 
-    payload = extract_payload(result)
     assert payload["success"] is False
 
 
@@ -1678,7 +1620,6 @@ async def test_delete_table_confirm_returns_false(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_tables_invalid_id_in_list(
     table_session, mock_table_client, extract_payload
 ):
@@ -1699,7 +1640,6 @@ async def test_get_tables_invalid_id_in_list(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_update_table_field_no_updates_no_table_id(
     table_session, mock_table_client, extract_payload
 ):
@@ -1721,7 +1661,6 @@ async def test_update_table_field_no_updates_no_table_id(
 class TestPipefyIdCoercion:
     """PipefyId coerces int IDs to str at the tool boundary."""
 
-    @pytest.mark.parametrize("table_session", [None], indirect=True)
     async def test_get_table_coerces_int_table_id(
         self, table_session, mock_table_client, extract_payload
     ):
@@ -1730,5 +1669,5 @@ class TestPipefyIdCoercion:
         )
         async with table_session as session:
             result = await session.call_tool("get_table", {"table_id": 42})
-        assert result.isError is False
+        assert result.is_error is False
         mock_table_client.get_table.assert_awaited_once_with("42")

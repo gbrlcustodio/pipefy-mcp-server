@@ -1,11 +1,11 @@
-"""Unit tests for field condition read tools (get_field_conditions, get_field_condition)."""
+"""Unit tests for field condition MCP tools (read + create verify)."""
 
 from datetime import timedelta
 from random import randint
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -13,6 +13,20 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
+
+_MINIMAL_CREATE_CONDITION = {
+    "expressions": [
+        {
+            "structure_id": 0,
+            "field_address": "425848636",
+            "operation": "equals",
+            "value": "Option A",
+        }
+    ],
+    "expressions_structure": [[0]],
+}
+_MINIMAL_CREATE_ACTIONS = [{"phaseFieldId": "425848637", "actionId": "hide"}]
 
 
 @pytest.fixture
@@ -20,6 +34,10 @@ def mock_pipefy_client():
     client = MagicMock(PipefyClient)
     client.get_field_conditions = AsyncMock()
     client.get_field_condition = AsyncMock()
+    client.create_field_condition = AsyncMock()
+    client.update_field_condition = AsyncMock()
+    client.delete_field_condition = AsyncMock()
+    client.get_phase_fields = AsyncMock(return_value={"fields": []})
     return client
 
 
@@ -38,7 +56,7 @@ def client_session(mcp_server, request):
         mcp_server,
         read_timeout_seconds=timedelta(seconds=10),
         raise_exceptions=True,
-        elicitation_callback=request.param,
+        elicitation_callback=getattr(request, "param", None),
     )
 
 
@@ -51,7 +69,6 @@ def phase_id() -> int:
 class TestGetFieldConditions:
     """Tests for get_field_conditions tool."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_conditions_success_returns_list(
         self,
         client_session,
@@ -74,7 +91,7 @@ class TestGetFieldConditions:
             result = await session.call_tool(
                 "get_field_conditions", {"phase_id": phase_id}
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_field_conditions.assert_called_once_with(str(phase_id))
         payload = extract_payload(result)
         assert payload == {
@@ -83,7 +100,6 @@ class TestGetFieldConditions:
             "field_conditions": rows,
         }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_conditions_empty_returns_empty_list(
         self,
         client_session,
@@ -95,12 +111,11 @@ class TestGetFieldConditions:
         )
         async with client_session as session:
             result = await session.call_tool("get_field_conditions", {"phase_id": 1})
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         assert payload["field_conditions"] == []
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_conditions_graphql_error_returns_error_payload(
         self,
         client_session,
@@ -116,7 +131,7 @@ class TestGetFieldConditions:
             result = await session.call_tool(
                 "get_field_conditions", {"phase_id": 1, "debug": False}
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -126,7 +141,6 @@ class TestGetFieldConditions:
 class TestGetFieldCondition:
     """Tests for get_field_condition tool."""
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_condition_success_returns_object(
         self,
         client_session,
@@ -147,7 +161,7 @@ class TestGetFieldCondition:
             result = await session.call_tool(
                 "get_field_condition", {"field_condition_id": "fc-9"}
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_field_condition.assert_called_once_with("fc-9")
         payload = extract_payload(result)
         assert payload == {
@@ -156,7 +170,6 @@ class TestGetFieldCondition:
             "field_condition": fc,
         }
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_condition_not_found_returns_error(
         self,
         client_session,
@@ -170,12 +183,11 @@ class TestGetFieldCondition:
             result = await session.call_tool(
                 "get_field_condition", {"field_condition_id": 999}
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "access denied" in tool_error_message(payload).lower()
 
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_condition_graphql_error_returns_error_payload(
         self,
         client_session,
@@ -191,7 +203,636 @@ class TestGetFieldCondition:
             result = await session.call_tool(
                 "get_field_condition", {"field_condition_id": "x", "debug": False}
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
+
+
+@pytest.mark.anyio
+class TestCreateFieldConditionVerify:
+    """Post-create read-back honesty for create_field_condition."""
+
+    async def test_create_field_condition_verified_when_phase_matches(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        cid = "fc-ok"
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": cid,
+                    "phase": {"id": phase_id, "name": "Inbox"},
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": _MINIMAL_CREATE_ACTIONS,
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["condition_id"] == cid
+        assert payload["verified"] is True
+        mock_pipefy_client.get_field_conditions.assert_not_called()
+
+    async def test_create_field_condition_wrong_phase_returns_failure(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        cid = "fc-wrong"
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": cid,
+                    "phase": {"id": "999000111", "name": "Start form"},
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": _MINIMAL_CREATE_ACTIONS,
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        message = tool_error_message(payload)
+        assert phase_id in message
+        assert cid in message
+        assert "999000111" in message
+        assert "delete_field_condition" in message
+        assert "confirm=true" in message
+        assert "do not retry create" in message.lower()
+        assert payload["error"]["code"] == "FIELD_CONDITION_WRONG_PHASE"
+        assert payload["error"]["details"] == {
+            "condition_id": cid,
+            "phase_id": phase_id,
+            "actual_phase_id": "999000111",
+        }
+
+    async def test_create_field_condition_null_phase_verifies_via_list(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        cid = "fc-soft-phase"
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": cid,
+                    "phase": None,
+                }
+            }
+        )
+        mock_pipefy_client.get_field_conditions = AsyncMock(
+            return_value={
+                "phase": {
+                    "id": phase_id,
+                    "fieldConditions": [{"id": cid}],
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": _MINIMAL_CREATE_ACTIONS,
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["verified"] is True
+        mock_pipefy_client.get_field_conditions.assert_awaited_once_with(phase_id)
+
+    async def test_create_field_condition_verified_via_list_when_get_raises(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        cid = "fc-list-ok"
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            side_effect=PipefyGraphQLError([{"message": "transient"}])
+        )
+        mock_pipefy_client.get_field_conditions = AsyncMock(
+            return_value={
+                "phase": {
+                    "id": phase_id,
+                    "fieldConditions": [{"id": cid}],
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": _MINIMAL_CREATE_ACTIONS,
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["verified"] is True
+
+    async def test_create_field_condition_missing_when_list_lacks_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        cid = "fc-ghost"
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            side_effect=PipefyGraphQLError([{"message": "Not found"}])
+        )
+        mock_pipefy_client.get_field_conditions = AsyncMock(
+            return_value={
+                "phase": {
+                    "id": phase_id,
+                    "fieldConditions": [{"id": "fc-other"}],
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": _MINIMAL_CREATE_ACTIONS,
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        message = tool_error_message(payload)
+        assert "did not persist" in message.lower()
+        assert cid in message
+        assert phase_id in message
+        assert "delete_field_condition" in message
+        assert "confirm=true" in message
+        assert "do not retry create" in message.lower()
+        assert payload["error"]["code"] == "FIELD_CONDITION_NOT_PERSISTED"
+        assert payload["error"]["details"] == {
+            "condition_id": cid,
+            "phase_id": phase_id,
+        }
+
+    async def test_create_field_condition_verify_unavailable_returns_warning(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        cid = "fc-unverified"
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            side_effect=RuntimeError("network down")
+        )
+        mock_pipefy_client.get_field_conditions = AsyncMock(
+            side_effect=RuntimeError("network down")
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": _MINIMAL_CREATE_ACTIONS,
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["condition_id"] == cid
+        assert "verified" not in payload
+        assert "could not verify" in payload["warning"].lower()
+
+    async def test_create_field_condition_null_phase_list_fail_returns_warning(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Get-by-id found the id but phase is null; list then fails → inconclusive."""
+        phase_id = "342182326"
+        cid = "fc-phase-null-list-down"
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": cid,
+                    "phase": None,
+                }
+            }
+        )
+        mock_pipefy_client.get_field_conditions = AsyncMock(
+            side_effect=RuntimeError("list unavailable")
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": _MINIMAL_CREATE_ACTIONS,
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["condition_id"] == cid
+        assert "verified" not in payload
+        assert "could not verify" in payload["warning"].lower()
+        mock_pipefy_client.get_field_conditions.assert_awaited_once_with(phase_id)
+
+
+@pytest.mark.anyio
+class TestRequiredHiddenLint:
+    """Block create/update when hide targets a required field."""
+
+    async def test_create_required_hidden_blocks_before_mutation(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        field_id = "425848637"
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "fields": [
+                    {
+                        "id": "brief",
+                        "internal_id": field_id,
+                        "required": True,
+                    }
+                ]
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": [{"phaseFieldId": field_id, "actionId": "hide"}],
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+        message = tool_error_message(payload)
+        assert field_id in message
+        assert "required" in message.lower()
+        mock_pipefy_client.create_field_condition.assert_not_called()
+        mock_pipefy_client.get_phase_fields.assert_awaited_once_with(phase_id)
+
+    async def test_create_required_hidden_legacy_action_id_blocks_before_mutation(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        field_id = "425848637"
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "fields": [
+                    {
+                        "id": "brief",
+                        "internal_id": field_id,
+                        "required": True,
+                    }
+                ]
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": [{"phaseFieldId": field_id, "actionId": "hidden"}],
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+        assert field_id in tool_error_message(payload)
+        mock_pipefy_client.create_field_condition.assert_not_called()
+
+    async def test_update_required_hidden_blocks_before_mutation(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        condition_id = "fc-7"
+        phase_id = "342182326"
+        field_id = "425848637"
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": condition_id,
+                    "phase": {"id": phase_id, "name": "Inbox"},
+                }
+            }
+        )
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "fields": [
+                    {
+                        "id": "brief",
+                        "internal_id": field_id,
+                        "required": True,
+                    }
+                ]
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_field_condition",
+                {
+                    "condition_id": condition_id,
+                    "actions": [{"phaseFieldId": field_id, "actionId": "hide"}],
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+        assert field_id in tool_error_message(payload)
+        mock_pipefy_client.update_field_condition.assert_not_called()
+        mock_pipefy_client.get_field_condition.assert_awaited_once_with(condition_id)
+        mock_pipefy_client.get_phase_fields.assert_awaited_once_with(phase_id)
+
+    async def test_update_extra_input_actions_rejected(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        condition_id = "fc-extra"
+        field_id = "425848637"
+        mock_pipefy_client.update_field_condition = AsyncMock(
+            return_value={
+                "updateFieldCondition": {"fieldCondition": {"id": condition_id}}
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_field_condition",
+                {
+                    "condition_id": condition_id,
+                    "name": "renamed only",
+                    "extra_input": {
+                        "actions": [{"phaseFieldId": field_id, "actionId": "hide"}],
+                    },
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+        message = tool_error_message(payload)
+        assert "extra_input" in message.lower()
+        assert "top-level" in message.lower()
+        assert "actions" in message.lower()
+        mock_pipefy_client.update_field_condition.assert_not_called()
+        mock_pipefy_client.get_phase_fields.assert_not_called()
+
+    async def test_update_required_hidden_legacy_action_id_blocks_before_mutation(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        condition_id = "fc-7"
+        phase_id = "342182326"
+        field_id = "425848637"
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": condition_id,
+                    "phase": {"id": phase_id, "name": "Inbox"},
+                }
+            }
+        )
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "fields": [
+                    {
+                        "id": "brief",
+                        "internal_id": field_id,
+                        "required": True,
+                    }
+                ]
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_field_condition",
+                {
+                    "condition_id": condition_id,
+                    "actions": [{"phaseFieldId": field_id, "actionId": "hidden"}],
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+        assert field_id in tool_error_message(payload)
+        mock_pipefy_client.update_field_condition.assert_not_called()
+
+    async def test_create_no_required_hidden_conflict_proceeds(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        cid = "fc-ok"
+        field_id = "425848637"
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "fields": [
+                    {
+                        "id": "brief",
+                        "internal_id": field_id,
+                        "required": False,
+                    }
+                ]
+            }
+        )
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": cid,
+                    "phase": {"id": phase_id, "name": "Inbox"},
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": [{"phaseFieldId": field_id, "actionId": "hide"}],
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["verified"] is True
+        mock_pipefy_client.create_field_condition.assert_awaited_once()
+
+    async def test_create_phase_fields_error_proceeds_best_effort(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        phase_id = "342182326"
+        cid = "fc-ok"
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            side_effect=RuntimeError("phase fields unavailable")
+        )
+        mock_pipefy_client.create_field_condition = AsyncMock(
+            return_value={"createFieldCondition": {"fieldCondition": {"id": cid}}}
+        )
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": cid,
+                    "phase": {"id": phase_id, "name": "Inbox"},
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_field_condition",
+                {
+                    "phase_id": phase_id,
+                    "condition": _MINIMAL_CREATE_CONDITION,
+                    "actions": _MINIMAL_CREATE_ACTIONS,
+                    "name": "Hide brief",
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        mock_pipefy_client.create_field_condition.assert_awaited_once()
+
+    async def test_update_phase_fields_error_proceeds_best_effort(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        condition_id = "fc-ok"
+        phase_id = "342182326"
+        field_id = "425848637"
+        mock_pipefy_client.get_field_condition = AsyncMock(
+            return_value={
+                "fieldCondition": {
+                    "id": condition_id,
+                    "phase": {"id": phase_id, "name": "Inbox"},
+                }
+            }
+        )
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            side_effect=RuntimeError("phase fields unavailable")
+        )
+        mock_pipefy_client.update_field_condition = AsyncMock(
+            return_value={
+                "updateFieldCondition": {"fieldCondition": {"id": condition_id}}
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_field_condition",
+                {
+                    "condition_id": condition_id,
+                    "actions": [{"phaseFieldId": field_id, "actionId": "hide"}],
+                },
+            )
+        assert result.is_error is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        mock_pipefy_client.update_field_condition.assert_awaited_once()
+        mock_pipefy_client.get_phase_fields.assert_awaited_once_with(phase_id)
+
+
+@pytest.mark.anyio
+class TestDeleteFieldCondition:
+    async def test_success(self, client_session, mock_pipefy_client):
+        mock_pipefy_client.delete_field_condition.return_value = {"success": True}
+        async with client_session as session:
+            payload = await confirm_after_preview(
+                session, "delete_field_condition", {"condition_id": "cond-9"}
+            )
+        mock_pipefy_client.delete_field_condition.assert_awaited_once_with("cond-9")
+        assert payload["success"] is True
+        assert payload.get("message")

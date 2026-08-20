@@ -23,7 +23,7 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 | `get_automation` | `pipefy automation get` | Single automation with full rule config — returns `event_params` and `action_params` (including `aiParams` for AI rules). |
 | `create_automation` | `pipefy automation create` | Create an if/then rule. `active` defaults to true. First-class typed `condition` (see [Conditions](#conditions--gate-a-rule-on-field-tests)); other fields via `extra_input`. |
 | `update_automation` | `pipefy automation update` | Patch a rule: first-class typed `condition` (see [Conditions](#conditions--gate-a-rule-on-field-tests)) and/or `extra_input`. |
-| `delete_automation` | `pipefy automation delete` | **(Two-step destructive)** |
+| `delete_automation` | `pipefy automation delete` | **(Two-step destructive)**[^mcp-confirm] |
 | `simulate_automation` | `pipefy automation simulate` | **AI-only** dry-run (`generate_with_ai` action). |
 | `get_automation_events` | `pipefy automation events list` | Available trigger events. |
 | `get_automation_event_attributes` | `pipefy automation event-attributes` | Official `field_map.value` event-attribute tokens. |
@@ -36,14 +36,18 @@ Logs, usage, and job exports for automations live in [skills/observability/pipef
 
 ## AI automations (prompt-driven)
 
+**Consent:** create or suggest an AI automation only when the user explicitly asked for AI. If it seems useful but was not requested, ask first — never introduce AI automations without being asked.
+
 | Tool (MCP) | CLI | Purpose |
 |------------|-----|---------|
 | `get_ai_automations` | `pipefy ai-automation list` | List AI automations for a pipe. |
 | `get_ai_automation` | `pipefy ai-automation get` | Full config including prompt, fields, condition. |
 | `create_ai_automation` | `pipefy ai-automation create` | Create a prompt-driven automation (requires AI enabled on the pipe). |
 | `update_ai_automation` | `pipefy ai-automation update` | Change name, `active`, prompt, `field_ids`, or `condition`. |
-| `delete_ai_automation` | `pipefy ai-automation delete` | **(Two-step destructive)** |
+| `delete_ai_automation` | `pipefy ai-automation delete` | **(Two-step destructive)**[^mcp-confirm] |
 | `validate_ai_automation_prompt` | `pipefy ai-automation validate-prompt` | **Pre-flight check.** Returns `{valid, problems, warnings, field_map}` — also detects prompt `%{id}` ∩ `field_ids` overlap. |
+
+[^mcp-confirm]: MCP two-step: echo `confirmation_token` from the preview with `confirm=true`. CLI: `--yes`.
 
 ---
 
@@ -79,8 +83,9 @@ Logs, usage, and job exports for automations live in [skills/observability/pipef
 
 1. **Discover events** for the pipe: `get_automation_events pipe_id=67890`.
 2. **Discover actions** for the pipe: `get_automation_actions pipe_id=67890`. (Always discover first; never guess `trigger_id` / `action_id`.)
-3. **Build the rule** with the discovered IDs and call `create_automation`.
-4. **Verify** by reading back with `get_automation`.
+3. **Confirm event×action compatibility** — the chosen `event_id` must appear in the action's `triggerEvents` (from `get_automation_actions`). If it does not, pick another pair; do not call `create_automation` yet. See [Event×action compatibility](#eventaction-compatibility).
+4. **Build the rule** with the discovered IDs and call `create_automation`.
+5. **Verify** by reading back with `get_automation`.
 
 ---
 
@@ -167,6 +172,26 @@ Use when the user wants an if/then rule to **stamp or copy values** onto the tri
 
 ## Traditional automation preflight
 
+### Event×action compatibility
+
+Before `create_automation`, confirm the chosen `event_id` is listed in that action's `triggerEvents` from `get_automation_actions` (cross-check with `get_automation_events` as needed). The API may still accept some incompatible pairs; those rules never fire.
+
+**Known dead combo:** `field_updated` + `move_single_card` — create can succeed and the rule never executes. Do not use this pairing; pick a compatible event (for example `card_moved` when the action is a move) or a different action for field-update triggers.
+
+### Applying a label has no automation action
+
+**Hard stop:** no action in the catalog applies a label to a card. The **action** is what is missing, not the trigger: `sla_based` is in the event catalog, so "when the card goes overdue" is a perfectly good trigger with nothing to attach to. `get_automation_actions(pipe_id)` is the dynamic source of truth for what a given pipe offers; read it before planning a rule and do not assume a label action exists.
+
+What to do with that intent:
+
+1. **Send the intent to the product, not to a script.** A label rule belongs in the customer's process, where it keeps firing without anyone driving it. The API and MCP cannot create it, so hand the user a manual step: configure the rule in Pipefy and confirm there what the interface offers for that trigger. State that step in the plan or summary you hand the user, the same way you would for an email template.
+2. **Offer the rule that does exist, when it fits.** `update_card_field` accepts `sla_based`, so "when the card goes overdue, stamp a field on the card" is createable through `create_automation` today. A status or flag field carries the same signal as a label and keeps the rule inside the process. Discover a suitable destination field first with `get_start_form_fields` / `get_phase_fields`: many pipes have no field named Status, and the automation needs a real `internal_id`. Propose it, do not impose it: the user may want the label specifically.
+
+   `sla_based` takes its parameter as `event_params.kindOfSla`, **camelCase**, even though `get_automation_events` reports it as `kind_of_sla`. Values are capitalized: `Expired`, `Late`, `Overdue`. Sending the catalog spelling fails with "Field is not defined on AutomationEventParamsInput". Shape the action with the `field_map` recipe below, including `inputMode`.
+3. **`update_card(label_ids=[...])` is a one-off correction, not automation.** It **replaces** the card's whole label list: include every id that should remain; do not send only the new one. Something has to run the call every time. Nothing persists as process behavior once the session ends. Use it to fix specific cards the user points at, and say so plainly. **Do not call it across a set of cards to stand in for the rule**, and do not loop it on a schedule: that makes the agent the runtime instead of the process.
+4. **Label CRUD is a different thing.** `create_label`, `update_label` and `delete_label` manage the label definitions on a pipe (name, color). None of them applies a label to a card, and none of them is the automation action.
+5. **Do not offer an AI automation or agent behavior as the alternative.** Some organizations forbid AI in their processes, and the [consent rule](#ai-automations-prompt-driven) applies here: propose AI only when the user explicitly asked for it.
+
 ### `field_map` destination `fieldId`
 
 On `create_automation`, when `extra_input.action_params.field_map` is present, the SDK checks each `fieldId` against numeric `internal_id` values on the action pipe (`action_repo_id`, default `pipe_id`). Slug-shaped `fieldId` values and unknown numeric ids fail before GraphQL with `success: false` and the offending id. Recovery: `get_start_form_fields` / `get_phase_fields` → use `internal_id`, not slug.
@@ -194,6 +219,8 @@ Pick the right tool for "notification" intent:
 
 Do NOT hand-build `action_params.taskParams` via `create_automation` when `create_send_task_automation` is the right tool.
 
+An automation that sends email depends on a template that already exists: template create, edit and delete have no API or MCP path, only the Pipefy UI. When the process needs a new or changed template, state that manual UI step in the plan or summary you give the user.
+
 ---
 
 ## Agentic + human-in-the-loop pattern
@@ -218,11 +245,22 @@ Use this pattern for approvals, financial decisions, content publication, and an
 
 ## Failure modes
 
+### Automation did not fire / empty logs
+
+1. `get_automation` — re-read the rule and its `condition`.
+2. Re-check event×action: `event_id` must be in the action's `triggerEvents` (see [Event×action compatibility](#eventaction-compatibility)); known dead pairs never run even when create succeeded.
+3. Empty logs are not proof of a platform outage — the rule may be dormant, inactive, or incompatible.
+4. Invalid `fieldId` in `field_map` may fail without updating the card (see below).
+5. Read the tool error payload and required-field / phase-transition hints **before** concluding "MCP down" or blaming the platform.
+
+### Other failure modes
+
 - **`simulate_automation` is AI-only.** Only `generate_with_ai` `action_id` accepted. For traditional rules, use `get_automation_logs` after the rule fires.
 - **Async simulation result.** `simulate_automation` returns `simulation_id` + `status:"processing"` + null `simulationResult`; no polling tool in v0.1. Wait, then call `get_automation_logs` or re-invoke `simulate_automation`.
 - **`validate_ai_automation_prompt` returns `valid:false`.** Read `problems` (per-field) and `warnings`. Most common: prompt missing `%{internal_id}` reference, or `field_ids` overlap with prompt `%{id}` tokens.
 - **`create_automation` cycle detection.** Same-pipe `card_created` + `create_card` rejected with `"This automation can't be created! It would result in an endless card creation cycle."` Use a different trigger, target a different pipe, or use `update_card` instead.
 - **`create_automation` fails with unknown event/action.** Always run `get_automation_events` + `get_automation_actions` first; do not guess IDs.
+- **Planned a rule that applies a label.** No such action exists in the catalog. The trigger does: `sla_based` is available, so only the label action is missing. See [Applying a label has no automation action](#applying-a-label-has-no-automation-action) before offering anything else.
 - **Phase transition error on `move_single_card`.** Only `create_automation` preflights transitions. Read allowed phase ids in the error text or call `get_phase_allowed_move_targets`, then re-issue with a permitted destination. UI is the only edit surface for transition rules.
 - **Cross-pipe `PERMISSION_DENIED`.** SA must be member of both source and destination pipes for `create_connected_card` / cross-pipe `create_card`. Recovery: `get_pipe_members` + `invite_members`.
 - **`get_automation_logs_by_repo` returns empty.** Pipe has no traditional automation executions; not an error. AI agent executions are separate (see `get_ai_agent_logs`).
@@ -239,6 +277,7 @@ Use this pattern for approvals, financial decisions, content publication, and an
 
 ## See also
 
+- [skills/building/pipefy-building/SKILL.md](../../building/pipefy-building/SKILL.md) — intent → domain skill router for build asks.
 - [skills/ai-agents/pipefy-ai-agents/SKILL.md](../../ai-agents/pipefy-ai-agents/SKILL.md) — conversational agents with behaviors (different from AI automations).
 - [skills/observability/pipefy-observability/SKILL.md](../../observability/pipefy-observability/SKILL.md) — execution logs and usage stats.
 - [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — discover trigger and action types via raw schema.

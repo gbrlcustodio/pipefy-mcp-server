@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -12,6 +12,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.llm_provider_tools import LlmProviderTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 BYOM_NODE = {
     "__typename": "LlmProvider",
@@ -107,7 +108,6 @@ def provider_session(provider_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_success_with_pagination(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -121,7 +121,7 @@ async def test_get_llm_providers_success_with_pagination(
         result = await session.call_tool(
             "get_llm_providers", {"organization_uuid": "org-uuid-1", "first": 2}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.get_llm_providers.assert_awaited_once_with(
         "org-uuid-1", only_active=False, first=2, after=None
     )
@@ -136,7 +136,6 @@ async def test_get_llm_providers_success_with_pagination(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_blank_org_uuid_rejected(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -151,7 +150,6 @@ async def test_get_llm_providers_blank_org_uuid_rejected(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_invalid_page_size_rejected(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -165,7 +163,6 @@ async def test_get_llm_providers_invalid_page_size_rejected(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_permission_denied_classified(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -184,7 +181,6 @@ async def test_get_llm_providers_permission_denied_classified(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_available_ai_models_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -202,7 +198,6 @@ async def test_get_available_ai_models_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_available_ai_models_invalid_enum_surfaces_api_error(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -226,7 +221,6 @@ async def test_get_available_ai_models_invalid_enum_surfaces_api_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_default_llm_provider_defaults_to_organization(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -244,7 +238,6 @@ async def test_get_default_llm_provider_defaults_to_organization(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_provider_dependencies_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -268,7 +261,6 @@ async def test_get_llm_provider_dependencies_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_validate_llm_provider_access_green(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -292,7 +284,6 @@ async def test_validate_llm_provider_access_green(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_validate_llm_provider_access_failure_maps_problem(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -319,7 +310,6 @@ async def test_validate_llm_provider_access_failure_maps_problem(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_providers_not_found_has_no_self_referential_hint(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -336,7 +326,6 @@ async def test_get_llm_providers_not_found_has_no_self_referential_hint(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_get_llm_provider_dependencies_not_found_adds_discovery_hint(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -356,7 +345,6 @@ async def test_get_llm_provider_dependencies_not_found_adds_discovery_hint(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_transport_failure_without_graphql_errors_falls_back_to_str(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -372,11 +360,61 @@ async def test_transport_failure_without_graphql_errors_falls_back_to_str(
     assert "socket closed" in tool_error_message(payload)
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_empty_exception_message_uses_fallback(
+    provider_session, mock_provider_client, extract_payload, exc_message
+):
+    mock_provider_client.get_llm_providers = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "get_llm_providers", {"organization_uuid": "org-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "LLM provider request failed." in message
+    assert "do not blind-retry" in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_classified_blank_or_whitespace_message_becomes_unknown_error(
+    provider_session, mock_provider_client, extract_payload, exc_message
+):
+    """SDK classifier normalizes blank messages; MCP keeps the classified envelope."""
+    mock_provider_client.get_llm_providers = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {
+                    "message": exc_message,
+                    "extensions": {
+                        "code": "PERMISSION_DENIED",
+                        "correlation_id": "corr-ws",
+                    },
+                }
+            ]
+        )
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "get_llm_providers", {"organization_uuid": "org-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert tool_error_message(payload) == "Unknown error"
+    assert payload["error"]["code"] == "PERMISSION_DENIED"
+    assert payload["error"]["details"]["kind"] == "permission_denied"
+    assert "do not blind-retry" not in tool_error_message(payload)
+
+
 # --- Write tools ---------------------------------------------------------
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_create_and_update_take_file_path_not_inline_configuration(
     provider_session,
 ):
@@ -384,13 +422,12 @@ async def test_create_and_update_take_file_path_not_inline_configuration(
     async with provider_session as session:
         tools = {t.name: t for t in (await session.list_tools()).tools}
     for name in ("create_llm_provider", "update_llm_provider"):
-        props = tools[name].inputSchema.get("properties", {})
+        props = tools[name].input_schema.get("properties", {})
         assert "configuration_file_path" in props
         assert "configuration" not in props
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_create_llm_provider_success_returns_no_configuration(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -404,7 +441,7 @@ async def test_create_llm_provider_success_returns_no_configuration(
                 "configuration_file_path": "/tmp/config.json",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.create_llm_provider.assert_awaited_once_with(
         "org-uuid-1", name="My OpenAI", configuration_file_path="/tmp/config.json"
     )
@@ -415,7 +452,6 @@ async def test_create_llm_provider_success_returns_no_configuration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_create_llm_provider_value_error_becomes_tool_error(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -439,7 +475,6 @@ async def test_create_llm_provider_value_error_becomes_tool_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_update_llm_provider_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -454,7 +489,7 @@ async def test_update_llm_provider_success(
                 "name": "Renamed",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.update_llm_provider.assert_awaited_once_with(
         "42",
         "org-uuid-1",
@@ -465,7 +500,6 @@ async def test_update_llm_provider_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_delete_preview_without_confirm_does_not_delete(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -480,43 +514,71 @@ async def test_delete_preview_without_confirm_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
-async def test_delete_with_confirm_executes(
-    provider_session, mock_provider_client, extract_payload
-):
+async def test_delete_with_confirm_executes(provider_session, mock_provider_client):
     mock_provider_client.delete_llm_provider = AsyncMock(return_value={"success": True})
     async with provider_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_llm_provider",
             {"provider_id": "42", "organization_uuid": "org-uuid-1", "confirm": True},
         )
-    assert result.isError is False
     mock_provider_client.delete_llm_provider.assert_awaited_once_with(
         "42", "org-uuid-1"
     )
-    assert extract_payload(result)["data"]["deleted_id"] == "42"
+    assert payload["data"]["deleted_id"] == "42"
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_delete_unconfirmed_by_api_is_tool_error(
-    provider_session, mock_provider_client, extract_payload
+    provider_session, mock_provider_client
 ):
     mock_provider_client.delete_llm_provider = AsyncMock(
         return_value={"success": False}
     )
     async with provider_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_llm_provider",
             {"provider_id": "42", "organization_uuid": "org-uuid-1", "confirm": True},
         )
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "did not confirm" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_delete_llm_provider_rejects_token_when_organization_uuid_differs(
+    provider_session, mock_provider_client, extract_payload
+):
+    mock_provider_client.delete_llm_provider = AsyncMock(return_value={"success": True})
+    async with provider_session as session:
+        preview = await session.call_tool(
+            "delete_llm_provider",
+            {"provider_id": "42", "organization_uuid": "org-A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_llm_provider",
+            {
+                "provider_id": "42",
+                "organization_uuid": "org-B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_provider_client.delete_llm_provider.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_llm_provider",
+            {"provider_id": "42", "organization_uuid": "org-A"},
+        )
+
+    mock_provider_client.delete_llm_provider.assert_awaited_once_with("42", "org-A")
+    assert matched["success"] is True
+
+
+@pytest.mark.anyio
 async def test_set_active_status_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -527,7 +589,7 @@ async def test_set_active_status_success(
         result = await session.call_tool(
             "set_llm_provider_active_status", {"provider_id": "42", "active": False}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.set_llm_provider_active_status.assert_awaited_once_with(
         "42", active=False
     )
@@ -536,7 +598,6 @@ async def test_set_active_status_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_set_default_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -547,7 +608,7 @@ async def test_set_default_success(
             "set_default_llm_provider",
             {"organization_id": "123456", "provider_id": "42"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.set_default_llm_provider.assert_awaited_once_with(
         "123456", provider_id="42", system_provider_id=None
     )
@@ -555,7 +616,6 @@ async def test_set_default_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_set_default_xor_violation_is_tool_error(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -579,7 +639,6 @@ async def test_set_default_xor_violation_is_tool_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("provider_session", [None], indirect=True)
 async def test_reset_default_success(
     provider_session, mock_provider_client, extract_payload
 ):
@@ -590,6 +649,6 @@ async def test_reset_default_success(
         result = await session.call_tool(
             "reset_default_llm_provider", {"organization_id": "123456"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_provider_client.reset_default_llm_provider.assert_awaited_once_with("123456")
     assert extract_payload(result)["data"]["organization_id"] == "123456"

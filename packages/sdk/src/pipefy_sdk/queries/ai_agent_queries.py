@@ -113,6 +113,7 @@ CREATE_AI_AGENT_MUTATION = gql(
                 repoUuid
                 instruction
                 dataSourceIds
+                disabledAt
             }
         }
     }
@@ -139,6 +140,7 @@ UPDATE_AI_AGENT_MUTATION = gql(
                 repoUuid
                 instruction
                 dataSourceIds
+                disabledAt
                 behaviors {
                     id
                     name

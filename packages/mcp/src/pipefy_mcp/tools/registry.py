@@ -4,9 +4,9 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
-from pipefy_mcp.core.fastmcp_tool_lifecycle import remove_fastmcp_tools_by_name
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
@@ -32,7 +32,7 @@ from pipefy_mcp.tools.toolsets import POWER_GRAPHQL_TOOLS, resolve_selection
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp.tools.base import Tool
+    from mcp.server.mcpserver.tools.base import Tool
 
 logger = logging.getLogger(__name__)
 
@@ -259,18 +259,54 @@ _TOOLSETS = (
 class ToolRegistry:
     """Responsible for registering tools with the MCP server."""
 
-    def __init__(self, mcp: FastMCP):
+    def __init__(self, mcp: MCPServer):
         self.mcp = mcp
         self.pipefy_tool_names: frozenset[str] = PIPEFY_TOOL_NAMES
 
     @staticmethod
-    def _snapshot_tool_names(mcp: FastMCP) -> set[str]:
-        return {tool.name for tool in mcp._tool_manager.list_tools()}
+    def _live_tools(mcp: MCPServer) -> list[Tool]:
+        """The tools currently registered, as server-tier ``Tool`` objects.
+
+        The one private-API touchpoint left in this class, and deliberate, for two
+        reasons. ``apply_power_profile`` keeps these objects themselves in the catalog
+        that ``execute_tool`` dispatches through, and ``describe_tool`` reads their
+        ``parameters``; the public ``MCPServer.list_tools()`` returns wire
+        ``mcp.types.Tool`` models, which carry neither ``run`` nor ``parameters``. And
+        that public method is async, while registration and filtering run
+        synchronously at build time, so awaiting here would push ``async`` up through
+        the composition root into both transports.
+
+        Note the ``meta`` marker is NOT among the reasons: it is present on the wire
+        model too, so the remote floor alone could read it either way. Removal goes
+        through the public ``MCPServer.remove_tool``.
+
+        If upstream renames ``_tool_manager`` this raises ``AttributeError`` at
+        startup, which is the failure mode to want: loud, before serving, rather than
+        a floor that silently fails to apply.
+        """
+        return list(mcp._tool_manager.list_tools())
+
+    @staticmethod
+    def _snapshot_tool_names(mcp: MCPServer) -> set[str]:
+        return {tool.name for tool in ToolRegistry._live_tools(mcp)}
+
+    def _remove_tools_by_name(self, names: set[str]) -> None:
+        """Remove tools by exact name, tolerating one that is already gone.
+
+        Only names the caller selected out of the live set are passed in, so a
+        missing one means another path removed it first; that is not an error worth
+        failing a build over.
+        """
+        for name in names:
+            try:
+                self.mcp.remove_tool(name)
+            except ToolError:
+                logger.debug("Tool %r not registered; skipping remove.", name)
 
     def check_for_name_collisions(self) -> None:
         """Fail fast if any Pipefy tool name is already registered on the app.
 
-        FastMCP keeps the first handler when names collide; preflight avoids
+        The SDK keeps the first handler when names collide; preflight avoids
         silently running a foreign ``create_card`` (or other) handler.
         """
         existing = self._snapshot_tool_names(self.mcp)
@@ -306,10 +342,10 @@ class ToolRegistry:
         """
         withheld = {
             tool.name
-            for tool in self.mcp._tool_manager.list_tools()
+            for tool in self._live_tools(self.mcp)
             if tool.name in self.pipefy_tool_names and not predicate(tool)
         }
-        remove_fastmcp_tools_by_name(self.mcp, withheld)
+        self._remove_tools_by_name(withheld)
         return withheld
 
     def apply_remote_profile(self, *, remote_mode: bool) -> set[str]:
@@ -347,7 +383,7 @@ class ToolRegistry:
         withheld = self.retain_only(lambda tool: tool.name in selection)
         exposed = sum(
             1
-            for tool in self.mcp._tool_manager.list_tools()
+            for tool in self._live_tools(self.mcp)
             if tool.name in self.pipefy_tool_names
         )
         logger.info(
@@ -369,7 +405,7 @@ class ToolRegistry:
         """
         catalog = {
             tool.name: tool
-            for tool in self.mcp._tool_manager.list_tools()
+            for tool in self._live_tools(self.mcp)
             if tool.name in self.pipefy_tool_names
             and tool.name not in POWER_GRAPHQL_TOOLS
         }
@@ -377,7 +413,7 @@ class ToolRegistry:
         register_meta_tools(self.mcp, catalog)
         visible = sum(
             1
-            for tool in self.mcp._tool_manager.list_tools()
+            for tool in self._live_tools(self.mcp)
             if tool.name in self.pipefy_tool_names
         )
         logger.info(

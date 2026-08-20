@@ -6,12 +6,22 @@ validation-error and not-found paths never reach a Pipefy client, so no runtime 
 needed.
 """
 
-from mcp.server.fastmcp import FastMCP
+from datetime import timedelta
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from _mcp_compat import (
+    create_connected_server_and_client_session as create_client_session,
+)
+from mcp.server.mcpserver import MCPServer
+from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.meta_tools import register_meta_tools
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.toolsets import DOMAINS, POWER_GRAPHQL_TOOLS
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
+from pipefy_mcp.tools.webhook_tools import WebhookTools
+from tools.conftest import build_tool_test_server
 
 _META_TOOLS = ("get_tool_categories", "search_tools", "describe_tool", "execute_tool")
 
@@ -19,7 +29,7 @@ _META_TOOLS = ("get_tool_categories", "search_tools", "describe_tool", "execute_
 def _catalog(*, remote: bool = False) -> dict:
     """A catalog snapshot of the registered Pipefy tools (optionally post-floor)."""
     install_pipefy_validation_envelope()
-    mcp = FastMCP("catalog-source")
+    mcp = MCPServer("catalog-source")
     registry = ToolRegistry(mcp=mcp)
     registry.register_tools()
     if remote:
@@ -34,7 +44,7 @@ def _catalog(*, remote: bool = False) -> dict:
 
 def _meta_fns(catalog: dict) -> dict:
     """Register the meta-tools over ``catalog`` and return their callables by name."""
-    host = FastMCP("meta-host")
+    host = MCPServer("meta-host")
     register_meta_tools(host, catalog)
     return {name: host._tool_manager._tools[name].fn for name in _META_TOOLS}
 
@@ -103,3 +113,50 @@ class TestExecuteTool:
         result = await fns["execute_tool"]("create_llm_provider", None, {})
         assert result["success"] is False
         assert result["error"]["code"] == "TOOL_NOT_FOUND"
+
+
+@pytest.mark.anyio
+async def test_execute_tool_passes_destructive_two_step_through(extract_payload):
+    """Power-profile deletes are reachable only via execute_tool; arguments pass through."""
+    client = MagicMock(PipefyClient)
+    client.delete_webhook = AsyncMock(return_value={"deleteWebhook": {"success": True}})
+    server = build_tool_test_server("power-passthrough", WebhookTools.register, client)
+    catalog = {
+        tool.name: tool
+        for tool in server._tool_manager.list_tools()
+        if tool.name == "delete_webhook"
+    }
+    assert catalog
+    register_meta_tools(server, catalog)
+
+    async with create_client_session(
+        server,
+        read_timeout_seconds=timedelta(seconds=10),
+        raise_exceptions=True,
+    ) as session:
+        preview_result = await session.call_tool(
+            "execute_tool",
+            {"name": "delete_webhook", "arguments": {"webhook_id": "wh-1"}},
+        )
+        preview = extract_payload(preview_result)
+        assert preview["success"] is False
+        assert preview["requires_confirmation"] is True
+        token = preview["confirmation_token"]
+        assert isinstance(token, str) and token.startswith("v1.")
+        assert token in preview["message"]
+        client.delete_webhook.assert_not_called()
+
+        confirm_result = await session.call_tool(
+            "execute_tool",
+            {
+                "name": "delete_webhook",
+                "arguments": {
+                    "webhook_id": "wh-1",
+                    "confirm": True,
+                    "confirmation_token": token,
+                },
+            },
+        )
+        confirmed = extract_payload(confirm_result)
+        assert confirmed["success"] is True
+        client.delete_webhook.assert_awaited_once_with("wh-1")

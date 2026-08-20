@@ -279,7 +279,8 @@ def _apply_prepare(bump_arg: str, target: str, *, stamp: bool = True) -> str:
     if stamp:
         stamp_changelog(version)
     run(["git", "add", "-A"])
-    run(["git", "commit", "-m", f"chore: release v{version}"])
+    # -s rather than a prepare-commit-msg hook, which a fresh clone lacks (#636).
+    run(["git", "commit", "-s", "-m", f"chore: release v{version}"])
     return version
 
 

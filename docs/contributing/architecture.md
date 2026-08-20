@@ -261,7 +261,7 @@ Four of these are costs, and each one lands at a different moment. `QR-9` and `Q
 These trades are real:
 
 - A question the model must answer costs a round trip, so `QR-6` and `QR-22` each spend what `QR-5` saves. A question the client fields costs `QR-5` nothing, which is why `QR-22` is the cheap way to meet `QR-5` and not a rival to it.
-- When no human is present, neither a consent dialog nor a question about a missing input can run, so what `QR-6` and `QR-22` would ask for becomes an explicit flag, and a run that has no flag fails rather than guessing.
+- `QR-3` holds when no human is present, so neither a consent dialog nor a question about a missing input can run. What `QR-6` and `QR-22` would ask for becomes an explicit flag, and a run that has no flag fails rather than guessing.
 - The `power` branch in [Tool surface](#tool-surface) holds the tool count constant, and every call then routes through a meta-tool, so `QR-9` spends what `QR-5` saves.
 - A port makes a unit injectable, and a port with one implementation is indirection, so `QR-13` spends what a reader of the code saves. `PORT-2` in [`conventions.md`](conventions.md) sets where that trade lands.
 

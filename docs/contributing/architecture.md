@@ -98,7 +98,7 @@ That match of application to consumer decides the layer split. The SDK executes.
 
 Each application decides its own identifier form, and there is no global choice. The SDK takes numeric identifiers first. The CLI takes deterministic identifiers. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. An identifier that can match more than one resource therefore never resolves silently, which is what `QR-7` requires. `ARG-1` in [`conventions.md`](conventions.md) holds each argument to one form, and [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md) names which one, per tool and per argument.
 
-The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation, which is `QR-22`. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic, which is what `QR-3` requires.
+The MCP server takes the human intent as the primary input. When the client declares the capability, the MCP server resolves ambiguity by elicitation, which is how it meets `QR-7`. `QR-22` asks for the same behavior wherever a tool lacks an input it needs. The declared capability of the client decides between interactive behavior and ambient behavior, so a headless caller stays deterministic, which is what `QR-3` requires.
 
 A destructive operation carries the same split. `QR-6` asks that the operation name what it affects before it runs, and `QR-3` asks that no run block on an answer when no human is present. Together they leave the choice to the declared capability, exactly as ambiguity does above.
 

@@ -34,6 +34,18 @@ Those functions act on the Pipefy capabilities below. Each name is a sub-domain 
 - Billing: read the AI credits an organization consumed.
 - System Integration: register a webhook, and reach an iPaaS flow.
 
+## Quality goals
+
+Five qualities dominate every decision on this map, in this order. A trade that spends one of them needs an argument that names it. [Quality requirements](#quality-requirements) holds every row named below.
+
+| Priority | Quality goal | Scenario |
+|---|---|---|
+| 1 | Authenticity | Two callers hold sessions on one remote process. A tool body reads the bearer from the request in flight, and never from process state. (`QR-4`, `QR-16`) |
+| 2 | Resource utilization | A model asks for one card by name. One tool call answers it, and the response carries what was asked for rather than the whole entity. (`QR-5`, `QR-10`, `QR-18`, `QR-23`) |
+| 3 | Diagnosability | A GraphQL call is denied. The response names the likely cause and the next step, and a `debug` argument adds the vendor error codes and a correlation id. (`QR-1`, `QR-8`, `QR-12`) |
+| 4 | Stability | Pipefy reshapes a GraphQL response. One adapter changes, and no code that imports the SDK changes. (`QR-2`) |
+| 5 | Backward compatibility | After v1.0, a release drops a parameter that consumer code passes. A deprecation warning shipped before that release, and `DEPRECATION.md` states what made the change breaking. (`QR-11`) |
+
 ## Constraints
 
 Limits that this repository does not decide.

@@ -16,10 +16,10 @@ Where the code does not match the map, [Known gaps](#known-gaps) names the diffe
 
 These are the functions a consumer comes to the toolkit for. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
 
-- `FR-1` Persistent sign-in. One CLI command signs a consumer in through a browser, and every later call uses the stored session. The toolkit refreshes that session before it expires, and a logout revokes it.
-- `FR-2` Name resolution. The CLI and the MCP server find a resource from its name, and a mistyped or shortened name still finds it. The API filters by name, and ranking the matches is the toolkit's part.
-- `FR-3` Validation without execution. The toolkit checks a proposed change against the API's rules and reports what would fail, without applying it.
-- `FR-4` Escape hatch. The CLI and the MCP server expose a raw GraphQL operation and schema introspection, so what no tool wraps stays reachable. A pipe's iPaaS workspace is reachable too, and the toolkit performs the credential exchange that reaching it takes.
+- `FR-1` Persistent sign-in. The CLI signs a consumer in through a browser on one command, and every later call uses the stored session. The toolkit refreshes that session before it expires, and a logout revokes it.
+- `FR-2` Name resolution. When a consumer names a resource instead of giving its id, the CLI and the MCP server find that resource, and an incomplete or misspelled name still finds it.
+- `FR-3` Validation without execution. Before a consumer applies a change, the toolkit checks it against the rules the API enforces and reports what would fail. The check applies nothing.
+- `FR-4` Escape hatch. When no tool wraps an operation, the CLI and the MCP server still reach it, through a raw GraphQL call and schema introspection. A pipe's iPaaS workspace is reachable too, and the toolkit performs the credential exchange that it needs.
 
 Those functions act on the Pipefy capabilities below. Each name is a sub-domain of Pipefy's domain model, which lives outside this repository.
 

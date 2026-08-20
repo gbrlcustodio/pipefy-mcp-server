@@ -211,9 +211,9 @@ Each row carries the dimensions of the quality it instantiates, and [`quality.ar
 | `QR-1` | `#operable` `#reliable` | An invalid request names the field and the rule it broke |
 | `QR-3` | `#usable` `#operable` | When no human is present, a run never waits for an answer, and it either goes ahead with what it has or fails |
 | `QR-4` | `#secure` | A request acts as the person who sent it, and never as anyone else |
-| `QR-5` | `#efficient` | A request finishes without the model making a chain of calls to get there |
+| `QR-5` | `#efficient` | A request finishes without the model making a chain of tool calls to get there |
 | `QR-6` | `#safe` `#reliable` | A destructive operation names what it affects, and it waits for an explicit yes |
-| `QR-7` | `#usable` `#reliable` `#suitable` | A name that fits more than one thing never quietly picks one, and the caller gets the matches instead |
+| `QR-7` | `#usable` `#reliable` `#suitable` | A name that fits more than one resource never quietly picks one, and the caller gets the matches instead |
 | `QR-9` | `#usable` `#reliable` `#suitable` | A model sees only the tools the consumer's work needs |
 | `QR-10` | `#efficient` | A tool keeps its answer short, and a caller who needs more asks for more |
 | `QR-15` | `#secure` | The toolkit checks where a URL points before it fetches it, and it refuses a private address |

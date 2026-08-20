@@ -24,8 +24,8 @@ These are the functions a consumer comes to the toolkit for. Each one is work th
 
 Those functions act on the Pipefy capabilities below. Each name is a sub-domain of Pipefy's domain model, which lives outside this repository.
 
-- Work Execution: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email. An AI agent acts on a card as a non-human assignee, and a builder sets up the agent, the behaviors it runs, and the knowledge it reads.
-- Process Modeling: create and change a pipe, its phases, its fields, its field conditions, its labels, and its automations. An AI automation is one action type of that automation mechanism.
+- Work Execution: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email.
+- Process Modeling: create and change a pipe, its phases, its fields, its field conditions, its labels, and its automations, an AI automation among them. A builder sets up an AI agent here too, with the behaviors it runs and the knowledge it reads.
 - Business Records: create and query a database table, its fields, and its records.
 - Request Intake: build the channel a requester submits through, a portal with its pages and its elements, publish a sub-portal, and read the start form that states what a submission must carry.
 - Identity and Access Management: invite a member, set a role, and mint a service account.

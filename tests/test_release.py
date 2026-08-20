@@ -608,3 +608,20 @@ def test_smoke_run_names_the_step_and_says_nothing_shipped(monkeypatch) -> None:
         _release._smoke_run("install the built wheels", ["pip", "install", "x"])
     assert "install the built wheels" in str(exc.value)
     assert "Nothing was tagged" in str(exc.value)
+
+
+def test_apply_prepare_signs_off_the_release_commit(monkeypatch) -> None:
+    # A Signed-off-by trailer lives inside the message, so an unsigned release
+    # commit is repaired only by an amend and a force-push on the open release
+    # pull request. #635 needed exactly that.
+    calls: list[list[str]] = []
+    monkeypatch.setattr(_release, "run", lambda cmd, **k: calls.append(cmd))
+    monkeypatch.setattr(
+        _release.bump_version, "read_sdk_version", lambda: "0.5.0-beta.1"
+    )
+    monkeypatch.setattr(_release, "stamp_changelog", lambda v: None)
+
+    _release._apply_prepare("beta", "0.5.0-beta.1")
+
+    [commit] = [c for c in calls if c[:2] == ["git", "commit"]]
+    assert "-s" in commit, commit

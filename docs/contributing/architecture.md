@@ -27,7 +27,7 @@ Those functions act on the Pipefy capabilities below. Each name is a sub-domain 
 - Work Execution: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email.
 - Process Modeling: create and change a pipe, its phases, its fields, its field conditions, its labels, and its automations. Create and change an AI agent, with the behaviors it runs and the knowledge it reads.
 - Business Records: create and query a database table, its fields, and its records.
-- Request Intake: build the channel a requester submits through, a portal with its pages and its elements, publish a sub-portal, and read the start form that states what a submission must carry.
+- Request Intake: the channel a requester submits through, and the portals, pages, elements, and sub-portals that make it up.
 - Identity and Access Management: invite a member, set a role, and mint a service account.
 - Governance and Audit: export a pipe's audit log, read an AI agent's logs, and choose the model provider an agent may use.
 - Performance and Oversight: define a pipe or organization report, export it, and read usage and execution metrics.

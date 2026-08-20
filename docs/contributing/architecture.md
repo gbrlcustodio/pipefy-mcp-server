@@ -26,7 +26,7 @@ Those functions act on the Pipefy capabilities below. Each name is a sub-domain 
 - Work Execution: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email. An AI agent acts on a card as a non-human assignee, and a builder sets up the agent, the behaviors it runs, and the knowledge it reads.
 - Process Modeling: create and change a pipe, its phases, its fields, its field conditions, its labels, and its automations. An AI automation is one action type of that automation mechanism.
 - Business Records: create and query a database table, its fields, and its records.
-- Request Intake: build a portal, its pages, and its elements, and publish a sub-portal.
+- Request Intake: build the channel a requester submits through, a portal with its pages and its elements, publish a sub-portal, and read the start form that states what a submission must carry.
 - Identity and Access Management: invite a member, set a role, and mint a service account.
 - Governance and Audit: export a pipe's audit log, read an AI agent's logs, and choose the model provider an agent may use.
 - Performance and Oversight: define a pipe or organization report, export it, and read usage and execution metrics.

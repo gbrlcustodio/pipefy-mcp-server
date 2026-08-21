@@ -24,7 +24,7 @@ HOSTED_MCP_URL = "https://mcp.pipefy.com/mcp"
 HOSTED_CLIENT_ID = "pipefy-mcp"
 HOSTED_MCP_FILENAME = ".mcp.json"
 REQUIRED_MANIFEST_MCP_SERVERS = "./.mcp.json"
-CURSOR_DEFAULT_MCP_FILENAME = "mcp.json"
+FORBIDDEN_ROOT_MCP_JSON = "mcp.json"
 REQUIRED_DISPLAY_NAME = "Pipefy AI Toolkit"
 REQUIRED_MARKETPLACE_NAME = "pipefy"
 
@@ -156,19 +156,15 @@ def _lint_manifest_mcp_pointer(
     )
     return [
         f"{manifest_rel} mcpServers is {shown}, expected "
-        f"{REQUIRED_MANIFEST_MCP_SERVERS!r} so Cursor loads the shared hosted "
-        f"{HOSTED_MCP_FILENAME} instead of discovering {CURSOR_DEFAULT_MCP_FILENAME}"
+        f"{REQUIRED_MANIFEST_MCP_SERVERS!r}"
     ]
 
 
-def _lint_no_cursor_default_mcp_file(root: Path) -> list[str]:
-    leftover = root / CURSOR_DEFAULT_MCP_FILENAME
+def _lint_no_forbidden_root_mcp_json(root: Path) -> list[str]:
+    leftover = root / FORBIDDEN_ROOT_MCP_JSON
     if not leftover.exists():
         return []
-    return [
-        f"{CURSOR_DEFAULT_MCP_FILENAME} exists; expected only "
-        f"{HOSTED_MCP_FILENAME} so Cursor and Claude Code share one hosted config"
-    ]
+    return [f"{FORBIDDEN_ROOT_MCP_JSON} exists; expected only {HOSTED_MCP_FILENAME}"]
 
 
 def _lint_display_name(manifest_rel: Path, manifest: dict[str, Any]) -> list[str]:
@@ -355,7 +351,7 @@ def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     errors.extend(_lint_forbidden_manifest_keys(manifest_rel, loaded))
     errors.extend(_lint_manifest_mcp_pointer(manifest_rel, loaded))
     errors.extend(_lint_marketplace_name(root))
-    errors.extend(_lint_no_cursor_default_mcp_file(root))
+    errors.extend(_lint_no_forbidden_root_mcp_json(root))
     errors.extend(_lint_commands_suppressed(manifest_rel, loaded))
     errors.extend(_lint_logo(root, manifest_rel, loaded))
     errors.extend(

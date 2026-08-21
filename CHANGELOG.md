@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0-beta.1] - 2026-08-21
+
 ### Added
 
 - **Cursor Marketplace plugin**: `.cursor-plugin/plugin.json` and root `mcp.json` package the skill catalog plus the hosted MCP server (`mcp.pipefy.com`) with in-client OAuth. The Cursor manifest declares `"commands": []` so the Claude Code files in `commands/` are not discovered. Version lockstep and CI packaging lint cover the new manifest. The listing is submitted from `main` after this packaging is released.

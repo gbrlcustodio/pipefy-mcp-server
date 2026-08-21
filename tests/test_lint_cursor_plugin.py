@@ -55,7 +55,7 @@ def _write_plugin(
     (skill_dir / "SKILL.md").write_text("# skill\n", encoding="utf-8")
     body = {
         "name": name,
-        "displayName": "Pipefy AI Toolkit",
+        "displayName": "Pipefy",
         "logo": "assets/logo.svg",
         "skills": skills if skills is not None else [f"./{_SKILL}"],
         "commands": [],
@@ -434,11 +434,11 @@ def test_sibling_mcp_json_is_rejected(tmp_path):
     assert any("expected only .mcp.json" in err for err in errors), errors
 
 
-def test_display_name_must_spell_ai_uppercase(tmp_path):
-    _write_plugin(tmp_path, manifest_update={"displayName": "Pipefy Ai Toolkit"})
+def test_display_name_must_be_pipefy(tmp_path):
+    _write_plugin(tmp_path, manifest_update={"displayName": "Pipefy AI Toolkit"})
     errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
-    assert any("displayName is 'Pipefy Ai Toolkit'" in err for err in errors), errors
-    assert any("Pipefy AI Toolkit" in err for err in errors), errors
+    assert any("displayName is 'Pipefy AI Toolkit'" in err for err in errors), errors
+    assert any("expected 'Pipefy'" in err for err in errors), errors
 
 
 def test_marketplace_name_must_be_pipefy(tmp_path):

@@ -18,11 +18,13 @@ from pipefy_auth import (
     TokenResponse,
 )
 from pipefy_auth.storage import StoredSession
-from pipefy_sdk import PipefyClient, PipefySettings
+from pipefy_sdk import PipefyClient, PipefySettings, __version__
+from pipefy_sdk.telemetry import telemetry_headers
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.auth import RequestScopedIdentity, StartupIdentity
 from pipefy_mcp.core.runtime import McpRuntime
+from pipefy_mcp.core.transport_security import transport_security_for
 from pipefy_mcp.settings import McpSettings, Settings
 
 
@@ -86,6 +88,58 @@ class TestMcpRuntime:
         # `lifespan_context._settings` would be just as reachable from a tool.
         assert not hasattr(runtime, "settings")
         assert not hasattr(runtime, "_settings")
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        ("profile", "deployment"), [("remote", "hosted"), ("local", "local")]
+    )
+    def test_engine_endpoints_stamp_the_profiles_deployment(self, profile, deployment):
+        """The resolved profile decides the telemetry deployment on every endpoint.
+
+        A hosted remote-profile server and a user's local stdio install both run the
+        ``mcp`` surface, so without this the two emit byte-identical client headers
+        (#550). The deployment is derived here from the already-validated profile —
+        never read from env or TOML — and both sides are labelled, so a bare
+        ``(mcp)`` means a client older than this axis rather than ``local``.
+        """
+        settings = Settings(
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            auth=AuthSettings(),
+            mcp=McpSettings(profile=profile),
+        )
+
+        runtime = McpRuntime(settings, RequestScopedIdentity())
+
+        expected = telemetry_headers(
+            surface="mcp", version=__version__, deployment=deployment
+        )
+        endpoints = runtime._engine.endpoints
+        assert endpoints.public._headers == expected
+        assert endpoints.interfaces._headers == expected
+        assert endpoints.internal._headers == expected
+
+    @pytest.mark.unit
+    def test_no_env_var_can_forge_the_deployment(self, monkeypatch: pytest.MonkeyPatch):
+        """The deployment is derived from the profile, never configured.
+
+        #336 established that the surface is never read from env or TOML; the
+        deployment keeps that property, so no ``PIPEFY_*_DEPLOYMENT`` knob exists.
+        A default-profile server stamps ``local`` whatever these env vars say — this
+        fails if such a setting is ever added.
+        """
+        monkeypatch.setenv("PIPEFY_MCP_DEPLOYMENT", "hosted")
+        monkeypatch.setenv("PIPEFY_CLIENT_DEPLOYMENT", "hosted")
+        settings = Settings(
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            auth=AuthSettings(),
+            mcp=McpSettings(),
+        )
+
+        runtime = McpRuntime(settings, RequestScopedIdentity())
+
+        headers = runtime._engine.endpoints.public._headers
+        assert headers["X-Client-Deployment"] == "local"
+        assert headers["User-Agent"].endswith("(mcp; local)")
 
     @pytest.mark.unit
     def test_unified_envelope_flag_follows_the_setting(self):
@@ -167,12 +221,17 @@ class TestForProfile:
         :class:`ResourceServer` to both builders, so the allowlist's public host and
         the advertised metadata resource cannot disagree.
         """
-        runtime = McpRuntime.for_profile(remote_rs_settings())
+        settings = remote_rs_settings()
+        runtime = McpRuntime.for_profile(settings)
 
-        assert runtime.transport_security is not None
-        assert "mcp.example.com" in runtime.transport_security.allowed_hosts
+        # The allowlist is a per-transport argument in 2.x, so it is resolved on the
+        # serving path rather than held on the runtime. Both derive from the same
+        # parsed resource, which is the property under test.
+        allowlist = transport_security_for(settings)
+        assert allowlist is not None
+        assert "mcp.example.com" in allowlist.allowed_hosts
         _, auth = runtime.inbound_auth
-        assert str(auth.resource_server_url).rstrip("/") == RS_RESOURCE
+        assert str(auth.resource_server_url) == RS_RESOURCE
 
     @pytest.mark.unit
     def test_local_builds_the_transport_allowlist_from_explicit_hosts(
@@ -188,8 +247,9 @@ class TestForProfile:
         runtime = McpRuntime.for_profile(settings)
 
         assert runtime.inbound_auth is None
-        assert runtime.transport_security is not None
-        assert "proxy.internal" in runtime.transport_security.allowed_hosts
+        allowlist = transport_security_for(settings)
+        assert allowlist is not None
+        assert "proxy.internal" in allowlist.allowed_hosts
 
     @pytest.mark.unit
     def test_remote_snapshots_the_callers_bearer_into_its_session(self):
@@ -257,7 +317,7 @@ class TestForProfile:
         runtime = McpRuntime.for_profile(settings)
 
         _, auth = runtime.inbound_auth
-        assert str(auth.issuer_url).rstrip("/") == login_issuer
+        assert str(auth.issuer_url) == login_issuer
 
     @pytest.mark.unit
     def test_local_static_token_binds_the_static_bearer(self, clear_auth_env):

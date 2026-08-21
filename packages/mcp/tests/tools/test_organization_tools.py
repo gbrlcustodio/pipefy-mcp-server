@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -43,7 +43,6 @@ def org_session(org_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_get_organization_success(org_session, mock_org_client, extract_payload):
     mock_org_client.get_organization = AsyncMock(
         return_value={
@@ -56,7 +55,7 @@ async def test_get_organization_success(org_session, mock_org_client, extract_pa
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "123"})
-    assert result.isError is False
+    assert result.is_error is False
     mock_org_client.get_organization.assert_awaited_once_with("123")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -65,7 +64,6 @@ async def test_get_organization_success(org_session, mock_org_client, extract_pa
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_get_organization_not_found_returns_error(
     org_session, mock_org_client, extract_payload
 ):
@@ -74,14 +72,13 @@ async def test_get_organization_not_found_returns_error(
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "999"})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_get_organization_transport_error(
     org_session, mock_org_client, extract_payload
 ):
@@ -90,7 +87,7 @@ async def test_get_organization_transport_error(
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "123"})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     err = payload.get("error")
@@ -98,7 +95,6 @@ async def test_get_organization_transport_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_list_organizations_success(
     org_session, mock_org_client, extract_payload
 ):
@@ -110,7 +106,7 @@ async def test_list_organizations_success(
     )
     async with org_session as session:
         result = await session.call_tool("list_organizations", {})
-    assert result.isError is False
+    assert result.is_error is False
     mock_org_client.list_organizations.assert_awaited_once_with()
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -122,19 +118,17 @@ async def test_list_organizations_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_list_organizations_empty(org_session, mock_org_client, extract_payload):
     mock_org_client.list_organizations = AsyncMock(return_value=[])
     async with org_session as session:
         result = await session.call_tool("list_organizations", {})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["organizations"] == []
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_list_organizations_transport_error(
     org_session, mock_org_client, extract_payload
 ):
@@ -143,11 +137,40 @@ async def test_list_organizations_transport_error(
     )
     async with org_session as session:
         result = await session.call_tool("list_organizations", {})
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     err = payload.get("error")
     assert isinstance(err, dict) and "message" in err
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_list_organizations_empty_exception_message_uses_fallback(
+    org_session, mock_org_client, extract_payload, exc_message
+):
+    mock_org_client.list_organizations = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    async with org_session as session:
+        result = await session.call_tool("list_organizations", {})
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message == "Organization request failed."
+    assert "do not blind-retry" not in message
+
+
+@pytest.mark.anyio
+async def test_list_organizations_preserves_non_empty_exception_message(
+    org_session, mock_org_client, extract_payload
+):
+    mock_org_client.list_organizations = AsyncMock(side_effect=RuntimeError("org boom"))
+    async with org_session as session:
+        result = await session.call_tool("list_organizations", {})
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "org boom" in tool_error_message(payload)
 
 
 ## ---------------------------------------------------------------------------
@@ -156,7 +179,6 @@ async def test_list_organizations_transport_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("org_session", [None], indirect=True)
 async def test_get_organization_coerces_int_organization_id(
     org_session, mock_org_client, extract_payload
 ):
@@ -171,7 +193,7 @@ async def test_get_organization_coerces_int_organization_id(
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": 123})
-    assert result.isError is False
+    assert result.is_error is False
     mock_org_client.get_organization.assert_awaited_once_with("123")
     payload = extract_payload(result)
     assert payload["success"] is True

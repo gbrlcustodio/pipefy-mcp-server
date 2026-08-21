@@ -225,6 +225,55 @@ def test_run_pipefy_client_coroutine_maps_pipefy_error_to_exit_1(monkeypatch):
     assert excinfo.value.exit_code == 1
 
 
+def test_run_pipefy_client_coroutine_graphql_error_keeps_the_code_suffix(
+    monkeypatch, capsys
+):
+    """The GraphQL branch has to stay above ``PipefyError`` or the code suffix is lost.
+
+    ``PipefyGraphQLError`` is a ``PipefyError``, so swapping the two catches sends
+    it to the generic branch, which echoes ``str(exc)`` and never runs the
+    formatter. ``run_cli_command`` has the portal detach test for this; the
+    coroutine runner had nothing.
+    """
+    from pipefy_sdk import PipefyGraphQLError
+
+    from pipefy_cli.commands import _common
+    from pipefy_cli.commands._common import run_pipefy_client_coroutine
+
+    monkeypatch.setattr(
+        _common, "get_authenticated_client", lambda settings, auth: object()
+    )
+    monkeypatch.setattr(
+        _common,
+        "settings_and_auth_from_ctx",
+        lambda ctx: (
+            object(),
+            _common.AuthContext(
+                bearer_token=None, service_account=None, oidc_client=None
+            ),
+        ),
+    )
+
+    async def factory(client: object) -> None:
+        raise PipefyGraphQLError(
+            [
+                {
+                    "message": "Couldn't find PortalInterface with",
+                    "extensions": {"code": "RECORD_NOT_FOUND"},
+                }
+            ]
+        )
+
+    with pytest.raises(typer.Exit) as excinfo:
+        run_pipefy_client_coroutine(MagicMock(), factory)
+
+    assert excinfo.value.exit_code == 1
+    assert (
+        capsys.readouterr().err.strip()
+        == "Couldn't find PortalInterface with (RECORD_NOT_FOUND)"
+    )
+
+
 def test_run_pipefy_client_coroutine_maps_value_error_when_configured(monkeypatch):
     """Optional ``value_error_exit_code`` maps export failures to stderr + exit."""
     from pipefy_cli.commands import _common

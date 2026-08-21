@@ -54,6 +54,26 @@ def inject_reference_ids(behaviors: list[dict[str, Any]]) -> list[dict[str, Any]
     return result
 
 
+def resolve_update_disabled_at(
+    *,
+    provided: str | None,
+    preserve: bool,
+    current: str | None,
+) -> str | None:
+    """Choose ``disabledAt`` for updateAiAgent.
+
+    Prefer an explicit ``provided`` value (pass-through). When omitted, re-send
+    ``current`` only if ``preserve`` is True; otherwise omit so the API can clear
+    a default disabled shell (create-active configure step). Activation remains
+    toggle-only — this helper never invents a clear beyond omitting the key.
+    """
+    if provided is not None:
+        return provided
+    if preserve:
+        return current
+    return None
+
+
 class AiAgentService:
     """Service for AI Agent CRUD via GraphQL."""
 
@@ -69,12 +89,14 @@ class AiAgentService:
         Raises:
             ValueError: When API response is missing agent.uuid.
         """
-        variables = {
-            "agent": {
-                "name": agent_input.name,
-                "repoUuid": agent_input.repo_uuid,
-            }
+        agent_payload: dict[str, Any] = {
+            "name": agent_input.name,
+            "repoUuid": agent_input.repo_uuid,
         }
+        if agent_input.disabled_at is not None:
+            agent_payload["disabledAt"] = agent_input.disabled_at
+
+        variables = {"agent": agent_payload}
 
         response = await self._executor.execute_query(
             CREATE_AI_AGENT_MUTATION, variables
@@ -90,6 +112,8 @@ class AiAgentService:
         return {
             "agent_uuid": agent_uuid,
             "message": f"AI Agent created successfully. UUID: {agent_uuid}",
+            "disabled_at": agent.get("disabledAt"),
+            "active": agent.get("disabledAt") is None,
         }
 
     async def update_agent(self, agent_input: UpdateAiAgentInput) -> AgentServiceResult:
@@ -107,15 +131,30 @@ class AiAgentService:
         ]
         behaviors_with_refs = inject_reference_ids(behaviors_raw)
 
+        current_disabled_at: str | None = None
+        if agent_input.disabled_at is None and agent_input.preserve_disabled_at:
+            current = await self.get_agent(agent_input.uuid)
+            raw = current.get("disabledAt")
+            current_disabled_at = raw if isinstance(raw, str) else None
+        disabled_at = resolve_update_disabled_at(
+            provided=agent_input.disabled_at,
+            preserve=agent_input.preserve_disabled_at,
+            current=current_disabled_at,
+        )
+
+        agent_payload: dict[str, Any] = {
+            "name": agent_input.name,
+            "repoUuid": agent_input.repo_uuid,
+            "instruction": agent_input.instruction or "",
+            "dataSourceIds": agent_input.data_source_ids,
+            "behaviors": behaviors_with_refs,
+        }
+        if disabled_at is not None:
+            agent_payload["disabledAt"] = disabled_at
+
         variables = {
             "uuid": agent_input.uuid,
-            "agent": {
-                "name": agent_input.name,
-                "repoUuid": agent_input.repo_uuid,
-                "instruction": agent_input.instruction or "",
-                "dataSourceIds": agent_input.data_source_ids,
-                "behaviors": behaviors_with_refs,
-            },
+            "agent": agent_payload,
         }
 
         response = await self._executor.execute_query(
@@ -132,6 +171,8 @@ class AiAgentService:
         return {
             "agent_uuid": agent_uuid,
             "message": f"AI Agent updated successfully. UUID: {agent_uuid}",
+            "disabled_at": agent.get("disabledAt"),
+            "active": agent.get("disabledAt") is None,
         }
 
     async def toggle_agent_status(

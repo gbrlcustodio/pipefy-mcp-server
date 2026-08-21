@@ -140,6 +140,19 @@ GraphQL always returns HTTP 200, even on errors. Check the `errors` array, not t
 | invalid_input | Wrong argument name or type | Run `introspect_type` (Tier 2) to recheck the input shape. |
 | INTERNAL_SERVER_ERROR | API bug or unsupported payload | **Do NOT retry the same payload.** Try an alternative mutation or workaround. |
 | missingRequiredInputObjectAttribute | A required field is missing from the input | Compare the payload against `__type(name: …InputType)`. |
+| Ambiguous write failure (`success: false`, empty or unclear message) | Mutation may already have applied (side effects on the server) | **Re-read before any retry** — see [Ambiguous write failure](#ambiguous-write-failure-re-read-before-retry). |
+
+---
+
+## Ambiguous write failure (re-read before retry)
+
+Write tools and `execute_graphql` can report failure even when the mutation already applied. Blind retry duplicates customer data (e.g. many cards created despite `success: false`).
+
+1. **Do not** immediately re-run the same create/mutation.
+2. **Re-read** first: `get_cards` / `get_phase_cards_count` / returned ids / `cards_count` on the pipe or phase you targeted. Prefer comparing to a count or id set you recorded **before** the write when available.
+3. Retry **only** if the re-read clearly shows the write did not land.
+4. If the re-read is **inconclusive** (no pre-write baseline, pagination truncates results, or counts cannot prove absence), **stop** — report the ambiguous failure and the re-read evidence to the user. Do not guess-retry.
+5. **Hard stop — no client-side idempotency:** `CreateCardInput` has no `idempotency_key` (only `clientMutationId`, which is not create-idempotency). Do not invent client-side keys or assume retries are safe. Re-read is the only safe path until the API adds real idempotency.
 
 ---
 
@@ -149,8 +162,10 @@ GraphQL always returns HTTP 200, even on errors. Check the `errors` array, not t
 - Do NOT use `createAutomation` with `action: create_card` + `field_map` — returns `INTERNAL_SERVER_ERROR` (confirmed API bug).
 - Instead, use `createCard` with the `throughConnectors` parameter. Prerequisite: a connector field with `canCreateNewConnected: true` must exist.
 
-### Pipe visibility returning empty list
-- If `organization { pipes { ... } }` returns `[]` but `pipesCount > 0`, the Service Account is not a member of those pipes.
+### Pipe listing shorter than `pipesCount`
+- `pipesCount` is the org-wide total; `organization { pipes { ... } }` and `search_pipes` return only the pipes the calling identity is a member of. A shorter listing, or an empty one, is expected behavior and not an error. Role does not widen it: a `super_admin` gets the same membership-scoped result. Detail and workarounds: [`docs/mcp/tools/organization.md`](../../../docs/mcp/tools/organization.md#why-counts-disagree).
+- `organization { pipes(include_publics: true) }` widens the listing with pipes that are public inside the org. It still normally returns fewer than `pipesCount`.
+- Service accounts hit this most often: an SA starts as a member of nothing.
 - Pipes created via API are automatically visible to the SA.
 - Pipes created in the UI require the SA to be added as an admin.
 - Workaround: get pipe IDs from the user once and query `pipe(id: "...")` directly.
@@ -201,6 +216,7 @@ Only after all 3 tiers and external resources have failed:
 - **400 Bad Request** — GraphQL syntax error. Validate the query string and escape quotes properly when embedding via shell.
 - **500 / service unavailable** — Pipefy API outage. Check [status.pipefy.com](https://status.pipefy.com) and retry later. Do not loop.
 - **`INTERNAL_SERVER_ERROR` in `errors` array** — do NOT retry the same payload; pick a different mutation path.
+- **Ambiguous write failure** — reported error with empty/unclear message after a create or other write: re-read counts/ids before retrying; never blind-retry creates ([Ambiguous write failure](#ambiguous-write-failure-re-read-before-retry)).
 
 ## Security notes
 

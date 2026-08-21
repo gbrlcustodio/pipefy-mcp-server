@@ -1,0 +1,165 @@
+name: Packaging smoke
+
+# `uv.lock` pins every dependency, so the test suite passes against known-good
+# versions no matter what is published to PyPI. That is what a lock is for, and
+# it means no test in this repository observes a fresh install. The packaging
+# smoke install is what covers that band: it resolves from the index instead.
+#
+# Running it only on push and pull request left a window with no observer. A
+# dependency breakage published upstream armed itself with zero commits here and
+# detonated on whatever release came next, regardless of content -- which is how
+# `mcp` 2.0.0 was found by the release workflow, the last possible moment. On a
+# timer, upstream breakage surfaces on its own schedule instead of the release's.
+#
+# The timer is dormant until this file reaches the default branch: GitHub fires
+# `schedule`, and offers `workflow_dispatch`, only for workflows present on
+# `main`. The path-filtered `pull_request` trigger below is unaffected.
+
+on:
+  schedule:
+    # Daily, off the hour -- GitHub drops scheduled runs queued at popular times,
+    # and the interval between releases is exactly where the breakage arms itself.
+    - cron: "23 7 * * *"
+  workflow_dispatch:
+  # This workflow's own changes are exercised by the pull request that makes
+  # them, so its first real run is not the first time it has ever run. No other
+  # push or pull-request trigger: ci.yml already smoke-installs on every PR, and
+  # duplicating that is what this workflow exists to stop needing.
+  pull_request:
+    paths:
+      - .github/workflows/packaging-smoke.yml
+      - scripts/smoke_entry_points.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packaging-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Wheels built from the checkout, third-party dependencies resolved from PyPI.
+  # Catches an upstream release that breaks the declared bounds -- the failure
+  # that would land on the *next* release.
+  built_wheels:
+    name: Wheels built from this checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Build workspace wheels
+        run: uv build --all-packages --wheel -o dist-packaging-smoke
+      - name: Install into a clean venv and launch every entry point
+        run: |
+          set -euo pipefail
+          # Membership is checked before the install, not after: an incomplete set
+          # is not an error for pip, which satisfies the absent member from the
+          # index through the sibling `==` pins. The smoke would then pass against
+          # a wheel this build never produced.
+          python scripts/smoke_entry_points.py --check-wheels dist-packaging-smoke
+          python -m venv .venv-built-smoke
+          .venv-built-smoke/bin/python -m pip install --upgrade pip
+          # Every wheel on one command line, so the sibling `==` pins resolve
+          # from these files while third-party dependencies come from the index.
+          .venv-built-smoke/bin/pip install dist-packaging-smoke/*.whl
+          .venv-built-smoke/bin/python scripts/smoke_entry_points.py
+
+  # The wheels already on PyPI, installed the way a user installs them. Catches a
+  # broken or incomplete upload, and upstream breakage against the bounds of the
+  # release that has *already* shipped -- neither of which the built-wheel job
+  # above can see, because it never reads the index for a workspace member.
+  published_wheels:
+    name: Wheels already on PyPI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+      - name: Install the published wheels into a clean venv
+        run: |
+          set -euo pipefail
+          python -m venv .venv-published-smoke
+          .venv-published-smoke/bin/python -m pip install --upgrade pip
+          # No `--pre`, deliberately: pip falls back to a pre-release when a
+          # requirement has no stable release, so this resolves the newest
+          # pre-1.0 wheel today and will resolve the stable one after 1.0
+          # without an edit. Either way it is what a plain install gets, which
+          # is the version this job exists to keep working. All five named
+          # explicitly so a member missing from the index fails here rather
+          # than being quietly skipped as somebody else's transitive.
+          .venv-published-smoke/bin/pip install \
+            pipefy pipefy-auth pipefy-cli pipefy-infra pipefy-mcp-server
+      - name: Launch every entry point
+        run: .venv-published-smoke/bin/python scripts/smoke_entry_points.py
+
+  # A red run nobody watches is not a control. A failure opens one labelled
+  # issue, or comments on the open one, so a break that persists across days
+  # stays a single thread instead of a daily pile. Close the issue once a run is
+  # green again; the next failure opens a fresh one.
+  #
+  # Skipped on pull requests, where the failure is already visible on the PR.
+  report:
+    name: Surface a failure
+    needs: [built_wheels, published_wheels]
+    if: ${{ always() && contains(needs.*.result, 'failure') && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILT_RESULT: ${{ needs.built_wheels.result }}
+          PUBLISHED_RESULT: ${{ needs.published_wheels.result }}
+        run: |
+          set -euo pipefail
+          label=packaging-smoke-failure
+          # Idempotent, so the label needs no manual repository setup and a
+          # rename cannot leave this step failing on a missing label.
+          gh label create "$label" \
+            --color b60205 \
+            --description "A packaging smoke install failed" \
+            --force
+          # Written to a file rather than a $(cat <<EOF) capture: an apostrophe
+          # inside a heredoc inside a command substitution is a parse error on
+          # older bash, and prose that cannot contain one is prose that will be
+          # edited wrong later.
+          body="$RUNNER_TEMP/packaging-smoke-body.md"
+          cat > "$body" <<EOF
+          A packaging smoke install failed. This gate resolves dependencies from PyPI instead of \`uv.lock\`, which is the only way to see a fresh install — a green test suite does not contradict it.
+
+          | Job | Result |
+          | --- | --- |
+          | Wheels built from this checkout | \`${BUILT_RESULT}\` |
+          | Wheels already on PyPI | \`${PUBLISHED_RESULT}\` |
+
+          Run: ${RUN_URL}
+
+          The usual cause is a dependency release outside the declared bounds. Read the failing install log, then cap or pin the offending dependency in the owning package's \`pyproject.toml\` and refresh \`uv.lock\`. A failure in the published-wheels job alone points at the release already on the index rather than at the current tree.
+
+          Close this issue once a run is green again; the next failure opens a fresh one.
+          EOF
+          existing=$(gh issue list --label "$label" --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$body"
+          else
+            gh issue create \
+              --title "The packaging smoke install is failing" \
+              --label "$label" \
+              --body-file "$body"
+          fi

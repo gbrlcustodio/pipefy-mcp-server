@@ -49,6 +49,11 @@ LABEL = "back-merge"
 # recognized rather than pushed over.
 BRANCH_PREFIX = "rc-dev/chore/back-merge-main-"
 
+# Appended for the branch that repairs a squashed back-merge. Distinct from the
+# plain prefix so the recovery gets its own idempotency key: the original branch
+# still exists, and its pull request is merged.
+RECOVERY_SUFFIX = "-ancestry"
+
 # Embedded in every issue body and comment. A re-run that would say exactly the
 # same thing finds its own marker and stays quiet, so an unresolved divergence
 # does not accumulate one identical comment per scheduled run.
@@ -120,6 +125,50 @@ def branch_for(sha: str) -> str:
     return f"{BRANCH_PREFIX}{sha}"
 
 
+def recovery_branch_for(sha: str) -> str:
+    """The branch that repairs ancestry after a squashed back-merge."""
+    return f"{BRANCH_PREFIX}{sha}{RECOVERY_SUFFIX}"
+
+
+def dco_mismatches() -> list[str]:
+    """Carried commits that ``dco-check`` reads as unsigned, one line each.
+
+    GitHub's squash merge rewrites the author to the merging account's profile
+    identity, while the ``Signed-off-by`` trailer is message text and is carried
+    verbatim. A contributor whose git ``user.name`` differs from their GitHub
+    display name therefore lands a commit on ``main`` whose author no longer
+    matches its own sign-off. It passed DCO on its original pull request, and it
+    cannot be rewritten once it is on the default branch, so the check fails on
+    every back-merge that carries it from then on.
+
+    Naming them in the pull request body keeps a red DCO from reading as a new
+    problem with the back-merge itself. Merge commits are skipped because
+    ``dco-check`` skips them too.
+    """
+    raw = capture(
+        [
+            "git",
+            "log",
+            "--no-merges",
+            "--format=%h%x1f%an <%ae>%x1f%(trailers:key=Signed-off-by,valueonly)%x1e",
+            f"origin/{DEV_BRANCH}..origin/{MAIN_BRANCH}",
+        ]
+    )
+    found = []
+    for record in raw.split("\x1e"):
+        if not record.strip():
+            continue
+        sha, _, rest = record.strip().partition("\x1f")
+        author, _, trailers = rest.partition("\x1f")
+        author = author.strip()
+        signoffs = [line.strip() for line in trailers.splitlines() if line.strip()]
+        if not signoffs:
+            found.append(f"`{sha}` author `{author}`, no sign-off")
+        elif author not in signoffs:
+            found.append(f"`{sha}` author `{author}`, signed off by `{signoffs[0]}`")
+    return found
+
+
 def carried_commits() -> list[str]:
     """One ``<short-sha> <subject>`` line per commit being carried into ``dev``."""
     return capture(
@@ -145,6 +194,16 @@ def merge_message(behind: int, signoff: str) -> str:
     return f"chore: back-merge {MAIN_BRANCH} into {DEV_BRANCH} ({behind} commit{plural})\n\n{signoff}"
 
 
+def recovery_merge_message(merged_pr: str, signoff: str) -> str:
+    """The ancestry-repair merge commit subject and its DCO trailer."""
+    return (
+        f"chore: restore {MAIN_BRANCH}'s ancestry on {DEV_BRANCH} after #{merged_pr}"
+        f"\n\nRecords `origin/{MAIN_BRANCH}` as a parent and takes no files, because"
+        f"\n#{merged_pr} already delivered them and only its second parent was lost."
+        f"\n\n{signoff}"
+    )
+
+
 def attempt_merge(branch: str, message: str) -> list[str]:
     """Cut ``branch`` from ``dev`` and merge ``main`` into it.
 
@@ -162,6 +221,33 @@ def attempt_merge(branch: str, message: str) -> list[str]:
     conflicts = capture(["git", "diff", "--name-only", "--diff-filter=U"]).splitlines()
     run(["git", "merge", "--abort"])
     return conflicts
+
+
+def attempt_ancestry_merge(branch: str, message: str) -> bool:
+    """Cut ``branch`` from ``dev`` and record ``main`` as a parent, taking no files.
+
+    ``-s ours`` is safe here for one reason: the pull request for this ``main``
+    head is already merged. A squash or a rebase applies every file and drops
+    only the second parent, so ``dev``'s tree already holds the content and
+    ancestry is the sole thing missing. The ruleset blocks non-fast-forward
+    pushes on ``dev``, so that content cannot have been rewound since.
+
+    A plain merge is the wrong tool. With no shared ancestry, git reads one
+    paragraph on each side as two independent additions and keeps both, so a
+    3-way merge duplicates text that ``dev`` already carries.
+    """
+    run(["git", "checkout", "-B", branch, f"origin/{DEV_BRANCH}"])
+    merge = [
+        "git",
+        "merge",
+        "-s",
+        "ours",
+        "--no-ff",
+        "-m",
+        message,
+        f"origin/{MAIN_BRANCH}",
+    ]
+    return try_run(merge) == 0
 
 
 def is_ancestry_only() -> bool:
@@ -281,29 +367,63 @@ def already_reported(issue: str, marker: str) -> bool:
     return marker in seen
 
 
+def dco_section(mismatches: list[str]) -> str:
+    """The pull request note explaining an expected DCO failure, or nothing."""
+    if not mismatches:
+        return ""
+    listing = "\n".join(f"- {line}" for line in mismatches)
+    return f"""
+## Expect the DCO check to fail
+
+These carried commits are already on `{MAIN_BRANCH}`, and `dco-check` reads each one as unsigned:
+
+{listing}
+
+Each passed DCO on its own pull request. A squash merge then rewrote the author to the merging account's profile identity while the `Signed-off-by` trailer stayed as written, so the two no longer match. A commit on the default branch cannot be rewritten, so this repeats on every back-merge that carries it.
+
+Nothing in this pull request causes it, and the check does not block the merge — no ruleset requires it.
+"""
+
+
+def checks_blurb(has_ci: bool) -> str:
+    """What the pull request says about its own checks.
+
+    Shared by both bodies. Two copies of this drifted apart once already, and
+    the arm that matters most is the one CI never renders: a recovery opened
+    without the secret has exactly the same hole as an ordinary back-merge.
+    """
+    if has_ci:
+        return (
+            "This pull request was opened by a token that triggers workflows, so "
+            "its checks run normally."
+        )
+    return (
+        "**This pull request carries no CI checks.** It was opened by `GITHUB_TOKEN`, and GitHub "
+        "deliberately does not trigger `on: pull_request` workflows for events raised by it — an "
+        "unchecked pull request that merely *looks* green would be worse. To run them, close and "
+        "reopen this pull request, or push any commit to its branch. Setting a `BACKMERGE_TOKEN` "
+        "secret makes checks run on their own; see RELEASE.md."
+    )
+
+
 def pr_body(
-    commits: list[str], behind: int, has_ci: bool, ancestry_only: bool = False
+    commits: list[str],
+    behind: int,
+    has_ci: bool,
+    ancestry_only: bool = False,
+    dco: list[str] | None = None,
 ) -> str:
     """The back-merge pull request body."""
     plural = "" if behind == 1 else "s"
     listing = "\n".join(f"- `{line}`" for line in commits)
+    dco_note = dco_section(dco or [])
     ancestry = (
         "\nThis merge changes no files. `main`'s content already reached `dev` by "
         "another route, so what is left to reconcile is history alone.\n"
         if ancestry_only
         else ""
     )
-    checks = (
-        "This pull request was opened by a token that triggers workflows, so its checks run normally."
-        if has_ci
-        else (
-            "**This pull request carries no CI checks.** It was opened by `GITHUB_TOKEN`, and GitHub "
-            "deliberately does not trigger `on: pull_request` workflows for events raised by it — an "
-            "unchecked pull request that merely *looks* green would be worse. To run them, close and "
-            "reopen this pull request, or push any commit to its branch. Setting a `BACKMERGE_TOKEN` "
-            "secret makes checks run on their own; see RELEASE.md."
-        )
-    )
+    checks = checks_blurb(has_ci)
     return f"""\
 `origin/{MAIN_BRANCH}` carries {behind} commit{plural} that `origin/{DEV_BRANCH}` does not. Until they are back-merged, `{DEV_BRANCH}` is missing work that has already shipped, and `release.py release-pr` refuses to cut a release at all.
 
@@ -316,7 +436,7 @@ These commits reached `{MAIN_BRANCH}` outside the release flow — a hotfix, a d
 ## Commits being carried over
 
 {listing}
-
+{dco_note}
 ## Checks
 
 {checks}
@@ -462,6 +582,7 @@ def open_pr(
     behind: int,
     has_ci: bool,
     ancestry_only: bool = False,
+    dco: list[str] | None = None,
 ) -> int:
     """Open the back-merge pull request. Returns the ``gh`` exit code."""
     plural = "" if behind == 1 else "s"
@@ -477,9 +598,149 @@ def open_pr(
             "--title",
             f"chore: back-merge {MAIN_BRANCH} into {DEV_BRANCH} ({behind} commit{plural})",
             "--body",
-            pr_body(commits, behind, has_ci, ancestry_only),
+            pr_body(commits, behind, has_ci, ancestry_only, dco),
         ]
     )
+
+
+def recovery_pr_body(
+    branch: str,
+    merged_pr: str,
+    behind: int,
+    commits: list[str],
+    has_ci: bool,
+    dco: list[str],
+) -> str:
+    """The body for the pull request that repairs a squashed back-merge."""
+    plural = "" if behind == 1 else "s"
+    listing = "\n".join(f"- `{line}`" for line in commits)
+    checks = checks_blurb(has_ci)
+    return f"""\
+Pull request #{merged_pr} is merged, yet `origin/{MAIN_BRANCH}` is still {behind} commit{plural} ahead of `origin/{DEV_BRANCH}`. That is what a squash or a rebase does to a back-merge: it applies every file and discards the second parent, so `{DEV_BRANCH}` gained the content but never the ancestry.
+
+`git rev-list --count origin/{DEV_BRANCH}..origin/{MAIN_BRANCH}` cannot reach zero on its own from here, `release-pr` stays blocked, and this workflow would keep proposing the same back-merge. This pull request closes that loop.
+
+## What it changes: nothing
+
+The merge is `-s ours`. It takes no files from `{MAIN_BRANCH}` and records it as a parent, because #{merged_pr} already delivered every file. Confirm with one command — it prints nothing:
+
+```bash
+git fetch origin {branch}
+git diff origin/{DEV_BRANCH} FETCH_HEAD
+```
+
+A plain merge is the wrong tool here. With no shared ancestry, git reads one paragraph on each side as two independent additions and keeps both, so it duplicates text `{DEV_BRANCH}` already carries.
+
+## Merge this with a merge commit, not a squash
+
+**Use "Create a merge commit".** Squashing this one discards the second parent again and leaves the count exactly where it is, which is the problem it exists to repair.
+
+## Commits whose ancestry this restores
+
+{listing}
+{dco_section(dco)}
+## Checks
+
+{checks}
+
+---
+
+Opened automatically by `.github/workflows/backmerge.yml` after it found #{merged_pr} merged with the divergence still standing.
+"""
+
+
+def open_recovery_pr(
+    branch: str,
+    merged_pr: str,
+    behind: int,
+    commits: list[str],
+    has_ci: bool,
+    dco: list[str],
+) -> int:
+    """Open the ancestry-repair pull request. Returns the ``gh`` exit code."""
+    return mutate(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--base",
+            DEV_BRANCH,
+            "--head",
+            branch,
+            "--title",
+            f"chore: restore {MAIN_BRANCH}'s ancestry on {DEV_BRANCH} after #{merged_pr}",
+            "--body",
+            recovery_pr_body(branch, merged_pr, behind, commits, has_ci, dco),
+        ]
+    )
+
+
+def restore_ancestry(
+    branch: str,
+    merged_pr: str,
+    sha: str,
+    behind: int,
+    commits: list[str],
+    has_ci: bool,
+    dco: list[str],
+) -> tuple[bool, str]:
+    """Propose the ancestry repair for a back-merge that was squashed or rebased.
+
+    Returns whether a pull request now stands for it, and -- when one does not --
+    the reason to record on the tracking issue. Every idempotency rule that
+    guards the ordinary back-merge guards this too: the branch is keyed to the
+    same ``main`` head, so a re-run finds its own work instead of repeating it.
+    """
+    pr, pr_state = existing_pr(branch)
+    if pr and pr_state == "OPEN":
+        print(f"Pull request #{pr} already restores the ancestry for {sha}.")
+        return True, ""
+
+    if pr:
+        # The repair itself was squashed or closed. Recovering from that
+        # automatically would mean opening a third pull request keyed to the
+        # same head, which is a loop, so this is where the automation stops and
+        # a human decides.
+        return False, (
+            f"Pull request #{merged_pr} for this `{MAIN_BRANCH}` head is merged "
+            f"and its ancestry repair #{pr} is {pr_state}, yet "
+            f"`origin/{MAIN_BRANCH}` is still {behind} commit(s) ahead of "
+            f"`origin/{DEV_BRANCH}`.\n\n"
+            "A repair that is itself squashed leaves the count exactly where it "
+            "was. Redo it by hand and land it with a merge commit:\n\n"
+            "```bash\n"
+            f"git fetch origin {MAIN_BRANCH} {DEV_BRANCH}\n"
+            f"git checkout -b {branch}-2 origin/{DEV_BRANCH}\n"
+            f"git merge -s ours --no-ff origin/{MAIN_BRANCH}\n"
+            f"git push -u origin {branch}-2\n"
+            "```\n\n"
+            'Then use **"Create a merge commit"**, not squash.'
+        )
+
+    if not remote_branch_exists(branch):
+        if not attempt_ancestry_merge(
+            branch, recovery_merge_message(merged_pr, signoff_trailer())
+        ):
+            return False, (
+                f"Pull request #{merged_pr} was squashed or rebased, and the "
+                "ancestry repair could not be built. Nothing was pushed."
+            )
+        if mutate(["git", "push", "origin", branch]) != 0:
+            return False, (
+                f"Pull request #{merged_pr} was squashed or rebased, and pushing "
+                f"the ancestry repair branch `{branch}` failed. Nothing reached "
+                "the remote, so there is no branch to open a pull request against."
+            )
+
+    if open_recovery_pr(branch, merged_pr, behind, commits, has_ci, dco) != 0:
+        return False, (
+            f"Pull request #{merged_pr} was squashed or rebased. The ancestry "
+            f"repair branch `{branch}` is pushed, but opening its pull request "
+            "failed."
+        )
+
+    supersede_tracking_issue(branch)
+    return True, ""
 
 
 def main() -> int:
@@ -529,43 +790,32 @@ def main() -> int:
         print(f"Pull request #{pr} already covers {sha}; leaving it alone.")
         return 0
 
+    if pr and pr_state == "MERGED":
+        # Merged, yet `dev` still does not contain `main`. That only happens when
+        # the pull request was squashed or rebased: the second parent is
+        # discarded, so the content lands but the ancestry never does. The
+        # content being already on `dev` is what makes the repair take no files.
+        print(f"Pull request #{pr} for {sha} is merged, yet the drift stands.")
+        recovery = recovery_branch_for(sha)
+        restored, reason = restore_ancestry(
+            recovery, pr, sha, behind, commits, has_ci, dco_mismatches()
+        )
+        if restored:
+            return 0
+        recorded = track(sha, behind, recovery, [], commits, run_url, reason)
+        return 0 if recorded else 1
+
     if pr:
-        # A pull request exists for this head but is not open, and the drift is
-        # still here. Reopening it or re-pushing its branch would overrule a
-        # human decision, so neither happens -- but going quiet is the exact
-        # failure this workflow exists to end, so the drift is recorded either
-        # way. The two states need different diagnoses.
+        # Closed without merging. Reopening it or re-pushing its branch would
+        # overrule a human decision, so neither happens -- but going quiet is the
+        # exact failure this workflow exists to end, so the drift is recorded.
         print(f"Pull request #{pr} for {sha} is {pr_state}; recording the drift.")
-        if pr_state == "MERGED":
-            # Merged, yet `dev` still does not contain `main`. That only happens
-            # when the pull request was squashed or rebased: the second parent is
-            # discarded, so the content lands but the ancestry never does.
-            reason = (
-                f"Pull request #{pr} for this `{MAIN_BRANCH}` head is already "
-                f"merged, yet `origin/{MAIN_BRANCH}` is still {behind} commit(s) "
-                f"ahead of `origin/{DEV_BRANCH}`.\n\n"
-                "That is what a **squash or rebase merge** does to a back-merge: "
-                "it discards the second parent, so `dev` gained the content of "
-                "those commits but never their ancestry. The count cannot reach "
-                "zero this way, `release-pr` stays blocked, and this repeats.\n\n"
-                "The fix is to redo the back-merge and land it with a merge "
-                "commit:\n\n"
-                "```bash\n"
-                f"git fetch origin {MAIN_BRANCH} {DEV_BRANCH}\n"
-                f"git checkout -b rc-dev/chore/back-merge-main-{sha}-merge "
-                f"origin/{DEV_BRANCH}\n"
-                f"git merge --no-ff origin/{MAIN_BRANCH}\n"
-                f"git push -u origin rc-dev/chore/back-merge-main-{sha}-merge\n"
-                "```\n\n"
-                'Then use **"Create a merge commit"**, not squash.'
-            )
-        else:
-            reason = (
-                f"Pull request #{pr} for this `{MAIN_BRANCH}` head was closed "
-                "without merging. Reopening it, or re-pushing its branch, would "
-                "overrule that decision, so this workflow does neither. The "
-                "divergence is still unresolved and still blocks a release."
-            )
+        reason = (
+            f"Pull request #{pr} for this `{MAIN_BRANCH}` head was closed "
+            "without merging. Reopening it, or re-pushing its branch, would "
+            "overrule that decision, so this workflow does neither. The "
+            "divergence is still unresolved and still blocks a release."
+        )
         recorded = track(sha, behind, branch, [], commits, run_url, reason)
         return 0 if recorded else 1
 
@@ -575,7 +825,7 @@ def main() -> int:
         # blocks non-fast-forward pushes, and rewriting a branch under review
         # destroys the incremental diff a reviewer is working through.
         print(f"Branch {branch} is already pushed; opening its pull request.")
-        if open_pr(branch, commits, behind, has_ci) != 0:
+        if open_pr(branch, commits, behind, has_ci, dco=dco_mismatches()) != 0:
             recorded = track(
                 sha,
                 behind,
@@ -613,7 +863,7 @@ def main() -> int:
         )
         return 0 if recorded else 1
 
-    if open_pr(branch, commits, behind, has_ci, ancestry_only) != 0:
+    if open_pr(branch, commits, behind, has_ci, ancestry_only, dco_mismatches()) != 0:
         recorded = track(
             sha,
             behind,

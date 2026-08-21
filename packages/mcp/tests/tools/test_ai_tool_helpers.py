@@ -4,7 +4,10 @@ import pytest
 from _shared.fixture_ids import make_pipe_id
 from pipefy_sdk import PipefyGraphQLError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.ai_tool_helpers import (
+    build_ai_tool_error,
+    build_create_agent_partial_failure,
     build_create_agent_success,
     build_create_automation_success,
     build_delete_agent_success,
@@ -47,16 +50,55 @@ def _make_behaviors(*specs):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("exc_message", ["", "   "])
+def test_build_ai_tool_error_empty_message_uses_fallback(exc_message):
+    payload = build_ai_tool_error(exc_message)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "AI request failed." in message
+    assert "do not blind-retry" in message
+
+
+@pytest.mark.unit
+def test_build_ai_tool_error_preserves_non_empty_message():
+    payload = build_ai_tool_error("boom")
+    assert payload["success"] is False
+    assert tool_error_message(payload) == "boom"
+
+
+@pytest.mark.unit
+def test_build_create_agent_partial_failure_includes_disabled_hint():
+    out = build_create_agent_partial_failure(
+        agent_uuid="u1",
+        error="update failed",
+        disabled_at="2026-08-04T12:00:00+00:00",
+    )
+    assert out["success"] is False
+    assert out["agent_uuid"] == "u1"
+    assert out["disabled_at"] == "2026-08-04T12:00:00+00:00"
+    assert out["active"] is False
+    assert "toggle_ai_agent_status" in out["error"]["message"]
+    assert "update failed" in out["error"]["message"]
+
+
+@pytest.mark.unit
 def test_build_create_agent_success_parametrized_flag(envelope_flag):
     out = build_create_agent_success(agent_uuid="abc", message="ok")
     if envelope_flag:
         assert out == {
             "success": True,
-            "data": {"agent_uuid": "abc"},
+            "data": {"agent_uuid": "abc", "disabled_at": None, "active": True},
             "message": "ok",
         }
     else:
-        assert out == {"success": True, "agent_uuid": "abc", "message": "ok"}
+        assert out == {
+            "success": True,
+            "agent_uuid": "abc",
+            "disabled_at": None,
+            "active": True,
+            "message": "ok",
+        }
 
 
 @pytest.mark.unit
@@ -65,11 +107,17 @@ def test_build_update_agent_success_parametrized_flag(envelope_flag):
     if envelope_flag:
         assert out == {
             "success": True,
-            "data": {"agent_uuid": "u1"},
+            "data": {"agent_uuid": "u1", "disabled_at": None, "active": True},
             "message": "updated",
         }
     else:
-        assert out == {"success": True, "agent_uuid": "u1", "message": "updated"}
+        assert out == {
+            "success": True,
+            "agent_uuid": "u1",
+            "disabled_at": None,
+            "active": True,
+            "message": "updated",
+        }
 
 
 @pytest.mark.unit

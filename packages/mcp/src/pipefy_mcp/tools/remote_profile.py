@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp.tools.base import Tool
+    from mcp.server.mcpserver.tools.base import Tool
 
 REMOTE_META_KEY = "remote"
 

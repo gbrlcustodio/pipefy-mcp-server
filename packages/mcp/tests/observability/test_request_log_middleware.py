@@ -12,7 +12,6 @@ from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from starlette.authentication import UnauthenticatedUser
 
-from pipefy_mcp.auth.resource_server import PipefyAccessToken
 from pipefy_mcp.observability.json_logging import (
     configure_observability_logging,
     reset_observability_logging,
@@ -331,11 +330,11 @@ async def test_sub_and_client_id_null_without_auth_context(capsys):
 @pytest.mark.anyio
 async def test_sub_and_client_id_from_scope_user(capsys):
     _configure_for_capture()
-    access_token = PipefyAccessToken(
+    access_token = AccessToken(
         token="the-token",
         client_id="client-abc",
         scopes=["read"],
-        sub="user-123",
+        subject="user-123",
     )
 
     async def app(scope, receive, send):
@@ -410,7 +409,8 @@ async def test_session_id_falls_back_to_response_header(capsys):
 
 
 @pytest.mark.anyio
-async def test_plain_access_token_yields_null_sub(capsys):
+async def test_access_token_without_a_subject_yields_null_sub(capsys):
+    """A token whose `sub` claim was absent logs a null sub, not an empty string."""
     _configure_for_capture()
     access_token = AccessToken(token="the-token", client_id="client-abc", scopes=[])
 

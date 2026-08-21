@@ -4,21 +4,13 @@ import asyncio
 from typing import Any, Literal, cast
 
 from pipefy_sdk import PipefyClient
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from pipefy_mcp.core.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
-from pipefy_mcp.tools.validation_helpers import UUID_RE, format_json_preview
-
-
-class DeletePipePreviewPayload(TypedDict):
-    success: Literal[False]
-    requires_confirmation: Literal[True]
-    pipe_id: str | int
-    message: str
-    pipe_summary: str
+from pipefy_mcp.tools.validation_helpers import UUID_RE
 
 
 class DeletePipeSuccessPayload(TypedDict):
@@ -32,9 +24,7 @@ class DeletePipeErrorPayload(TypedDict):
     error: ToolErrorDetail
 
 
-DeletePipePayload = (
-    DeletePipePreviewPayload | DeletePipeSuccessPayload | DeletePipeErrorPayload
-)
+DeletePipePayload = DeletePipeSuccessPayload | DeletePipeErrorPayload
 
 
 class PipeMutationSuccessPayload(TypedDict):
@@ -52,6 +42,8 @@ class FieldConditionMutationSuccessPayload(TypedDict):
     condition_id: str
     action: str
     message: str
+    verified: NotRequired[bool]
+    warning: NotRequired[str]
 
 
 class FieldConditionDeleteSuccessPayload(TypedDict):
@@ -105,7 +97,10 @@ def build_pipe_mutation_success_payload(
 
 
 def build_pipe_tool_error_payload(
-    *, message: str, code: str | None = None
+    *,
+    message: str,
+    code: str | None = None,
+    details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """``success: False`` with ``error`` text.
 
@@ -115,25 +110,38 @@ def build_pipe_tool_error_payload(
             ``"INVALID_ARGUMENTS"`` for pre-API argument-shape failures so
             the envelope matches the shape of arg-coercion errors
             emitted by :class:`pipefy_mcp.tools.validation_envelope.PipefyValidationTool`.
+        details: Optional structured context (ids, verify outcome, etc.).
     """
-    return tool_error(message, code=code)
+    return tool_error(message, code=code, details=details)
 
 
 def build_field_condition_success_payload(
-    condition_id: str, action: str
+    condition_id: str,
+    action: str,
+    *,
+    verified: bool | None = None,
+    warning: str | None = None,
 ) -> FieldConditionMutationSuccessPayload:
     """Field condition mutation envelope with canned ``message``.
 
     Args:
         condition_id: ID returned by the API.
         action: ``created`` or ``updated`` (echoed to clients).
+        verified: When True, post-create read-back confirmed the rule on the
+            requested phase.
+        warning: Optional note (e.g. verify reads unavailable).
     """
-    return {
+    payload: FieldConditionMutationSuccessPayload = {
         "success": True,
         "condition_id": condition_id,
         "action": action,
         "message": f"Field condition {action} (ID: {condition_id}).",
     }
+    if verified is not None:
+        payload["verified"] = verified
+    if warning is not None:
+        payload["warning"] = warning
+    return payload
 
 
 def build_field_condition_delete_payload(
@@ -152,38 +160,6 @@ def build_field_condition_delete_payload(
     return {
         "success": False,
         "message": "Field condition could not be deleted.",
-    }
-
-
-def build_delete_pipe_preview_payload(
-    *,
-    pipe_id: str | int,
-    pipe_name: str,
-    pipe_data: dict[str, Any],
-) -> DeletePipePreviewPayload:
-    """Two-step delete: preview before ``confirm=True``.
-
-    Args:
-        pipe_id: Target pipe id.
-        pipe_name: Display name for messaging.
-        pipe_data: Subset serialized into ``pipe_summary``.
-    """
-    return {
-        "success": False,
-        "requires_confirmation": True,
-        "pipe_id": pipe_id,
-        "pipe_summary": format_json_preview(
-            {
-                "id": pipe_data.get("id"),
-                "name": pipe_name,
-                "phases": pipe_data.get("phases"),
-            }
-        ),
-        "message": (
-            "Warning: You are about to permanently delete pipe "
-            f"'{pipe_name}' (ID: {pipe_id}). "
-            "This cannot be undone. Confirm with the user, then call again with confirm=True."
-        ),
     }
 
 
@@ -603,7 +579,6 @@ def normalize_phase_cards_list(raw: dict[str, Any]) -> dict[str, Any] | None:
 __all__ = [
     "DeletePipeErrorPayload",
     "DeletePipePayload",
-    "DeletePipePreviewPayload",
     "DeletePipeSuccessPayload",
     "FieldConditionDeleteFailurePayload",
     "FieldConditionDeletePayload",
@@ -611,7 +586,6 @@ __all__ = [
     "FieldConditionMutationSuccessPayload",
     "PipeMutationSuccessPayload",
     "build_delete_pipe_error_payload",
-    "build_delete_pipe_preview_payload",
     "build_delete_pipe_success_payload",
     "build_field_condition_delete_payload",
     "build_field_condition_success_payload",

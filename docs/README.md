@@ -16,6 +16,7 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 |-----|------|
 | [`config.md`](config.md) | `PIPEFY_*` environment variables, `config.toml` schema and path, precedence chain |
 | [`cli/auth.md`](cli/auth.md) | CLI credential precedence, `pipefy auth login`, troubleshooting |
+| [`uninstall.md`](uninstall.md) | `uninstall.sh --scan` and teardown, and switching between the hosted, local, and plugin channels |
 | [`parity.md`](parity.md) | MCP tool ↔ CLI command matrix (source of truth for coverage and deferrals) |
 | [`MIGRATION.md`](MIGRATION.md) | Notes for existing MCP users across packaging changes |
 | [`dependencies.md`](dependencies.md) | Why each runtime dependency exists |
@@ -28,4 +29,4 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 | [`../SECURITY.md`](../SECURITY.md) | Vulnerability disclosure |
 | [`compliance/COMPLIANCE.template.md`](compliance/COMPLIANCE.template.md) | Stub for per-blueprint `COMPLIANCE.md` / AI Compliance Card |
 
-First-time install and per-client MCP wiring live in the root [`README.md#installation`](../README.md#installation). First-time agent checklist (path choice, ask-your-agent, verify): [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](../skills/onboarding/pipefy-toolkit-setup/SKILL.md). Package READMEs under `packages/*/README.md` cover surface-specific edge cases.
+First-time install and per-client MCP wiring live in the root [`README.md#installation`](../README.md#installation) (including the [Cursor Marketplace plugin](../README.md#6-cursor-marketplace-plugin)). First-time agent checklist (path choice, ask-your-agent, verify): [`skills/onboarding/pipefy-toolkit-setup/SKILL.md`](../skills/onboarding/pipefy-toolkit-setup/SKILL.md). Package READMEs under `packages/*/README.md` cover surface-specific edge cases.

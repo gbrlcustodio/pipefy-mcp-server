@@ -9,7 +9,7 @@ artifacts surfaced here to the SDK.
 
 from __future__ import annotations
 
-__version__ = "0.4.0-beta.2"
+__version__ = "0.5.0-beta.1"
 
 from pipefy_auth.bearer import (
     RefreshableBearerAuth,
@@ -47,12 +47,14 @@ from pipefy_auth.revoke import (
 from pipefy_auth.settings import AuthSettings, JwtValidationSettings
 from pipefy_auth.storage import (
     SessionDeleteError,
+    SessionEntryPresence,
     StoredSession,
     configure_keychain_backend,
     delete_session,
     keychain_backend_name,
     keychain_key,
     load_session,
+    session_entry_presence,
     store_session,
 )
 from pipefy_auth.verification import (
@@ -85,6 +87,7 @@ __all__ = [
     "ServiceAccount",
     "ServiceAccountAuth",
     "SessionDeleteError",
+    "SessionEntryPresence",
     "StaticBearerAuth",
     "StaticTokenAuth",
     "StoredSession",
@@ -106,5 +109,6 @@ __all__ = [
     "resolve_pipefy_auth",
     "revoke_session",
     "run_login",
+    "session_entry_presence",
     "store_session",
 ]

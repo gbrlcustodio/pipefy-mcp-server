@@ -213,10 +213,52 @@ async def test_jsonrpc_error_from_tools_list_raises(respx_mock, gateway):
         await gateway.list_tools("embed-jwt")
 
 
+@pytest.mark.anyio
+@respx.mock
+async def test_list_tools_missing_tools_key_names_the_step(respx_mock, gateway):
+    _mock_happy_chain(respx_mock, rpc_result={})
+
+    with pytest.raises(IpaasGatewayError, match="tools/list.*without 'tools'"):
+        await gateway.list_tools("embed-jwt")
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_list_tools_non_list_tools_field_names_the_step(respx_mock, gateway):
+    _mock_happy_chain(respx_mock, rpc_result={"tools": "nope"})
+
+    with pytest.raises(IpaasGatewayError, match="tools/list.*not a list"):
+        await gateway.list_tools("embed-jwt")
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_list_tools_non_object_catalog_entry_names_the_step(respx_mock, gateway):
+    _mock_happy_chain(respx_mock, rpc_result={"tools": ["not-an-object"]})
+
+    with pytest.raises(IpaasGatewayError, match="tools/list.*not an object"):
+        await gateway.list_tools("embed-jwt")
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_session_list_tools_missing_tools_key_names_the_step(respx_mock, gateway):
+    _mock_happy_chain(respx_mock, rpc_result={})
+
+    with pytest.raises(IpaasGatewayError, match="tools/list.*without 'tools'"):
+        async with gateway.mcp_session("embed-jwt") as session:
+            await session.list_tools()
+
+
 CALL_RESULT = {
     "content": [{"type": "text", "text": "flow created: flow-1"}],
     "isError": False,
 }
+
+
+async def _session_call_tool(gateway, token, name, arguments=None):
+    async with gateway.mcp_session(token) as session:
+        return await session.call_tool(name, arguments)
 
 
 @pytest.mark.anyio
@@ -224,8 +266,8 @@ CALL_RESULT = {
 async def test_call_tool_posts_tools_call_with_arguments(respx_mock, gateway):
     mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
 
-    result = await gateway.call_tool(
-        "embed-jwt", "demo_create_flow", {"name": "My flow"}
+    result = await _session_call_tool(
+        gateway, "embed-jwt", "demo_create_flow", {"name": "My flow"}
     )
 
     assert result == CALL_RESULT
@@ -245,7 +287,7 @@ async def test_call_tool_posts_tools_call_with_arguments(respx_mock, gateway):
 async def test_call_tool_defaults_arguments_to_empty_object(respx_mock, gateway):
     mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
 
-    await gateway.call_tool("embed-jwt", "demo_list_flows")
+    await _session_call_tool(gateway, "embed-jwt", "demo_list_flows")
 
     body = json.loads(mcp_route.calls.last.request.content)
     assert body["params"] == {"name": "demo_list_flows", "arguments": {}}
@@ -259,7 +301,9 @@ async def test_call_tool_gives_only_the_invocation_hop_the_long_timeout(
     """A called tool may run a real flow; the handshake hops keep 30s."""
     mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
 
-    await gateway.call_tool("embed-jwt", "demo_test_flow", {"flowId": "flow-1"})
+    await _session_call_tool(
+        gateway, "embed-jwt", "demo_test_flow", {"flowId": "flow-1"}
+    )
 
     initialize, invocation = mcp_route.calls[-2].request, mcp_route.calls[-1].request
     assert initialize.extensions["timeout"]["read"] == REQUEST_TIMEOUT_SECONDS
@@ -276,7 +320,9 @@ async def test_call_tool_relays_host_error_results_without_raising(respx_mock, g
     }
     _mock_happy_chain(respx_mock, rpc_result=error_result)
 
-    result = await gateway.call_tool("embed-jwt", "demo_delete_flow", {"id": "nope"})
+    result = await _session_call_tool(
+        gateway, "embed-jwt", "demo_delete_flow", {"id": "nope"}
+    )
 
     assert result == error_result
 
@@ -286,7 +332,9 @@ async def test_call_tool_relays_host_error_results_without_raising(respx_mock, g
 async def test_call_tool_parses_sse_encoded_response(respx_mock, gateway):
     _mock_happy_chain(respx_mock, sse_tools_list=True, rpc_result=CALL_RESULT)
 
-    result = await gateway.call_tool("embed-jwt", "demo_create_flow", {"name": "x"})
+    result = await _session_call_tool(
+        gateway, "embed-jwt", "demo_create_flow", {"name": "x"}
+    )
 
     assert result == CALL_RESULT
 
@@ -301,7 +349,51 @@ async def test_jsonrpc_error_from_tools_call_names_the_method(respx_mock, gatewa
     )
 
     with pytest.raises(IpaasGatewayError, match="tools/call returned an error"):
-        await gateway.call_tool("embed-jwt", "demo_create_flow", {})
+        await _session_call_tool(gateway, "embed-jwt", "demo_create_flow", {})
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_mcp_session_list_then_call_posts_token_once(respx_mock, gateway):
+    """list_tools then call_tool inside one session run the OAuth handshake once."""
+    _mock_auth_chain(respx_mock)
+
+    def mcp_responder(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        method = body["method"]
+        if method == "initialize":
+            return httpx.Response(
+                200, json={"jsonrpc": "2.0", "id": body["id"], "result": {}}
+            )
+        if method == "tools/list":
+            return httpx.Response(
+                200,
+                json={"jsonrpc": "2.0", "id": body["id"], "result": {"tools": TOOLS}},
+            )
+        if method == "tools/call":
+            return httpx.Response(
+                200,
+                json={"jsonrpc": "2.0", "id": body["id"], "result": CALL_RESULT},
+            )
+        return httpx.Response(500)
+
+    respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=mcp_responder)
+
+    async with gateway.mcp_session("embed-jwt") as mcp:
+        tools = await mcp.list_tools()
+        result = await mcp.call_tool("demo_create_flow", {"name": "My flow"})
+
+    assert tools == TOOLS
+    assert result == CALL_RESULT
+    token_posts = [
+        call
+        for call in respx_mock.calls
+        if urlparse(str(call.request.url)).path == "/token"
+    ]
+    assert len(token_posts) == 1
+    assert not any(
+        key in vars(gateway) for key in ("access_token", "_cached_access_token")
+    )
 
 
 @pytest.mark.anyio
@@ -322,7 +414,9 @@ async def test_call_tool_timeout_names_the_method_and_points_at_runs(
     with pytest.raises(
         IpaasGatewayError, match="tools/call timed out after 120s.*run-listing"
     ):
-        await gateway.call_tool("embed-jwt", "demo_test_flow", {"flowId": "flow-1"})
+        await _session_call_tool(
+            gateway, "embed-jwt", "demo_test_flow", {"flowId": "flow-1"}
+        )
 
 
 @pytest.mark.anyio
@@ -337,7 +431,9 @@ async def test_handshake_timeout_reports_retry_safe(respx_mock, gateway):
     respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=responder)
 
     with pytest.raises(IpaasGatewayError, match="handshake timed out.*safe to retry"):
-        await gateway.call_tool("embed-jwt", "demo_test_flow", {"flowId": "flow-1"})
+        await _session_call_tool(
+            gateway, "embed-jwt", "demo_test_flow", {"flowId": "flow-1"}
+        )
 
 
 @pytest.mark.anyio
@@ -347,7 +443,7 @@ async def test_response_without_result_names_the_method(respx_mock, gateway):
     respx_mock.post(f"{IPAAS_URL}/mcp").respond(200, json={"jsonrpc": "2.0", "id": 2})
 
     with pytest.raises(IpaasGatewayError, match="tools/call.*no result"):
-        await gateway.call_tool("embed-jwt", "demo_list_flows")
+        await _session_call_tool(gateway, "embed-jwt", "demo_list_flows")
 
 
 PIECE_NAME = "@example/piece-demo"
@@ -564,7 +660,9 @@ async def test_sse_notification_frames_before_the_response_are_skipped(
 
     respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=responder)
 
-    result = await gateway.call_tool("embed-jwt", "demo_create_flow", {"name": "x"})
+    result = await _session_call_tool(
+        gateway, "embed-jwt", "demo_create_flow", {"name": "x"}
+    )
 
     assert result == CALL_RESULT
 
@@ -579,7 +677,7 @@ async def test_null_result_is_a_protocol_error(respx_mock, gateway):
     )
 
     with pytest.raises(IpaasGatewayError, match="tools/call.*non-object result"):
-        await gateway.call_tool("embed-jwt", "demo_list_flows")
+        await _session_call_tool(gateway, "embed-jwt", "demo_list_flows")
 
 
 @pytest.mark.anyio

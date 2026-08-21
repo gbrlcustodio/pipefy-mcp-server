@@ -51,10 +51,10 @@ Replace `field` / `value` when filterable-field metadata uses different names or
 |------|------|
 | `create_pipe_report` | Creates a pipe report (name, optional `fields`, `filter`, `formulas`). |
 | `update_pipe_report` | Updates a pipe report; only provided arguments are applied. |
-| `delete_pipe_report` | Deletes a pipe report (`destructiveHint=True` — confirm with the user first). |
+| `delete_pipe_report` | Deletes a pipe report (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |
 | `create_organization_report` | Creates an org-wide report spanning multiple pipes. |
 | `update_organization_report` | Updates an organization report. |
-| `delete_organization_report` | Deletes an organization report (`destructiveHint=True` — confirm first). |
+| `delete_organization_report` | Deletes an organization report (`destructiveHint=True`; [two-step](cross-cutting.md#destructive-operations) with `confirmation_token`). |
 
 ## Report export tools
 

@@ -12,15 +12,15 @@ Knowledge bases are the data sources an AI agent draws on. Each item's `id` is w
 | `get_ai_knowledge_base_plain_text` | Yes | Fetches one plain text by `id`, including its full `content`. |
 | `create_ai_knowledge_base_plain_text` | No | Creates a plain text. `name`, `content` (1-3500 chars), and `description` (1-900 chars) are all required. |
 | `update_ai_knowledge_base_plain_text` | No | Partial update by `plain_text_id`: pass any of `name` / `content` / `description` (at least one); omitted fields keep their stored value. |
-| `delete_ai_knowledge_base_plain_text` | No | Deletes a plain text permanently. Two-step: preview with `confirm=false` (default), execute with `confirm=true`. |
+| `delete_ai_knowledge_base_plain_text` | No | Deletes a plain text permanently. [Two-step](cross-cutting.md#destructive-operations): echo `confirmation_token` from the preview. |
 | `get_ai_knowledge_base_document` | Yes | Fetches one document by `id`. `content` is the stored document URL, not the extracted text. |
 | `create_ai_knowledge_base_document` | No | Creates a document from a local PDF in one shot (presigned URL, S3 PUT, create mutation). `name`, `file_path`, and `description` (1-900 chars) are required. |
 | `update_ai_knowledge_base_document` | No | Metadata-only partial update by `document_id`: pass `name` and/or `description` (at least one). The PDF file cannot be replaced. |
-| `delete_ai_knowledge_base_document` | No | Deletes a document permanently. Two-step: preview with `confirm=false` (default), execute with `confirm=true`. |
+| `delete_ai_knowledge_base_document` | No | Deletes a document permanently. [Two-step](cross-cutting.md#destructive-operations): echo `confirmation_token` from the preview. |
 | `get_ai_knowledge_base_data_lookup` | Yes | Fetches one data lookup by `id`. The payload never includes `conditions` (see below). |
 | `create_ai_knowledge_base_data_lookup` | No | Creates a data lookup: a data source that searches cards in a source pipe by conditions and returns selected fields. `name`, `description` (1-900 chars), `source_repo_id`, `output_fields`, and `conditions` are required. |
 | `update_ai_knowledge_base_data_lookup` | No | Replaces a data lookup's full definition: `source_repo_id`, `output_fields`, and `conditions` are required on every call; omitting `search_query` clears it. Only `name`/`description` are partial. |
-| `delete_ai_knowledge_base_data_lookup` | No | Deletes a data lookup permanently. Two-step: preview with `confirm=false` (default), execute with `confirm=true`. |
+| `delete_ai_knowledge_base_data_lookup` | No | Deletes a data lookup permanently. [Two-step](cross-cutting.md#destructive-operations): echo `confirmation_token` from the preview. |
 | `validate_knowledge_base_access` | Yes | Probes whether the current credential can read a pipe's knowledge bases, classifying failures into structured problems instead of opaque errors. |
 
 ## Identifiers: pipe UUID, not numeric ID
@@ -81,7 +81,7 @@ The toolkit validates the definition client-side because the API accepts shapes 
 - The **CLI gates writes** on the probe: `pipefy kb plain-text create` / `update`, `pipefy kb document create` / `update`, and `pipefy kb data-lookup create` / `update` run the read-access probe first and fail with the classified problem if it is denied, before attempting the mutation.
 - **Clean-gate contract.** The probe can return a success that still carries a `problem` — when the API returns partial data alongside GraphQL errors, it surfaces the classified error rather than discarding it, and deliberately does not flip `ok`. The CLI write gate therefore treats the gate as clean only when it is **`ok` and carries no `problem`**; a present `problem` is partial denial and is never read as full access.
 - The **MCP tools stay explicit-validate-first**: create / update do not auto-probe. Call `validate_knowledge_base_access` yourself before writing.
-- **Deletes require confirmation**: the MCP tool needs `confirm=true`; the CLI needs `--yes` (or an interactive prompt).
+- **Deletes require confirmation**: MCP two-step with `confirmation_token` ([Destructive operations](cross-cutting.md#destructive-operations)); the CLI needs `--yes` (or an interactive prompt).
 
 ## Attaching a source to an agent
 

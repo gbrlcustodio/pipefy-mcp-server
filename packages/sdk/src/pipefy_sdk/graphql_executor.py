@@ -11,6 +11,8 @@ from gql.transport.httpx import HTTPXAsyncTransport
 from graphql import DocumentNode, GraphQLSchema
 from httpx import Auth, Timeout
 
+from pipefy_sdk.exceptions import PipefyAPIError
+
 
 @dataclass(frozen=True)
 class GraphQLResult:
@@ -41,7 +43,7 @@ def _graphql_error_message(errors: list[Any]) -> str:
     return "; ".join(parts) or "Query failed."
 
 
-class PipefyGraphQLError(Exception):
+class PipefyGraphQLError(PipefyAPIError):
     """A GraphQL response came back carrying ``errors``.
 
     Owned by the SDK so callers catch one error type instead of a gql transport

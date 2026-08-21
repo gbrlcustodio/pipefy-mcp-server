@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pipefy": {
+      "url": "https://mcp.pipefy.com/mcp",
+      "auth": {
+        "CLIENT_ID": "pipefy-mcp"
+      }
+    }
+  }
+}

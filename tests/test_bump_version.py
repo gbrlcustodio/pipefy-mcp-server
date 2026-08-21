@@ -162,11 +162,16 @@ def test_json_version_re_replaces_version(manifest: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "manifest", [_bump.PLUGIN_MANIFEST, _bump.MARKETPLACE_MANIFEST]
+    "manifest",
+    [
+        _bump.PLUGIN_MANIFEST,
+        _bump.MARKETPLACE_MANIFEST,
+        _bump.CURSOR_PLUGIN_MANIFEST,
+    ],
 )
 def test_json_manifest_version_matches_real_manifest(manifest: Path) -> None:
-    # Both Claude manifests carry the lockstep version; a lone "version" key must
-    # resolve and equal the SDK source of truth.
+    # Claude and Cursor manifests carry the lockstep version; a lone "version"
+    # key must resolve and equal the SDK source of truth.
     text = manifest.read_text(encoding="utf-8")
     m = _bump._sole_match(_bump.JSON_VERSION_RE, text)
     assert m is not None
@@ -174,14 +179,15 @@ def test_json_manifest_version_matches_real_manifest(manifest: Path) -> None:
 
 
 def test_json_manifests_cover_every_versioned_plugin_manifest() -> None:
-    # A .claude-plugin JSON that carries a "version" but is absent from
-    # JSON_MANIFESTS is exactly the drift this fix targets: it exists yet is
-    # bumped and verified by nothing. Deriving the expected set from the tree
-    # (not a hand-list) means neither dropping a manifest nor adding a future one
-    # can silently unwire it.
+    # A .claude-plugin or .cursor-plugin JSON that carries a "version" but is
+    # absent from JSON_MANIFESTS is exactly the drift this fix targets: it exists
+    # yet is bumped and verified by nothing. Deriving the expected set from the
+    # tree (not a hand-list) means neither dropping a manifest nor adding a
+    # future one can silently unwire it.
     versioned = {
         path
-        for path in (_bump.REPO_ROOT / ".claude-plugin").glob("*.json")
+        for directory in (".claude-plugin", ".cursor-plugin")
+        for path in (_bump.REPO_ROOT / directory).glob("*.json")
         if _bump.JSON_VERSION_RE.search(path.read_text(encoding="utf-8"))
     }
     assert versioned == set(_bump.JSON_MANIFESTS)
@@ -343,3 +349,52 @@ def test_write_dep_pins_rejects_duplicate_dep_occurrence(
 
     with pytest.raises(ValueError, match="Expected one 'pipefy' dependency"):
         _bump.write_dep_pins("9.9.9")
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("0.5.0-alpha.1", "alpha"),
+        ("0.5.0a1", "alpha"),
+        ("0.5.0-beta.2", "beta"),
+        ("0.5.0b2", "beta"),
+        ("0.5.0-rc.1", "rc"),
+        ("0.5.0rc1", "rc"),
+        ("0.5.0", None),
+        ("1.0.0", None),
+    ],
+)
+def test_prerelease_track_ignores_spelling(version: str, expected: str | None) -> None:
+    # The branch gate in release.py keys off this, so the SemVer-style and the
+    # compact PEP 440 form must classify identically.
+    assert _bump.prerelease_track(version) == expected
+
+
+@pytest.mark.parametrize(
+    ("current", "expected"),
+    [
+        # Promotion keeps X.Y.Z and resets the counter, preserving the style.
+        ("0.5.0-alpha.1", "0.5.0-beta.1"),
+        ("0.5.0-alpha.7", "0.5.0-beta.1"),
+        ("0.5.0a3", "0.5.0b1"),
+        ("1.0.0.alpha.2", "1.0.0.beta.1"),
+    ],
+)
+def test_bump_beta_promotes_alpha_to_first_beta(current: str, expected: str) -> None:
+    assert _bump.bump_beta(current) == expected
+
+
+def test_bump_beta_promotion_is_an_upgrade() -> None:
+    # PEP 440 must order the promotion upward, or release_pr's ahead-of-main
+    # guard would reject its own output.
+    from packaging.version import Version
+
+    assert Version(_bump.bump_beta("0.5.0-alpha.3")) > Version("0.5.0-alpha.3")
+
+
+@pytest.mark.parametrize("current", ["0.5.0-beta.1", "0.5.0-rc.1", "0.5.0"])
+def test_bump_beta_refuses_non_alpha(current: str) -> None:
+    # Only alphas promote; walking a beta line is `prerelease`, and opening a
+    # new line is an explicit `version=`, so no core bump is implied here.
+    with pytest.raises(ValueError, match="not an alpha"):
+        _bump.bump_beta(current)

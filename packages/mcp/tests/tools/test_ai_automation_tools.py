@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -15,6 +15,7 @@ from tools.conftest import (
     assert_invalid_arguments_envelope,
     build_tool_test_server,
 )
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -96,7 +97,7 @@ class TestGetAiAutomation:
                 "get_ai_automation",
                 {"automation_id": "501"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_automation.assert_awaited_once_with("501")
         payload = extract_payload(result)
         assert payload["success"] is True
@@ -117,7 +118,7 @@ class TestGetAiAutomation:
                 "get_ai_automation",
                 {"automation_id": "x"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         p = extract_payload(result)
         assert p["success"] is False
         assert "boom" in tool_error_message(p)
@@ -198,7 +199,7 @@ class TestGetAiAutomation:
                 "get_ai_automation",
                 {"automation_id": "1"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         mock_pipefy_client_no_ai.get_automation.assert_awaited_once_with("1")
@@ -232,7 +233,7 @@ class TestGetAiAutomations:
                 "get_ai_automations",
                 {"pipe_id": "303"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_automations.assert_awaited_once_with(
             organization_id=None,
             pipe_id="303",
@@ -298,7 +299,7 @@ class TestGetAiAutomations:
                 "get_ai_automations",
                 {"pipe_id": "303", "organization_id": "9001"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.get_automations.assert_awaited_once_with(
             organization_id="9001",
             pipe_id="303",
@@ -400,7 +401,7 @@ class TestDeleteAiAutomation:
                 "delete_ai_automation",
                 {"automation_id": "rm-1", "confirm": False},
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.delete_automation.assert_not_called()
         p = extract_payload(result)
         assert p["success"] is False
@@ -411,70 +412,64 @@ class TestDeleteAiAutomation:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_automation.return_value = {"success": True}
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": "rm-1", "confirm": True},
             )
-        assert result.isError is False
         mock_pipefy_client.delete_automation.assert_awaited_once_with("rm-1")
-        p = extract_payload(result)
-        assert p["success"] is True
+        assert payload["success"] is True
 
     async def test_graphql_error(
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_automation.side_effect = PipefyGraphQLError(
             [{"message": "forbidden"}]
         )
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": "z", "confirm": True},
             )
-        p = extract_payload(result)
-        assert p["success"] is False
-        assert "forbidden" in tool_error_message(p)
+        assert payload["success"] is False
+        assert "forbidden" in tool_error_message(payload)
 
     async def test_works_without_oauth_config(
         self,
         client_session_no_ai,
         mock_pipefy_client_no_ai,
-        extract_payload,
     ):
         """Delete uses public GraphQL, not the Internal API. OAuth is not required."""
         mock_pipefy_client_no_ai.delete_automation.return_value = {"success": True}
         async with client_session_no_ai as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": "1", "confirm": True},
             )
-        assert result.isError is False
         mock_pipefy_client_no_ai.delete_automation.assert_awaited_once_with("1")
-        p = extract_payload(result)
-        assert p["success"] is True
+        assert payload["success"] is True
 
     async def test_api_success_false_returns_error_payload(
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_automation.return_value = {"success": False}
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": "x", "confirm": True},
             )
-        p = extract_payload(result)
-        assert p["success"] is False
-        assert "did not succeed" in tool_error_message(p).lower()
+        assert payload["success"] is False
+        assert "did not succeed" in tool_error_message(payload).lower()
 
     async def test_rejects_invalid_automation_id(
         self,
@@ -494,8 +489,8 @@ class TestDeleteAiAutomation:
             listed = await session.list_tools()
         tool = next(t for t in listed.tools if t.name == "delete_ai_automation")
         assert tool.annotations is not None
-        assert tool.annotations.destructiveHint is True
-        assert tool.annotations.readOnlyHint is False
+        assert tool.annotations.destructive_hint is True
+        assert tool.annotations.read_only_hint is False
 
 
 @pytest.mark.anyio
@@ -522,7 +517,7 @@ class TestCreateAiAutomation:
                     "field_ids": ["133"],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload == {
             "success": True,
@@ -582,7 +577,7 @@ class TestCreateAiAutomation:
                     "field_ids": ["133"],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -616,7 +611,7 @@ class TestCreateAiAutomation:
                     "field_ids": ["133"],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         err = tool_error_message(payload)
@@ -654,7 +649,7 @@ class TestCreateAiAutomation:
                     "debug": True,
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         err = tool_error_message(payload)
@@ -688,7 +683,7 @@ class TestCreateAiAutomation:
                     "field_ids": ["133"],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         validated_input = mock_pipefy_client.create_ai_automation.call_args[0][0]
         assert validated_input.condition.to_api_payload() == DEFAULT_CONDITION
 
@@ -725,7 +720,7 @@ class TestCreateAiAutomation:
                     "condition": custom_condition,
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         validated_input = mock_pipefy_client.create_ai_automation.call_args[0][0]
         dumped = validated_input.condition.model_dump(mode="python")
         assert dumped["expressions"][0]["field_address"] == "status"
@@ -748,7 +743,7 @@ class TestCreateAiAutomation:
                     "field_ids": ["133"],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         mock_pipefy_client.create_ai_automation.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
@@ -773,7 +768,7 @@ class TestUpdateAiAutomation:
                 "update_ai_automation",
                 {"automation_id": "789", "name": "Updated", "active": False},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload == {
             "success": True,
@@ -797,7 +792,7 @@ class TestUpdateAiAutomation:
                 "update_ai_automation",
                 {"automation_id": "789", "name": "Updated", "active": False},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -821,7 +816,7 @@ class TestUpdateAiAutomation:
                 "update_ai_automation",
                 {"automation_id": "789", "name": "Updated", "active": False},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         err = tool_error_message(payload)
@@ -858,7 +853,7 @@ class TestUpdateAiAutomation:
                     "debug": True,
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         err = tool_error_message(payload)
@@ -882,7 +877,7 @@ class TestUpdateAiAutomation:
                 "update_ai_automation",
                 {"automation_id": "99999999999", "name": "x"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         err = tool_error_message(payload)
@@ -912,7 +907,7 @@ class TestUpdateAiAutomation:
                 "update_ai_automation",
                 {"automation_id": "42", "name": "x"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         err = tool_error_message(payload)
         assert "may not exist OR" in err
@@ -949,7 +944,7 @@ class TestPipefyIdCoercion:
                     "field_ids": ["f1"],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
 
@@ -972,7 +967,7 @@ class TestPipefyIdCoercion:
                 "update_ai_automation",
                 {"automation_id": 789, "name": "Updated"},
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
 
@@ -991,7 +986,7 @@ class TestPipefyIdCoercion:
                 "get_ai_automation",
                 {"automation_id": 900},
             )
-        assert result.isError is False
+        assert result.is_error is False
         assert extract_payload(result)["success"] is True
         mock_pipefy_client.get_automation.assert_awaited_once_with("900")
 
@@ -1017,15 +1012,15 @@ class TestPipefyIdCoercion:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         mock_pipefy_client.delete_automation.return_value = {"success": True}
         async with client_session as session:
-            result = await session.call_tool(
+            payload = await confirm_after_preview(
+                session,
                 "delete_ai_automation",
                 {"automation_id": 501, "confirm": True},
             )
-        assert extract_payload(result)["success"] is True
+        assert payload["success"] is True
         mock_pipefy_client.delete_automation.assert_awaited_once_with("501")
 
 
@@ -1098,7 +1093,7 @@ class TestValidateAiAutomationPrompt:
                     "field_ids": ["200"],
                 },
             )
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         assert payload["valid"] is True
@@ -1325,7 +1320,7 @@ class TestValidateAiAutomationPrompt:
             t for t in listed.tools if t.name == "validate_ai_automation_prompt"
         )
         assert tool.annotations is not None
-        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.read_only_hint is True
 
     async def test_field_map_contains_only_referenced_fields(
         self,

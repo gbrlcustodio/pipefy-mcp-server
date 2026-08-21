@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
+    ensure_non_empty_error_message,
     extract_error_strings,
     extract_graphql_error_codes,
 )
@@ -30,20 +31,32 @@ _PORTAL_PERMISSION_GUIDANCE = (
     "Permission denied. Request organization permissions such as "
     "`create_portal` or `manage_portals` from your admin."
 )
+_PORTAL_OPERATION_FAILED = (
+    "Portal operation failed. Re-read portal state before retrying; do not blind-retry."
+)
 
 
-def map_portal_error_to_message(exc: BaseException) -> str:
+def map_portal_error_to_message(
+    exc: BaseException,
+    *,
+    empty_fallback: str = _PORTAL_OPERATION_FAILED,
+) -> str:
     """Map portal SDK/GraphQL failures to agent-friendly messages.
 
     Args:
         exc: Exception raised by ``PipefyClient`` portal methods or GraphQL transport.
+        empty_fallback: Non-empty message when ``str(exc)`` is blank after strip.
+            Writes keep the default write-style fallback; reads pass a plain
+            read-domain string.
 
     Returns:
         User-visible error string; permission failures mention ``create_portal``
         and ``manage_portals``.
     """
     if isinstance(exc, PortalPermissionError):
-        return str(exc).strip()
+        return ensure_non_empty_error_message(
+            str(exc).strip(), _PORTAL_PERMISSION_GUIDANCE
+        )
 
     text = str(exc).strip()
     lowered = text.lower()
@@ -67,7 +80,7 @@ def map_portal_error_to_message(exc: BaseException) -> str:
         if messages:
             return "; ".join(messages)
 
-    return text or "Portal operation failed. Try again or contact support."
+    return ensure_non_empty_error_message(text, empty_fallback)
 
 
 def validate_tool_ids(

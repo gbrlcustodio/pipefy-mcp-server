@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_infra.filesystem import LocalFileError
@@ -91,7 +91,7 @@ async def test_upload_attachment_to_card_file_path_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["card_id"] == "7"
@@ -134,7 +134,7 @@ async def test_upload_attachment_to_card_file_path_explicit_file_name_overrides(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["file_name"] == "Invoice 2026.pdf"
 
@@ -157,7 +157,7 @@ async def test_upload_attachment_to_card_file_path_passes_tilde_to_service(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     attachment_arg = mock_attachment_client.upload_attachment.await_args.args[0]
     assert str(attachment_arg.path) == "~/tilde.bin"
 
@@ -330,7 +330,7 @@ async def test_upload_attachment_to_card_validation_missing_source(
 
     Both sources are optional args, so arg-coercion succeeds and the DTO's
     exactly-one-of validator fires in the body as a ``step=validation`` error
-    (not the FastMCP arg-coercion INVALID_ARGUMENTS shape).
+    (not the SDK arg-coercion INVALID_ARGUMENTS shape).
     """
     async with attachment_session as session:
         result = await session.call_tool(
@@ -601,7 +601,7 @@ async def test_upload_attachment_to_card_coerces_int_ids(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     mock_attachment_client.upload_attachment.assert_awaited_once()
@@ -632,7 +632,7 @@ async def test_upload_attachment_to_table_record_coerces_int_ids(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     mock_attachment_client.upload_attachment.assert_awaited_once()
@@ -677,7 +677,7 @@ async def test_upload_attachment_to_card_file_url_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["file_name"] == "report.pdf"

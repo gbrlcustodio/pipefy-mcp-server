@@ -5,7 +5,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -13,6 +13,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.service_account_tools import ServiceAccountTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 ORG = "341c1327-261c-4766-bb96-7953e4c3970d"
 
@@ -45,7 +46,6 @@ def sa_session(sa_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_success(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -67,7 +67,7 @@ async def test_create_service_account_success(
             {"organization_uuid": ORG, "name": "sa", "role": "normal"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_sa_client.create_service_account.assert_awaited_once_with(
         organization_uuid=ORG,
         name="sa",
@@ -85,7 +85,6 @@ async def test_create_service_account_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_passes_expiration(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -118,7 +117,6 @@ async def test_create_service_account_passes_expiration(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_with_pipe_ids_chains_and_verifies(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -146,7 +144,7 @@ async def test_create_service_account_with_pipe_ids_chains_and_verifies(
                 "pipe_ids": ["100"],
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     # pipe_role defaults to admin.
     mock_sa_client.create_service_account.assert_awaited_once_with(
         organization_uuid=ORG,
@@ -165,7 +163,6 @@ async def test_create_service_account_with_pipe_ids_chains_and_verifies(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_pipe_ids_null_members_still_returns_secret(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -194,7 +191,7 @@ async def test_create_service_account_pipe_ids_null_members_still_returns_secret
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["serviceAccount"]["client"]["secret"] == "csecret"
@@ -203,7 +200,6 @@ async def test_create_service_account_pipe_ids_null_members_still_returns_secret
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_bad_pipe_ids(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -224,7 +220,6 @@ async def test_create_service_account_rejects_bad_pipe_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_long_name(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -240,7 +235,6 @@ async def test_create_service_account_rejects_long_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_bad_expiration_pair(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -261,7 +255,6 @@ async def test_create_service_account_rejects_bad_expiration_pair(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_rejects_blank_org(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -277,7 +270,6 @@ async def test_create_service_account_rejects_blank_org(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_graphql_error(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -289,14 +281,13 @@ async def test_create_service_account_graphql_error(
             "create_service_account",
             {"organization_uuid": ORG, "name": "sa", "role": "normal"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not allowed" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "raw",
     [
@@ -322,7 +313,7 @@ async def test_create_service_account_soft_failure_is_not_reported_as_created(
             "create_service_account",
             {"organization_uuid": ORG, "name": "sa", "role": "normal"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "once" not in json.dumps(payload)
@@ -331,7 +322,6 @@ async def test_create_service_account_soft_failure_is_not_reported_as_created(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "raw",
     [
@@ -369,7 +359,7 @@ async def test_create_service_account_without_secret_fails_closed(
             "create_service_account",
             {"organization_uuid": ORG, "name": "sa", "role": "normal"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "once" not in json.dumps(payload)
@@ -377,7 +367,6 @@ async def test_create_service_account_without_secret_fails_closed(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_without_secret_surfaces_uuid_for_cleanup(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -400,7 +389,6 @@ async def test_create_service_account_without_secret_surfaces_uuid_for_cleanup(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_create_service_account_failure_never_echoes_secret(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -423,7 +411,6 @@ async def test_create_service_account_failure_never_echoes_secret(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_delete_service_account_preview_does_not_call_mutation(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -440,15 +427,13 @@ async def test_delete_service_account_preview_does_not_call_mutation(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
-async def test_delete_service_account_confirmed(
-    sa_session, mock_sa_client, extract_payload
-):
+async def test_delete_service_account_confirmed(sa_session, mock_sa_client):
     mock_sa_client.delete_service_account.return_value = {
         "deleteServiceAccount": {"success": True}
     }
     async with sa_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_service_account",
             {
                 "organization_uuid": ORG,
@@ -456,16 +441,13 @@ async def test_delete_service_account_confirmed(
                 "confirm": True,
             },
         )
-    assert result.isError is False
     mock_sa_client.delete_service_account.assert_awaited_once_with(
         organization_uuid=ORG, service_account_uuid="sa-uuid-1"
     )
-    payload = extract_payload(result)
     assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "raw",
     [
@@ -475,11 +457,12 @@ async def test_delete_service_account_confirmed(
     ],
 )
 async def test_delete_service_account_soft_failure_is_not_reported_as_deleted(
-    sa_session, mock_sa_client, extract_payload, raw
+    sa_session, mock_sa_client, raw
 ):
     mock_sa_client.delete_service_account.return_value = raw
     async with sa_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_service_account",
             {
                 "organization_uuid": ORG,
@@ -487,14 +470,48 @@ async def test_delete_service_account_soft_failure_is_not_reported_as_deleted(
                 "confirm": True,
             },
         )
-    assert result.isError is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "did not succeed" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
+async def test_delete_service_account_rejects_token_when_organization_uuid_differs(
+    sa_session, mock_sa_client, extract_payload
+):
+    mock_sa_client.delete_service_account.return_value = {
+        "deleteServiceAccount": {"success": True}
+    }
+    async with sa_session as session:
+        preview = await session.call_tool(
+            "delete_service_account",
+            {"organization_uuid": "org-A", "service_account_uuid": "sa-uuid-1"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_service_account",
+            {
+                "organization_uuid": "org-B",
+                "service_account_uuid": "sa-uuid-1",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_sa_client.delete_service_account.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_service_account",
+            {"organization_uuid": "org-A", "service_account_uuid": "sa-uuid-1"},
+        )
+
+    mock_sa_client.delete_service_account.assert_awaited_once_with(
+        organization_uuid="org-A", service_account_uuid="sa-uuid-1"
+    )
+    assert matched["success"] is True
+
+
+@pytest.mark.anyio
 async def test_delete_service_account_rejects_blank_uuid(
     sa_session, mock_sa_client, extract_payload
 ):
@@ -510,10 +527,9 @@ async def test_delete_service_account_rejects_blank_uuid(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sa_session", [None], indirect=True)
 async def test_delete_service_account_has_destructive_hint(sa_session):
     async with sa_session as session:
         listed = await session.list_tools()
     tool = next(t for t in listed.tools if t.name == "delete_service_account")
     assert tool.annotations is not None
-    assert tool.annotations.destructiveHint is True
+    assert tool.annotations.destructive_hint is True

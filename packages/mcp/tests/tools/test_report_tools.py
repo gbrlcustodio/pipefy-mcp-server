@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -13,6 +13,7 @@ from pipefy_sdk.report_filter_preflight import EXAMPLE_PHASE_FILTER
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.report_tools import ReportTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 GOLDEN_REPORT_PHASE_FILTER = {
     **EXAMPLE_PHASE_FILTER,
@@ -66,7 +67,6 @@ def report_session(report_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_success(
     report_session, mock_report_client, extract_payload
 ):
@@ -80,7 +80,7 @@ async def test_get_pipe_reports_success(
     async with report_session as session:
         result = await session.call_tool("get_pipe_reports", {"pipe_uuid": "uuid-123"})
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_reports.assert_awaited_once_with(
         "uuid-123", first=30, after=None, search=None, report_id=None, order=None
     )
@@ -90,7 +90,6 @@ async def test_get_pipe_reports_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -101,7 +100,7 @@ async def test_get_pipe_reports_graphql_error(
     async with report_session as session:
         result = await session.call_tool("get_pipe_reports", {"pipe_uuid": "uuid-123"})
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not allowed" in tool_error_message(payload)
@@ -111,7 +110,6 @@ class TestGetPipeReport:
     """Tests for ``get_pipe_report`` (single report via filtered ``get_pipe_reports``)."""
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("report_session", [None], indirect=True)
     async def test_get_pipe_report_success(
         self, report_session, mock_report_client, extract_payload
     ):
@@ -136,7 +134,7 @@ class TestGetPipeReport:
                 {"pipe_uuid": "uuid-abc", "report_id": "r42"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         mock_report_client.get_pipe_reports.assert_awaited_once_with(
             "uuid-abc",
             first=1,
@@ -148,7 +146,6 @@ class TestGetPipeReport:
         assert payload["data"]["pipeReport"]["name"] == "Filtered"
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("report_session", [None], indirect=True)
     async def test_get_pipe_report_not_found(
         self, report_session, mock_report_client, extract_payload
     ):
@@ -165,7 +162,7 @@ class TestGetPipeReport:
                 {"pipe_uuid": "uuid-abc", "report_id": "missing"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         mock_report_client.get_pipe_reports.assert_awaited_once_with(
             "uuid-abc",
             first=1,
@@ -177,7 +174,6 @@ class TestGetPipeReport:
         assert "missing" in tool_error_message(payload)
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("report_session", [None], indirect=True)
     async def test_get_pipe_report_graphql_error(
         self, report_session, mock_report_client, extract_payload
     ):
@@ -191,14 +187,13 @@ class TestGetPipeReport:
                 {"pipe_uuid": "uuid-abc", "report_id": "r1"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "unavailable" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_columns_success(
     report_session, mock_report_client, extract_payload
 ):
@@ -228,7 +223,7 @@ async def test_get_pipe_report_columns_success(
             "get_pipe_report_columns", {"pipe_uuid": "uuid-456"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_report_columns.assert_awaited_once_with("uuid-456")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -236,7 +231,6 @@ async def test_get_pipe_report_columns_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_filterable_fields_success(
     report_session, mock_report_client, extract_payload
 ):
@@ -266,7 +260,7 @@ async def test_get_pipe_report_filterable_fields_success(
             "get_pipe_report_filterable_fields", {"pipe_uuid": "uuid-789"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_report_filterable_fields.assert_awaited_once_with(
         "uuid-789"
     )
@@ -277,7 +271,6 @@ async def test_get_pipe_report_filterable_fields_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_success(
     report_session, mock_report_client, extract_payload
 ):
@@ -294,7 +287,7 @@ async def test_get_organization_report_success(
             "get_organization_report", {"report_id": "or1"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_report.assert_awaited_once_with("or1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -302,7 +295,6 @@ async def test_get_organization_report_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_reports_success(
     report_session, mock_report_client, extract_payload
 ):
@@ -319,7 +311,7 @@ async def test_get_organization_reports_success(
             {"organization_id": "org-1", "first": 10, "after": "c1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_reports.assert_awaited_once_with(
         "org-1", first=10, after="c1"
     )
@@ -329,7 +321,6 @@ async def test_get_organization_reports_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_export_success(
     report_session, mock_report_client, extract_payload
 ):
@@ -346,7 +337,7 @@ async def test_get_pipe_report_export_success(
             "get_pipe_report_export", {"export_id": "exp1"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_report_export.assert_awaited_once_with("exp1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -354,7 +345,6 @@ async def test_get_pipe_report_export_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_export_success(
     report_session, mock_report_client, extract_payload
 ):
@@ -371,7 +361,7 @@ async def test_get_organization_report_export_success(
             "get_organization_report_export", {"export_id": "exp2"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_report_export.assert_awaited_once_with("exp2")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -379,7 +369,6 @@ async def test_get_organization_report_export_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_all_read_tools_have_readonly_hint(report_session):
     read_tool_names = [
         "get_pipe_reports",
@@ -398,13 +387,12 @@ async def test_all_read_tools_have_readonly_hint(report_session):
     for name in read_tool_names:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.readOnlyHint is True, (
+        assert tool.annotations.read_only_hint is True, (
             f"{name} should be readOnlyHint=True"
         )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_success(
     report_session, mock_report_client, extract_payload, legacy_envelope
 ):
@@ -418,7 +406,7 @@ async def test_create_pipe_report_success(
             {"pipe_id": "123", "name": "New Report", "fields": ["title"]},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_pipe_report.assert_awaited_once_with(
         "123", "New Report", fields=["title"], filter=None, formulas=None
     )
@@ -428,7 +416,6 @@ async def test_create_pipe_report_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_forwards_golden_report_filter(
     report_session, mock_report_client, extract_payload
 ):
@@ -446,7 +433,7 @@ async def test_create_pipe_report_forwards_golden_report_filter(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_pipe_report.assert_awaited_once_with(
         "123",
         "Filtered",
@@ -459,7 +446,6 @@ async def test_create_pipe_report_forwards_golden_report_filter(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_rejects_naive_current_phase_filter(
     report_session, mock_report_client, extract_payload
 ):
@@ -484,7 +470,6 @@ async def test_create_pipe_report_rejects_naive_current_phase_filter(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_report_rejects_naive_current_phase_filter(
     report_session, mock_report_client, extract_payload
 ):
@@ -509,7 +494,6 @@ async def test_export_pipe_report_rejects_naive_current_phase_filter(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_pipe_report_rejects_invalid_report_filter(
     report_session, mock_report_client, extract_payload
 ):
@@ -529,7 +513,6 @@ async def test_update_pipe_report_rejects_invalid_report_filter(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -542,14 +525,13 @@ async def test_create_pipe_report_graphql_error(
             "create_pipe_report", {"pipe_id": "123", "name": "Bad"}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid pipe" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_graphql_error_with_debug(
     report_session, mock_report_client, extract_payload
 ):
@@ -567,7 +549,7 @@ async def test_create_pipe_report_graphql_error_with_debug(
             "create_pipe_report", {"pipe_id": "123", "name": "Bad", "debug": True}
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     # The ambiguity enricher rewrote the raw "invalid pipe" into a dual-meaning
@@ -579,7 +561,6 @@ async def test_create_pipe_report_graphql_error_with_debug(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_pipe_report_success(
     report_session, mock_report_client, extract_payload, legacy_envelope
 ):
@@ -593,7 +574,7 @@ async def test_update_pipe_report_success(
             {"report_id": "r10", "name": "Updated", "color": "red"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.update_pipe_report.assert_awaited_once_with(
         "r10",
         name="Updated",
@@ -609,27 +590,21 @@ async def test_update_pipe_report_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_delete_pipe_report_success(
-    report_session, mock_report_client, extract_payload
-):
+async def test_delete_pipe_report_success(report_session, mock_report_client):
     mock_report_client.delete_pipe_report.return_value = {
         "deletePipeReport": {"success": True}
     }
 
     async with report_session as session:
-        result = await session.call_tool(
-            "delete_pipe_report", {"report_id": "r10", "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_pipe_report", {"report_id": "r10", "confirm": True}
         )
 
-    assert result.isError is False
     mock_report_client.delete_pipe_report.assert_awaited_once_with("r10")
-    payload = extract_payload(result)
     assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_organization_report_success(
     report_session, mock_report_client, extract_payload, legacy_envelope
 ):
@@ -649,7 +624,7 @@ async def test_create_organization_report_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_organization_report.assert_awaited_once_with(
         "org-1", "Cross-Pipe", ["p1", "p2"], fields=None, filter=None
     )
@@ -662,7 +637,6 @@ async def test_create_organization_report_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_organization_report_success(
     report_session, mock_report_client, extract_payload
 ):
@@ -678,7 +652,7 @@ async def test_update_organization_report_success(
             {"report_id": "or5", "name": "Updated Org"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.update_organization_report.assert_awaited_once_with(
         "or5", name="Updated Org", color=None, fields=None, filter=None, pipe_ids=None
     )
@@ -687,27 +661,21 @@ async def test_update_organization_report_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_delete_organization_report_success(
-    report_session, mock_report_client, extract_payload
-):
+async def test_delete_organization_report_success(report_session, mock_report_client):
     mock_report_client.delete_organization_report.return_value = {
         "deleteOrganizationReport": {"success": True}
     }
 
     async with report_session as session:
-        result = await session.call_tool(
-            "delete_organization_report", {"report_id": "or5", "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_organization_report", {"report_id": "or5", "confirm": True}
         )
 
-    assert result.isError is False
     mock_report_client.delete_organization_report.assert_awaited_once_with("or5")
-    payload = extract_payload(result)
     assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_report_success(
     report_session, mock_report_client, extract_payload, legacy_envelope
 ):
@@ -723,7 +691,7 @@ async def test_export_pipe_report_success(
             {"pipe_id": "p1", "pipe_report_id": "r1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.export_pipe_report.assert_awaited_once_with(
         "p1",
         "r1",
@@ -740,7 +708,6 @@ async def test_export_pipe_report_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -754,14 +721,13 @@ async def test_export_pipe_report_graphql_error(
             {"pipe_id": "p1", "pipe_report_id": "r1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "export denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_organization_report_success(
     report_session, mock_report_client, extract_payload, legacy_envelope
 ):
@@ -781,7 +747,7 @@ async def test_export_organization_report_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.export_organization_report.assert_awaited_once_with(
         "42",
         organization_report_id="7",
@@ -801,7 +767,6 @@ async def test_export_organization_report_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_audit_logs_success(
     report_session, mock_report_client, extract_payload, legacy_envelope
 ):
@@ -815,7 +780,7 @@ async def test_export_pipe_audit_logs_success(
             {"pipe_uuid": "uuid-abc", "search_term": "audit"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.export_pipe_audit_logs.assert_awaited_once_with(
         "uuid-abc",
         search_term="audit",
@@ -826,7 +791,6 @@ async def test_export_pipe_audit_logs_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_tools_are_not_readonly(report_session):
     export_tool_names = [
         "export_pipe_report",
@@ -840,7 +804,7 @@ async def test_export_tools_are_not_readonly(report_session):
     for name in export_tool_names:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.readOnlyHint is False, (
+        assert tool.annotations.read_only_hint is False, (
             f"{name} should be readOnlyHint=False"
         )
 
@@ -851,7 +815,6 @@ async def test_export_tools_are_not_readonly(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_coerces_int_report_id(
     report_session, mock_report_client, extract_payload
 ):
@@ -860,14 +823,13 @@ async def test_get_organization_report_coerces_int_report_id(
     }
     async with report_session as session:
         result = await session.call_tool("get_organization_report", {"report_id": 500})
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_report.assert_awaited_once_with("500")
     payload = extract_payload(result)
     assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_reports_coerces_int_organization_id(
     report_session, mock_report_client, extract_payload
 ):
@@ -881,14 +843,13 @@ async def test_get_organization_reports_coerces_int_organization_id(
         result = await session.call_tool(
             "get_organization_reports", {"organization_id": 42}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_reports.assert_awaited_once_with(
         "42", first=30, after=None
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_export_coerces_int_export_id(
     report_session, mock_report_client, extract_payload
 ):
@@ -897,14 +858,13 @@ async def test_get_pipe_report_export_coerces_int_export_id(
     }
     async with report_session as session:
         result = await session.call_tool("get_pipe_report_export", {"export_id": 99})
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_report_export.assert_awaited_once_with("99")
     payload = extract_payload(result)
     assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_export_coerces_int_export_id(
     report_session, mock_report_client, extract_payload
 ):
@@ -915,12 +875,11 @@ async def test_get_organization_report_export_coerces_int_export_id(
         result = await session.call_tool(
             "get_organization_report_export", {"export_id": 88}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_organization_report_export.assert_awaited_once_with("88")
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_coerces_int_pipe_id(
     report_session, mock_report_client, extract_payload
 ):
@@ -931,14 +890,13 @@ async def test_create_pipe_report_coerces_int_pipe_id(
         result = await session.call_tool(
             "create_pipe_report", {"pipe_id": 301, "name": "Report"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_pipe_report.assert_awaited_once_with(
         "301", "Report", fields=None, filter=None, formulas=None
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_pipe_report_coerces_int_report_id(
     report_session, mock_report_client, extract_payload
 ):
@@ -949,7 +907,7 @@ async def test_update_pipe_report_coerces_int_report_id(
         result = await session.call_tool(
             "update_pipe_report", {"report_id": 200, "name": "Updated"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.update_pipe_report.assert_awaited_once_with(
         "200",
         name="Updated",
@@ -962,7 +920,6 @@ async def test_update_pipe_report_coerces_int_report_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_report_coerces_int_ids(
     report_session, mock_report_client, extract_payload
 ):
@@ -973,7 +930,7 @@ async def test_export_pipe_report_coerces_int_ids(
         result = await session.call_tool(
             "export_pipe_report", {"pipe_id": 301, "pipe_report_id": 777}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.export_pipe_report.assert_awaited_once_with(
         "301",
         "777",
@@ -986,7 +943,6 @@ async def test_export_pipe_report_coerces_int_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_organization_report_coerces_int_organization_id(
     report_session, mock_report_client, extract_payload
 ):
@@ -998,14 +954,13 @@ async def test_create_organization_report_coerces_int_organization_id(
             "create_organization_report",
             {"organization_id": 42, "name": "Org Report", "pipe_ids": ["10"]},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.create_organization_report.assert_awaited_once_with(
         "42", "Org Report", ["10"], fields=None, filter=None
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_organization_report_coerces_int_report_id(
     report_session, mock_report_client, extract_payload
 ):
@@ -1016,14 +971,13 @@ async def test_update_organization_report_coerces_int_report_id(
         result = await session.call_tool(
             "update_organization_report", {"report_id": 300, "name": "Renamed"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.update_organization_report.assert_awaited_once_with(
         "300", name="Renamed", color=None, fields=None, filter=None, pipe_ids=None
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_coerces_int_report_id_filter(
     report_session, mock_report_client, extract_payload
 ):
@@ -1037,14 +991,13 @@ async def test_get_pipe_reports_coerces_int_report_id_filter(
         result = await session.call_tool(
             "get_pipe_reports", {"pipe_uuid": "uuid-x", "report_id": 55}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_report_client.get_pipe_reports.assert_awaited_once_with(
         "uuid-x", first=30, after=None, search=None, report_id="55", order=None
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_delete_tools_have_destructive_hint(report_session):
     async with report_session as session:
         listed = await session.list_tools()
@@ -1053,7 +1006,7 @@ async def test_delete_tools_have_destructive_hint(report_session):
     for name in ["delete_pipe_report", "delete_organization_report"]:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
-        assert tool.annotations.destructiveHint is True, (
+        assert tool.annotations.destructive_hint is True, (
             f"{name} should be destructiveHint=True"
         )
 
@@ -1064,7 +1017,6 @@ async def test_delete_tools_have_destructive_hint(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_blank_pipe_uuid(report_session, extract_payload):
     async with report_session as session:
         result = await session.call_tool("get_pipe_reports", {"pipe_uuid": ""})
@@ -1075,7 +1027,6 @@ async def test_get_pipe_reports_blank_pipe_uuid(report_session, extract_payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_blank_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool("get_organization_report", {"report_id": ""})
@@ -1084,7 +1035,6 @@ async def test_get_organization_report_blank_report_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_reports_blank_organization_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
@@ -1095,7 +1045,6 @@ async def test_get_organization_reports_blank_organization_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_export_blank_export_id(report_session):
     async with report_session as session:
         result = await session.call_tool("get_pipe_report_export", {"export_id": ""})
@@ -1104,7 +1053,6 @@ async def test_get_pipe_report_export_blank_export_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_export_blank_export_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
@@ -1115,7 +1063,6 @@ async def test_get_organization_report_export_blank_export_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_blank_pipe_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
@@ -1126,7 +1073,6 @@ async def test_create_pipe_report_blank_pipe_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_blank_name(report_session, extract_payload):
     async with report_session as session:
         result = await session.call_tool(
@@ -1139,7 +1085,6 @@ async def test_create_pipe_report_blank_name(report_session, extract_payload):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_pipe_report_blank_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool("update_pipe_report", {"report_id": ""})
@@ -1148,7 +1093,6 @@ async def test_update_pipe_report_blank_report_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_organization_report_blank_organization_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
@@ -1160,7 +1104,6 @@ async def test_create_organization_report_blank_organization_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_organization_report_blank_name(report_session, extract_payload):
     async with report_session as session:
         result = await session.call_tool(
@@ -1174,7 +1117,6 @@ async def test_create_organization_report_blank_name(report_session, extract_pay
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_organization_report_blank_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
@@ -1185,7 +1127,6 @@ async def test_update_organization_report_blank_report_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_report_blank_pipe_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
@@ -1196,7 +1137,6 @@ async def test_export_pipe_report_blank_pipe_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_report_blank_pipe_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
@@ -1217,7 +1157,6 @@ async def test_export_pipe_report_blank_pipe_report_id(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_flag_on_emits_pagination(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1241,7 +1180,6 @@ async def test_get_pipe_reports_flag_on_emits_pagination(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_flag_off_no_top_level_pagination(
     report_session, mock_report_client, extract_payload, legacy_envelope
 ):
@@ -1261,7 +1199,6 @@ async def test_get_pipe_reports_flag_off_no_top_level_pagination(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_out_of_bounds_returns_invalid_arguments_regardless_of_flag(
     report_session, mock_report_client, extract_payload, envelope_flag
 ):
@@ -1277,7 +1214,6 @@ async def test_get_pipe_reports_out_of_bounds_returns_invalid_arguments_regardle
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_reports_flag_on_emits_pagination(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1302,7 +1238,6 @@ async def test_get_organization_reports_flag_on_emits_pagination(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_reports_out_of_bounds_returns_invalid_arguments(
     report_session, mock_report_client, extract_payload, envelope_flag
 ):
@@ -1326,7 +1261,6 @@ async def test_get_organization_reports_out_of_bounds_returns_invalid_arguments(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_flag_on_wraps_raw(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1347,7 +1281,6 @@ async def test_get_pipe_report_flag_on_wraps_raw(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_columns_flag_on_wraps_raw(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1363,7 +1296,6 @@ async def test_get_pipe_report_columns_flag_on_wraps_raw(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_filterable_fields_flag_on_wraps_raw(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1379,7 +1311,6 @@ async def test_get_pipe_report_filterable_fields_flag_on_wraps_raw(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_flag_on_wraps_raw(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1395,7 +1326,6 @@ async def test_get_organization_report_flag_on_wraps_raw(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_export_flag_on_wraps_raw(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1411,7 +1341,6 @@ async def test_get_pipe_report_export_flag_on_wraps_raw(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_export_flag_on_wraps_raw(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1427,7 +1356,6 @@ async def test_get_organization_report_export_flag_on_wraps_raw(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_flag_on_wraps_raw_mutation(
     report_session, mock_report_client, extract_payload, unified_envelope
 ):
@@ -1446,7 +1374,6 @@ async def test_create_pipe_report_flag_on_wraps_raw_mutation(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_first_less_than_one(report_session, extract_payload):
     async with report_session as session:
         result = await session.call_tool(
@@ -1461,7 +1388,6 @@ async def test_get_pipe_reports_first_less_than_one(report_session, extract_payl
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_reports_first_less_than_one(
     report_session, extract_payload
 ):
@@ -1482,7 +1408,6 @@ async def test_get_organization_reports_first_less_than_one(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_organization_report_empty_pipe_ids(
     report_session, extract_payload
 ):
@@ -1503,7 +1428,6 @@ async def test_create_organization_report_empty_pipe_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_organization_report_organization_id_less_than_one(
     report_session, extract_payload
 ):
@@ -1524,7 +1448,6 @@ async def test_export_organization_report_organization_id_less_than_one(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -1543,7 +1466,6 @@ async def test_get_organization_report_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_reports_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -1562,7 +1484,6 @@ async def test_get_organization_reports_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_export_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -1581,7 +1502,6 @@ async def test_get_pipe_report_export_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_export_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -1600,7 +1520,6 @@ async def test_get_organization_report_export_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_pipe_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -1619,26 +1538,21 @@ async def test_update_pipe_report_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_delete_pipe_report_graphql_error(
-    report_session, mock_report_client, extract_payload
-):
+async def test_delete_pipe_report_graphql_error(report_session, mock_report_client):
     mock_report_client.delete_pipe_report.side_effect = PipefyGraphQLError(
         [{"message": "delete denied"}]
     )
 
     async with report_session as session:
-        result = await session.call_tool(
-            "delete_pipe_report", {"report_id": "r10", "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_pipe_report", {"report_id": "r10", "confirm": True}
         )
 
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "delete denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -1658,7 +1572,6 @@ async def test_create_organization_report_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -1677,26 +1590,23 @@ async def test_update_organization_report_graphql_error(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_delete_organization_report_graphql_error(
-    report_session, mock_report_client, extract_payload
+    report_session, mock_report_client
 ):
     mock_report_client.delete_organization_report.side_effect = PipefyGraphQLError(
         [{"message": "org delete failed"}]
     )
 
     async with report_session as session:
-        result = await session.call_tool(
-            "delete_organization_report", {"report_id": "or5", "confirm": True}
+        payload = await confirm_after_preview(
+            session, "delete_organization_report", {"report_id": "or5", "confirm": True}
         )
 
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "org delete failed" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_organization_report_graphql_error(
     report_session, mock_report_client, extract_payload
 ):
@@ -1726,7 +1636,6 @@ REPORT_FILTER_TOOL_NAMES = {
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_report_tool_descriptions_are_non_empty(report_session):
     async with report_session as session:
         listed = await session.list_tools()
@@ -1736,7 +1645,6 @@ async def test_report_tool_descriptions_are_non_empty(report_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_filter_tools_warn_against_top_level_current_phase(report_session):
     async with report_session as session:
         listed = await session.list_tools()

@@ -8,6 +8,7 @@
 - **`docs/parity.md`** — MCP tool ↔ CLI command parity matrix. Source of truth for coverage and deferrals.
 - **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
 - **`docs/dependencies.md`** — Rationale for runtime dependencies.
+- **`docs/uninstall.md`** — `uninstall.sh --scan` and teardown, and switching between the hosted, local, and plugin channels. The two root scripts are colocated so `install.sh` and `uninstall.sh` stay reviewable side by side; a test asserts every file the installer writes is one the teardown accounts for.
 - **`docs/architecture.md`**: Intra-package layering (domain, adapter, composition root), type ownership at boundaries, ports, and the alternative-constructor guide.
 - **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior). Includes `identifiers.md`, the canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id.
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
@@ -67,6 +68,7 @@ Rules for the migration:
 - `uv run pytest` — full test suite.
 - `uv run ruff check .` / `uv run ruff format .` — lint and format.
 - `uvx pre-commit install` — opt in to the ruff lint + format git hook (one-time, per clone). Run against the whole tree with `uvx pre-commit run --all-files`; bypass for a WIP commit with `git commit --no-verify`. The hook's ruff `rev` in `.pre-commit-config.yaml` must move with `uv.lock` to keep hook and CI aligned.
+- Shell scripts (`install.sh`, `uninstall.sh`) are covered by the same hook file: `shellcheck --shell=sh` from `shellcheck-py` (a Python package, so no Docker), `sh -n`, and a check that every `rm` / `rmdir` in `uninstall.sh` routes through its `remove_path` guard. CI runs the same three plus `dash -n`, and pins the same `shellcheck-py` release the hook does.
 - Coverage: `uv run pytest --cov=packages/sdk/src/pipefy_sdk --cov-report=term-missing`.
 
 ### Manual E2E
@@ -83,7 +85,7 @@ Static typing is the contract for internal code; do not re-check it at runtime. 
 
 Runtime type checks belong only at a trust boundary, where untyped or external data crosses into typed code and static analysis cannot follow:
 
-- The MCP tool signature is the boundary. FastMCP is pydantic-backed, so a scalar arg declared `color: str` is coerced and rejected there. SDK planners called behind it (for example `normalize_label_color`) trust the type and must not guard it again.
+- The MCP tool signature is the boundary. `MCPServer` builds a pydantic model per tool from the signature, so a scalar arg declared `color: str` is coerced and rejected there. SDK planners called behind it (for example `normalize_label_color`) trust the type and must not guard it again.
 - The CLI command signature is the same kind of boundary. Typer parses and coerces options against their annotations (a `color: str` option in `pipefy_cli` is the rejection point), and the same SDK planners run behind it, so the MCP and CLI surfaces validate at the edge and trust the type underneath identically.
 - A `dict`-typed tool arg (for example `filter: dict | None`) validates the container but not its nested values. Validating that nested, un-schema'd structure (the job of `validate_report_cards_filter`) is legitimate boundary work, not defensive noise.
 

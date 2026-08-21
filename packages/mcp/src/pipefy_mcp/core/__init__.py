@@ -1,1 +1,1 @@
-"""Runtime composition and FastMCP lifecycle for the MCP server."""
+"""Runtime composition and the SDK lifecycle for the MCP server."""

@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import (
@@ -16,6 +16,7 @@ from pipefy_sdk import (
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.knowledge_base_tools import KnowledgeBaseTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 PLAIN_TEXT_NODE = {
     "id": "kb-1",
@@ -117,7 +118,6 @@ def kb_session(kb_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_knowledge_bases_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -126,7 +126,7 @@ async def test_get_knowledge_bases_success(
         result = await session.call_tool(
             "get_ai_knowledge_bases", {"pipe_uuid": "pipe-uuid-1"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_kb_client.get_ai_knowledge_bases.assert_awaited_once_with("pipe-uuid-1")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -134,7 +134,6 @@ async def test_get_knowledge_bases_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_knowledge_bases_blank_pipe_uuid_rejected(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -147,7 +146,6 @@ async def test_get_knowledge_bases_blank_pipe_uuid_rejected(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_plain_text_not_found(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -163,7 +161,6 @@ async def test_get_plain_text_not_found(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_plain_text_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -180,14 +177,13 @@ async def test_create_plain_text_success(
                 "description": "How to onboard",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["knowledge_base_plain_text"] == PLAIN_TEXT_FULL
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_plain_text_limit_value_error_mapped(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -210,7 +206,6 @@ async def test_create_plain_text_limit_value_error_mapped(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_update_plain_text_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -226,14 +221,13 @@ async def test_update_plain_text_success(
                 "content": "New content",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_kb_client.update_ai_knowledge_base_plain_text.assert_awaited_once_with(
         "kb-1", "pipe-uuid-1", name=None, content="New content", description=None
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_preview_without_confirm_does_not_delete(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -249,20 +243,18 @@ async def test_delete_preview_without_confirm_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_with_confirm_executes(
-    kb_session, mock_kb_client, unified_envelope, extract_payload
+    kb_session, mock_kb_client, unified_envelope
 ):
     mock_kb_client.delete_ai_knowledge_base_plain_text = AsyncMock(
         return_value={"success": True, "errors": []}
     )
     async with kb_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_ai_knowledge_base_plain_text",
             {"plain_text_id": "kb-1", "pipe_uuid": "pipe-uuid-1", "confirm": True},
         )
-    assert result.isError is False
-    payload = extract_payload(result)
     assert payload["success"] is True
     mock_kb_client.delete_ai_knowledge_base_plain_text.assert_awaited_once_with(
         "kb-1", "pipe-uuid-1"
@@ -270,7 +262,43 @@ async def test_delete_with_confirm_executes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_delete_plain_text_rejects_token_when_pipe_uuid_differs(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.delete_ai_knowledge_base_plain_text = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+    async with kb_session as session:
+        preview = await session.call_tool(
+            "delete_ai_knowledge_base_plain_text",
+            {"plain_text_id": "kb-1", "pipe_uuid": "pipe-uuid-A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_ai_knowledge_base_plain_text",
+            {
+                "plain_text_id": "kb-1",
+                "pipe_uuid": "pipe-uuid-B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_kb_client.delete_ai_knowledge_base_plain_text.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_ai_knowledge_base_plain_text",
+            {"plain_text_id": "kb-1", "pipe_uuid": "pipe-uuid-A"},
+        )
+
+    mock_kb_client.delete_ai_knowledge_base_plain_text.assert_awaited_once_with(
+        "kb-1", "pipe-uuid-A"
+    )
+    assert matched["success"] is True
+
+
+@pytest.mark.anyio
 async def test_validate_access_green(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -285,14 +313,13 @@ async def test_validate_access_green(
         result = await session.call_tool(
             "validate_knowledge_base_access", {"pipe_uuid": "pipe-uuid-1"}
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["knowledge_base_count"] == 2
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_validate_access_failure_classified(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -319,7 +346,6 @@ async def test_validate_access_failure_classified(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_knowledge_bases_permission_denied_classified(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -337,7 +363,6 @@ async def test_get_knowledge_bases_permission_denied_classified(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_plain_text_not_found_error_adds_discovery_hint(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -356,7 +381,6 @@ async def test_get_plain_text_not_found_error_adds_discovery_hint(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_knowledge_bases_not_found_has_no_self_referential_hint(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -383,7 +407,7 @@ async def test_get_document_success(
             "get_ai_knowledge_base_document",
             {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-1"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_kb_client.get_ai_knowledge_base_document.assert_awaited_once_with(
         "kb-2", "pipe-uuid-1"
     )
@@ -393,7 +417,6 @@ async def test_get_document_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_document_not_found(kb_session, mock_kb_client, extract_payload):
     mock_kb_client.get_ai_knowledge_base_document = AsyncMock(return_value={})
     async with kb_session as session:
@@ -407,7 +430,6 @@ async def test_get_document_not_found(kb_session, mock_kb_client, extract_payloa
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -424,7 +446,7 @@ async def test_create_document_success(
                 "file_path": "/tmp/handbook.pdf",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_kb_client.create_ai_knowledge_base_document.assert_awaited_once_with(
         "pipe-uuid-1",
         name="Handbook",
@@ -437,7 +459,6 @@ async def test_create_document_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_blank_file_path_rejected(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -458,7 +479,6 @@ async def test_create_document_blank_file_path_rejected(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_non_pdf_maps_file_read_step(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -484,7 +504,6 @@ async def test_create_document_non_pdf_maps_file_read_step(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_s3_failure_carries_step_and_snippet(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -513,7 +532,6 @@ async def test_create_document_s3_failure_carries_step_and_snippet(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_document_kb_create_failure_classified(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -543,7 +561,6 @@ async def test_create_document_kb_create_failure_classified(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_update_document_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -555,14 +572,13 @@ async def test_update_document_success(
             "update_ai_knowledge_base_document",
             {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-1", "name": "New name"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_kb_client.update_ai_knowledge_base_document.assert_awaited_once_with(
         "kb-2", "pipe-uuid-1", name="New name", description=None
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_document_preview_without_confirm(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -578,20 +594,18 @@ async def test_delete_document_preview_without_confirm(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_document_with_confirm_executes(
-    kb_session, mock_kb_client, unified_envelope, extract_payload
+    kb_session, mock_kb_client, unified_envelope
 ):
     mock_kb_client.delete_ai_knowledge_base_document = AsyncMock(
         return_value={"success": True, "errors": []}
     )
     async with kb_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_ai_knowledge_base_document",
             {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-1", "confirm": True},
         )
-    assert result.isError is False
-    payload = extract_payload(result)
     assert payload["success"] is True
     mock_kb_client.delete_ai_knowledge_base_document.assert_awaited_once_with(
         "kb-2", "pipe-uuid-1"
@@ -599,7 +613,43 @@ async def test_delete_document_with_confirm_executes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_delete_document_rejects_token_when_pipe_uuid_differs(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.delete_ai_knowledge_base_document = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+    async with kb_session as session:
+        preview = await session.call_tool(
+            "delete_ai_knowledge_base_document",
+            {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_ai_knowledge_base_document",
+            {
+                "document_id": "kb-2",
+                "pipe_uuid": "pipe-uuid-B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_kb_client.delete_ai_knowledge_base_document.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_ai_knowledge_base_document",
+            {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-A"},
+        )
+
+    mock_kb_client.delete_ai_knowledge_base_document.assert_awaited_once_with(
+        "kb-2", "pipe-uuid-A"
+    )
+    assert matched["success"] is True
+
+
+@pytest.mark.anyio
 async def test_get_data_lookup_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -611,7 +661,7 @@ async def test_get_data_lookup_success(
             "get_ai_knowledge_base_data_lookup",
             {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-1"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_kb_client.get_ai_knowledge_base_data_lookup.assert_awaited_once_with(
         "kb-3", "pipe-uuid-1"
     )
@@ -621,7 +671,6 @@ async def test_get_data_lookup_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_get_data_lookup_not_found(kb_session, mock_kb_client, extract_payload):
     mock_kb_client.get_ai_knowledge_base_data_lookup = AsyncMock(return_value={})
     async with kb_session as session:
@@ -637,7 +686,6 @@ async def test_get_data_lookup_not_found(kb_session, mock_kb_client, extract_pay
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_data_lookup_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -656,7 +704,7 @@ async def test_create_data_lookup_success(
                 "conditions": [STATIC_CONDITION],
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["knowledge_base_data_lookup"] == DATA_LOOKUP_FULL
@@ -672,7 +720,6 @@ async def test_create_data_lookup_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_create_data_lookup_definition_value_error_mapped(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -700,7 +747,6 @@ async def test_create_data_lookup_definition_value_error_mapped(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_update_data_lookup_success(
     kb_session, mock_kb_client, unified_envelope, extract_payload
 ):
@@ -719,7 +765,7 @@ async def test_update_data_lookup_success(
                 "name": "Renamed",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is True
     mock_kb_client.update_ai_knowledge_base_data_lookup.assert_awaited_once_with(
@@ -735,7 +781,6 @@ async def test_update_data_lookup_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_update_data_lookup_requires_full_definition_in_schema(kb_session):
     """The tool schema itself enforces the full-definition contract."""
     async with kb_session as session:
@@ -743,7 +788,7 @@ async def test_update_data_lookup_requires_full_definition_in_schema(kb_session)
     tool = next(
         t for t in tools.tools if t.name == "update_ai_knowledge_base_data_lookup"
     )
-    assert set(tool.inputSchema["required"]) >= {
+    assert set(tool.input_schema["required"]) >= {
         "data_lookup_id",
         "pipe_uuid",
         "source_repo_id",
@@ -753,7 +798,6 @@ async def test_update_data_lookup_requires_full_definition_in_schema(kb_session)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_data_lookup_preview_without_confirm(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -769,20 +813,18 @@ async def test_delete_data_lookup_preview_without_confirm(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
 async def test_delete_data_lookup_with_confirm_executes(
-    kb_session, mock_kb_client, unified_envelope, extract_payload
+    kb_session, mock_kb_client, unified_envelope
 ):
     mock_kb_client.delete_ai_knowledge_base_data_lookup = AsyncMock(
         return_value={"success": True, "errors": []}
     )
     async with kb_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_ai_knowledge_base_data_lookup",
             {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-1", "confirm": True},
         )
-    assert result.isError is False
-    payload = extract_payload(result)
     assert payload["success"] is True
     mock_kb_client.delete_ai_knowledge_base_data_lookup.assert_awaited_once_with(
         "kb-3", "pipe-uuid-1"
@@ -790,7 +832,43 @@ async def test_delete_data_lookup_with_confirm_executes(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_delete_data_lookup_rejects_token_when_pipe_uuid_differs(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.delete_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+    async with kb_session as session:
+        preview = await session.call_tool(
+            "delete_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-A"},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "delete_ai_knowledge_base_data_lookup",
+            {
+                "data_lookup_id": "kb-3",
+                "pipe_uuid": "pipe-uuid-B",
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_kb_client.delete_ai_knowledge_base_data_lookup.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "delete_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-A"},
+        )
+
+    mock_kb_client.delete_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "kb-3", "pipe-uuid-A"
+    )
+    assert matched["success"] is True
+
+
+@pytest.mark.anyio
 async def test_get_data_lookup_permission_denied_classified(
     kb_session, mock_kb_client, extract_payload
 ):
@@ -807,3 +885,70 @@ async def test_get_data_lookup_permission_denied_classified(
     error = payload.get("error") or {}
     details = error.get("details") or {}
     assert details.get("kind") == "permission_denied"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_empty_exception_message_uses_fallback(
+    kb_session, mock_kb_client, extract_payload, exc_message
+):
+    mock_kb_client.get_ai_knowledge_bases = AsyncMock(
+        side_effect=RuntimeError(exc_message)
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_bases", {"pipe_uuid": "pipe-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert message.strip()
+    assert "Knowledge base request failed." in message
+    assert "do not blind-retry" in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exc_message", ["", "   "])
+async def test_classified_blank_or_whitespace_message_becomes_unknown_error(
+    kb_session, mock_kb_client, extract_payload, exc_message
+):
+    """SDK classifier normalizes blank messages; MCP keeps the classified envelope."""
+    mock_kb_client.get_ai_knowledge_bases = AsyncMock(
+        side_effect=PipefyGraphQLError(
+            [
+                {
+                    "message": exc_message,
+                    "extensions": {
+                        "code": "PERMISSION_DENIED",
+                        "correlation_id": "corr-ws",
+                    },
+                }
+            ]
+        )
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_bases", {"pipe_uuid": "pipe-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert tool_error_message(payload) == "Unknown error"
+    assert payload["error"]["code"] == "PERMISSION_DENIED"
+    assert payload["error"]["details"]["kind"] == "permission_denied"
+    assert "do not blind-retry" not in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+async def test_non_empty_exception_message_preserved(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.get_ai_knowledge_bases = AsyncMock(
+        side_effect=RuntimeError("socket closed")
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_bases", {"pipe_uuid": "pipe-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "socket closed" in tool_error_message(payload)

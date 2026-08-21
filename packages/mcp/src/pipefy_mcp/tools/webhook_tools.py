@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
@@ -27,7 +26,7 @@ class WebhookTools:
     """MCP tools for sending emails from card inboxes and managing webhooks."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
             meta=REMOTE,
@@ -42,7 +41,10 @@ class WebhookTools:
             """List email templates for a pipe or table.
 
             Use before send_email_with_template to discover template IDs.
-            Templates are created in the Pipefy UI; this query lists existing ones.
+
+            Hard stop: creating, editing and deleting email templates is not
+            available through the API or MCP. Only the Pipefy UI can do it, so
+            the template must already exist before any flow that uses it.
 
             Args:
                 repo_id: Pipe or table ID.
@@ -217,8 +219,12 @@ class WebhookTools:
             """Send an email from a card's inbox using an existing email template.
 
             Fetches the template with placeholders (e.g. {{card.title}}) resolved
-            for the card, then sends via createAndSendInboxEmail. Template must
-            exist (created in Pipefy UI). Use get_email_templates to find template IDs.
+            for the card, then sends via createAndSendInboxEmail. Use
+            get_email_templates to find template IDs.
+
+            Hard stop: there is no API or MCP path to create or change an email
+            template. A flow that needs a new or edited template requires a
+            manual step in the Pipefy UI; say so in the plan before building.
 
             Args:
                 card_id: ID of the card with inbox.
@@ -276,7 +282,7 @@ class WebhookTools:
             meta=REMOTE,
         )
         async def get_webhooks(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             pipe_id: PipefyId,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -473,21 +479,22 @@ class WebhookTools:
             meta=REMOTE,
         )
         async def delete_webhook(
-            ctx: Context[ServerSession, None],
+            ctx: Context,
             webhook_id: PipefyId,
             confirm: bool = False,
+            confirmation_token: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a webhook permanently.
 
-            Two-step operation: preview with ``confirm=False`` (default), then execute with
-            ``confirm=True`` after explicit human approval. Elicitation does not authorize
-            deletion (only ``confirm=True`` does).
+            Two-step operation: preview with ``confirm=False`` (default), then echo
+            ``confirmation_token`` from the preview on step 2.
 
             Args:
                 ctx: MCP context for debug logging.
                 webhook_id: ID of the webhook to delete.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Set to True with the preview token to execute the deletion (step 2).
+                confirmation_token: Token from the preview response.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -499,6 +506,9 @@ class WebhookTools:
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"webhook (ID: {webhook_id})",
+                resource_identity={"webhook_id": wid},
+                tool_name="delete_webhook",
+                confirmation_token=confirmation_token,
             )
             if guard is not None:
                 return guard

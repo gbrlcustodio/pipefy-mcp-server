@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
@@ -12,6 +12,7 @@ from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.member_tools import MemberTools
 from tools.conftest import build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -44,7 +45,6 @@ def member_session(member_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_rejects_empty_members(member_session, extract_payload):
     async with member_session as session:
         result = await session.call_tool(
@@ -52,7 +52,7 @@ async def test_invite_members_rejects_empty_members(member_session, extract_payl
             {"pipe_id": "pipe-1", "members": []},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "members" in tool_error_message(payload)
@@ -78,7 +78,6 @@ def _members_payload(*emails: str) -> dict:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_verified_member(
     member_session, mock_member_client, extract_payload
 ):
@@ -95,7 +94,7 @@ async def test_add_service_account_verified_member(
             {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_member_client.add_service_account_to_pipe.assert_awaited_once_with(
         "100", "svc@x.com", "member"
     )
@@ -106,7 +105,6 @@ async def test_add_service_account_verified_member(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_matches_email_case_insensitively(
     member_session, mock_member_client, extract_payload
 ):
@@ -127,7 +125,6 @@ async def test_add_service_account_matches_email_case_insensitively(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_errors_when_not_a_member(
     member_session, mock_member_client, extract_payload
 ):
@@ -149,7 +146,6 @@ async def test_add_service_account_errors_when_not_a_member(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_surfaces_invite_errors_when_absent(
     member_session, mock_member_client, extract_payload
 ):
@@ -174,7 +170,6 @@ async def test_add_service_account_surfaces_invite_errors_when_absent(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_ignores_invite_errors_when_member_present(
     member_session, mock_member_client, extract_payload
 ):
@@ -199,7 +194,6 @@ async def test_add_service_account_ignores_invite_errors_when_member_present(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_handles_null_pipe_members(
     member_session, mock_member_client, extract_payload
 ):
@@ -216,14 +210,13 @@ async def test_add_service_account_handles_null_pipe_members(
         )
 
     # No crash; verification treats null as absent -> tool reports not-added.
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "svc@x.com" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_skips_verification_for_non_numeric_pipe_id(
     member_session, mock_member_client, extract_payload
 ):
@@ -244,7 +237,6 @@ async def test_add_service_account_skips_verification_for_non_numeric_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_rejects_blank_email(
     member_session, mock_member_client, extract_payload
 ):
@@ -260,7 +252,6 @@ async def test_add_service_account_rejects_blank_email(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_maps_value_error_to_invalid_arguments(
     member_session, mock_member_client, extract_payload
 ):
@@ -278,7 +269,6 @@ async def test_add_service_account_maps_value_error_to_invalid_arguments(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_add_service_account_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
@@ -290,14 +280,13 @@ async def test_add_service_account_graphql_error(
             "add_service_account_to_pipe",
             {"pipe_id": "100", "email": "svc@x.com", "role_name": "member"},
         )
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "permission denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_rejects_empty_user_ids(
     member_session, extract_payload
 ):
@@ -307,14 +296,13 @@ async def test_remove_member_from_pipe_rejects_empty_user_ids(
             {"pipe_id": "pipe-1", "user_ids": []},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "user_ids" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_success(
     member_session, mock_member_client, extract_payload
 ):
@@ -334,7 +322,7 @@ async def test_invite_members_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_member_client.invite_members.assert_awaited_once_with(
         "pipe-1", [{"email": "a@x.com", "role_name": "member"}]
     )
@@ -344,7 +332,6 @@ async def test_invite_members_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_maps_sdk_value_error_to_invalid_arguments(
     member_session, mock_member_client, extract_payload
 ):
@@ -368,7 +355,6 @@ async def test_invite_members_maps_sdk_value_error_to_invalid_arguments(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
@@ -385,38 +371,33 @@ async def test_invite_members_graphql_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid email" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_value_error_from_client(
-    member_session, mock_member_client, extract_payload
+    member_session, mock_member_client
 ):
     mock_member_client.remove_members_from_pipe.side_effect = ValueError(
         "pipe_id must be a numeric pipe ID or a pipe UUID, got 'bad'."
     )
 
     async with member_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "remove_member_from_pipe",
-            {"pipe_id": "bad", "user_ids": ["u1"], "confirm": True},
+            {"pipe_id": "bad", "user_ids": ["u1"]},
         )
 
-    assert result.isError is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "pipe_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_remove_member_verified_all_removed(
-    member_session, mock_member_client, extract_payload
-):
+async def test_remove_member_verified_all_removed(member_session, mock_member_client):
     mock_member_client.remove_members_from_pipe.return_value = {
         "removeMembersFromPipe": {"success": True}
     }
@@ -437,25 +418,23 @@ async def test_remove_member_verified_all_removed(
     }
 
     async with member_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "remove_member_from_pipe",
-            {"pipe_id": "100", "user_ids": ["user-1", "user-2"], "confirm": True},
+            {"pipe_id": "100", "user_ids": ["user-1", "user-2"]},
         )
 
-    assert result.isError is False
     mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
         "100", ["user-1", "user-2"]
     )
     mock_member_client.get_pipe_members.assert_awaited_once_with("100")
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert "warning" not in payload
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_warns_when_member_still_present(
-    member_session, mock_member_client, extract_payload
+    member_session, mock_member_client
 ):
     mock_member_client.remove_members_from_pipe.return_value = {
         "removeMembersFromPipe": {"success": True}
@@ -486,12 +465,12 @@ async def test_remove_member_warns_when_member_still_present(
     }
 
     async with member_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "remove_member_from_pipe",
-            {"pipe_id": "100", "user_ids": ["160654"], "confirm": True},
+            {"pipe_id": "100", "user_ids": ["160654"]},
         )
 
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert "warning" in payload
     assert "160654" in payload["warning"]
@@ -499,9 +478,8 @@ async def test_remove_member_warns_when_member_still_present(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_warns_when_uuid_still_present(
-    member_session, mock_member_client, extract_payload
+    member_session, mock_member_client
 ):
     """Verification matches user UUIDs too, not just numeric IDs."""
     mock_member_client.remove_members_from_pipe.return_value = {
@@ -524,42 +502,40 @@ async def test_remove_member_warns_when_uuid_still_present(
     }
 
     async with member_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "remove_member_from_pipe",
-            {"pipe_id": "100", "user_ids": ["abc-def-123"], "confirm": True},
+            {"pipe_id": "100", "user_ids": ["abc-def-123"]},
         )
 
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert "warning" in payload
     assert "abc-def-123" in payload["warning"]
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_skips_verification_for_non_numeric_pipe_id(
-    member_session, mock_member_client, extract_payload
+    member_session, mock_member_client
 ):
     mock_member_client.remove_members_from_pipe.return_value = {
         "removeMembersFromPipe": {"success": True}
     }
 
     async with member_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "remove_member_from_pipe",
-            {"pipe_id": "pipe-1", "user_ids": ["user-1"], "confirm": True},
+            {"pipe_id": "pipe-1", "user_ids": ["user-1"]},
         )
 
     mock_member_client.get_pipe_members.assert_not_awaited()
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert "warning" not in payload
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_returns_success_when_verification_fails(
-    member_session, mock_member_client, extract_payload
+    member_session, mock_member_client
 ):
     """If get_pipe_members raises, don't fail the whole operation."""
     mock_member_client.remove_members_from_pipe.return_value = {
@@ -568,19 +544,18 @@ async def test_remove_member_returns_success_when_verification_fails(
     mock_member_client.get_pipe_members.side_effect = Exception("network error")
 
     async with member_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "remove_member_from_pipe",
-            {"pipe_id": "100", "user_ids": ["user-1"], "confirm": True},
+            {"pipe_id": "100", "user_ids": ["user-1"]},
         )
 
-    payload = extract_payload(result)
     assert payload["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_coerces_int_user_ids_to_str(
-    member_session, mock_member_client, extract_payload
+    member_session, mock_member_client
 ):
     """Agent may re-serialize user_ids as ints on the confirm call."""
     mock_member_client.remove_members_from_pipe.return_value = {
@@ -589,12 +564,12 @@ async def test_remove_member_coerces_int_user_ids_to_str(
     mock_member_client.get_pipe_members.return_value = {"pipe": {"members": []}}
 
     async with member_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "remove_member_from_pipe",
-            {"pipe_id": "100", "user_ids": [307516938], "confirm": True},
+            {"pipe_id": "100", "user_ids": [307516938]},
         )
 
-    payload = extract_payload(result)
     assert payload["success"] is True
     mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
         "100", ["307516938"]
@@ -602,39 +577,35 @@ async def test_remove_member_coerces_int_user_ids_to_str(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_graphql_error(
-    member_session, mock_member_client, extract_payload
+    member_session, mock_member_client
 ):
     mock_member_client.remove_members_from_pipe.side_effect = PipefyGraphQLError(
         [{"message": "forbidden"}]
     )
 
     async with member_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "remove_member_from_pipe",
-            {"pipe_id": "p1", "user_ids": ["u1"], "confirm": True},
+            {"pipe_id": "p1", "user_ids": ["u1"]},
         )
 
-    assert result.isError is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "forbidden" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_has_destructive_hint(member_session):
     async with member_session as session:
         listed = await session.list_tools()
     remove_tool = next(t for t in listed.tools if t.name == "remove_member_from_pipe")
     assert remove_tool.annotations is not None
-    assert remove_tool.annotations.destructiveHint is True
-    assert remove_tool.annotations.readOnlyHint is False
+    assert remove_tool.annotations.destructive_hint is True
+    assert remove_tool.annotations.read_only_hint is False
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_set_role_success(member_session, mock_member_client, extract_payload):
     mock_member_client.set_role.return_value = {
         "setRole": {
@@ -655,7 +626,7 @@ async def test_set_role_success(member_session, mock_member_client, extract_payl
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_member_client.set_role.assert_awaited_once_with("pipe-1", "member-1", "admin")
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -664,7 +635,6 @@ async def test_set_role_success(member_session, mock_member_client, extract_payl
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_rejects_missing_email_or_role(
     member_session, mock_member_client, extract_payload
 ):
@@ -681,7 +651,6 @@ async def test_invite_members_rejects_missing_email_or_role(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_preview_does_not_call_mutation(
     member_session, mock_member_client, extract_payload
 ):
@@ -700,7 +669,45 @@ async def test_remove_member_preview_does_not_call_mutation(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_rejects_token_when_user_ids_differ_same_length(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.remove_members_from_pipe.return_value = {
+        "removeMembersFromPipe": {"success": True}
+    }
+    mock_member_client.get_pipe_members.return_value = {"pipe": {"members": []}}
+
+    async with member_session as session:
+        preview = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "100", "user_ids": ["1", "2"]},
+        )
+        token = extract_payload(preview)["confirmation_token"]
+        mismatch = await session.call_tool(
+            "remove_member_from_pipe",
+            {
+                "pipe_id": "100",
+                "user_ids": ["99", "100"],
+                "confirm": True,
+                "confirmation_token": token,
+            },
+        )
+        assert extract_payload(mismatch)["requires_confirmation"] is True
+        mock_member_client.remove_members_from_pipe.assert_not_awaited()
+
+        matched = await confirm_after_preview(
+            session,
+            "remove_member_from_pipe",
+            {"pipe_id": "100", "user_ids": ["1", "2"]},
+        )
+
+    mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
+        "100", ["1", "2"]
+    )
+    assert matched["success"] is True
+
+
+@pytest.mark.anyio
 async def test_set_role_rejects_blank_role_name(
     member_session, mock_member_client, extract_payload
 ):
@@ -716,7 +723,6 @@ async def test_set_role_rejects_blank_role_name(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_set_role_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
@@ -730,7 +736,7 @@ async def test_set_role_graphql_error(
             {"pipe_id": "p1", "member_id": "m1", "role_name": "admin"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid role" in tool_error_message(payload)

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
+from pipefy_mcp.tools.graphql_error_helpers import ensure_non_empty_error_message
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
@@ -13,12 +14,14 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
 from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 
+_ORGANIZATION_REQUEST_FAILED = "Organization request failed."
+
 
 class OrganizationTools:
     """Registers MCP tools for organization operations."""
 
     @staticmethod
-    def register(mcp: FastMCP) -> None:
+    def register(mcp: MCPServer) -> None:
         """Register organization-related tools on the MCP server."""
 
         @mcp.tool(
@@ -29,8 +32,12 @@ class OrganizationTools:
             """Fetch Pipefy organization details by ID.
 
             Returns id, uuid, name, plan, role, members count, pipes count,
-            and creation date. The response includes both ``result`` (pretty-printed
-            JSON string) and ``data`` (parsed dict) for convenience.
+            and creation date. ``pipesCount`` counts every pipe in the organization,
+            while pipe listings return only the pipes the current identity is a
+            member of, so a listing smaller than the count is not an error
+            (detail in ``docs/mcp/tools/organization.md``). The response includes
+            both ``result`` (pretty-printed JSON string) and ``data`` (parsed
+            dict) for convenience.
 
             Args:
                 organization_id: Numeric organization ID.
@@ -39,7 +46,11 @@ class OrganizationTools:
             try:
                 result = await client.get_organization(organization_id)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(
+                    ensure_non_empty_error_message(
+                        str(exc), _ORGANIZATION_REQUEST_FAILED
+                    )
+                )
             return build_success_payload(result, include_parsed=True)
 
         @mcp.tool(
@@ -63,5 +74,9 @@ class OrganizationTools:
             try:
                 result = await client.list_organizations()
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(
+                    ensure_non_empty_error_message(
+                        str(exc), _ORGANIZATION_REQUEST_FAILED
+                    )
+                )
             return build_success_payload({"organizations": result}, include_parsed=True)

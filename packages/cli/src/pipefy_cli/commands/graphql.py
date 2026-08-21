@@ -7,9 +7,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import typer
-from graphql import GraphQLSyntaxError, parse
-from graphql.language.ast import OperationDefinitionNode, OperationType
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.graphql_document import inspect_graphql_document
 
 from pipefy_cli.commands._common import run_pipefy_client_coroutine
 from pipefy_cli.output import render_json, render_rich
@@ -18,21 +17,6 @@ graphql_app = typer.Typer(
     help="Execute arbitrary GraphQL (mutations require --yes). See docs/cli/self-healing.md.",
     no_args_is_help=True,
 )
-
-
-def _document_contains_mutation(document: str) -> bool:
-    """Return True when the document defines at least one mutation operation."""
-    try:
-        doc = parse(document)
-    except GraphQLSyntaxError:
-        return False
-    for defn in doc.definitions:
-        if (
-            isinstance(defn, OperationDefinitionNode)
-            and defn.operation == OperationType.MUTATION
-        ):
-            return True
-    return False
 
 
 def _parse_vars_json(raw: str | None) -> dict[str, Any]:
@@ -88,11 +72,25 @@ def graphql_exec(
 
     Pass variables as JSON with ``--vars '{"key":"value"}'`` (not ``--variables``).
 
-    Mutations are rejected unless ``--yes`` is set (exit code 2). Pair with
-    ``pipefy introspect`` to discover operation shapes (see docs/cli/self-healing.md).
+    Mutations are rejected unless ``--yes`` is set (exit code 2). A document too
+    deeply nested to parse is rejected outright, because its operation type
+    cannot be determined. Pair with ``pipefy introspect`` to discover operation
+    shapes (see docs/cli/self-healing.md).
     """
     variables = _parse_vars_json(vars_json)
-    if _document_contains_mutation(query) and not yes:
+    inspection = inspect_graphql_document(query)
+    # Nesting deep enough to exhaust the parser leaves the operation type
+    # unknown, so --yes cannot stand in for a mutation acknowledgement here.
+    # Refusing matches execute_graphql, which errors on the same document.
+    if inspection.too_nested:
+        typer.echo(
+            "This document is too deeply nested to parse, so it cannot be "
+            "classified as a query or a mutation; nothing was sent. Reduce the "
+            "nesting and re-run.",
+            err=True,
+        )
+        raise typer.Exit(2)
+    if inspection.contains_mutation and not yes:
         typer.echo(
             "This document includes a mutation; re-run with --yes to confirm, "
             "or use read-only operations.",

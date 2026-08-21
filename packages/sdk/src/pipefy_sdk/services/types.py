@@ -40,6 +40,8 @@ class AiAgentGraphPayload(TypedDict, total=False):
 class AgentServiceResult(TypedDict):
     agent_uuid: str
     message: str
+    disabled_at: str | None
+    active: bool  # True when disabled_at is None
 
 
 class AutomationServiceResult(TypedDict):

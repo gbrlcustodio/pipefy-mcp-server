@@ -4,15 +4,16 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _shared.pagination_test_defaults import DEFAULT_FIRST
-from mcp.shared.memory import (
+from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
+from _shared.pagination_test_defaults import DEFAULT_FIRST
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
+from tools.destructive_confirm_test_support import confirm_after_preview
 
 
 @pytest.fixture
@@ -48,7 +49,6 @@ def webhook_session(webhook_mcp_server, request):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -72,7 +72,7 @@ async def test_send_inbox_email_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.send_inbox_email.assert_awaited_once_with(
         "card-1",
         ["a@x.com"],
@@ -86,7 +86,6 @@ async def test_send_inbox_email_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -106,14 +105,13 @@ async def test_send_inbox_email_graphql_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "inbox not enabled" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -137,7 +135,7 @@ async def test_get_email_templates_success(
             {"repo_id": "307061640"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.get_email_templates.assert_awaited_once_with(
         "307061640",
         filter_by_name=None,
@@ -148,7 +146,6 @@ async def test_get_email_templates_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -171,7 +168,7 @@ async def test_send_email_with_template_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.send_email_with_template.assert_awaited_once_with(
         "1320616225",
         "42",
@@ -184,7 +181,6 @@ async def test_send_email_with_template_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -201,14 +197,13 @@ async def test_send_email_with_template_graphql_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "template not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_rejects_non_numeric_card_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -225,14 +220,13 @@ async def test_send_email_with_template_rejects_non_numeric_card_id(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "numeric card ID" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_http_url(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -250,14 +244,13 @@ async def test_create_webhook_rejects_http_url(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "HTTPS" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_invalid_email_type(
     webhook_session, extract_payload
 ):
@@ -267,14 +260,13 @@ async def test_get_card_inbox_emails_invalid_email_type(
             {"card_id": "12345", "email_type": "draft"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "email_type" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -298,7 +290,7 @@ async def test_create_webhook_success(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.create_webhook.assert_awaited_once_with(
         "pipe-1", "https://example.com/hook", ["card.create"]
     )
@@ -308,7 +300,6 @@ async def test_create_webhook_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -326,7 +317,7 @@ async def test_create_webhook_graphql_error(
             },
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid url" in tool_error_message(payload)
@@ -339,7 +330,6 @@ async def test_create_webhook_graphql_error(
 
 class TestGetWebhooks:
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_success(self, webhook_session, mock_webhook_client, extract_payload):
         mock_webhook_client.get_webhooks.return_value = {
             "pipe": {
@@ -362,7 +352,7 @@ class TestGetWebhooks:
                 {"pipe_id": "601"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         mock_webhook_client.get_webhooks.assert_awaited_once_with("601")
         payload = extract_payload(result)
         assert payload["success"] is True
@@ -370,7 +360,6 @@ class TestGetWebhooks:
         assert payload["result"]["pipe"]["webhooks"][0]["id"] == "w1"
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_empty(self, webhook_session, mock_webhook_client, extract_payload):
         mock_webhook_client.get_webhooks.return_value = {"pipe": {"webhooks": []}}
 
@@ -380,13 +369,12 @@ class TestGetWebhooks:
                 {"pipe_id": "602"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is True
         assert payload["result"]["pipe"]["webhooks"] == []
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_graphql_error(
         self, webhook_session, mock_webhook_client, extract_payload
     ):
@@ -400,24 +388,22 @@ class TestGetWebhooks:
                 {"pipe_id": "999"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "pipe not found" in tool_error_message(payload).lower()
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_has_read_only_hint(self, webhook_session):
         async with webhook_session as session:
             listed = await session.list_tools()
         tool = next(t for t in listed.tools if t.name == "get_webhooks")
         assert tool.annotations is not None
-        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.read_only_hint is True
 
 
 class TestUpdateWebhook:
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_success(self, webhook_session, mock_webhook_client, extract_payload):
         mock_webhook_client.update_webhook.return_value = {
             "updateWebhook": {
@@ -443,7 +429,7 @@ class TestUpdateWebhook:
                 },
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         mock_webhook_client.update_webhook.assert_awaited_once_with(
             "w1",
             name="Renamed",
@@ -456,7 +442,6 @@ class TestUpdateWebhook:
         assert payload["result"]["updateWebhook"]["webhook"]["id"] == "w1"
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_graphql_error(
         self, webhook_session, mock_webhook_client, extract_payload
     ):
@@ -470,13 +455,12 @@ class TestUpdateWebhook:
                 {"webhook_id": "w1", "name": "X"},
             )
 
-        assert result.isError is False
+        assert result.is_error is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "webhook gone" in tool_error_message(payload)
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
     async def test_rejects_when_no_fields_to_update(
         self, webhook_session, mock_webhook_client, extract_payload
     ):
@@ -493,7 +477,6 @@ class TestUpdateWebhook:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_preview_does_not_delete(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -503,7 +486,7 @@ async def test_delete_webhook_preview_does_not_delete(
             {"webhook_id": "webhook-1"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.delete_webhook.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -514,61 +497,51 @@ async def test_delete_webhook_preview_does_not_delete(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
-async def test_delete_webhook_success(
-    webhook_session, mock_webhook_client, extract_payload
-):
+async def test_delete_webhook_success(webhook_session, mock_webhook_client):
     mock_webhook_client.delete_webhook.return_value = {
         "deleteWebhook": {"success": True}
     }
 
     async with webhook_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_webhook",
             {"webhook_id": "webhook-1", "confirm": True},
         )
 
-    assert result.isError is False
     mock_webhook_client.delete_webhook.assert_awaited_once_with("webhook-1")
-    payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["result"]["deleteWebhook"]["success"] is True
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
-async def test_delete_webhook_graphql_error(
-    webhook_session, mock_webhook_client, extract_payload
-):
+async def test_delete_webhook_graphql_error(webhook_session, mock_webhook_client):
     mock_webhook_client.delete_webhook.side_effect = PipefyGraphQLError(
         [{"message": "webhook not found"}]
     )
 
     async with webhook_session as session:
-        result = await session.call_tool(
+        payload = await confirm_after_preview(
+            session,
             "delete_webhook",
             {"webhook_id": "w1", "confirm": True},
         )
 
-    assert result.isError is False
-    payload = extract_payload(result)
     assert payload["success"] is False
     assert "webhook not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_has_destructive_hint(webhook_session):
     async with webhook_session as session:
         listed = await session.list_tools()
     delete_tool = next(t for t in listed.tools if t.name == "delete_webhook")
     assert delete_tool.annotations is not None
-    assert delete_tool.annotations.destructiveHint is True
-    assert delete_tool.annotations.readOnlyHint is False
+    assert delete_tool.annotations.destructive_hint is True
+    assert delete_tool.annotations.read_only_hint is False
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -600,7 +573,7 @@ async def test_get_card_inbox_emails_success(
             {"card_id": "12345"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.get_card_inbox_emails.assert_awaited_once_with(
         "12345", email_type=None
     )
@@ -610,7 +583,6 @@ async def test_get_card_inbox_emails_success(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_with_type_filter(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -624,7 +596,7 @@ async def test_get_card_inbox_emails_with_type_filter(
             {"card_id": "12345", "email_type": "received"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.get_card_inbox_emails.assert_awaited_once_with(
         "12345", email_type="received"
     )
@@ -634,7 +606,6 @@ async def test_get_card_inbox_emails_with_type_filter(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -648,20 +619,19 @@ async def test_get_card_inbox_emails_graphql_error(
             {"card_id": "99999"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "card not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_has_read_only_hint(webhook_session):
     async with webhook_session as session:
         listed = await session.list_tools()
     tool = next(t for t in listed.tools if t.name == "get_card_inbox_emails")
     assert tool.annotations is not None
-    assert tool.annotations.readOnlyHint is True
+    assert tool.annotations.read_only_hint is True
 
 
 ## ---------------------------------------------------------------------------
@@ -670,7 +640,6 @@ async def test_get_card_inbox_emails_has_read_only_hint(webhook_session):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_coerces_int_repo_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -679,14 +648,13 @@ async def test_get_email_templates_coerces_int_repo_id(
     }
     async with webhook_session as session:
         result = await session.call_tool("get_email_templates", {"repo_id": 301})
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.get_email_templates.assert_awaited_once_with(
         "301", filter_by_name=None, first=DEFAULT_FIRST
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_coerces_int_card_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -695,14 +663,13 @@ async def test_get_card_inbox_emails_coerces_int_card_id(
     }
     async with webhook_session as session:
         result = await session.call_tool("get_card_inbox_emails", {"card_id": 555})
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.get_card_inbox_emails.assert_awaited_once_with(
         "555", email_type=None
     )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_coerces_int_card_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -724,14 +691,13 @@ async def test_send_inbox_email_coerces_int_card_id(
                 "from_": "s@x.com",
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.send_inbox_email.assert_awaited_once()
     call_args = mock_webhook_client.send_inbox_email.call_args
     assert call_args[0][0] == "100"
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_coerces_int_ids(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -747,7 +713,7 @@ async def test_send_email_with_template_coerces_int_ids(
             "send_email_with_template",
             {"card_id": 200, "email_template_id": 55},
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.send_email_with_template.assert_awaited_once()
     call_args = mock_webhook_client.send_email_with_template.call_args
     assert call_args[0][0] == "200"
@@ -755,7 +721,6 @@ async def test_send_email_with_template_coerces_int_ids(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_coerces_int_pipe_id(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -771,7 +736,7 @@ async def test_create_webhook_coerces_int_pipe_id(
                 "actions": ["card.create"],
             },
         )
-    assert result.isError is False
+    assert result.is_error is False
     mock_webhook_client.create_webhook.assert_awaited_once()
     call_args = mock_webhook_client.create_webhook.call_args
     assert call_args[0][0] == "301"
@@ -783,7 +748,6 @@ async def test_create_webhook_coerces_int_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_empty_to_list(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -806,7 +770,6 @@ async def test_send_inbox_email_rejects_empty_to_list(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_to_with_blank_items(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -829,7 +792,6 @@ async def test_send_inbox_email_rejects_to_with_blank_items(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_blank_subject(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -852,7 +814,6 @@ async def test_send_inbox_email_rejects_blank_subject(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_blank_from(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -875,7 +836,6 @@ async def test_send_inbox_email_rejects_blank_from(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_invalid_card_id(
     webhook_session, mock_webhook_client
 ):
@@ -901,7 +861,6 @@ async def test_send_inbox_email_rejects_invalid_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_rejects_blank_template_id(
     webhook_session, mock_webhook_client
 ):
@@ -916,7 +875,6 @@ async def test_send_email_with_template_rejects_blank_template_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_value_error_from_client(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -941,7 +899,6 @@ async def test_send_email_with_template_value_error_from_client(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_blank_url(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -958,7 +915,6 @@ async def test_create_webhook_rejects_blank_url(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_empty_actions_list(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -975,7 +931,6 @@ async def test_create_webhook_rejects_empty_actions_list(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_invalid_pipe_id(
     webhook_session, mock_webhook_client
 ):
@@ -999,7 +954,6 @@ async def test_create_webhook_rejects_invalid_pipe_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_graphql_error(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -1013,14 +967,13 @@ async def test_get_email_templates_graphql_error(
             {"repo_id": "999"},
         )
 
-    assert result.isError is False
+    assert result.is_error is False
     p = extract_payload(result)
     assert p["success"] is False
     assert "pipe not found" in tool_error_message(p).lower()
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_rejects_invalid_repo_id(
     webhook_session, mock_webhook_client
 ):
@@ -1040,7 +993,6 @@ async def test_get_email_templates_rejects_invalid_repo_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_rejects_invalid_card_id(
     webhook_session, mock_webhook_client
 ):
@@ -1060,7 +1012,6 @@ async def test_get_card_inbox_emails_rejects_invalid_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_rejects_invalid_card_id(
     webhook_session, mock_webhook_client
 ):
@@ -1081,7 +1032,6 @@ async def test_send_email_with_template_rejects_invalid_card_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_rejects_blank_webhook_id(
     webhook_session, mock_webhook_client
 ):

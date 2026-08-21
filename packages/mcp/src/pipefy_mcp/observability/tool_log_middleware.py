@@ -19,34 +19,40 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import TYPE_CHECKING
 
-from mcp import UrlElicitationRequiredError, types
+from mcp import UrlElicitationRequiredError
 
-from pipefy_mcp.core.tool_middleware import CallNext, ToolCallContext
+from pipefy_mcp.core.tool_middleware import CallNext, ToolCallContext, result_is_error
 from pipefy_mcp.observability.json_logging import (
+    UNNAMED_TOOL,
     ToolCallOutcome,
     build_tool_call_event,
     emit_structured_event,
 )
 
+if TYPE_CHECKING:
+    from mcp.server.context import HandlerResult
 
-def _outcome(result: types.ServerResult) -> ToolCallOutcome:
+
+def _outcome(result: HandlerResult) -> ToolCallOutcome:
     """Map a terminal result to an outcome.
 
-    Reads ``isError`` off the result's root defensively: an experimental
-    ``CreateTaskResult`` root has no ``isError`` and reads as ``ok`` rather than
-    raising.
+    Delegates the flag read to :func:`result_is_error`, which handles both shapes a
+    middleware sees: the wire dict the SDK's handler returns for a real tool call,
+    and the ``CallToolResult`` model a short-circuit builds. Reading the attribute
+    directly would report every real tool failure as ``ok``.
     """
-    return "error" if getattr(result.root, "isError", False) else "ok"
+    return "error" if result_is_error(result) else "ok"
 
 
 async def tool_log_middleware(
     ctx: ToolCallContext, call_next: CallNext
-) -> types.ServerResult:
+) -> HandlerResult:
     """Emit one structured log line around a tool call, then propagate the result.
 
-    A tool body error surfaces as a result with ``isError=True`` (FastMCP's
-    terminal turns tool exceptions into an error result), so the common path logs
+    A tool body error surfaces as a result with ``isError=True`` (the SDK's
+    handler turns tool exceptions into an error result), so the common path logs
     from the returned result. The two exceptions that DO propagate through the
     chain each get their own non-error outcome and are re-raised: ``CancelledError``
     (client disconnect / ``notifications/cancelled``) and
@@ -54,6 +60,10 @@ async def tool_log_middleware(
     Swallowing either would break cancellation and elicitation. ``BaseException``
     (not ``Exception``) is caught so a ``CancelledError`` cannot skip the handler
     and let ``finally`` emit a stale ``ok``.
+
+    A ``tools/call`` that named no tool reaches the chain too (middleware sees raw
+    params), and is logged under :data:`UNNAMED_TOOL` rather than an empty ``tool``,
+    so it does not land in a dashboard's blank bucket beside the real tool names.
     """
     started_at = time.perf_counter()
     outcome: ToolCallOutcome = "ok"
@@ -74,7 +84,7 @@ async def tool_log_middleware(
         duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
         emit_structured_event(
             build_tool_call_event(
-                tool=ctx.tool_name,
+                tool=ctx.tool_name or UNNAMED_TOOL,
                 outcome=outcome,
                 duration_ms=duration_ms,
                 arg_keys=list(ctx.argument_keys),

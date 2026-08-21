@@ -40,11 +40,11 @@ Five qualities dominate every decision on this map, in this order. A trade that 
 
 | Priority | Quality goal | Scenario |
 |---|---|---|
-| 1 | Authenticity | Two callers hold sessions on one remote process. A tool body reads the bearer from the request in flight, and never from process state. (`QR-4`, `QR-16`) |
+| 1 | Authenticity | Two callers hold sessions on one remote process. Neither one can act as the other, and neither one can read the other's data. (`QR-4`, `QR-16`) |
 | 2 | Resource utilization | A model asks for one card by name. One tool call answers it, and the response carries what was asked for rather than the whole entity. (`QR-5`, `QR-10`, `QR-18`, `QR-23`) |
-| 3 | Diagnosability | A GraphQL call is denied. The response names the likely cause and the next step, and a `debug` argument adds the vendor error codes and a correlation id. (`QR-1`, `QR-8`, `QR-12`) |
-| 4 | Stability | Pipefy reshapes a GraphQL response. One adapter changes, and no code that imports the SDK changes. (`QR-2`) |
-| 5 | Backward compatibility | After v1.0, a release drops a parameter that consumer code passes. A deprecation warning shipped before that release, and `DEPRECATION.md` states what made the change breaking. (`QR-11`) |
+| 3 | Diagnosability | A GraphQL call is denied. The response names the likely cause, the next step, and on request the vendor error codes and a correlation id. (`QR-1`, `QR-8`, `QR-12`) |
+| 4 | Stability | Pipefy reshapes a GraphQL response. The change never reaches the consumer's code. (`QR-2`) |
+| 5 | Backward compatibility | After v1.0, a release deprecates a public SDK function. The function keeps working for two more minor releases, and `DEPRECATION.md` sets that period. (`QR-11`) |
 
 ## Constraints
 
@@ -249,7 +249,7 @@ Each row carries the dimensions of the quality it instantiates, and [`quality.ar
 | ID | Dimensions | Demand |
 |---|---|---|
 | `QR-2` | `#reliable` | A vendor API change does not reach the consumer's code |
-| `QR-11` | `#usable` `#operable` `#reliable` | After v1.0, a warning comes before every breaking change, and [`DEPRECATION.md`](../DEPRECATION.md) says what counts as each |
+| `QR-11` | `#usable` `#operable` `#reliable` | After v1.0, a deprecated path keeps working for a stated period, and a warning comes before every breaking change, both defined in [`DEPRECATION.md`](../DEPRECATION.md) |
 | `QR-13` | `#suitable` `#maintainable` | A test can be written for any unit, and a test that passes tells the truth about the released code |
 | `QR-14` | `#maintainable` | A merged change never breaks the layer order |
 | `QR-21` | `#flexible` `#usable` | A deployment picks which tools it exposes by configuration, and never by changing the source |

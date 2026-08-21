@@ -158,7 +158,7 @@ claude mcp add --transport http --scope user --client-id pipefy-mcp pipefy https
 
 Complete the browser login when prompted, or run `claude mcp login pipefy` if the client reports *Needs authentication*. The hosted server exposes the remote-safe surface: everything except the tools whose input is a file on your machine.
 
-Coming from the plugin, uninstall the plugin as well — a plugin-provided server ranks below user scope, so removing only the user-scope entry falls through to the plugin's own `uvx pipefy-mcp-server`:
+Coming from the plugin, uninstall the plugin as well — a plugin-provided server ranks below user scope, so removing only the user-scope entry falls through to the plugin's own `.mcp.json` (hosted `mcp.pipefy.com`):
 
 ```text
 /plugin uninstall pipefy@pipefy

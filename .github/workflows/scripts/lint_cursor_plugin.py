@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Cursor plugin packaging: manifest, published skill set, and mcp.json."""
+"""Validate Cursor plugin packaging: manifest, published skill set, and .mcp.json."""
 
 from __future__ import annotations
 
@@ -18,10 +18,13 @@ PATH_LIST_FIELDS = ("skills", "commands", "agents", "rules", "hooks")
 ALLOWED_MCP_TOP_LEVEL_KEYS = ("mcpServers",)
 ALLOWED_MCP_SERVER_KEYS = ("url", "auth")
 ALLOWED_MCP_AUTH_KEYS = ("CLIENT_ID",)
-FORBIDDEN_MANIFEST_KEYS = ("mcpServers", "variables")
+FORBIDDEN_MANIFEST_KEYS = ("variables",)
 HOSTED_SERVER_NAME = "pipefy"
 HOSTED_MCP_URL = "https://mcp.pipefy.com/mcp"
 HOSTED_CLIENT_ID = "pipefy-mcp"
+HOSTED_MCP_FILENAME = ".mcp.json"
+REQUIRED_MANIFEST_MCP_SERVERS = "./.mcp.json"
+CURSOR_DEFAULT_MCP_FILENAME = "mcp.json"
 
 
 def _rel(root: Path, path: Path) -> Path:
@@ -138,6 +141,32 @@ def _lint_forbidden_manifest_keys(
                 f"ship; expected no {key} field"
             )
     return errors
+
+
+def _lint_manifest_mcp_pointer(
+    manifest_rel: Path, manifest: dict[str, Any]
+) -> list[str]:
+    value = manifest.get("mcpServers")
+    if value == REQUIRED_MANIFEST_MCP_SERVERS:
+        return []
+    shown = (
+        repr(value) if value is None or isinstance(value, str) else "a non-path value"
+    )
+    return [
+        f"{manifest_rel} mcpServers is {shown}, expected "
+        f"{REQUIRED_MANIFEST_MCP_SERVERS!r} so Cursor loads the shared hosted "
+        f"{HOSTED_MCP_FILENAME} instead of discovering {CURSOR_DEFAULT_MCP_FILENAME}"
+    ]
+
+
+def _lint_no_cursor_default_mcp_file(root: Path) -> list[str]:
+    leftover = root / CURSOR_DEFAULT_MCP_FILENAME
+    if not leftover.exists():
+        return []
+    return [
+        f"{CURSOR_DEFAULT_MCP_FILENAME} exists; expected only "
+        f"{HOSTED_MCP_FILENAME} so Cursor and Claude Code share one hosted config"
+    ]
 
 
 def _lint_commands_suppressed(
@@ -282,7 +311,7 @@ def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     ``skill_md_paths`` is the ``git ls-files 'skills/**/SKILL.md'`` listing.
     """
     manifest_path = root / ".cursor-plugin/plugin.json"
-    mcp_path = root / "mcp.json"
+    mcp_path = root / HOSTED_MCP_FILENAME
     loaded = _load_json(root, manifest_path)
     if isinstance(loaded, str):
         return [loaded]
@@ -291,6 +320,8 @@ def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     errors: list[str] = []
     errors.extend(_lint_plugin_name(manifest_rel, loaded))
     errors.extend(_lint_forbidden_manifest_keys(manifest_rel, loaded))
+    errors.extend(_lint_manifest_mcp_pointer(manifest_rel, loaded))
+    errors.extend(_lint_no_cursor_default_mcp_file(root))
     errors.extend(_lint_commands_suppressed(manifest_rel, loaded))
     errors.extend(_lint_logo(root, manifest_rel, loaded))
     errors.extend(

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cursor Marketplace plugin**: Cursor loads `.mcp.json` (Claude Code's auto-discovered name) when this repository is the plugin root, not the Cursor-default `mcp.json`. Shipping both files meant the Marketplace clone started `uvx pipefy-mcp-server` instead of `https://mcp.pipefy.com/mcp`. There is now one hosted config in `.mcp.json`, and `.cursor-plugin/plugin.json` sets `"mcpServers": "./.mcp.json"` so Cursor cannot discover a sibling `mcp.json`.
+
+### Changed
+
+- **Claude Code plugin MCP**: `.mcp.json` is the hosted `mcp.pipefy.com` server with in-client OAuth, the same file the Cursor plugin points at. Local stdio (`uvx`) remains the Quick-install / `claude mcp add` path.
+
 ## [0.5.0-beta.1] - 2026-08-21
 
 ### Added

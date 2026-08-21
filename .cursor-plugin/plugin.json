@@ -30,5 +30,6 @@
     "./skills/relations/pipefy-relations",
     "./skills/reports/pipefy-reports"
   ],
-  "commands": []
+  "commands": [],
+  "mcpServers": "./.mcp.json"
 }

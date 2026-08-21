@@ -48,7 +48,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 - **In Cursor and want the fastest start with no local setup?** → **Cursor Marketplace plugin**.
 - **In Claude Code and want the fastest start with no local setup?** → **Hosted MCP**.
-- **In Claude Code and want the CLI, `/pipefy:*` slash commands, or the few local-only tools?** → **Claude Code plugin**.
+- **In Claude Code and want the CLI, `/pipefy:*` slash commands, or skills on the hosted MCP?** → **Claude Code plugin**.
 - **On Cursor, Claude Desktop, or Codex and need the local-file tools, the CLI, or one command for everything?** → **Quick-install script**.
 - **Terminal, scripting, or CI, with no agent?** → **CLI only**.
 - **Just want the workflow playbooks in any agent?** → **Skills only**.
@@ -57,7 +57,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 |---|---|---|---|---|---|
 | **[Cursor Marketplace plugin](#6-cursor-marketplace-plugin)** | Pipefy cloud (HTTPS) | Remote-safe surface; local-file tools withheld | In-client OAuth | skills | Fastest start in Cursor; zero local Python |
 | **[Hosted MCP](#1-hosted-mcp-claude-code)** | Pipefy cloud (HTTPS) | Remote-safe surface: all but the few local-file tools | In-client OAuth | nothing else | Fastest start in Claude Code; zero local Python |
-| **[Claude Code plugin](#2-claude-code-plugin)** | Your machine (`uvx` stdio) | Full [tool surface](#mcp-server) | `pipefy` CLI OAuth | slash commands + skills + CLI | Claude Code users who want the CLI, slash commands & the local-only tools |
+| **[Claude Code plugin](#2-claude-code-plugin)** | Pipefy cloud (HTTPS) | Remote-safe surface; local-file tools withheld | In-client OAuth | slash commands + skills + CLI | Claude Code users who want slash commands, skills, and the CLI on the hosted MCP |
 | **[Quick-install script](#3-quick-install-script)** | Your machine (stdio) | Full [tool surface](#mcp-server) | `pipefy auth login` | CLI + skills, wired into your client config | Local-file tools, CLI, Claude Desktop / Codex, or one-command full setup |
 | **[CLI only](#4-cli-only)** | — (no MCP) | CLI commands ([parity](docs/parity.md)) | login or service account | — | Terminal use, scripting, CI |
 | **[Skills only](#5-skills-only)** | — | — | — | markdown playbooks | Adding playbooks to any agent |
@@ -95,7 +95,7 @@ Complete the browser login when prompted (`claude mcp login pipefy` if the clien
 
 ### 2. Claude Code plugin
 
-**Pick this when:** you're in Claude Code and want the full local surface — every tool (including the local-file ones the hosted server withholds), the `/pipefy:*` slash commands, and the skill catalog. The MCP server runs locally via `uvx`.
+**Pick this when:** you're in Claude Code and want the hosted MCP server plus the `/pipefy:*` slash commands, the skill catalog, and the CLI. The plugin's `.mcp.json` is the same hosted URL the Cursor plugin uses (`https://mcp.pipefy.com/mcp`). Local-file tools stay on the [Quick-install script](#3-quick-install-script).
 
 ```text
 /plugin marketplace add pipefy/ai-toolkit
@@ -104,7 +104,7 @@ Complete the browser login when prompted (`claude mcp login pipefy` if the clien
 /pipefy:pipefy-login
 ```
 
-Type the slash commands **in order** (the model cannot invoke `/plugin …` for you). `/plugin install pipefy` registers the local MCP server plus the `/pipefy:install` and `/pipefy:pipefy-login` commands; `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent); `/pipefy:pipefy-login` runs the OAuth browser flow. Hand-wired setups, the macOS `errSecInvalidOwnerEdit` keychain note, and the contributor local-clone alternative: [`packages/mcp/README.md`](packages/mcp/README.md). To run a local branch as the plugin, see [Test the plugin from a local checkout](#test-the-claude-code-plugin-from-a-local-checkout).
+Type the slash commands **in order** (the model cannot invoke `/plugin …` for you). `/plugin install pipefy` registers the hosted MCP server plus the `/pipefy:install` and `/pipefy:pipefy-login` commands; `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent); `/pipefy:pipefy-login` runs the OAuth browser flow for the CLI. MCP sign-in for the hosted server is the in-client OAuth prompt. Hand-wired local stdio, the macOS `errSecInvalidOwnerEdit` keychain note, and the contributor local-clone alternative: [`packages/mcp/README.md`](packages/mcp/README.md). To run a local branch as the plugin, see [Test the plugin from a local checkout](#test-the-claude-code-plugin-from-a-local-checkout).
 
 ### 3. Quick-install script
 
@@ -158,7 +158,7 @@ To load this checkout as a local plugin (contributors): Cursor rejects a symlink
 dest="$HOME/.cursor/plugins/local/pipefy"
 if [ -L "$dest" ]; then rm "$dest"; fi
 mkdir -p "$dest/assets"
-cp -R .cursor-plugin skills LICENSE NOTICE README.md mcp.json "$dest/"
+cp -R .cursor-plugin skills LICENSE NOTICE README.md .mcp.json "$dest/"
 cp assets/logo.svg "$dest/assets/"
 ```
 

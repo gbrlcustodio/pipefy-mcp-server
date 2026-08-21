@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "pipefy": {
-      "command": "uvx",
-      "args": [
-        "pipefy-mcp-server"
-      ]
+      "url": "https://mcp.pipefy.com/mcp",
+      "auth": {
+        "CLIENT_ID": "pipefy-mcp"
+      }
     }
   }
 }

@@ -105,7 +105,7 @@ It reads the current version and `## [Unreleased]` from `origin/dev` (not your c
 
    Once the workflow finishes it asserts, and fails loudly on any gap, that the GitHub Release ships all five wheels (`pipefy-*.whl`, `pipefy_mcp_server-*.whl`, `pipefy_cli-*.whl`, `pipefy_auth-*.whl`, `pipefy_infra-*.whl`), that the published version installs from PyPI (`uvx --from "pipefy-cli==<PEP 440>" pipefy --version`), and that the `install.sh` dry-run resolves the just-cut tag (`Resolved tag: vX.Y.Z`). Re-run those checks any time with `uv run python scripts/release.py verify vX.Y.Z`.
 
-5. Submit or refresh the Cursor Marketplace listing from `main` after every tag that ships a change to `.cursor-plugin/plugin.json` or `mcp.json`. The listing is not cut by any workflow: those files ship with the repository, and a human submits them at [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish). Cursor reviews every plugin by hand and re-reviews each update, so budget for a review round rather than treating the submission as instant.
+5. Submit or refresh the Cursor Marketplace listing from `main` after every tag that ships a change to `.cursor-plugin/plugin.json` or `.mcp.json`. The listing is not cut by any workflow: those files ship with the repository, and a human submits them at [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish). Cursor reviews every plugin by hand and re-reviews each update, so budget for a review round rather than treating the submission as instant.
 
 ## Verification (cross-platform smoke test)
 

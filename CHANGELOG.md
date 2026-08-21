@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Cursor Marketplace plugin**: Cursor loads `.mcp.json` (Claude Code's auto-discovered name) when this repository is the plugin root, not the Cursor-default `mcp.json`. Shipping both files meant the Marketplace clone started `uvx pipefy-mcp-server` instead of `https://mcp.pipefy.com/mcp`. There is now one hosted config in `.mcp.json`, and `.cursor-plugin/plugin.json` sets `"mcpServers": "./.mcp.json"` so Cursor cannot discover a sibling `mcp.json`.
+- **Cursor Marketplace plugin**: hosted MCP config is `.mcp.json` only. `.cursor-plugin/plugin.json` points `mcpServers` at `./.mcp.json`, the same file Claude Code auto-discovers.
 - **Cursor plugin listing title**: adding this repo as a GitHub marketplace title-cased the slug `ai-toolkit` to "Ai Toolkit". `.cursor-plugin/marketplace.json` now names the marketplace `pipefy`, and the plugin `displayName` is `Pipefy AI Toolkit`.
 
 ### Changed

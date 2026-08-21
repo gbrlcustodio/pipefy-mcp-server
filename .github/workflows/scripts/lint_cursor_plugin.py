@@ -25,6 +25,8 @@ HOSTED_CLIENT_ID = "pipefy-mcp"
 HOSTED_MCP_FILENAME = ".mcp.json"
 REQUIRED_MANIFEST_MCP_SERVERS = "./.mcp.json"
 CURSOR_DEFAULT_MCP_FILENAME = "mcp.json"
+REQUIRED_DISPLAY_NAME = "Pipefy AI Toolkit"
+REQUIRED_MARKETPLACE_NAME = "pipefy"
 
 
 def _rel(root: Path, path: Path) -> Path:
@@ -166,6 +168,36 @@ def _lint_no_cursor_default_mcp_file(root: Path) -> list[str]:
     return [
         f"{CURSOR_DEFAULT_MCP_FILENAME} exists; expected only "
         f"{HOSTED_MCP_FILENAME} so Cursor and Claude Code share one hosted config"
+    ]
+
+
+def _lint_display_name(manifest_rel: Path, manifest: dict[str, Any]) -> list[str]:
+    value = manifest.get("displayName")
+    if value == REQUIRED_DISPLAY_NAME:
+        return []
+    shown = (
+        repr(value) if value is None or isinstance(value, str) else "a non-string value"
+    )
+    return [
+        f"{manifest_rel} displayName is {shown}, expected {REQUIRED_DISPLAY_NAME!r}"
+    ]
+
+
+def _lint_marketplace_name(root: Path) -> list[str]:
+    path = root / ".cursor-plugin/marketplace.json"
+    loaded = _load_json(root, path)
+    if isinstance(loaded, str):
+        return [loaded]
+    name = loaded.get("name")
+    if name == REQUIRED_MARKETPLACE_NAME:
+        return []
+    shown = (
+        repr(name) if name is None or isinstance(name, str) else "a non-string value"
+    )
+    return [
+        f"{_rel(root, path)} name is {shown}, expected "
+        f"{REQUIRED_MARKETPLACE_NAME!r} so Cursor does not title-case the "
+        "GitHub slug ai-toolkit to 'Ai Toolkit'"
     ]
 
 
@@ -319,8 +351,10 @@ def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     manifest_rel = _rel(root, manifest_path)
     errors: list[str] = []
     errors.extend(_lint_plugin_name(manifest_rel, loaded))
+    errors.extend(_lint_display_name(manifest_rel, loaded))
     errors.extend(_lint_forbidden_manifest_keys(manifest_rel, loaded))
     errors.extend(_lint_manifest_mcp_pointer(manifest_rel, loaded))
+    errors.extend(_lint_marketplace_name(root))
     errors.extend(_lint_no_cursor_default_mcp_file(root))
     errors.extend(_lint_commands_suppressed(manifest_rel, loaded))
     errors.extend(_lint_logo(root, manifest_rel, loaded))

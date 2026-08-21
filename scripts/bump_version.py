@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra,
-Claude and Cursor plugin manifests, the Claude marketplace manifest, and
+Claude and Cursor plugin manifests, both marketplace manifests, and
 root workspace meta.
 
 After rewriting the version strings, runs ``uv lock`` so the workspace
@@ -25,12 +25,14 @@ ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
 MARKETPLACE_MANIFEST = REPO_ROOT / ".claude-plugin/marketplace.json"
 CURSOR_PLUGIN_MANIFEST = REPO_ROOT / ".cursor-plugin/plugin.json"
+CURSOR_MARKETPLACE_MANIFEST = REPO_ROOT / ".cursor-plugin/marketplace.json"
 
 # Claude and Cursor manifests carry the release version, so they move with every bump.
 JSON_MANIFESTS: tuple[Path, ...] = (
     PLUGIN_MANIFEST,
     MARKETPLACE_MANIFEST,
     CURSOR_PLUGIN_MANIFEST,
+    CURSOR_MARKETPLACE_MANIFEST,
 )
 
 # The SDK distribution; its __version__ is the lockstep source of truth every

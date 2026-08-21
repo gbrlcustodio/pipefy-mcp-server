@@ -55,6 +55,7 @@ def _write_plugin(
     (skill_dir / "SKILL.md").write_text("# skill\n", encoding="utf-8")
     body = {
         "name": name,
+        "displayName": "Pipefy AI Toolkit",
         "logo": "assets/logo.svg",
         "skills": skills if skills is not None else [f"./{_SKILL}"],
         "commands": [],
@@ -66,6 +67,16 @@ def _write_plugin(
         body.pop(key, None)
     (root / ".cursor-plugin" / "plugin.json").write_text(
         json.dumps(body),
+        encoding="utf-8",
+    )
+    (root / ".cursor-plugin" / "marketplace.json").write_text(
+        json.dumps(
+            {
+                "name": "pipefy",
+                "owner": {"name": "Pipefy"},
+                "plugins": [{"name": "pipefy", "source": "./"}],
+            }
+        ),
         encoding="utf-8",
     )
     (root / ".mcp.json").write_text(
@@ -421,6 +432,31 @@ def test_sibling_mcp_json_is_rejected(tmp_path):
     errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
     assert any("mcp.json exists" in err for err in errors), errors
     assert any("expected only .mcp.json" in err for err in errors), errors
+
+
+def test_display_name_must_spell_ai_uppercase(tmp_path):
+    _write_plugin(tmp_path, manifest_update={"displayName": "Pipefy Ai Toolkit"})
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("displayName is 'Pipefy Ai Toolkit'" in err for err in errors), errors
+    assert any("Pipefy AI Toolkit" in err for err in errors), errors
+
+
+def test_marketplace_name_must_be_pipefy(tmp_path):
+    _write_plugin(tmp_path)
+    (tmp_path / ".cursor-plugin" / "marketplace.json").write_text(
+        json.dumps({"name": "ai-toolkit", "plugins": []}),
+        encoding="utf-8",
+    )
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("name is 'ai-toolkit'" in err for err in errors), errors
+    assert any("expected 'pipefy'" in err for err in errors), errors
+
+
+def test_missing_marketplace_is_rejected(tmp_path):
+    _write_plugin(tmp_path)
+    (tmp_path / ".cursor-plugin" / "marketplace.json").unlink()
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("marketplace.json" in err for err in errors), errors
 
 
 def test_missing_commands_key_is_rejected(tmp_path):

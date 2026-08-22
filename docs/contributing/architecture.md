@@ -235,6 +235,7 @@ Each row carries the dimensions of the quality it instantiates, and [`quality.ar
 | `QR-20` | `#usable` `#operable` | An invalid change is refused before it reaches the API |
 | `QR-22` | `#usable` `#operable` | A tool that is missing something it needs asks for it, rather than failing |
 | `QR-23` | `#usable` `#efficient` | A tool's description says briefly what the tool does, and it never teaches how to use it |
+| `QR-24` | `#secure` | A credential the toolkit stores is usable only by whoever it was issued to |
 
 **Failure.** A demand that a caller holds when a call cannot complete, or a component it needs fails.
 

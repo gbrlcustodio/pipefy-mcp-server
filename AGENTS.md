@@ -9,9 +9,9 @@
 - **`docs/MIGRATION.md`**. What existing MCP users need to know about v0.1.
 - **`docs/contributing/dependencies.md`**. Rationale for runtime dependencies.
 - **`docs/uninstall.md`**. `uninstall.sh --scan` and teardown, and switching between the hosted, local, and plugin channels. The two root scripts are colocated so `install.sh` and `uninstall.sh` stay reviewable side by side. A test asserts every file the installer writes is one the teardown accounts for.
-- **`docs/contributing/architecture.md`**. The map of the architecture. The quality requirements and the constraints that shape it, the boundary with its diagram, and the decomposition into applications, packages, and layers. Then the tool surface, the response shape, one runtime scenario, the rules that cross every package, the known debt, and the glossary.
+- **`docs/contributing/architecture.md`**. The map of the architecture. The functions it delivers, the goals that rank them, the roles that hold them, and the quality requirements and constraints that shape it. Then the boundary with its diagram, the decomposition into applications, packages, and layers, the tool surface, the response shape, one runtime scenario, the rules that cross every package, the known debt, and the glossary.
 - **`docs/contributing/conventions.md`**. The code conventions, as rules with permanent IDs. A rule belongs there when a reviewer applies it by judgment to one unit of code.
-- **`docs/contributing/authoring.md`**. How the docs tree is organized, the audience and Diataxis cuts, and where a new doc goes.
+- **`docs/contributing/authoring.md`**. How the docs tree is organized, the audience and Diataxis cuts, where a new doc goes, and the form of a convention and of a section of `architecture.md`.
 - **`docs/mcp/tools/`**. Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior). Includes `identifiers.md`, the canonical map of which tool/argument expects slug vs `internal_id` vs uuid vs numeric id.
 - **`docs/cli/`**. CLI-specific guides, for example introspect-then-execute.
 - **`docs/sdk/README.md`**. Using `pipefy` as a library.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Cursor plugin packaging: manifest, published skill set, and mcp.json."""
+"""Validate Cursor plugin packaging: manifest, published skill set, and .mcp.json."""
 
 from __future__ import annotations
 
@@ -18,10 +18,15 @@ PATH_LIST_FIELDS = ("skills", "commands", "agents", "rules", "hooks")
 ALLOWED_MCP_TOP_LEVEL_KEYS = ("mcpServers",)
 ALLOWED_MCP_SERVER_KEYS = ("url", "auth")
 ALLOWED_MCP_AUTH_KEYS = ("CLIENT_ID",)
-FORBIDDEN_MANIFEST_KEYS = ("mcpServers", "variables")
+FORBIDDEN_MANIFEST_KEYS = ("variables",)
 HOSTED_SERVER_NAME = "pipefy"
 HOSTED_MCP_URL = "https://mcp.pipefy.com/mcp"
 HOSTED_CLIENT_ID = "pipefy-mcp"
+HOSTED_MCP_FILENAME = ".mcp.json"
+REQUIRED_MANIFEST_MCP_SERVERS = "./.mcp.json"
+FORBIDDEN_ROOT_MCP_JSON = "mcp.json"
+REQUIRED_DISPLAY_NAME = "Pipefy"
+REQUIRED_MARKETPLACE_NAME = "pipefy"
 
 
 def _rel(root: Path, path: Path) -> Path:
@@ -138,6 +143,58 @@ def _lint_forbidden_manifest_keys(
                 f"ship; expected no {key} field"
             )
     return errors
+
+
+def _lint_manifest_mcp_pointer(
+    manifest_rel: Path, manifest: dict[str, Any]
+) -> list[str]:
+    value = manifest.get("mcpServers")
+    if value == REQUIRED_MANIFEST_MCP_SERVERS:
+        return []
+    shown = (
+        repr(value) if value is None or isinstance(value, str) else "a non-path value"
+    )
+    return [
+        f"{manifest_rel} mcpServers is {shown}, expected "
+        f"{REQUIRED_MANIFEST_MCP_SERVERS!r}"
+    ]
+
+
+def _lint_no_forbidden_root_mcp_json(root: Path) -> list[str]:
+    leftover = root / FORBIDDEN_ROOT_MCP_JSON
+    if not leftover.exists():
+        return []
+    return [f"{FORBIDDEN_ROOT_MCP_JSON} exists; expected only {HOSTED_MCP_FILENAME}"]
+
+
+def _lint_display_name(manifest_rel: Path, manifest: dict[str, Any]) -> list[str]:
+    value = manifest.get("displayName")
+    if value == REQUIRED_DISPLAY_NAME:
+        return []
+    shown = (
+        repr(value) if value is None or isinstance(value, str) else "a non-string value"
+    )
+    return [
+        f"{manifest_rel} displayName is {shown}, expected {REQUIRED_DISPLAY_NAME!r}"
+    ]
+
+
+def _lint_marketplace_name(root: Path) -> list[str]:
+    path = root / ".cursor-plugin/marketplace.json"
+    loaded = _load_json(root, path)
+    if isinstance(loaded, str):
+        return [loaded]
+    name = loaded.get("name")
+    if name == REQUIRED_MARKETPLACE_NAME:
+        return []
+    shown = (
+        repr(name) if name is None or isinstance(name, str) else "a non-string value"
+    )
+    return [
+        f"{_rel(root, path)} name is {shown}, expected "
+        f"{REQUIRED_MARKETPLACE_NAME!r} so Cursor does not title-case the "
+        "GitHub slug ai-toolkit to 'Ai Toolkit'"
+    ]
 
 
 def _lint_commands_suppressed(
@@ -282,7 +339,7 @@ def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     ``skill_md_paths`` is the ``git ls-files 'skills/**/SKILL.md'`` listing.
     """
     manifest_path = root / ".cursor-plugin/plugin.json"
-    mcp_path = root / "mcp.json"
+    mcp_path = root / HOSTED_MCP_FILENAME
     loaded = _load_json(root, manifest_path)
     if isinstance(loaded, str):
         return [loaded]
@@ -290,7 +347,11 @@ def collect_errors(root: Path, skill_md_paths: list[str]) -> list[str]:
     manifest_rel = _rel(root, manifest_path)
     errors: list[str] = []
     errors.extend(_lint_plugin_name(manifest_rel, loaded))
+    errors.extend(_lint_display_name(manifest_rel, loaded))
     errors.extend(_lint_forbidden_manifest_keys(manifest_rel, loaded))
+    errors.extend(_lint_manifest_mcp_pointer(manifest_rel, loaded))
+    errors.extend(_lint_marketplace_name(root))
+    errors.extend(_lint_no_forbidden_root_mcp_json(root))
     errors.extend(_lint_commands_suppressed(manifest_rel, loaded))
     errors.extend(_lint_logo(root, manifest_rel, loaded))
     errors.extend(

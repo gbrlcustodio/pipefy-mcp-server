@@ -167,6 +167,7 @@ def test_json_version_re_replaces_version(manifest: str) -> None:
         _bump.PLUGIN_MANIFEST,
         _bump.MARKETPLACE_MANIFEST,
         _bump.CURSOR_PLUGIN_MANIFEST,
+        _bump.CURSOR_MARKETPLACE_MANIFEST,
     ],
 )
 def test_json_manifest_version_matches_real_manifest(manifest: Path) -> None:

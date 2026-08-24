@@ -55,9 +55,11 @@ def _write_plugin(
     (skill_dir / "SKILL.md").write_text("# skill\n", encoding="utf-8")
     body = {
         "name": name,
+        "displayName": "Pipefy",
         "logo": "assets/logo.svg",
         "skills": skills if skills is not None else [f"./{_SKILL}"],
         "commands": [],
+        "mcpServers": "./.mcp.json",
     }
     if manifest_update:
         body.update(manifest_update)
@@ -67,7 +69,17 @@ def _write_plugin(
         json.dumps(body),
         encoding="utf-8",
     )
-    (root / "mcp.json").write_text(
+    (root / ".cursor-plugin" / "marketplace.json").write_text(
+        json.dumps(
+            {
+                "name": "pipefy",
+                "owner": {"name": "Pipefy"},
+                "plugins": [{"name": "pipefy", "source": "./"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / ".mcp.json").write_text(
         json.dumps(mcp if mcp is not None else _HOSTED_MCP),
         encoding="utf-8",
     )
@@ -390,10 +402,61 @@ def test_server_key_must_be_pipefy(tmp_path):
     assert any("server key is 'other'" in err for err in errors), errors
 
 
-def test_manifest_mcp_servers_are_rejected(tmp_path):
-    _write_plugin(tmp_path, manifest_update={"mcpServers": {}})
+def test_manifest_mcp_servers_must_point_at_dot_mcp_json(tmp_path):
+    _write_plugin(tmp_path, manifest_update={"mcpServers": "./mcp.json"})
     errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
-    assert any("declares mcpServers" in err for err in errors), errors
+    assert any("mcpServers is './mcp.json'" in err for err in errors), errors
+    assert any("./.mcp.json" in err for err in errors), errors
+
+
+def test_missing_manifest_mcp_servers_is_rejected(tmp_path):
+    _write_plugin(tmp_path, omit=("mcpServers",))
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("mcpServers is None" in err for err in errors), errors
+    assert any("./.mcp.json" in err for err in errors), errors
+
+
+def test_inline_manifest_mcp_servers_are_rejected_without_echoing_value(tmp_path):
+    _write_plugin(
+        tmp_path,
+        manifest_update={"mcpServers": {"pipefy": {"url": _SENTINEL}}},
+    )
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("mcpServers is a non-path value" in err for err in errors), errors
+    assert _SENTINEL not in "\n".join(errors)
+
+
+def test_sibling_mcp_json_is_rejected(tmp_path):
+    _write_plugin(tmp_path)
+    (tmp_path / "mcp.json").write_text("{}", encoding="utf-8")
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("mcp.json exists" in err for err in errors), errors
+    assert any("expected only .mcp.json" in err for err in errors), errors
+
+
+def test_display_name_must_be_pipefy(tmp_path):
+    _write_plugin(tmp_path, manifest_update={"displayName": "Pipefy AI Toolkit"})
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("displayName is 'Pipefy AI Toolkit'" in err for err in errors), errors
+    assert any("expected 'Pipefy'" in err for err in errors), errors
+
+
+def test_marketplace_name_must_be_pipefy(tmp_path):
+    _write_plugin(tmp_path)
+    (tmp_path / ".cursor-plugin" / "marketplace.json").write_text(
+        json.dumps({"name": "ai-toolkit", "plugins": []}),
+        encoding="utf-8",
+    )
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("name is 'ai-toolkit'" in err for err in errors), errors
+    assert any("expected 'pipefy'" in err for err in errors), errors
+
+
+def test_missing_marketplace_is_rejected(tmp_path):
+    _write_plugin(tmp_path)
+    (tmp_path / ".cursor-plugin" / "marketplace.json").unlink()
+    errors = _lint.collect_errors(tmp_path, [_SKILL_MD])
+    assert any("marketplace.json" in err for err in errors), errors
 
 
 def test_missing_commands_key_is_rejected(tmp_path):

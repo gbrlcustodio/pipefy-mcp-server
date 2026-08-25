@@ -10,7 +10,7 @@ An MCP tool expresses one user outcome, not one API endpoint. It orchestrates th
 - Arguments are flat and explicit: typed primitives, `Literal` for a closed set, one form per field, no guess-the-shape passthroughs.
 - Responses are shaped and bounded, carrying pagination metadata rather than raw wire envelopes.
 - Errors are typed and actionable. They tell the model what to try next.
-- Write gates use protocol-native elicitation. The gate fires when the client declares elicitation support. Otherwise it fails closed, so a headless client never waits on a prompt nobody can answer.
+- Write gates are an explicit two-step confirmation: a preview on `confirm=False`, execution on `confirm=True`. They use no elicitation, because a client can auto-accept a prompt. Where a tool lacks an input it needs, [`tools/pipes-and-cards.md`](tools/pipes-and-cards.md) states when it asks and what it does when it cannot.
 
 The reasoning is in the decision record [ADR-0003](../contributing/adr/0003-mcp-tools-express-outcomes.md).
 

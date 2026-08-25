@@ -11,7 +11,7 @@ The MCP surface was close to a one-to-one map of the GraphQL API. A tool per end
 
 An MCP tool expresses one user outcome and orchestrates the underlying steps in code, not in the model context. Do not fragment one goal into atomic operations the model must chain. Expose a discovery tool only where listing is itself the user's goal, never as a mandatory input-feeder for an action tool.
 
-Tool contracts follow four standards. Arguments are flat and explicit: typed primitives, `Literal` for a closed set, one form per field, no guess-the-shape passthroughs. Responses are shaped and bounded, carrying pagination metadata. Errors are typed and actionable. Write gates use protocol-native elicitation, which fires when the client declares support and otherwise fails closed, so a headless client never waits on a prompt nobody can answer.
+Tool contracts follow four standards. Arguments are flat and explicit: typed primitives, `Literal` for a closed set, one form per field, no guess-the-shape passthroughs. Responses are shaped and bounded, carrying pagination metadata. Errors are typed and actionable. Write gates are an explicit two-step confirmation, and they use no elicitation, because a client can auto-accept a prompt.
 
 ## Consequences
 

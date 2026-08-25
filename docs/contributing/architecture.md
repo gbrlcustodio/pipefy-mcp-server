@@ -82,7 +82,11 @@ Every decision on this map works inside these limits. Each row names the limit a
 | Schema as the model's only instruction | MCP | A field name and its description are written for a model to read, so a schema change is a behavior change |
 | No guaranteed answer from the client | MCP | The client's side of a question is optional in the protocol, so every tool needs a path that finishes without an answer |
 | Vendor-owned GraphQL shape | All three | A better entity shape or error shape is a translation we build and maintain, and `QR-2` is what that buys |
+| Vendor-owned domain vocabulary | All three | Every capability name comes from the domain model, never from the tool catalog, and `QR-17` is the demand it serves |
+| A tool catalog we do not own | MCP | The iPaaS tools are relayed rather than reshaped, so they are the one place `QR-5` does not apply |
 | No keychain in some environments | CLI, MCP | Credential storage carries a file backend as well as the OS keychain |
+
+[`docs/ipaas.md`](../ipaas.md) owns the iPaaS flow.
 
 ## Context and scope
 

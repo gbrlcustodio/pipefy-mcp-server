@@ -108,6 +108,12 @@ Every fact has one owner: the code, a schema, an enforced contract, or another d
 
 Where the code owns a list, generate the document from that code: docstrings, pydantic `Field(description=...)`, the tool registry, or Typer help. Hand-author only where there is no code source, such as a concept doc. Do not keep a generated table and durable prose in the same file.
 
+## Name no vendor behind a capability
+
+A Pipefy capability can run on a third-party service. Name the capability, and never the service. A document that names it hands a reader outside Pipefy the product to probe, and the vendor can change without the capability changing.
+
+State a limit without its mechanism. [`docs/ipaas.md`](../ipaas.md) draws the iPaaS credential flow as a short-lived, pipe-scoped credential and a session-scoped access, with no endpoint, no token shape, and no step named. That is the altitude for every document here.
+
 ## Keep it small
 
 Keep recognizable names: `README`, `CHANGELOG`, `CONTRIBUTING`, `SECURITY`, `MIGRATION`, `DEPRECATION`, and `ARCHITECTURE` (as `docs/contributing/architecture.md`). A directory earns its keep by file count and homogeneity, so do not invent a `guides/` or `reference/` bucket for a few files. A concrete cleanup or migration step is a closeable task, so open an issue instead of listing it here.

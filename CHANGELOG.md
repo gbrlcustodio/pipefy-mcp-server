@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Claude Code plugin MCP**: `.mcp.json` is the hosted `mcp.pipefy.com` server with in-client OAuth, the same file the Cursor plugin points at. Local stdio (`uvx`) remains the Quick-install / `claude mcp add` path.
+- **Release process (DCO expectations)**: `RELEASE.md` states that a red DCO check on a `dev → main` release cut is expected and blocks nothing, and that a cut whose check is green because it carries almost nothing was made from the wrong branch. The back-merge bullet stays scoped to back-merges, since the two ranges are complementary, and now says the mismatch is unrepairable once the commit is on `main` or `dev` rather than on the default branch alone.
 
 ## [0.5.0-beta.1] - 2026-08-21
 

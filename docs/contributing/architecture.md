@@ -71,13 +71,17 @@ Four expectations here rest on nothing: an operator's deploy shape, the platform
 
 The contributor, the maintainer, the domain expert, and Privacy, Legal and Compliance hold no quality goal.
 
-## Constraints
+## Architecture constraints
 
-Limits that this repository does not decide.
+Every decision on this map works inside these limits. Each row names the limit and what follows from it. A limit we imposed on our own code is a refactor candidate instead, under `CONS-1` in [`conventions.md`](conventions.md).
 
-- The MCP protocol publishes a tool's inputs as JSON Schema, and a language model fills them from that schema alone. The schema is therefore an instruction to the model, and not only a check on what arrives.
-- The Pipefy GraphQL API is not ours to change, so its entity shape and its error shape come as the vendor defines them. Any better shape is a translation that we build and maintain.
-- The OS keychain is not available in every environment, so credential storage carries a file backend for a headless one.
+**Technical.**
+
+| Constraint | Applies to | Consequence |
+|---|---|---|
+| Schema as the model's only instruction | MCP | A field name and its description are written for a model to read, so a schema change is a behavior change |
+| Vendor-owned GraphQL shape | All three | A better entity shape or error shape is a translation we build and maintain, and `QR-2` is what that buys |
+| No keychain in some environments | CLI, MCP | Credential storage carries a file backend as well as the OS keychain |
 
 ## Context and scope
 

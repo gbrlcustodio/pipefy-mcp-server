@@ -41,7 +41,7 @@ A code example names no shipped symbol. A symbol in an example rots on the next 
 - A section that arc42 numbers takes arc42's position and arc42's name.
 - A section we have nothing to say about stays absent, and never empty.
 
-Three headings still carry an earlier name: `Constraints` at arc42 2, `Known gaps` at arc42 11, and `Vocabulary` at arc42 12. Each one is a rename this review has not run yet, so none of the three sets a precedent.
+Two headings still carry an earlier name: `Known gaps` at arc42 11, and `Vocabulary` at arc42 12. Each one is a rename this review has not run yet, so neither sets a precedent.
 
 **`Requirements overview`, arc42 1.1.** The functions the toolkit delivers, then the capabilities they act on, one line each.
 
@@ -75,6 +75,16 @@ Change the order when something outside this file changes what matters:
 - A party earns a row when it should know the architecture, has to be convinced of it, works with the architecture or the code, needs the documentation for its work, or decides about the system. Those are arc42's five criteria, and a party that is not a person can meet them.
 - Expectations cover the architecture and its documentation, which is what arc42 tip 1-20 asks for.
 - Name no `FR` and no `QR`. A run of IDs costs every reader legibility, and it pays only a completeness check, which is a different artifact.
+
+**`Architecture constraints`, arc42 2.** The limits every decision works inside, in two tables: technical, then organizational.
+
+- A row is a noun phrase that names the limit, and a consequence that says what the toolkit therefore does.
+- Name a limit, and never a capability. A reader finds a constraint by the word that removes freedom.
+- A limit earns a row when it bounds a decision this map describes. One that binds Pipefy, a contributor, or a deployer stays off the map and lives where it is set, in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) or [`TERMS.md`](../../TERMS.md).
+- A cell reads on its own. Use no term the map leaves undefined, and take no referent from the neighboring cell.
+- Name the applications a limit applies to, in the words `Vocabulary` fixes. A contributor on one application reads that column and stops.
+- Ask whether we could remove the limit today. If we could, it is not a constraint but a gap, and `Known gaps` records it with the fix as its artifact.
+- An owner goes under the table, never in a cell.
 
 **`Quality requirements`, arc42 10.** Three tables of `QR` rows, split by stimulus: normal use, a serious failure, and a change to the system or to what it depends on. Those are arc42's three scenario categories, in tip 1-12.
 

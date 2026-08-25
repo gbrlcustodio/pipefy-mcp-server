@@ -38,15 +38,24 @@ def supports_elicitation(ctx: Context) -> bool:
 
     The third case is the one an embedder controls, and it is the flag the
     hosted wrapper sets (``pipefy_remote_mcp.asgi`` passes
-    ``json_response=True`` so a POST answers as plain JSON rather than SSE). A
-    deployment that keeps that flag has no elicitation at any revision, so
-    ``create_card`` and ``fill_card_phase_fields`` always take their
-    no-elicitation path there and callers must pass ``fields`` explicitly.
+    ``json_response=True`` so a POST answers as plain JSON rather than SSE).
+    ``wire_hosted_observability`` defaults the flag to ``False`` and the serving
+    path leaves it there, so a deployment built from this repository keeps its
+    back channel and another embedder decides for itself. A deployment that
+    keeps that flag has no elicitation at any revision, so ``create_card`` and
+    ``fill_card_phase_fields`` always take their no-elicitation path there and
+    callers must pass ``fields`` explicitly.
 
     A session object that does not expose ``can_send_request`` (an older SDK, a
     hand-built test double) is treated as able to send, and the
     ``NoBackChannelError`` handling at the elicitation call sites covers that
     case.
+
+    Revision 2026-07-28 replaces this mechanism rather than removing it: a
+    resolved parameter carries the question and the negotiated revision decides
+    the transport, so a new tool declares a resolver instead of calling this.
+    ``docs/contributing/adr/0003-mcp-tools-express-outcomes.md`` holds that
+    decision.
 
     Args:
         ctx: MCP request context for the active call.

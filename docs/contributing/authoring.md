@@ -84,7 +84,7 @@ Change the order when something outside this file changes what matters:
 - A cell reads on its own. Use no term the map leaves undefined, and take no referent from the neighboring cell.
 - Name the applications a limit applies to, in the words `Vocabulary` fixes. A contributor on one application reads that column and stops.
 - Ask whether we could remove the limit today. If we could, it is not a constraint but a gap, and `Known gaps` records it with the fix as its artifact.
-- An owner goes under the table, never in a cell.
+- A link that points at an owner goes under the table, never in a cell. See [Point at the owner of a fact](#point-at-the-owner-of-a-fact).
 
 **`Quality requirements`, arc42 10.** Three tables of `QR` rows, split by stimulus: normal use, a serious failure, and a change to the system or to what it depends on. Those are arc42's three scenario categories, in tip 1-12.
 

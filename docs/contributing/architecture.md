@@ -268,7 +268,7 @@ Each row carries the dimensions of the quality it instantiates, and [`quality.ar
 | `QR-3` | `#usable` `#operable` | When no human is present, a run never waits for an answer, and it either goes ahead with what it has or fails |
 | `QR-4` | `#secure` | A request acts as the person who sent it, and never as anyone else |
 | `QR-5` | `#efficient` | A request finishes without the model making a chain of tool calls to get there |
-| `QR-6` | `#safe` `#reliable` | A destructive operation names what it affects, and it waits for an explicit yes |
+| `QR-6` | `#safe` `#reliable` | What a destructive operation will destroy can be learned without running it |
 | `QR-7` | `#usable` `#reliable` `#suitable` | A name that fits more than one resource never quietly picks one, and the caller gets the matches instead |
 | `QR-9` | `#usable` `#reliable` `#suitable` | A model sees only the tools the consumer's work needs |
 | `QR-10` | `#efficient` | A tool keeps its answer short, and a caller who needs more asks for more |
@@ -280,6 +280,7 @@ Each row carries the dimensions of the quality it instantiates, and [`quality.ar
 | `QR-22` | `#usable` `#operable` | A tool that is missing something it needs asks for it, rather than failing |
 | `QR-23` | `#usable` `#efficient` | A tool's description says briefly what the tool does, and it never teaches how to use it |
 | `QR-24` | `#secure` | A credential the toolkit stores is usable only by whoever it was issued to |
+| `QR-25` | `#safe` `#flexible` | A consumer is stopped for approval only where they chose to be stopped |
 
 **Failure.** A demand that a caller holds when a call cannot complete, or a component it needs fails.
 

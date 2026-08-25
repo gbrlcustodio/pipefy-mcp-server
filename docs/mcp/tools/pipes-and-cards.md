@@ -74,7 +74,9 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 
 ### Headless / agent clients
 
-When elicitation is unavailable, `create_card` and `fill_card_phase_fields` still work but behave differently. That covers agents, CLIs, and SDK consumers, and also **the hosted server**, which serves `json_response=True` and so has no server-to-client back channel at any protocol revision. It covers every client on protocol revision **2026-07-28** as well, which carries no server-to-client channel on any transport, stdio included:
+`create_card` and `fill_card_phase_fields` ask for missing field values when they can. Three things stop them: the client declares no elicitation capability, the caller passes `skip_elicitation=true`, or the connection carries no server-initiated request, which is how these tools ask today. They therefore never ask on protocol revision **2026-07-28**, whatever the transport, or on a deployment that answers a POST as plain JSON rather than SSE, which **the hosted server** does. A deployment you run yourself keeps SSE, so these tools ask there.
+
+When they cannot ask, both tools still work:
 
 1. The tool fetches the start-form or phase field definitions internally.
 2. Provided `fields` are **filtered to editable field IDs only** — keys that do not match an editable field are silently discarded (no error).

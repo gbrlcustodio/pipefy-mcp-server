@@ -42,7 +42,7 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 Useful when you want to wire the server without editing `~/.claude.json` by hand.
 
-**Hosted MCP (HTTP)** — zero local Python; OAuth in Claude Code. Prefer this when you do not need the full local tool surface. Do not also install the Claude Code plugin’s local `pipefy` server under the same name. Canonical snippet: [root README — Hosted MCP](../../README.md#1-hosted-mcp-claude-code).
+**Hosted MCP (HTTP)** — zero local Python; OAuth in Claude Code. Prefer this when you do not need the full local tool surface. Do not also install the Claude Code plugin under the same server name. Canonical snippet: [root README — Hosted MCP](../../README.md#1-hosted-mcp-claude-code).
 
 **Local stdio** — runs `uvx pipefy-mcp-server` on the machine:
 
@@ -63,22 +63,7 @@ claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET <YOUR_CLIENT_SECR
 
 ### Claude Code: settings edit (post-plugin install)
 
-The plugin's `.mcp.json` ships `command` + `args` only. To set the `env` block, edit the `pipefy` server entry in `~/.claude.json` (or the Claude Code settings UI):
-
-```json
-{
-  "mcpServers": {
-    "pipefy": {
-      "env": {
-        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
-        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
-      }
-    }
-  }
-}
-```
-
-A live MCP server picks up rotated credentials on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes.
+The plugin's `.mcp.json` is the hosted URL (`https://mcp.pipefy.com/mcp`) with in-client OAuth — the same file the Cursor plugin points at. Do not also register a local stdio `pipefy` server under the same name. To run local stdio instead, uninstall the plugin (or disable its server) and use `claude mcp add` in the section above.
 
 ### Local-clone alternative (contributors)
 

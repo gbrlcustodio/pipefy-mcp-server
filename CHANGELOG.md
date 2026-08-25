@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cursor Marketplace plugin**: hosted MCP config is `.mcp.json` only. `.cursor-plugin/plugin.json` points `mcpServers` at `./.mcp.json`, the same file Claude Code auto-discovers.
+- **Cursor plugin listing title**: adding this repo as a GitHub marketplace title-cased the slug `ai-toolkit` to "Ai Toolkit". `.cursor-plugin/marketplace.json` names the marketplace `pipefy`, and the plugin `displayName` is `Pipefy`, matching other company plugins.
+
+### Changed
+
+- **Claude Code plugin MCP**: `.mcp.json` is the hosted `mcp.pipefy.com` server with in-client OAuth, the same file the Cursor plugin points at. Local stdio (`uvx`) remains the Quick-install / `claude mcp add` path.
+
+## [0.5.0-beta.1] - 2026-08-21
+
 ### Added
 
 - **Cursor Marketplace plugin**: `.cursor-plugin/plugin.json` and root `mcp.json` package the skill catalog plus the hosted MCP server (`mcp.pipefy.com`) with in-client OAuth. The Cursor manifest declares `"commands": []` so the Claude Code files in `commands/` are not discovered. Version lockstep and CI packaging lint cover the new manifest. The listing is submitted from `main` after this packaging is released.

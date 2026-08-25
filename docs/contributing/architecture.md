@@ -80,6 +80,7 @@ Every decision on this map works inside these limits. Each row names the limit a
 | Constraint | Applies to | Consequence |
 |---|---|---|
 | Schema as the model's only instruction | MCP | A field name and its description are written for a model to read, so a schema change is a behavior change |
+| No guaranteed answer from the client | MCP | The client's side of a question is optional in the protocol, so every tool needs a path that finishes without an answer |
 | Vendor-owned GraphQL shape | All three | A better entity shape or error shape is a translation we build and maintain, and `QR-2` is what that buys |
 | No keychain in some environments | CLI, MCP | Credential storage carries a file backend as well as the OS keychain |
 
@@ -129,7 +130,7 @@ The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and that 
 
 ## Applications
 
-An application is what a consumer uses. Each one exposes the same domain, and each one matches its consumer.
+An application is what a consumer uses. Each one exposes the same domain, and each one matches its consumer. [Architecture constraints](#architecture-constraints) names which limits each one works inside.
 
 - The SDK is for a programmer. It executes a named operation deterministically and returns a domain value. It is the deterministic execution layer.
 - The CLI is for a human or a script in a shell. It is thin over the SDK. Discovery is a separate command, which is idiomatic in a shell.

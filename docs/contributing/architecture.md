@@ -84,9 +84,11 @@ Every decision on this map works inside these limits. Each row names the limit a
 | Vendor-owned GraphQL shape | All three | A better entity shape or error shape is a translation we build and maintain, and `QR-2` is what that buys |
 | Vendor-owned domain vocabulary | All three | Every capability name comes from the domain model, never from the tool catalog, and `QR-17` is the demand it serves |
 | A tool catalog we do not own | MCP | The iPaaS tools are relayed rather than reshaped, so they are the one place `QR-5` does not apply |
+| No deployment we operate | MCP | Every endpoint and every exposed tool is a setting rather than a source constant, which is `QR-21`, and the unauthenticated profile refuses a non-loopback bind |
+| No assumed operating system | All three | A credential store, a config path, and a file lock each take an OS-specific form |
 | No keychain in some environments | CLI, MCP | Credential storage carries a file backend as well as the OS keychain |
 
-[`docs/ipaas.md`](../ipaas.md) owns the iPaaS flow.
+The hosted wrapper that runs the remote profile is built outside this repository. [`docs/ipaas.md`](../ipaas.md) owns the iPaaS flow, and `install.sh` covers the POSIX platforms alone.
 
 ## Context and scope
 

@@ -90,6 +90,14 @@ Every decision on this map works inside these limits. Each row names the limit a
 
 The hosted wrapper that runs the remote profile is built outside this repository. [`docs/ipaas.md`](../ipaas.md) owns the iPaaS flow, and `install.sh` covers the POSIX platforms alone.
 
+**Organizational.**
+
+| Constraint | Applies to | Consequence |
+|---|---|---|
+| Apache 2.0 for the code and the docs | All three | A dependency carries a compatible license, or it does not land |
+
+[`TERMS.md`](../../TERMS.md) is the notice behind that row, and it is the only limit here that engineering did not set.
+
 ## Context and scope
 
 In domain terms, the toolkit acts on the Pipefy organizations that a caller can access. Every call acts as a member or a service account of one of them. Inside an organization, a pipe holds the definition of a process and a card is one run of that process. A table holds records of the business entities that a process reads, and a record has no lifecycle of its own. Around those, the toolkit reaches portals, reports, members and roles, webhooks, files in storage, and the automations of a pipe. It also reaches the flows of the iPaaS, which run on a separate engine, and [`docs/ipaas.md`](../ipaas.md) defines those terms. The GraphQL schema owns the entity shape.

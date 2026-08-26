@@ -26,6 +26,7 @@
     "./skills/pipes-and-cards/pipefy-pipes-and-cards",
     "./skills/portal-setup/pipefy-portal-setup",
     "./skills/process-design/pipefy-process-design",
+    "./skills/process-impact/pipefy-process-impact",
     "./skills/process-intelligence/pipefy-process-intelligence",
     "./skills/relations/pipefy-relations",
     "./skills/reports/pipefy-reports"

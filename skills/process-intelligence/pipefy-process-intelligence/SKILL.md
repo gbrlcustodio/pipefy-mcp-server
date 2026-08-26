@@ -24,6 +24,7 @@ The user asks to analyze or improve an existing process:
 - "Where are the bottlenecks?"
 
 **Not for:** designing a new process from scratch → use `skills/process-design/`.
+Justifying a change with numbers only (no implementation) → use `skills/process-impact/`.
 
 ---
 
@@ -72,7 +73,7 @@ The user asks to analyze or improve an existing process:
 | Same comment posted repeatedly | AI agent to auto-post based on trigger |
 | No automation between intake and first action | Add "notify assignee" automation on card creation |
 | Large field count on start form | Move optional fields to later phases |
-| Phases with 0 cards over 90 days | Consider removing or merging phases |
+| Phases with 0 cards over 90 days | Merge into a neighboring phase, or replace the hop with an automation or AI agent. Do not treat an empty phase as a reason to delete the pipe. |
 
 ---
 
@@ -111,9 +112,19 @@ Each round focuses on 1–2 improvements; report results before proceeding.
 ### Implemented this round
 - [Change 1]: [tool called + result]
 
+### Impact
+- Minimum step: [automation already done or proposed]
+- Next step (optional): [AI agent / iPaaS extra lift, or "does not close"]
+- Time returned: [formula or qualitative]. Lead time only if this round already has dates.
+
 ### Next round (if approved)
 - [Opportunity]: [proposed action]
 ```
+
+Keep Impact to 1–2 lines unless the user asked for a fuller case — then read
+[pipefy-process-impact](../../process-impact/pipefy-process-impact/SKILL.md).
+Do not recommend deleting a pipe. Do not invent volume, hourly cost, or lead
+time.
 
 ---
 
@@ -125,12 +136,13 @@ Each round focuses on 1–2 improvements; report results before proceeding.
 
 ## Failure modes
 
-- **`get_cards` returns empty:** pipe may have no cards yet — analyze structure only and recommend first card creation.
+- **`get_cards` returns empty:** pipe may have no cards yet — analyze structure only. Recommend standing up intake (start form, portal, or an automation that creates cards) rather than removing the pipe.
 - **`create_automation` fails with unknown event:** use `get_automation_events` to list valid triggers.
 - **User pushes back on automation:** explain what the automation does in plain language before creating.
 
 ## See also
 
+- [pipefy-process-impact](../../process-impact/pipefy-process-impact/SKILL.md) — fuller justification; this skill only emits the Impact blurb per round.
 - `skills/automations/` — detailed automation creation guide.
 - `skills/ai-agents/` — add conversational agents for user-facing automation.
 - `skills/observability/` — check credit and execution data to quantify improvement impact.

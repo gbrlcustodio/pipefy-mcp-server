@@ -102,8 +102,14 @@ Phases: [list]
 Start form fields: [list with types]
 Key automations: [list]
 Related processes: [list or "none"]
+Impact: [1–2 lines — time this design returns to the team vs a fully manual
+run of the same flow. If a phase exists only as human triage, say what an
+automation vs an AI agent would change. Do not start a pipe diagnosis.]
 Next step: [execute with pipes-and-cards skill? or more questions?]
 ```
+
+Do not invent volume, hourly cost, or lead time. If the user wants a fuller
+justification, read [pipefy-process-impact](../../process-impact/pipefy-process-impact/SKILL.md).
 
 ---
 
@@ -116,6 +122,7 @@ Next step: [execute with pipes-and-cards skill? or more questions?]
 ## See also
 
 - [pipefy-building](../../building/pipefy-building/SKILL.md) — for execution / build asks, read the router then the domain skill (do not expand this consulting skill into a build playbook).
+- [pipefy-process-impact](../../process-impact/pipefy-process-impact/SKILL.md) — justify a material change; this skill only emits the 1–2 line impact blurb.
 - `skills/pipes-and-cards/` — execute the design once finalized.
 - `skills/automations/` — add automation rules to the new pipe.
 - `skills/process-intelligence/` — analyze an existing process for improvement (distinct from designing new).

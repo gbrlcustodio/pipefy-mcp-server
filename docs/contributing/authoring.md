@@ -36,12 +36,16 @@ A code example names no shipped symbol. A symbol in an example rots on the next 
 
 ## Authoring a section of `architecture.md`
 
-[`architecture.md`](architecture.md) fills part of the [arc42 template](https://docs.arc42.org). Where a rule below is arc42's, it says so. The rest are ours. Two rules cover every section:
+[`architecture.md`](architecture.md) fills part of the [arc42 template](https://docs.arc42.org). Where a rule below is arc42's, it says so. The rest are ours. These rules cover every heading:
 
 - A section that arc42 numbers takes arc42's position and arc42's name.
-- A section we have nothing to say about stays absent, and never empty.
+- Every heading sits under a numbered one. A `##` heading takes arc42's name, and a `###` heading under it is ours to name.
+- A section whose content another owner holds is a pointer to that owner, and never a copy. `Architecture decisions` at arc42 9 points at [`adr/`](adr/README.md).
+- A section that nothing owns yet stays absent, and `Known gaps` names it as the target. Arc42 6 and arc42 7 stay absent today.
 
-Two headings still carry an earlier name: `Known gaps` at arc42 11, and `Vocabulary` at arc42 12. Each one is a rename this review has not run yet, so neither sets a precedent.
+A subsection that names a part of the system goes under arc42 5, and one that states a rule that holds whichever part you are in goes under arc42 8. Arc42 asks for practices, patterns, and regulations at 8, and it never asks that a concept reach every part, so a rule that one application alone obeys still belongs there.
+
+`Known gaps` at arc42 11 and `Vocabulary` at arc42 12 still carry an earlier name. Each one is a rename this review has not run yet, so neither sets a precedent.
 
 **`Requirements overview`, arc42 1.1.** The functions the toolkit delivers, then the capabilities they act on, one line each.
 

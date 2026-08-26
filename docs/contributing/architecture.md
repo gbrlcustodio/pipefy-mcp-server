@@ -140,8 +140,6 @@ The legend:
 - An arrow that crosses the boundary names the concept, and not the class that implements it. The port names are in [Ports and dependency inversion](#ports-and-dependency-inversion).
 - The `transport` setting decides whether an MCP client arrives over stdio or over HTTP. What each caller does about a credential is in [Identity lifetime](#identity-lifetime).
 
-The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, and [Known gaps](#known-gaps) carries that.
-
 ## Applications
 
 An application is what a consumer uses. Each one exposes the same domain, and each one matches its consumer. [Architecture constraints](#architecture-constraints) names which limits each one works inside.
@@ -178,9 +176,42 @@ The machinery is this large because the catalog is. The tool names copy the API 
 
 ## Package decomposition
 
-Three applications and two shared libraries. The graph is in the diagram above. The MCP server and the CLI never depend on each other, and a shared library never depends on an application. That is the reason for the split.
+Three applications and two shared libraries. The MCP server and the CLI never depend on each other, and a shared library never depends on an application. That is the reason for the split.
 
-The diagram draws what each package declares. Each package also carries its own ruff `TID251` ban list, with one message per banned package. That list holds the edges that must never appear, and two rules produce every entry. An import never runs against the direction of the diagram. The MCP server and the CLI also never import each other, or the private modules of the SDK. Each package's own `pyproject.toml` holds its list.
+```mermaid
+flowchart LR
+    subgraph toolkit["AI Toolkit"]
+        direction TB
+        mcp["pipefy-mcp-server (packages/mcp)"]
+        cli["pipefy-cli (packages/cli)"]
+        sdk["pipefy (packages/sdk)"]
+        auth["pipefy-auth (packages/auth)"]
+        infra["pipefy-infra (packages/infra)"]
+
+        mcp --> sdk
+        mcp --> auth
+        mcp --> infra
+        cli --> sdk
+        cli --> auth
+        sdk --> infra
+        auth --> infra
+    end
+
+    sdk --> graphql["Pipefy GraphQL API"]
+    sdk --> storage["File storage"]
+    mcp --> ipaas["iPaaS HTTP API"]
+    auth --> idp["Pipefy identity provider (OIDC)"]
+    auth --> keychain["OS keychain"]
+```
+
+The legend:
+
+- An arrow between two packages is a dependency that the package declares in its own `pyproject.toml`.
+- An arrow that leaves the box carries no label here. [Context and scope](#context-and-scope) says what crosses each one.
+
+The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, and [Known gaps](#known-gaps) carries that.
+
+Each package also carries its own ruff `TID251` ban list, with one message per banned package. That list holds the edges that must never appear, and two rules produce every entry. An import never runs against the direction of the diagram. The MCP server and the CLI also never import each other, or the private modules of the SDK. Each package's own `pyproject.toml` holds its list.
 
 What each package depends on, and why, is in [`dependencies.md`](dependencies.md).
 

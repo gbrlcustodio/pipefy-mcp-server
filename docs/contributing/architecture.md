@@ -162,7 +162,7 @@ Each party then does the part it is placed to do. The MCP server says what a too
 
 Today the server does more than that. A destructive tool returns a preview, and it acts only on a second call that sets `confirm`. The model makes that second call, so the preview informs the model and no person agrees to anything. [Known gaps](#known-gaps) carries the correction.
 
-The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. The per-tool outcome design lives in the MCP docs. `SURF-1` in [`conventions.md`](conventions.md) is the rule that admits a new tool, method, or flag.
+The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. `SURF-1` in [`conventions.md`](conventions.md) admits a new tool, method, or flag, and `TOOL-1` there states the shape one takes. What outcome each shipped tool expresses is in the MCP docs.
 
 ## Tool surface
 

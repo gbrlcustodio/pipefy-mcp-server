@@ -86,6 +86,17 @@ Change the order when something outside this file changes what matters:
 - Ask whether we could remove the limit today. If we could, it is not a constraint but a gap, and `Known gaps` records it with the fix as its target.
 - A link that points at an owner goes under the table, never in a cell. See [Point at the owner of a fact](#point-at-the-owner-of-a-fact).
 
+**`Context and scope`, arc42 3.** The parties the toolkit exchanges data with, in one diagram and one table, under prose that states the domain it all acts on.
+
+- Draw the toolkit as one box, which is what arc42 asks for. Which package reaches a partner is a level-1 fact, so `Package decomposition` draws the same partners again, and arc42 asks that the two stay consistent.
+- Draw every partner. Completeness is arc42's demand here and almost nowhere else in the template. A host resource that holds or carries a credential is a partner, and so is a party that stands between an application and its consumer.
+- A table beside the diagram carries what crosses each boundary and which applications reach it, which arc42 recommends. It exists because no install reaches every partner, so the box alone would overstate each one.
+- An inbound arrow carries the channel a consumer arrives over. An outbound arrow carries no label, because the table holds what crosses it, and the level-1 diagram repeats every partner with no label, so the two pictures cannot come to claim different things.
+- One diagram carries the business context and the technical context, which arc42 allows. Technology appears only where it marks the boundary. A deployment fact that another section owns is a pointer here, and never a second statement.
+- The prose states what the toolkit acts on and who it acts as. It names no capability, because `Requirements overview` owns that list, and it names no endpoint, which is the altitude [Name no vendor behind a capability](#name-no-vendor-behind-a-capability) sets.
+- The legend says what a reader cannot read off the diagram or the table, and it points at the section that owns each fact they leave out.
+- Mark no risk and no quality goal on a partner, though arc42 offers both. `Quality requirements` and `Known gaps` own them, and a second copy on a diagram would drift.
+
 **`Quality requirements`, arc42 10.** Three tables of `QR` rows, split by stimulus: normal use, a serious failure, and a change to the system or to what it depends on. Those are arc42's three scenario categories.
 
 - A permanent ID, such as `QR-7`, under the same rule as a convention ID above.

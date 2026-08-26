@@ -311,6 +311,39 @@ Do not
 
 Why: the tool count tracks user intent, not the wire. A surface member that no user need earns still costs every reader and every caller.
 
+## Tool contracts
+
+**TOOL-1. An MCP tool expresses one user outcome, and it orchestrates the steps in code.**
+
+Do
+
+- Put the sequence in the tool body, so one call finishes the goal.
+- Expose a discovery tool only where the listing is itself what the user wants.
+
+Do not
+
+- Split one goal into atomic tools that the model has to chain.
+- Ship a discovery tool whose only job is to feed an action tool its arguments.
+
+Why: a chain in the model context is slow and unreliable, and the caller pays a round trip per link. A surface that mirrors the API pushes that chain onto every caller.
+
+**TOOL-2. An MCP tool declares its own effect, and it asks for no consent.**
+
+Do
+
+- Declare read-only on a tool that changes nothing, which settles its kind on its own.
+- Declare a write destructive unless every change it makes is additive.
+- Say in a destructive description that the effect is permanent.
+
+Do not
+
+- Withhold execution until a second call approves it.
+- Read a declaration as authorization, which is the API's alone.
+
+Why: the protocol defaults a tool to a destructive write, so a tool that declares nothing misinforms every client that reads the hint. The client owns the policy its consumer set, so a stop inside the server overrides that policy and asks the model rather than the person.
+
+Weighed: elicitation, rejected because a client can auto-accept it, so the prompt proves nothing about a person.
+
 ## Testing at boundaries
 
 **TEST-1. A port's contract suite runs against the real adapter and every fake.**

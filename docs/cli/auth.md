@@ -91,7 +91,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Tier 3 | Service-account client secret. |
 | `PIPEFY_AUTH_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
 | `PIPEFY_DISABLE_STORED_SESSION` | Tier 4 | When `1` / `true`, the stored-session tier is skipped end-to-end: tier resolution never probes the keychain, and `pipefy auth login` / `pipefy auth logout` refuse with exit code 2. Use to avoid the keyring backend-discovery cost on cold start (headless Linux, CI) or to opt out of OS-keychain storage entirely. TOML key: `disable_stored_session`. |
-| `PIPEFY_KEYCHAIN_BACKEND` | Tier 4 | Active `keyring` backend. `auto` (default) uses OS-keyring discovery; `file` swaps to a plaintext on-disk keyring under `~/.config/pipefy/keyring.cfg` (POSIX) / `%APPDATA%/pipefy/keyring.cfg` (Windows). TOML key: `keychain_backend`. |
+| `PIPEFY_KEYCHAIN_BACKEND` | Tier 4 | Active `keyring` backend. `auto` (default) uses OS-keyring discovery; `file` swaps to a plaintext on-disk keyring under `~/.config/pipefy/keyring.cfg` (POSIX) / `%APPDATA%/pipefy/keyring.cfg` (Windows); `encrypted` (macOS/Windows) writes AES-GCM ciphertext to `session.enc` with a create-once OS wrapping key. TOML key: `keychain_backend`. |
 
 The service-account OAuth token URL (Tier 3) and the OIDC issuer URL (Tier 4) are **not** interchangeable: the first is `<base>/oauth/token` for client-credentials, the second is the full OIDC discovery root for the user-login flow.
 
@@ -223,20 +223,19 @@ Every `PIPEFY_*` env var is validated against a semantically meaningful regex at
 
 The login worked but `keyring` couldn't write the entry.
 
-**macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecInvalidOwnerEdit` from Security.framework ("Invalid attempt to change the owner of this item") — not `errSecParam` (`-50`). The `keyring` macOS backend deletes any existing item and re-adds it on every write, so a stale entry created by another Python binary (for example a previous `uvx` cache path, or a login from Terminal.app followed by a write from an IDE/agent host) can surface this error. The root cause is not fully pinned; treat the steps below as remediation, not a proven mechanism.
+**macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecInvalidOwnerEdit` from Security.framework ("Invalid attempt to change the owner of this item") — not `errSecParam` (`-50`). The `keyring` macOS backend deletes any existing item and re-adds it on every write, so a stale entry created by another Python binary (for example a previous `uvx` cache path, or a login from Terminal.app followed by a write from an IDE/agent host) can surface this error. Unsigned `python3.xx` binaries also cannot persist **Always Allow**, so the login-keychain password dialog returns on the next process even after a successful Allow.
 
-1. Clear the entry with `pipefy auth logout`, which removes a stored entry even when that entry can no longer be parsed. If it fails, remove the entry directly with `security delete-generic-password -s pipefy`.
-2. Run `pipefy auth login` again.
-3. Prefer running that login from a regular **Terminal.app** session; if macOS prompts for keychain access, click **Always Allow**.
-4. If the OS keychain remains unusable, set `PIPEFY_KEYCHAIN_BACKEND=file` (plaintext under the Pipefy config directory) or use a static `PIPEFY_TOKEN`.
+1. Set `PIPEFY_KEYCHAIN_BACKEND=encrypted` (TOML: `keychain_backend = "encrypted"`) and run `pipefy auth login` again. The session blob is AES-GCM ciphertext in `~/.config/pipefy/session.enc`; the OS Keychain holds only a create-once wrapping key with an allow-all ACL, so refresh does not re-prompt.
+2. Or clear the entry with `pipefy auth logout`, which removes a stored entry even when that entry can no longer be parsed. If it fails, remove the entry directly with `security delete-generic-password -s pipefy`, then run `pipefy auth login` from a regular **Terminal.app** session and click **Always Allow** if macOS prompts.
+3. If you need a store with no OS involvement, set `PIPEFY_KEYCHAIN_BACKEND=file` (plaintext under the Pipefy config directory) or use a static `PIPEFY_TOKEN`.
 
-Stable installs (`uv tool install` / wheel) keep a stable Python binary path across runs; with `uvx`, a path change after `uvx --refresh` or a uv version bump can recreate a cross-binary ownership mismatch and require clearing the entry again.
+Stable installs (`uv tool install` / wheel) keep a stable Python binary path across runs; with `uvx`, a path change after `uvx --refresh` or a uv version bump can recreate a cross-binary ownership mismatch and require clearing the entry again unless `encrypted` is in use.
 
 **Linux (headless / CI).** Usually no Secret Service daemon — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` for a plaintext file backend under the Pipefy config directory, or use a static `PIPEFY_TOKEN`.
 
-**Windows.** Credential Manager may reject the write (including from non-interactive callers). Run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`.
+**Windows.** Credential Manager may reject the write (including from non-interactive callers, and **WinError 1783** when the UTF-16 session blob exceeds the credential size cap). Set `PIPEFY_KEYCHAIN_BACKEND=encrypted` (DPAPI-wrapped `session.enc`, no blob cap), run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`.
 
-When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the CLI hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
+When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the CLI hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory). When `encrypted` is active the backend reports as `EncryptedFileKeyring` and the same writability hint applies (`session.enc`).
 
 ### `Missing Pipefy authentication. Set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run \`pipefy auth login\`.`
 
@@ -281,12 +280,14 @@ Reactive refresh-on-401 (for tokens revoked mid-session) is a separate slice, tr
 
 #### Opting out of the OS keychain
 
-Two env vars (mirrored as TOML keys) override the default behaviour:
+Three env vars (mirrored as TOML keys) override the default behaviour:
 
 - `PIPEFY_DISABLE_STORED_SESSION=1` skips the keychain entirely. `pipefy auth login` refuses with exit 2, tier resolution never probes the backend, and `pipefy auth status` omits the `stored-session` tier. Use when only `PIPEFY_TOKEN` / `PIPEFY_SERVICE_ACCOUNT_*` matter (CI runners, automation) and the cold-start keyring backend-discovery cost (~30-80 ms on Darwin, more on a Linux box with no Secret Service daemon) is undesirable.
 
 - `PIPEFY_KEYCHAIN_BACKEND=file` swaps the active backend to a plaintext on-disk keyring under `config_dir() / "keyring.cfg"` (`~/.config/pipefy/keyring.cfg` on POSIX, `%APPDATA%/pipefy/keyring.cfg` on Windows). Unblocks headless Linux without Secret Service. **The file is plaintext, not OS-secured**: anyone with read access to the file (including a co-tenant on a shared CI runner) reads the refresh token. Opt-in only.
 
-These are independent: `PIPEFY_DISABLE_STORED_SESSION=1` takes precedence (the file backend is never read or written). `pipefy auth status` will reflect the active backend name regardless (`Keyring`, `PlaintextKeyring`, etc.).
+- `PIPEFY_KEYCHAIN_BACKEND=encrypted` (macOS and Windows; rejected on Linux at settings load with exit 2) writes the session as AES-256-GCM ciphertext to `config_dir() / "session.enc"`. The wrapping key is created once: allow-all ACL generic password `pipefy-wrapping-key` / `aes-256-gcm` on macOS, DPAPI `wrapping.key` on Windows. Token refresh rewrites only the file, so CLI, MCP, and agent-hosted `python3.xx` processes share one store without Keychain ACL prompts. Threat model matches OS DPAPI / allow-all Keychain: any process of the logged-in user can decrypt; a cold disk cannot. Prefer this over `file` on real user machines.
 
-Removing `PIPEFY_KEYCHAIN_BACKEND=file` **moves** the store rather than clearing it: the next login writes to the OS keychain while whatever is already in `keyring.cfg` stays there, still signed in and invisible to a keychain-only sweep. `./uninstall.sh --scan` resolves the effective backend and reads both stores regardless of which one is active — see [`docs/uninstall.md`](../uninstall.md).
+These are independent: `PIPEFY_DISABLE_STORED_SESSION=1` takes precedence (file and encrypted backends are never read or written). `pipefy auth status` will reflect the active backend name regardless (`Keyring`, `PlaintextKeyring`, `EncryptedFileKeyring`, etc.).
+
+Removing `PIPEFY_KEYCHAIN_BACKEND=file` or `encrypted` **moves** the store rather than clearing it: the next login writes to the OS keychain while whatever is already in `keyring.cfg` / `session.enc` stays there, still signed in and invisible to a keychain-only sweep. `./uninstall.sh --scan` resolves the effective backend and reads the OS keychain, `keyring.cfg`, and `session.enc` regardless of which one is active — see [`docs/uninstall.md`](../uninstall.md).

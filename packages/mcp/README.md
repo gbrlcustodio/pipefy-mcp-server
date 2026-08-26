@@ -36,7 +36,7 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 ### macOS keychain `errSecInvalidOwnerEdit (-25244)`
 
-`pipefy auth login` may exit with `errSecInvalidOwnerEdit (-25244)` ("Invalid attempt to change the owner of this item") at the final keychain-write step even though OAuth itself succeeded. Clear the entry with `pipefy auth logout`, which removes a stored entry even when that entry can no longer be parsed; if it fails, remove the entry with `security delete-generic-password -s pipefy`. Then run `pipefy auth login` again from Terminal.app and click **Always Allow** if prompted. If the OS keychain remains unusable, set `PIPEFY_KEYCHAIN_BACKEND=file` or use a static `PIPEFY_TOKEN`. See [`docs/cli/auth.md`](../../docs/cli/auth.md) for the full platform-specific troubleshooting.
+`pipefy auth login` may exit with `errSecInvalidOwnerEdit (-25244)` ("Invalid attempt to change the owner of this item") at the final keychain-write step even though OAuth itself succeeded. Prefer `PIPEFY_KEYCHAIN_BACKEND=encrypted` so the rotating session is not stored as a Keychain item. Otherwise clear the entry with `pipefy auth logout` (or `security delete-generic-password -s pipefy`) and run `pipefy auth login` from Terminal.app, clicking **Always Allow** if prompted. `PIPEFY_KEYCHAIN_BACKEND=file` or a static `PIPEFY_TOKEN` remain the no-OS-keychain escapes. See [`docs/cli/auth.md`](../../docs/cli/auth.md) for the full platform-specific troubleshooting.
 
 ### Claude Code: `claude mcp add` (per-project terminal flow)
 

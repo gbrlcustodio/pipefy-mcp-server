@@ -4,7 +4,7 @@ Shared OAuth + keychain helpers for Pipefy CLI and MCP server.
 
 ## What lives here
 
-- **`storage`** — keychain-backed `StoredSession` (one entry per `(issuer, client_id)` tuple, under the OS keychain service name `pipefy`).
+- **`storage`** — keychain-backed `StoredSession` (one entry per `(issuer, client_id)` tuple, under the OS keychain service name `pipefy`, or under `session.enc` / `keyring.cfg` when a file backend is selected).
 - **`flow`** — OAuth 2.0 Authorization Code with PKCE login flow.
 - **`refresh`** — refresh-token grant + eager pre-use freshness check (`ensure_fresh_session`).
 - **`discovery`** — OIDC `.well-known/openid-configuration` fetch + validation.

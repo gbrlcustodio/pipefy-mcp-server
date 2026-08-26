@@ -108,6 +108,7 @@ The diagram draws the toolkit as one box, with every party it exchanges data wit
 flowchart LR
     toolkit["AI Toolkit"]
 
+    person["Person working through an LLM"] --> client
     client["MCP client"] -- "stdio or HTTP" --> toolkit
     shell["Person or script at a terminal"] -- "a command" --> toolkit
     program["Embedding program"] -- "an import" --> toolkit

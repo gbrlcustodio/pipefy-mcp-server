@@ -102,43 +102,38 @@ The hosted wrapper that runs the remote profile is built outside this repository
 
 In domain terms, the toolkit acts on the Pipefy organizations that a caller can access. Every call acts as a member of one of them. Inside an organization, a pipe holds the definition of a process and a card is one run of that process. A table holds records of the business entities a process uses, and a record has no lifecycle of its own. [Requirements overview](#requirements-overview) names every capability the toolkit reaches around those, and the GraphQL schema owns the entity shape. The flows of the iPaaS are the exception, because they run on a separate engine, and [`docs/ipaas.md`](../ipaas.md) defines those terms.
 
-The diagram draws the boundary in both directions, with the toolkit packages inside it.
+The diagram draws the toolkit as one box, with every party it exchanges data with.
 
 ```mermaid
 flowchart LR
-    client["MCP client"] -- "stdio or HTTP" --> mcp
-    shell["Person or script at a terminal"] --> cli
-    program["Embedding program"] --> sdk
+    toolkit["AI Toolkit"]
 
-    subgraph toolkit["Toolkit packages"]
-        direction TB
-        mcp["pipefy-mcp-server (packages/mcp)"]
-        cli["pipefy-cli (packages/cli)"]
-        sdk["pipefy (packages/sdk)"]
-        auth["pipefy-auth (packages/auth)"]
-        infra["pipefy-infra (packages/infra)"]
+    client["MCP client"] -- "stdio or HTTP" --> toolkit
+    shell["Person or script at a terminal"] -- "a command" --> toolkit
+    program["Embedding program"] -- "an import" --> toolkit
 
-        mcp --> sdk
-        mcp --> auth
-        mcp --> infra
-        cli --> sdk
-        cli --> auth
-        sdk --> infra
-        auth --> infra
-    end
-
-    sdk -- "public, Interfaces, Internal" --> graphql["Pipefy GraphQL API"]
-    sdk -- "attachment upload and download" --> storage["File storage"]
-    mcp --> ipaas["iPaaS HTTP API"]
-    auth -- "credential storage" --> keychain["OS keychain"]
-    auth -- "login and token validation" --> idp["Pipefy identity provider (OIDC)"]
+    toolkit --> graphql["Pipefy GraphQL API"]
+    toolkit --> storage["File storage"]
+    toolkit --> ipaas["iPaaS HTTP API"]
+    toolkit --> idp["Pipefy identity provider (OIDC)"]
+    toolkit --> keychain["OS keychain"]
 ```
+
+No install reaches every partner, so the table says which of the three applications reaches each one.
+
+| Partner | What crosses | Reached by |
+|---|---|---|
+| Pipefy GraphQL API | Every capability in [Requirements overview](#requirements-overview) | All three |
+| File storage | The bytes of an attachment, up and down | All three |
+| iPaaS HTTP API | The flows of a pipe's workspace, and the credential exchange they need | The MCP server |
+| Pipefy identity provider (OIDC) | A login, and the validation of an inbound bearer | The CLI and the MCP server |
+| OS keychain | A stored credential | The CLI and the MCP server |
 
 The legend:
 
-- An arrow between two packages is a dependency that the package declares in its own `pyproject.toml`.
-- An arrow that crosses the boundary names the concept, and not the class that implements it. The port names are in [Ports and dependency inversion](#ports-and-dependency-inversion).
-- The `transport` setting decides whether an MCP client arrives over stdio or over HTTP. What each caller does about a credential is in [Identity lifetime](#identity-lifetime).
+- The table names what crosses as a concept, and never the class that implements it. [Package decomposition](#package-decomposition) draws the same partners on the package whose code performs each crossing.
+- Where a crossing has a port, [Ports and dependency inversion](#ports-and-dependency-inversion) names it, and [Known gaps](#known-gaps) carries every one that has none.
+- Which application each consumer uses is in [Applications](#applications), and what each one does about a credential is in [Identity lifetime](#identity-lifetime). A deployment profile decides which channel the MCP server serves.
 
 ## Applications
 

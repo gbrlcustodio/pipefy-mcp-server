@@ -4,15 +4,9 @@ Material in this tree describes **`pipefy-mcp-server`**: the MCP process, tool b
 
 ## Tool design
 
-An MCP tool expresses one user outcome, not one API endpoint. It orchestrates the underlying steps in code, so the model does not chain calls in its context. Five rules follow:
+An MCP tool expresses one user outcome, not one API endpoint. It orchestrates the underlying steps in code, so the model does not chain calls in its context.
 
-- One outcome tool per user goal. Do not fragment a goal into atomic operations the model must sequence.
-- Arguments are flat and explicit: typed primitives, `Literal` for a closed set, one form per field, no guess-the-shape passthroughs.
-- Responses are shaped and bounded, carrying pagination metadata rather than raw wire envelopes.
-- Errors are typed and actionable. They tell the model what to try next.
-- Write gates are an explicit two-step confirmation: a preview on `confirm=False`, execution on `confirm=True`. They use no elicitation, because a client can auto-accept a prompt. Where a tool lacks an input it needs, [`tools/pipes-and-cards.md`](tools/pipes-and-cards.md) states when it asks and what it does when it cannot.
-
-The reasoning is in the decision record [ADR-0003](../contributing/adr/0003-mcp-tools-express-outcomes.md).
+`TOOL-1` and `TOOL-2` in [`conventions.md`](../contributing/conventions.md) are the rules a tool follows, and the reasoning is in the decision record [ADR-0003](../contributing/adr/0003-mcp-tools-express-outcomes.md).
 
 ## Contents
 

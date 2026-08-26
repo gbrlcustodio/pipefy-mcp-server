@@ -812,8 +812,7 @@ Usage: pipefy auth [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ login    Sign in to Pipefy via your browser and store the session in the OS  │
-│          keychain.                                                           │
+│ login    Sign in via the browser and persist the session.                    │
 │ status   Print which auth source is active, the authenticated identity, and  │
 │          session expiry.                                                     │
 │ logout   Clear the local session, revoking the refresh token when it can be  │
@@ -823,7 +822,10 @@ Usage: pipefy auth [OPTIONS] COMMAND [ARGS]...
 ### HELP auth/login
 Usage: pipefy auth login [OPTIONS]
 
- Sign in to Pipefy via your browser and store the session in the OS keychain.
+ Sign in via the browser and persist the session.
+
+ OS keychain is the default store; PIPEFY_KEYCHAIN_BACKEND=file or encrypted
+ select other stores. See docs/cli/auth.md.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --no-browser                                    Print the authorization URL  │

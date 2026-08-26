@@ -280,6 +280,44 @@ class TestAuthLogoutCommand:
         assert "Could not delete local session from the keychain" in result.stderr
         assert "Keychain is locked" in result.stderr
 
+    def test_encrypted_delete_failure_names_session_enc(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        from pipefy_auth.encrypted_file_keyring import install_encrypted_file_keyring
+        from pipefy_auth.wrapping_key import InMemoryWrappingKey
+
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(saved_cwd))
+        original = keyring.get_keyring()
+        install_encrypted_file_keyring(
+            wrapping_key=InMemoryWrappingKey(),
+            file_path=saved_cwd / "pipefy" / "session.enc",
+        )
+        monkeypatch.setattr(
+            "pipefy_cli.main.configure_keychain_backend", lambda _choice: None
+        )
+        _store_test_session()
+
+        def _ok_revoke(**_kwargs: object) -> None:
+            return None
+
+        def _delete_boom(*, issuer: str, client_id: str) -> bool:
+            raise storage.SessionDeleteError("disk full")
+
+        monkeypatch.setattr(auth_module, "revoke_session", _ok_revoke)
+        monkeypatch.setattr(auth_module, "delete_session", _delete_boom)
+        try:
+            result = runner.invoke(cli_app, ["auth", "logout"])
+        finally:
+            keyring.set_keyring(original)
+        assert result.exit_code == 1
+        assert "session.enc" in result.stderr
+        assert "service: 'pipefy'" not in result.stderr
+
     def test_end_session_unsupported_warns_and_deletes(
         self,
         runner,

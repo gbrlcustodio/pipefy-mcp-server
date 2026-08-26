@@ -32,7 +32,13 @@ from pipefy_auth import (
     session_entry_presence,
     store_session,
 )
+from pipefy_auth.keychain_choice import (
+    SESSION_ENC_FILENAME,
+    WRAPPING_KEY_FILENAME,
+    WRAPPING_KEYCHAIN_SERVICE,
+)
 from pipefy_auth.settings import _LEGACY_ENV_KEYS_TO_NEW
+from pipefy_infra.config import config_dir
 from pipefy_sdk import MePayload, PipefyGraphQLError, PipefySettings
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
@@ -48,6 +54,26 @@ from pipefy_cli.commands._common import settings_and_auth_from_ctx
 from pipefy_cli.output import render_json
 
 AuthSessionState = Literal["active", "refresh-expired", "needs-login", "n/a"]
+
+
+def _manual_session_cleanup_hint() -> str:
+    """Tell the operator which artifact to remove when logout cannot delete."""
+    backend = keychain_backend_name()
+    if backend == "encrypted":
+        enc = config_dir() / SESSION_ENC_FILENAME
+        wrap = config_dir() / WRAPPING_KEY_FILENAME
+        return (
+            f"remove {enc} (leftover wrapping: {wrap} on Windows, Keychain "
+            f"service {WRAPPING_KEYCHAIN_SERVICE!r} on macOS). "
+            f"See {DOCS_CLI_AUTH_REF}."
+        )
+    if backend == "file":
+        cfg = config_dir() / "keyring.cfg"
+        return f"remove {cfg}. See {DOCS_CLI_AUTH_REF}."
+    return (
+        "remove it manually via your OS keychain (service: 'pipefy'). "
+        f"See {DOCS_CLI_AUTH_REF}."
+    )
 
 
 @dataclass
@@ -129,7 +155,11 @@ def auth_login(
         min=5.0,
     ),
 ) -> None:
-    """Sign in to Pipefy via your browser and store the session in the OS keychain."""
+    """Sign in via the browser and persist the session.
+
+    OS keychain is the default store; PIPEFY_KEYCHAIN_BACKEND=file or encrypted
+    select other stores. See docs/cli/auth.md.
+    """
     # Lazy to keep keyring's ~30-80ms backend-discovery cost off every CLI startup.
     from keyring.errors import KeyringError
 
@@ -522,8 +552,8 @@ def auth_logout(ctx: typer.Context) -> None:
             typer.echo(revoke_warning, err=True)
         typer.echo(
             f"Could not delete local session from the keychain: {exc}. "
-            "The stored credential may still be present; remove it manually "
-            f"via your OS keychain (service: 'pipefy'). See {DOCS_CLI_AUTH_REF}.",
+            f"The stored credential may still be present; "
+            f"{_manual_session_cleanup_hint()}",
             err=True,
         )
         raise typer.Exit(1) from exc
@@ -541,8 +571,7 @@ def auth_logout(ctx: typer.Context) -> None:
         typer.echo(
             "Could not read the keychain to check for a stored session "
             f"({issuer}), and no entry was removed. A credential may still be "
-            "present; check for it manually via your OS keychain (service: "
-            f"'pipefy'). See {DOCS_CLI_AUTH_REF}.",
+            f"present; {_manual_session_cleanup_hint()}",
             err=True,
         )
         raise typer.Exit(1)

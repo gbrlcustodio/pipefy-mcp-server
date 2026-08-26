@@ -828,7 +828,7 @@ class TestAuthLoginCommand:
         monkeypatch.setattr(
             auth_module,
             "keychain_backend_name",
-            lambda: "PlaintextKeyring",
+            lambda: "file",
         )
 
         def _boom(**_kwargs: object) -> None:
@@ -838,8 +838,6 @@ class TestAuthLoginCommand:
 
         result = cli_runner.invoke(cli_app, ["auth", "login"])
         assert result.exit_code == 1
-        assert (
-            "could not be stored in your keychain (PlaintextKeyring)" in result.stderr
-        )
+        assert "could not be stored in your keychain (file)" in result.stderr
         assert "config directory is writable" in result.stderr
         assert "Secret Service" not in result.stderr

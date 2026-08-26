@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal, Self
 
 from pipefy_auth import AuthSettings, JwtValidationSettings
+from pipefy_auth.responses import _format_validation_error
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
 from pipefy_sdk import PipefySettings
@@ -539,10 +540,32 @@ def resolve_mcp_settings(
     try:
         return Settings(mcp=McpSettings(**init))
     except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+        raise ValueError(_format_validation_error(exc)) from exc
 
 
-settings = Settings()
+_settings: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """Return the process-wide :class:`Settings` singleton.
+
+    Construction is deferred so importing this module (and ``pipefy_mcp.main``)
+    does not instantiate settings before argparse handles ``--help``.
+    """
+    global _settings
+    if _settings is None:
+        try:
+            _settings = Settings()
+        except ValidationError as exc:
+            raise ValueError(_format_validation_error(exc)) from exc
+    return _settings
+
+
+def __getattr__(name: str) -> Any:
+    if name == "settings":
+        return get_settings()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "AuthSettings",
@@ -552,6 +575,6 @@ __all__ = [
     "PipefySettings",
     "ResourceServerSettings",
     "Settings",
+    "get_settings",
     "resolve_mcp_settings",
-    "settings",
 ]

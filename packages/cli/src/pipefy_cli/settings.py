@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from pipefy_auth import AuthSettings
+from pipefy_auth.responses import _format_validation_error
 from pipefy_sdk import PipefySettings
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -60,7 +61,7 @@ def resolve_cli_settings(
             auth=AuthSettings(**auth_init),
         )
     except ValidationError as exc:
-        raise ValueError(str(exc)) from exc
+        raise ValueError(_format_validation_error(exc)) from exc
 
 
 __all__ = ["CliSettings", "resolve_cli_settings"]

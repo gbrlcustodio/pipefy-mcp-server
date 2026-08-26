@@ -33,7 +33,7 @@ from pipefy_cli.commands import _auth_keychain_hints as hints
                 "PIPEFY_TOKEN",
                 "docs/cli/auth.md",
             ],
-            ["Terminal.app", "Credential Manager"],
+            ["Terminal.app", "Credential Manager", "PIPEFY_KEYCHAIN_BACKEND=encrypted"],
         ),
         (
             "Windows",
@@ -74,10 +74,20 @@ def test_plaintext_backend_hint_ignores_platform(
     assert "docs/cli/auth.md" in hint
 
 
-def test_encrypted_backend_hint_ignores_platform(
+def test_encrypted_backend_hint_names_wrapping_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    hint = hints.keychain_store_failure_hint(backend="encrypted")
+    assert "config directory is writable" in hint
+    assert "pipefy-wrapping-key" in hint
+    assert "wrapping.key" in hint
+    assert "errSecInvalidOwnerEdit" not in hint
+
+
+def test_encrypted_class_name_backend_uses_encrypted_hint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(platform, "system", lambda: "Darwin")
     hint = hints.keychain_store_failure_hint(backend="EncryptedFileKeyring")
-    assert "config directory is writable" in hint
-    assert "errSecInvalidOwnerEdit" not in hint
+    assert "pipefy-wrapping-key" in hint

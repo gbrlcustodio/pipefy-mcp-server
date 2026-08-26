@@ -516,7 +516,9 @@ async def enrich_permission_denied_error(
     if not unique_ids:
         return None
 
-    timeout = _settings_mod.settings.pipefy.permission_denied_enrichment_timeout_seconds
+    timeout = (
+        _settings_mod.get_settings().pipefy.permission_denied_enrichment_timeout_seconds
+    )
     try:
         results = await asyncio.wait_for(
             asyncio.gather(

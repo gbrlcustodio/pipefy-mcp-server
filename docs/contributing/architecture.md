@@ -302,6 +302,10 @@ One rule follows, and it is what `QR-4` requires of any application here. With a
 
 A caller can also carry state between calls, such as a vendor cursor or an export id. The API authorizes that value on each request. A handle that we mint ourselves obeys the same rule.
 
+## Architecture decisions
+
+[`adr/`](adr/README.md) holds the set, one record per decision. This document carries the rule a record produced, and the record keeps the why.
+
 ## Quality requirements
 
 The architecture on this map exists to serve the demands below, so a section above can name what its decision answers, and a review can cite one ID instead of reopening the argument.

@@ -28,6 +28,7 @@ from pydantic import (
     model_validator,
 )
 
+from pipefy_auth.keychain_choice import KeychainBackendChoice
 from pipefy_auth.responses import TokenResponse
 
 _SERVICE = "pipefy"
@@ -35,11 +36,12 @@ _KEYRING_FILENAME = "keyring.cfg"
 _TOKEN_FIELDS: frozenset[str] = frozenset(TokenResponse.model_fields.keys())
 
 
-def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
+def configure_keychain_backend(choice: KeychainBackendChoice) -> None:
     """Apply the requested keyring backend before any session read or write.
 
-    Idempotent: safe to call multiple times; the second ``"file"`` call
-    replaces the previous file backend with one pointing at the same path.
+    Idempotent: safe to call multiple times; a second ``"file"`` or
+    ``"encrypted"`` call replaces the previous backend of that kind with one
+    pointing at the same path.
 
     Args:
         choice: ``"auto"`` is a no-op and preserves ``keyring``'s built-in
@@ -48,8 +50,17 @@ def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
             ``pipefy_infra.config.config_dir() / "keyring.cfg"``; the file stores
             credentials in plaintext on disk and is intended for headless
             Linux or CI runners where the OS keychain is unavailable.
+            ``"encrypted"`` (macOS and Windows) writes AES-GCM ciphertext to
+            ``config_dir() / "session.enc"`` and keeps a create-once wrapping
+            key in the OS (Keychain allow-all ACL on Darwin, DPAPI on
+            Windows) so token refresh does not re-prompt unsigned Pythons.
     """
     if choice == "auto":
+        return
+    if choice == "encrypted":
+        from pipefy_auth.encrypted_file_keyring import install_encrypted_file_keyring
+
+        install_encrypted_file_keyring()
         return
     import keyring
     from keyrings.alt.file import PlaintextKeyring

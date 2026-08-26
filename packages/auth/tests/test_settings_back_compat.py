@@ -226,7 +226,7 @@ def test_keychain_backend_defaults_to_auto():
 def test_keychain_backend_rejects_unknown_value(
     monkeypatch: pytest.MonkeyPatch, bad: str
 ):
-    """Only ``auto`` and ``file`` are valid; anything else (including empty / whitespace-only) raises."""
+    """Only ``auto``, ``file`` and ``encrypted`` are valid; anything else (including empty / whitespace-only) raises."""
     from pydantic import ValidationError
 
     monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", bad)
@@ -263,3 +263,26 @@ def test_keychain_backend_and_kill_switch_strip_whitespace(
     monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", padded)
     # No raise: bool parser sees the stripped value.
     AuthSettings()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("platform", ["darwin", "win32"])
+def test_encrypted_backend_is_accepted_on_macos_and_windows(
+    monkeypatch: pytest.MonkeyPatch, platform: str
+):
+    monkeypatch.setattr("pipefy_auth.settings.sys.platform", platform)
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", " Encrypted ")
+    assert AuthSettings().keychain_backend == "encrypted"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("platform", ["linux", "freebsd"])
+def test_encrypted_backend_is_rejected_off_macos_and_windows(
+    monkeypatch: pytest.MonkeyPatch, platform: str
+):
+    from pydantic import ValidationError
+
+    monkeypatch.setattr("pipefy_auth.settings.sys.platform", platform)
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", "encrypted")
+    with pytest.raises(ValidationError, match="only supported on macOS and Windows"):
+        AuthSettings()

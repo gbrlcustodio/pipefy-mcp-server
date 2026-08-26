@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -11,17 +12,21 @@ _SKILL_MD = _REPO / _SKILL_DIR / "SKILL.md"
 _PLUGIN = _REPO / ".cursor-plugin" / "plugin.json"
 _HOOKS = (
     _REPO / "skills" / "process-design" / "pipefy-process-design" / "SKILL.md",
-    _REPO / "skills" / "process-intelligence" / "pipefy-process-intelligence" / "SKILL.md",
+    _REPO
+    / "skills"
+    / "process-intelligence"
+    / "pipefy-process-intelligence"
+    / "SKILL.md",
     _REPO / "skills" / "building" / "pipefy-building" / "SKILL.md",
     _REPO / "skills" / "README.md",
 )
 
-_HEADCOUNT_CUT_LANGUAGE = (
+_HEADCOUNT_SUBSTRINGS = (
     "headcount",
     "layoff",
-    "fte",
     "upsell",
 )
+_FTE_TOKEN = re.compile(r"\bfte\b")
 
 
 def test_frontmatter_name_matches_directory():
@@ -43,5 +48,10 @@ def test_design_intelligence_building_and_catalog_route_to_process_impact():
 
 def test_public_skill_avoids_headcount_cut_language():
     lowered = _SKILL_MD.read_text(encoding="utf-8").casefold()
-    for needle in _HEADCOUNT_CUT_LANGUAGE:
+    for needle in _HEADCOUNT_SUBSTRINGS:
         assert needle not in lowered, needle
+    assert _FTE_TOKEN.search(lowered) is None
+    assert "fte" in "after"
+    assert _FTE_TOKEN.search("after the impact case") is None
+    assert _FTE_TOKEN.search(" fte ") is not None
+    assert _FTE_TOKEN.search(" FTE ".casefold()) is not None

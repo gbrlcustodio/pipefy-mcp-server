@@ -2,18 +2,22 @@
 name: pipefy-process-impact
 description: >
   Use this skill when the user asks whether a process change is worth it,
-  wants impact / ROI / a short internal justification, or when
-  process-design / process-intelligence just proposed a material change.
-  Quantify time returned to the team from Pipefy data already in context;
-  do not start a pipe diagnosis unless the user asks. Do not use this skill
-  to implement changes (that is process-intelligence plus domain skills).
+  wants impact / ROI / a short internal justification, or wants more than
+  the 1-2 line impact blurb already emitted by process-design or
+  process-intelligence. Quantify time returned to the team from Pipefy
+  data already in context. Start a pipe diagnosis only if the user asked
+  to measure this pipe, or process-intelligence is already running (reuse
+  round 1 only). Do not implement from this skill; if intelligence is
+  already implementing, continue there.
 tags: [pipefy, process-impact, impact, automation]
 ---
 
 # Process impact
 
 Quantify the impact of a process change already under discussion. **Use
-context you already have. Do not open a diagnosis unless the user asks.**
+context you already have. Open a diagnosis only if the user asked to
+measure this pipe, or process-intelligence is already running (reuse
+round 1 only).**
 
 This skill does not create pipes, automations, or AI agents. Point to the
 domain skill when the user wants the change built.
@@ -42,7 +46,7 @@ Pick the cheapest mode that answers the question:
 
 | Mode | When | Extra MCP calls |
 |------|------|-----------------|
-| **Impact line** | Default. Design and intelligence already emit this. | None |
+| **Impact line** | Default. Design and intelligence already emit a 1–2 line blurb. | None |
 | **Impact case** | User asked to justify or go deeper on numbers. | None — use conversation context plus stated assumptions |
 | **Diagnosis** | User asked to measure *this pipe*, or intelligence is already running | Reuse [pipefy-process-intelligence](../../process-intelligence/pipefy-process-intelligence/SKILL.md) round 1. Do not duplicate that investigation here. |
 
@@ -55,7 +59,8 @@ Pick the cheapest mode that answers the question:
 
 - A proposed or existing change in view (phase, automation, AI agent, iPaaS,
   or a new process design).
-- Optional: `pipe_id` if the user asked for a diagnosis.
+- Optional: `pipe_id` if the user asked for a diagnosis; `pipe.uuid` when
+  listing agents.
 
 ---
 
@@ -72,6 +77,10 @@ call them for an impact line or impact case):
 | `get_ai_agents` | `pipefy agent list` | Yes |
 | `search_pipes` | `pipefy pipe list` | Yes |
 
+`get_ai_agents` / `pipefy agent list --repo` take the pipe **UUID**. If
+diagnosis runs, follow process-intelligence: `get_pipe` then
+`get_ai_agents repo_uuid=<pipe.uuid>`.
+
 Usage and credit totals, if the user already wants them in the case, live in
 [pipefy-observability](../../observability/pipefy-observability/SKILL.md).
 Treat credit spend as the cost of capacity the process already produces — not
@@ -83,8 +92,8 @@ as a line to cut.
 
 | Axis | Without a diagnosis | With intelligence round 1 | Ask the user |
 |------|---------------------|---------------------------|--------------|
-| Time people spend operating the pipe | Count visible manual hops (phase with no automation, human triage) | Volume from a card sample; which phases have automations or AI agents | Minutes per hop; weekly volume if no sample |
-| Lead time (card created → done) | Do not invent a number | Proxy: cards waiting in a phase (`phases[].cards_count` on `get_pipe`). True cycle needs dates the default card tools do not return | "How long does a case take today, end to end?" |
+| Time people spend operating the pipe | Count visible manual hops (phase with no automation, human triage) | Composition: which hops look manual. A card sample is not weekly volume. `phases[].cards_count` is live WIP / bottleneck inventory, not duration | Minutes per hop; weekly volume (`cases_per_week`) unless a dated throughput source is already in context |
+| Lead time (card created → done) | Do not invent a number | Not measured unless dates are already in this round's context | "How long does a case take today, end to end?" |
 | Cost / capacity | Hours returned to the team | Same, with measured volume | Hourly cost **optional**. Money only when they give it |
 | Revenue | Omit | Omit unless the user confirms this process sits on the path to revenue (quotes, onboarding, billing) | Ticket, conversion, or that confirmation |
 
@@ -133,8 +142,9 @@ Do not recommend a capability the evidence does not support.
 ## Steps
 
 1. **Choose the mode** — impact line, impact case, or diagnosis (table
-   above). If diagnosis, read process-intelligence and stop duplicating
-   tool calls.
+   above). If diagnosis, reuse intelligence round 1 only; do not start
+   round 2+ from this skill. If the user asked to analyze **and** improve,
+   intelligence owns implementation after they approve a round.
 
 2. **Name the current hop** — what people do in the pipe today for this
    change (manual move, triage, copy-paste, waiting).
@@ -153,7 +163,9 @@ Do not recommend a capability the evidence does not support.
 
 ## Output format
 
-**Impact line** (also used by process-design and process-intelligence):
+**Impact line:** design and intelligence emit their own 1–2 line blurbs
+(see those skills). The paragraph below is this skill's **impact-case**
+default, not the hook blurb.
 
 ```
 Impact: [this hop is manual today]. A [automation] avoids ~N actions/week
@@ -170,7 +182,7 @@ if volume is confirmed.
 Current: [what people do in the pipe today]
 Minimum step: [automation] — time returned: [formula]
 Next step (optional): [AI agent / iPaaS] — extra lift: [why, or "does not close"]
-Lead time: [number + source] or [not measured; give today's cycle or diagnose]
+Lead time: [number + source] or [not measured; give today's end-to-end cycle]
 Assumptions: [minutes/hop, volume, hourly cost if any]
 If you want this built: [domain skill]
 ```
@@ -194,14 +206,14 @@ path to revenue.
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
 | User wants a dollar ROI | No hourly cost in context | Ask for it; otherwise stop at hours returned |
-| User wants lead time | Default card tools have no timestamps | Ask for today's cycle, or diagnose and use phase WIP as a proxy |
+| User wants lead time | Default card tools have no timestamps | Ask for today's cycle; omit the number if they do not give one |
 | Quiet / unused pipe | Process never launched | Reactivate or connect; cover hops with automations or AI agents if they fit. Do not delete unless asked |
 | User asks to cut credits or leave Pipefy | Out of scope | Stay on process impact; do not recommend moving work off the pipe |
 
 ## See also
 
 - [pipefy-process-design](../../process-design/pipefy-process-design/SKILL.md) — new process architecture (emits an impact line).
-- [pipefy-process-intelligence](../../process-intelligence/pipefy-process-intelligence/SKILL.md) — diagnose and implement; reuse for Diagnosis mode.
+- [pipefy-process-intelligence](../../process-intelligence/pipefy-process-intelligence/SKILL.md) — diagnose (round 1); reuse for Diagnosis mode. Round 2+ implementation stays on process-intelligence when the user asked to improve — not from this skill.
 - [pipefy-building](../../building/pipefy-building/SKILL.md) — route implementation to a domain skill.
 - [pipefy-automations](../../automations/pipefy-automations/SKILL.md) — minimum-step automations.
 - [pipefy-ai-agents](../../ai-agents/pipefy-ai-agents/SKILL.md) — next-step AI agents.

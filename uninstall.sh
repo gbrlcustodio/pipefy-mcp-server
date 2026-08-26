@@ -1873,7 +1873,7 @@ scan_keychain_backend() {
         detail "writes to the OS keychain instead, while anything already in keyring.cfg"
         detail "or session.enc stays there, still signed in and invisible to a keychain-only sweep."
     fi
-    detail "both stores are checked below, whichever one is effective"
+    detail "the OS keychain, keyring.cfg, session.enc, and wrapping artifacts are checked below, whichever store is effective"
 }
 
 keychain_has_entry() {
@@ -1986,7 +1986,7 @@ EOF
         fi
     fi
     if security find-generic-password -s "$KEYCHAIN_WRAPPING_SERVICE" >/dev/null 2>&1; then
-        finding "keychain: wrapping key service $KEYCHAIN_WRAPPING_SERVICE"
+        finding "keychain: wrapping key service $KEYCHAIN_WRAPPING_SERVICE, account $KEYCHAIN_WRAPPING_ACCOUNT"
         plan_add 2 credential keychain "$KEYCHAIN_WRAPPING_ACCOUNT" "$KEYCHAIN_WRAPPING_SERVICE" - - - - - \
             "delete the keychain wrapping key $KEYCHAIN_WRAPPING_SERVICE / $KEYCHAIN_WRAPPING_ACCOUNT"
     else

@@ -76,7 +76,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 **Authentication** (for the local paths; the hosted server uses its own in-client OAuth):
 
-- **Human OAuth (interactive):** `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Pipe access is whatever the signed-in user already has.
+- **Human OAuth (interactive):** `pipefy auth login` runs the browser flow and stores a session in the OS keychain by default (`PIPEFY_KEYCHAIN_BACKEND=file` or `encrypted` select other stores). Pipe access is whatever the signed-in user already has.
 - **Service account (unattended / CI):** provision one in [Pipefy Admin](https://app.pipefy.com/) (Admin → Service Accounts), add it to every pipe the tools should touch, and set `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` / `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`.
 
 Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
@@ -128,7 +128,7 @@ uvx --from pipefy-cli pipefy --help        # ad-hoc, no install
 
 uv tool install pipefy-cli                 # permanent install
 pipefy --install-completion bash           # or zsh, fish
-pipefy auth login                          # browser OAuth, session in OS keychain
+pipefy auth login                          # browser OAuth; OS keychain by default (file/encrypted optional)
 ```
 
 CLI deep-dives (auth precedence, `--token` / `PIPEFY_TOKEN`, parity matrix): [`packages/cli/README.md`](packages/cli/README.md) and [`docs/cli/`](docs/cli/README.md).

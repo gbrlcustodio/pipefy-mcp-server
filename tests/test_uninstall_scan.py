@@ -922,6 +922,51 @@ def test_macos_keychain_absent_is_reported_without_dumping(tmp_path):
     assert "dump-keychain" not in log.read_text(encoding="utf-8")
 
 
+def test_macos_wrapping_key_present_is_planned_with_canonical_identity(tmp_path):
+    from pipefy_auth.keychain_choice import (
+        WRAPPING_KEYCHAIN_ACCOUNT,
+        WRAPPING_KEYCHAIN_SERVICE,
+    )
+
+    home = _home(tmp_path)
+    log = tmp_path / "security.log"
+    stub = _stub_path(
+        tmp_path,
+        os_name="Darwin",
+        security=(
+            "#!/bin/sh\n"
+            f'printf "%s\\n" "$*" >> "{log}"\n'
+            'svc=""\n'
+            'prev=""\n'
+            'for arg in "$@"; do\n'
+            '    if [ "$prev" = "-s" ]; then svc="$arg"; fi\n'
+            '    prev="$arg"\n'
+            "done\n"
+            'case "$1" in\n'
+            "    find-generic-password)\n"
+            f'        [ "$svc" = "{WRAPPING_KEYCHAIN_SERVICE}" ] && exit 0\n'
+            "        exit 44\n"
+            "        ;;\n"
+            "    dump-keychain) exit 0 ;;\n"
+            "esac\n"
+            "exit 1\n"
+        ),
+    )
+
+    result = _run(home, stub)
+
+    assert result.returncode == 1
+    assert (
+        f"keychain: wrapping key service {WRAPPING_KEYCHAIN_SERVICE}, "
+        f"account {WRAPPING_KEYCHAIN_ACCOUNT}"
+    ) in result.stdout
+    invocations = log.read_text(encoding="utf-8").split("\n")
+    assert any(
+        WRAPPING_KEYCHAIN_SERVICE in line and line.startswith("find-generic-password")
+        for line in invocations
+    )
+
+
 def test_linux_secret_service_entries_never_leak_the_secret(tmp_path):
     home = _home(tmp_path)
     sentinel = "refresh-token-value"
@@ -1065,7 +1110,7 @@ def test_effective_session_store_from_the_process_environment(tmp_path):
     # The hazard the owner hit: drop the line, the store silently changes.
     assert "the next login" in out and "writes to the OS keychain instead" in out
     assert "still signed in and invisible to a keychain-only sweep" in out
-    assert "both stores are checked below" in out
+    assert "wrapping artifacts are checked below" in out
 
 
 def test_effective_session_store_from_config_toml(tmp_path):

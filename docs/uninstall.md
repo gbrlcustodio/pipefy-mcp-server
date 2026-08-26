@@ -118,7 +118,7 @@ Without a receipt the run is in **heuristic mode**, which is permanent rather th
 
 ## The stored session lives in one of three places
 
-`PIPEFY_KEYCHAIN_BACKEND=file` puts the session in `~/.config/pipefy/keyring.cfg`; `encrypted` puts it in `session.enc` (plus `wrapping.key` on Windows, and a `pipefy-wrapping-key` Keychain item on macOS). Without either override, the session is in the OS keychain. Removing that setting **moves the store** rather than clearing it: the next login writes to the keychain while anything already in `keyring.cfg` / `session.enc` stays there, still signed in and invisible to a keychain-only sweep. The scan resolves and reports the effective backend and checks the OS keychain, `keyring.cfg`, and `session.enc` regardless of which one is active.
+`PIPEFY_KEYCHAIN_BACKEND=file` puts the session in `~/.config/pipefy/keyring.cfg`; `encrypted` puts it in `session.enc` (plus `wrapping.key` on Windows, and a `pipefy-wrapping-key` Keychain item on macOS). Without either override, the session is in the OS keychain. Removing that setting **moves the store** rather than clearing it: the next login writes to the keychain while anything already in `keyring.cfg` / `session.enc` stays there, still signed in and invisible to a keychain-only sweep. The scan resolves and reports the effective backend and checks the OS keychain, `keyring.cfg`, `session.enc`, and wrapping artifacts regardless of which store is active.
 
 ## Never removed, by design
 
@@ -212,6 +212,8 @@ The scan prints this list too, filled in with the names it found:
 | credentials | `pipefy auth logout` |
 | hosted OAuth token | `claude mcp logout <name>` |
 | macOS keychain item | `security delete-generic-password -s pipefy` |
+| macOS wrapping key | `security delete-generic-password -s pipefy-wrapping-key -a aes-256-gcm` |
+| Windows wrapping key | delete `wrapping.key` under the Pipefy config directory |
 
 Use the names the report printed: a registration can be called anything.
 

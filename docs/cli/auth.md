@@ -44,7 +44,7 @@ uv run pipefy auth login
 
 `PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Export non-prod values only when targeting a non-prod environment.
 
-This opens your browser, completes an OAuth 2.0 Authorization Code + PKCE flow against the Pipefy identity provider, and writes the resulting session (access token + refresh token + minimal metadata) into your OS keychain.
+This opens your browser, completes an OAuth 2.0 Authorization Code + PKCE flow against the Pipefy identity provider, and writes the resulting session (access token + refresh token + minimal metadata) into the active session store (OS keychain by default; `PIPEFY_KEYCHAIN_BACKEND=file` or `encrypted` select other stores).
 
 After login, every other `pipefy <cmd>` invocation transparently reuses that session and refreshes the access token on demand.
 
@@ -109,7 +109,7 @@ The service-account OAuth token URL (Tier 3) and the OIDC issuer URL (Tier 4) ar
 
 | Command | Status | Notes |
 |---------|--------|-------|
-| `pipefy auth login` | Available | Browser-based PKCE login; persists the session in the OS keychain. |
+| `pipefy auth login` | Available | Browser-based PKCE login; persists the session (OS keychain by default; `file` / `encrypted` backends optional). |
 | `pipefy auth status` | Available | Print which auth source is active, identity, and session expiry. |
 | `pipefy auth logout` | Available | Revoke the refresh token at the IdP and clear the stored session. |
 
@@ -166,7 +166,7 @@ Whether there is anything to clear is decided by the **presence** of a keychain 
 - **Revocation network / non-2xx failure** — stderr `Could not revoke refresh token at the IdP: <reason>. Clearing local session anyway; the refresh token may remain valid at the server until natural expiry.`
 - **IdP doesn't advertise `end_session_endpoint`** — stderr `Pipefy auth server does not advertise a logout endpoint; the refresh token could not be revoked server-side. Clearing local session only.` (OIDC Discovery 1.0 makes the field optional; Keycloak ships it.)
 - **Entry present but unreadable** — revocation needs a readable refresh token, so the entry is delete-only: stdout `Removed an unreadable Pipefy session entry (<issuer>).` and stderr `The stored session entry could not be read, so its refresh token could not be revoked at the IdP; that token remains valid at the server until natural expiry.` Nothing was revoked server-side, so the unrevoked refresh token stays usable at the IdP until it expires on its own.
-- **Keychain read failed and nothing was deleted** — presence could not be established, so the command claims neither removal nor a clean machine: stderr `Could not read the keychain to check for a stored session (<issuer>), and no entry was removed. A credential may still be present; check for it manually via your OS keychain (service: 'pipefy').` and exit 1.
+- **Keychain read failed and nothing was deleted** — presence could not be established, so the command claims neither removal nor a clean machine: stderr names the active store (`session.enc` for `encrypted`, `keyring.cfg` for `file`, or OS keychain service `pipefy`) and exit 1.
 
 When no entry is stored, `pipefy auth logout` prints `Not signed in. Nothing to do.` and exits 0 — idempotent, matching `gh auth logout` and similar CLIs.
 
@@ -233,9 +233,9 @@ Stable installs (`uv tool install` / wheel) keep a stable Python binary path acr
 
 **Linux (headless / CI).** Usually no Secret Service daemon — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` for a plaintext file backend under the Pipefy config directory, or use a static `PIPEFY_TOKEN`.
 
-**Windows.** Credential Manager may reject the write (including from non-interactive callers, and **WinError 1783** when the UTF-16 session blob exceeds the credential size cap). Set `PIPEFY_KEYCHAIN_BACKEND=encrypted` (DPAPI-wrapped `session.enc`, no blob cap), run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`.
+**Windows.** Credential Manager may reject the write (including from non-interactive callers, and **WinError 1783** when the UTF-16 session blob exceeds the credential size cap). Set `PIPEFY_KEYCHAIN_BACKEND=encrypted` (AES-GCM `session.enc` plus DPAPI `wrapping.key`, no blob cap), run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`.
 
-When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the CLI hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory). When `encrypted` is active the backend reports as `EncryptedFileKeyring` and the same writability hint applies (`session.enc`).
+When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `file` and the CLI hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory). When `encrypted` is active the backend reports as `encrypted` and the hint also names the create-once wrapping key (`pipefy-wrapping-key` on macOS, `wrapping.key` on Windows).
 
 ### `Missing Pipefy authentication. Set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run \`pipefy auth login\`.`
 
@@ -264,7 +264,7 @@ The browser came back with a different `state` than the CLI sent. Re-run `pipefy
 3. Bind a loopback socket on `127.0.0.1:<ephemeral>` **before** opening the browser (so no other process can grab the port mid-flight).
 4. Open the browser at the authorization URL with `code_challenge_method=S256` and scopes `openid profile email offline_access` (the last one is what makes the IdP issue a refresh token).
 5. The IdP redirects back to the loopback callback with `?code=...&state=...`.
-6. The CLI verifies `state`, POSTs the code + PKCE verifier to the token endpoint, and persists the response in the OS keychain.
+6. The CLI verifies `state`, POSTs the code + PKCE verifier to the token endpoint, and persists the response in the active session store.
 
 The stored shape is keyed by `(issuer_host, client_id)` — one active session per (IdP, client) pair, per machine. Re-running `pipefy auth login` against the same issuer replaces the previous entry.
 
@@ -276,11 +276,11 @@ Reactive refresh-on-401 (for tokens revoked mid-session) is a separate slice, tr
 
 ### Keychain backends
 
-`keyring` selects an OS backend automatically: macOS Keychain on Darwin, Credential Manager on Windows, Secret Service (gnome-keyring / kwallet) on Linux. `pipefy auth login` prints the resolved backend name on success so you can confirm where the entry landed; `pipefy auth status` reports it as `Keychain: <BackendName>`.
+`keyring` selects an OS backend automatically: macOS Keychain on Darwin, Credential Manager on Windows, Secret Service (gnome-keyring / kwallet) on Linux. `pipefy auth login` prints the resolved backend token on success (`encrypted`, `file`, or the OS class name) so you can confirm where the entry landed; `pipefy auth status` reports it as `Keychain: <token>`.
 
 #### Opting out of the OS keychain
 
-Three env vars (mirrored as TOML keys) override the default behaviour:
+Two env vars (mirrored as TOML keys) with three `PIPEFY_KEYCHAIN_BACKEND` values override the default behaviour:
 
 - `PIPEFY_DISABLE_STORED_SESSION=1` skips the keychain entirely. `pipefy auth login` refuses with exit 2, tier resolution never probes the backend, and `pipefy auth status` omits the `stored-session` tier. Use when only `PIPEFY_TOKEN` / `PIPEFY_SERVICE_ACCOUNT_*` matter (CI runners, automation) and the cold-start keyring backend-discovery cost (~30-80 ms on Darwin, more on a Linux box with no Secret Service daemon) is undesirable.
 
@@ -288,6 +288,6 @@ Three env vars (mirrored as TOML keys) override the default behaviour:
 
 - `PIPEFY_KEYCHAIN_BACKEND=encrypted` (macOS and Windows; rejected on Linux at settings load with exit 2) writes the session as AES-256-GCM ciphertext to `config_dir() / "session.enc"`. The wrapping key is created once: allow-all ACL generic password `pipefy-wrapping-key` / `aes-256-gcm` on macOS, DPAPI `wrapping.key` on Windows. Token refresh rewrites only the file, so CLI, MCP, and agent-hosted `python3.xx` processes share one store without Keychain ACL prompts. Threat model matches OS DPAPI / allow-all Keychain: any process of the logged-in user can decrypt; a cold disk cannot. Prefer this over `file` on real user machines.
 
-These are independent: `PIPEFY_DISABLE_STORED_SESSION=1` takes precedence (file and encrypted backends are never read or written). `pipefy auth status` will reflect the active backend name regardless (`Keyring`, `PlaintextKeyring`, `EncryptedFileKeyring`, etc.).
+These are independent: `PIPEFY_DISABLE_STORED_SESSION=1` takes precedence (file and encrypted backends are never read or written). `pipefy auth status` will reflect the active backend token regardless (`encrypted`, `file`, or an OS class name such as `Keyring`).
 
-Removing `PIPEFY_KEYCHAIN_BACKEND=file` or `encrypted` **moves** the store rather than clearing it: the next login writes to the OS keychain while whatever is already in `keyring.cfg` / `session.enc` stays there, still signed in and invisible to a keychain-only sweep. `./uninstall.sh --scan` resolves the effective backend and reads the OS keychain, `keyring.cfg`, and `session.enc` regardless of which one is active — see [`docs/uninstall.md`](../uninstall.md).
+Removing `PIPEFY_KEYCHAIN_BACKEND=file` or `encrypted` **moves** the store rather than clearing it: the next login writes to the OS keychain while whatever is already in `keyring.cfg` / `session.enc` stays there, still signed in and invisible to a keychain-only sweep. `./uninstall.sh --scan` resolves the effective backend and reads the OS keychain, `keyring.cfg`, `session.enc`, and wrapping artifacts (`wrapping.key`, macOS `pipefy-wrapping-key`) regardless of which store is active — see [`docs/uninstall.md`](../uninstall.md).

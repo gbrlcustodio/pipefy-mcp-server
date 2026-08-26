@@ -25,7 +25,7 @@ skills/
 The copyable starter lives at [`.github/skill-template/pipefy-skill-template/`](../.github/skill-template/pipefy-skill-template/), outside this catalog.
 
 **Domain folders** match the MCP tool surface:
-`pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ipaas`, `ai-agents`, `observability`, `members-email-webhooks`, `portal-setup`, `attachments`, `introspection`, `building`, `process-design`, `process-intelligence`, `api-troubleshoot`, `onboarding`
+`pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ipaas`, `ai-agents`, `observability`, `members-email-webhooks`, `portal-setup`, `attachments`, `introspection`, `building`, `process-design`, `process-impact`, `process-intelligence`, `api-troubleshoot`, `onboarding`
 
 Regulated domains (`legal`, `human-resources`, `finance`, `compliance`, or any skill involving decisions about natural persons) require substantive Legal review and a filled `COMPLIANCE.md` (start from [`docs/compliance/COMPLIANCE.template.md`](../docs/compliance/COMPLIANCE.template.md)). See [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 

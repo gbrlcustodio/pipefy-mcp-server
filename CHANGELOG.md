@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Skills (`pipefy-process-impact`)**: consulting playbook for whether a process change is worth it. Uses Pipefy context already in the conversation; a pipe diagnosis runs only when asked (or when `pipefy-process-intelligence` is already in flight). Process-design and process-intelligence emit a 1–2 line impact blurb on material changes.
+
 ### Fixed
 
 - **Cursor Marketplace plugin**: hosted MCP config is `.mcp.json` only. `.cursor-plugin/plugin.json` points `mcpServers` at `./.mcp.json`, the same file Claude Code auto-discovers.

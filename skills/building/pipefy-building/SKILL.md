@@ -24,6 +24,7 @@ If the user already has a building skill or a detailed build prompt/spec, use th
 | User intent (examples) | Read |
 |------------------------|------|
 | Design / architecture / "help me structure this process" | [pipefy-process-design](../../process-design/pipefy-process-design/SKILL.md) (consulting only) |
+| Impact / ROI / "is this change worth it?" / justify internally | [pipefy-process-impact](../../process-impact/pipefy-process-impact/SKILL.md) (consulting; do not implement from there) |
 | Pipes, phases, fields, labels, cards, field conditions | [pipefy-pipes-and-cards](../../pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) |
 | Traditional or AI automations (if/then, prompt-driven rules) | [pipefy-automations](../../automations/pipefy-automations/SKILL.md) |
 | Conversational AI agents and behaviors | [pipefy-ai-agents](../../ai-agents/pipefy-ai-agents/SKILL.md) |
@@ -47,4 +48,5 @@ Hard stops and quirks (phase connections UI-only, email template create/edit UI-
 ## See also
 
 - [pipefy-process-design](../../process-design/pipefy-process-design/SKILL.md) — consulting when the ask is design, not build.
+- [pipefy-process-impact](../../process-impact/pipefy-process-impact/SKILL.md) — consulting when the ask is impact / ROI / justification, not build.
 - [skills/README.md](../../README.md) — full catalog.

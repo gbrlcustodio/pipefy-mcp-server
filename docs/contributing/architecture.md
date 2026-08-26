@@ -117,6 +117,7 @@ flowchart LR
     toolkit --> storage["File storage"]
     toolkit --> ipaas["iPaaS HTTP API"]
     toolkit --> idp["Pipefy identity provider (OIDC)"]
+    toolkit --> browser["System web browser"]
     toolkit --> keychain["OS keychain"]
     toolkit --> files["Local filesystem"]
 ```
@@ -129,6 +130,7 @@ No install reaches every partner, so the table says which of the three applicati
 | File storage | The bytes of an attachment, up and down | All three |
 | iPaaS HTTP API | The flows of a pipe's workspace, and the credential exchange they need | The MCP server |
 | Pipefy identity provider (OIDC) | A login, and the validation of an inbound bearer | The CLI and the MCP server |
+| System web browser | A login handed off, and the authorization code that comes back | The CLI |
 | OS keychain | A stored credential | The CLI and the MCP server |
 | Local filesystem | A config file, a stored credential, and the bytes of a local file | All three |
 
@@ -199,6 +201,7 @@ flowchart LR
     sdk --> storage["File storage"]
     mcp --> ipaas["iPaaS HTTP API"]
     auth --> idp["Pipefy identity provider (OIDC)"]
+    auth --> browser["System web browser"]
     auth --> keychain["OS keychain"]
     auth --> files["Local filesystem"]
     infra --> files

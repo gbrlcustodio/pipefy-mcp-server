@@ -23,7 +23,12 @@ from ctypes import (
 )
 from pathlib import Path
 
+from pipefy_auth.atomic_replace import replace_file_atomically
 from pipefy_auth.keychain_choice import WRAPPING_KEY_BYTES
+from pipefy_auth.wrapping_key import (
+    create_once_file_wrapping_key,
+    require_persisted_wrapping_key,
+)
 
 _CRYPTPROTECT_UI_FORBIDDEN = 0x01
 
@@ -103,13 +108,6 @@ def dpapi_unprotect(ciphertext: bytes) -> bytes:
     return _copy_out(outgoing)
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_bytes(data)
-    tmp.replace(path)
-
-
 class WindowsDpapiWrappingKey:
     """32-byte AES key, DPAPI-encrypted beside the session file."""
 
@@ -117,19 +115,25 @@ class WindowsDpapiWrappingKey:
         self._path = path
         self._cached: bytes | None = None
 
-    def load_or_create(self) -> bytes:
+    def load(self) -> bytes | None:
         if self._cached is not None:
             return self._cached
-        if self._path.exists():
-            key = dpapi_unprotect(self._path.read_bytes())
-            if len(key) != WRAPPING_KEY_BYTES:
-                raise OSError(
-                    f"DPAPI wrapping key at {self._path} has {len(key)} bytes, "
-                    f"expected {WRAPPING_KEY_BYTES}"
-                )
-            self._cached = key
-            return key
-        key = os.urandom(WRAPPING_KEY_BYTES)
-        _atomic_write(self._path, dpapi_protect(key))
-        self._cached = key
-        return key
+        if not self._path.exists():
+            return None
+        self._cached = require_persisted_wrapping_key(
+            dpapi_unprotect(self._path.read_bytes()),
+            location=str(self._path),
+        )
+        return self._cached
+
+    def load_or_create(self) -> bytes:
+        self._cached = create_once_file_wrapping_key(
+            cached=self._cached,
+            path=self._path,
+            read_unprotected=lambda: dpapi_unprotect(self._path.read_bytes()),
+            write_protected=lambda minted: replace_file_atomically(
+                self._path, dpapi_protect(minted)
+            ),
+            mint=lambda: os.urandom(WRAPPING_KEY_BYTES),
+        )
+        return self._cached

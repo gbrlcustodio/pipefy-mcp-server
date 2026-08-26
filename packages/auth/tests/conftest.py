@@ -20,6 +20,11 @@ def _isolate_refresh_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
         "pipefy_auth.refresh.refresh_lock_path",
         lambda: tmp_path / "refresh.lock",
     )
+    import pipefy_auth.storage as storage
+
+    storage._PRIOR_SESSION_KEYRING = None
+    yield
+    storage._PRIOR_SESSION_KEYRING = None
 
 
 class InMemoryKeyring(keyring.backend.KeyringBackend):

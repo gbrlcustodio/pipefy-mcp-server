@@ -18,6 +18,7 @@ from pipefy_auth.keychain_choice import (
     WRAPPING_KEYCHAIN_ACCOUNT,
     WRAPPING_KEYCHAIN_SERVICE,
 )
+from pipefy_auth.wrapping_key import require_persisted_wrapping_key
 
 _ERR_SUCCESS = 0
 _ERR_ITEM_NOT_FOUND = -25300
@@ -172,20 +173,30 @@ class DarwinKeychainWrappingKey:
     def __init__(self) -> None:
         self._cached: bytes | None = None
 
-    def load_or_create(self) -> bytes:
+    def load(self) -> bytes | None:
         if self._cached is not None:
             return self._cached
         existing = _copy_wrapping_key()
+        if existing is None:
+            return None
+        if len(existing) != WRAPPING_KEY_BYTES:
+            raise OSError(
+                f"Keychain wrapping key for service {WRAPPING_KEYCHAIN_SERVICE!r} "
+                f"has {len(existing)} bytes, expected {WRAPPING_KEY_BYTES}"
+            )
+        self._cached = existing
+        return existing
+
+    def load_or_create(self) -> bytes:
+        existing = self.load()
         if existing is not None:
-            if len(existing) != WRAPPING_KEY_BYTES:
-                raise OSError(
-                    f"Keychain wrapping key for service {WRAPPING_KEYCHAIN_SERVICE!r} "
-                    f"has {len(existing)} bytes, expected {WRAPPING_KEY_BYTES}"
-                )
-            self._cached = existing
             return existing
-        key = os.urandom(WRAPPING_KEY_BYTES)
-        _add_wrapping_key(key)
-        again = _copy_wrapping_key()
-        self._cached = again if again is not None else key
+        _add_wrapping_key(os.urandom(WRAPPING_KEY_BYTES))
+        self._cached = require_persisted_wrapping_key(
+            _copy_wrapping_key(),
+            location=(
+                f"Keychain service {WRAPPING_KEYCHAIN_SERVICE!r} "
+                f"account {WRAPPING_KEYCHAIN_ACCOUNT!r}"
+            ),
+        )
         return self._cached

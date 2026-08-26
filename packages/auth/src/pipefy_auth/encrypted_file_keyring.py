@@ -1,8 +1,8 @@
 """AES-GCM file keyring: rotating session blob stays off the OS keychain.
 
-macOS Keychain / Windows Credential Manager hold only the create-once wrapping
-key (see ``wrapping_key``). Every ``set_password`` (login and token refresh)
-rewrites ``session.enc`` under ``config_dir()``.
+macOS Keychain holds the create-once wrapping key; Windows stores that key
+DPAPI-encrypted as ``wrapping.key``. Every ``set_password`` (login and token
+refresh) rewrites AES-GCM ``session.enc`` under ``config_dir()``.
 """
 
 from __future__ import annotations
@@ -20,7 +20,9 @@ from keyring.compat import properties
 from keyring.errors import KeyringError, PasswordDeleteError
 from pipefy_infra.config import config_dir
 
+from pipefy_auth.atomic_replace import replace_file_atomically
 from pipefy_auth.keychain_choice import SESSION_ENC_FILENAME, WRAPPING_KEY_BYTES
+from pipefy_auth.locks import RefreshLockTimeout, file_lock
 from pipefy_auth.wrapping_key import WrappingKeyStore, wrapping_key_store_for_platform
 
 _MAGIC = b"PFY1"
@@ -67,15 +69,29 @@ def unseal_session_blob(blob: bytes, key: bytes) -> bytes:
         ) from exc
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_bytes(data)
-    if os.name != "nt":
-        tmp.chmod(0o600)
-    tmp.replace(path)
-    if os.name != "nt":
-        path.chmod(0o600)
+def parse_session_entries(loaded: object, *, path: object) -> dict[str, dict[str, str]]:
+    """Parse the JSON map stored in ``session.enc``.
+
+    Args:
+        loaded: Decoded JSON root.
+        path: Path used in error messages.
+    """
+    if not isinstance(loaded, dict):
+        raise KeyringError(
+            f"encrypted session file {path} JSON root is "
+            f"{type(loaded).__name__}, expected object"
+        )
+    parsed: dict[str, dict[str, str]] = {}
+    for service, bucket in loaded.items():
+        if not isinstance(bucket, dict):
+            raise KeyringError(
+                f"encrypted session file {path} service {service!r} is "
+                f"{type(bucket).__name__}, expected object"
+            )
+        parsed[str(service)] = {
+            str(user): str(secret) for user, secret in bucket.items()
+        }
+    return parsed
 
 
 class EncryptedFileKeyring(KeyringBackend):
@@ -100,17 +116,33 @@ class EncryptedFileKeyring(KeyringBackend):
         return entries.get(service, {}).get(username)
 
     def set_password(self, service: str, username: str, password: str) -> None:
-        entries = self._load_entries() or {}
-        bucket = entries.setdefault(service, {})
-        bucket[username] = password
-        self._dump_entries(entries)
+        try:
+            with file_lock(self._path.with_name(self._path.name + ".lock")):
+                entries = self._entries_for_write()
+                bucket = entries.setdefault(service, {})
+                bucket[username] = password
+                self._dump_entries(entries)
+        except RefreshLockTimeout as exc:
+            raise KeyringError(
+                f"could not lock encrypted session file {self._path}: {exc}"
+            ) from exc
 
     def delete_password(self, service: str, username: str) -> None:
+        try:
+            with file_lock(self._path.with_name(self._path.name + ".lock")):
+                self._delete_password_locked(service, username)
+        except RefreshLockTimeout as exc:
+            raise KeyringError(
+                f"could not lock encrypted session file {self._path}: {exc}"
+            ) from exc
+
+    def _delete_password_locked(self, service: str, username: str) -> None:
         entries = self._load_entries() or {}
         bucket = entries.get(service)
         if bucket is None or username not in bucket:
             raise PasswordDeleteError(
-                f"no encrypted session entry for service {service!r} username {username!r}"
+                f"no encrypted session entry for service {service!r} "
+                f"username {username!r}"
             )
         del bucket[username]
         if not bucket:
@@ -124,26 +156,47 @@ class EncryptedFileKeyring(KeyringBackend):
         if not self._path.exists():
             return None
         try:
-            plaintext = unseal_session_blob(
-                self._path.read_bytes(), self._wrapping_key.load_or_create()
-            )
-            loaded: Any = json.loads(plaintext.decode("utf-8"))
+            key = self._wrapping_key.load()
+            if key is None:
+                raise KeyringError(
+                    f"wrapping key is missing while encrypted session file "
+                    f"{self._path} still exists"
+                )
+            return self._unseal_entries(key)
         except (OSError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise KeyringError(
                 f"could not read encrypted session file {self._path}: {exc}"
             ) from exc
-        if not isinstance(loaded, dict):
-            raise KeyringError(
-                f"encrypted session file {self._path} JSON root is "
-                f"{type(loaded).__name__}, expected object"
-            )
-        return loaded
+
+    def _entries_for_write(self) -> dict[str, dict[str, str]]:
+        if not self._path.exists():
+            return {}
+        key = self._wrapping_key.load()
+        if key is None:
+            self._path.unlink()
+            return {}
+        try:
+            return self._unseal_entries(key)
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            KeyringError,
+        ):
+            return {}
+
+    def _unseal_entries(self, key: bytes) -> dict[str, dict[str, str]]:
+        loaded: Any = json.loads(
+            unseal_session_blob(self._path.read_bytes(), key).decode("utf-8")
+        )
+        return parse_session_entries(loaded, path=self._path)
 
     def _dump_entries(self, entries: dict[str, dict[str, str]]) -> None:
         plaintext = json.dumps(entries, ensure_ascii=False).encode("utf-8")
         blob = seal_session_blob(plaintext, self._wrapping_key.load_or_create())
         try:
-            _atomic_write(self._path, blob)
+            replace_file_atomically(self._path, blob)
         except OSError as exc:
             raise KeyringError(
                 f"could not write encrypted session file {self._path}: {exc}"

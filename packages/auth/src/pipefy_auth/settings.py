@@ -61,6 +61,11 @@ DEFAULT_BASE_URL = "https://app.pipefy.com"
 # blank values. Anything in between is opaque to us (the IdP defines the format).
 _OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 
+_KEYCHAIN_BACKEND_ALIASES: dict[str, KeychainBackendChoice] = {
+    "encryptedfilekeyring": "encrypted",
+    "plaintextkeyring": "file",
+}
+
 # Legacy ``PIPEFY_OAUTH_*`` env vars still resolve to the new
 # ``PIPEFY_SERVICE_ACCOUNT_*`` fields. The mapping is exported for
 # diagnostics (e.g. CLI's ``pipefy auth status`` lists which legacy keys
@@ -202,7 +207,8 @@ class AuthSettings(BaseSettings):
         # error. Case is meaningful for credential fields (kept strict via
         # ``_strip_str``), so the lowering applies only here.
         if isinstance(value, str):
-            return value.strip().lower()
+            normalized = value.strip().lower()
+            return _KEYCHAIN_BACKEND_ALIASES.get(normalized, normalized)
         return value
 
     # ``AliasChoices`` lists ONLY fully-prefixed env-var names. Unprefixed

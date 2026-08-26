@@ -19,6 +19,8 @@ from pipefy_auth.responses import TokenResponse
 from pipefy_auth.storage import (
     StoredSession,
     configure_keychain_backend,
+    delete_session,
+    keychain_backend_name,
     keychain_key,
     load_session,
     session_entry_presence,
@@ -291,3 +293,75 @@ def test_stored_session_forbids_unknown_outer_fields() -> None:
                 "unexpected": "x",
             }
         )
+
+
+@pytest.mark.unit
+def test_encrypted_backend_name_is_the_choice_token(
+    _isolated_keyring: None,
+    config_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pipefy_auth.wrapping_key import InMemoryWrappingKey
+
+    monkeypatch.setattr(
+        "pipefy_auth.encrypted_file_keyring.wrapping_key_store_for_platform",
+        lambda config_dir: InMemoryWrappingKey(),
+    )
+    configure_keychain_backend("encrypted")
+    assert keychain_backend_name() == "encrypted"
+
+
+@pytest.mark.unit
+def test_file_backend_name_is_the_choice_token(
+    _isolated_keyring: None,
+    config_home: Path,
+) -> None:
+    configure_keychain_backend("file")
+    assert keychain_backend_name() == "file"
+
+
+@pytest.mark.unit
+def test_encrypted_store_session_sweeps_prior_os_item(
+    _isolated_keyring: None,
+    config_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pipefy_auth.wrapping_key import InMemoryWrappingKey
+
+    prior = InMemoryKeyring()
+    keyring.set_keyring(prior)
+    username = keychain_key(_ISSUER, _CLIENT_ID)
+    prior.set_password(_SERVICE, username, "old-os-blob")
+    monkeypatch.setattr(
+        "pipefy_auth.encrypted_file_keyring.wrapping_key_store_for_platform",
+        lambda config_dir: InMemoryWrappingKey(),
+    )
+    configure_keychain_backend("encrypted")
+    store_session(issuer=_ISSUER, client_id=_CLIENT_ID, token=_token())
+    assert prior.get_password(_SERVICE, username) is None
+    loaded = load_session(issuer=_ISSUER, client_id=_CLIENT_ID)
+    assert loaded is not None
+    assert loaded.token.access_token == "AT"
+
+
+@pytest.mark.unit
+def test_encrypted_delete_session_sweeps_prior_os_item(
+    _isolated_keyring: None,
+    config_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pipefy_auth.wrapping_key import InMemoryWrappingKey
+
+    prior = InMemoryKeyring()
+    keyring.set_keyring(prior)
+    username = keychain_key(_ISSUER, _CLIENT_ID)
+    monkeypatch.setattr(
+        "pipefy_auth.encrypted_file_keyring.wrapping_key_store_for_platform",
+        lambda config_dir: InMemoryWrappingKey(),
+    )
+    configure_keychain_backend("encrypted")
+    store_session(issuer=_ISSUER, client_id=_CLIENT_ID, token=_token())
+    prior.set_password(_SERVICE, username, "leftover")
+    assert delete_session(issuer=_ISSUER, client_id=_CLIENT_ID) is True
+    assert prior.get_password(_SERVICE, username) is None
+    assert load_session(issuer=_ISSUER, client_id=_CLIENT_ID) is None

@@ -33,6 +33,11 @@ from pipefy_auth.responses import TokenResponse
 
 _SERVICE = "pipefy"
 _KEYRING_FILENAME = "keyring.cfg"
+_PRIOR_SESSION_KEYRING: Any = None
+_BACKEND_CHOICE_BY_CLASS: dict[str, str] = {
+    "EncryptedFileKeyring": "encrypted",
+    "PlaintextKeyring": "file",
+}
 _TOKEN_FIELDS: frozenset[str] = frozenset(TokenResponse.model_fields.keys())
 
 
@@ -55,13 +60,23 @@ def configure_keychain_backend(choice: KeychainBackendChoice) -> None:
             key in the OS (Keychain allow-all ACL on Darwin, DPAPI on
             Windows) so token refresh does not re-prompt unsigned Pythons.
     """
+    global _PRIOR_SESSION_KEYRING
     if choice == "auto":
         return
     if choice == "encrypted":
-        from pipefy_auth.encrypted_file_keyring import install_encrypted_file_keyring
+        import keyring
 
+        from pipefy_auth.encrypted_file_keyring import (
+            EncryptedFileKeyring,
+            install_encrypted_file_keyring,
+        )
+
+        current = keyring.get_keyring()
+        if not isinstance(current, EncryptedFileKeyring):
+            _PRIOR_SESSION_KEYRING = current
         install_encrypted_file_keyring()
         return
+    _PRIOR_SESSION_KEYRING = None
     import keyring
     from keyrings.alt.file import PlaintextKeyring
     from pipefy_infra.config import config_dir
@@ -163,9 +178,9 @@ def store_session(
         obtained_at=int(time.time()),
         token=token,
     )
-    keyring.set_password(
-        _SERVICE, keychain_key(issuer, client_id), session.model_dump_json()
-    )
+    username = keychain_key(issuer, client_id)
+    keyring.set_password(_SERVICE, username, session.model_dump_json())
+    _sweep_prior_os_session(username)
     return session
 
 
@@ -233,17 +248,24 @@ def delete_session(*, issuer: str, client_id: str) -> bool:
     import keyring
     from keyring.errors import KeyringError, PasswordDeleteError
 
+    username = keychain_key(issuer, client_id)
     try:
-        keyring.delete_password(_SERVICE, keychain_key(issuer, client_id))
+        keyring.delete_password(_SERVICE, username)
     except PasswordDeleteError:
+        _sweep_prior_os_session(username)
         return False
     except KeyringError as exc:
         raise SessionDeleteError(str(exc)) from exc
+    _sweep_prior_os_session(username)
     return True
 
 
 def keychain_backend_name() -> str:
-    """Short identifier for the active keyring backend (diagnostics)."""
+    """Return the ``PIPEFY_KEYCHAIN_BACKEND`` token for the active keyring.
+
+    File backends map to ``encrypted`` / ``file`` so status and login output
+    can be copied back into the env var. OS backends keep their class name.
+    """
     import keyring
     from keyring.errors import KeyringError
 
@@ -251,7 +273,21 @@ def keychain_backend_name() -> str:
         backend = keyring.get_keyring()
     except KeyringError as exc:
         return f"unavailable ({exc})"
-    return backend.__class__.__name__
+    class_name = backend.__class__.__name__
+    return _BACKEND_CHOICE_BY_CLASS.get(class_name, class_name)
+
+
+def _sweep_prior_os_session(username: str) -> None:
+    """Best-effort delete of a leftover OS-keychain item after encrypted migrate."""
+    prior = _PRIOR_SESSION_KEYRING
+    if prior is None:
+        return
+    from keyring.errors import KeyringError, PasswordDeleteError
+
+    try:
+        prior.delete_password(_SERVICE, username)
+    except (PasswordDeleteError, KeyringError, OSError):
+        return
 
 
 __all__ = [

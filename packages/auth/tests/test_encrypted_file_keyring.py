@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import threading
 from pathlib import Path
 
 import keyring
@@ -78,7 +80,7 @@ def test_encrypted_file_keyring_delete_removes_file_when_empty(tmp_path: Path):
 def test_corrupt_session_file_raises_keyring_error(tmp_path: Path):
     path = tmp_path / SESSION_ENC_FILENAME
     path.write_bytes(b"not-ciphertext")
-    ring = EncryptedFileKeyring(path, InMemoryWrappingKey())
+    ring = EncryptedFileKeyring(path, InMemoryWrappingKey(key=os.urandom(32)))
     with pytest.raises(KeyringError, match="could not read"):
         ring.get_password("pipefy", "acct")
 
@@ -119,3 +121,93 @@ def test_wrapping_key_factory_rejects_linux(monkeypatch: pytest.MonkeyPatch, tmp
     monkeypatch.setattr("pipefy_auth.wrapping_key.sys.platform", "linux")
     with pytest.raises(ValueError, match="only supported on macOS and Windows"):
         wrapping_key_store_for_platform(config_dir=tmp_path)
+
+
+def test_set_password_overwrites_unreadable_session_file(tmp_path: Path):
+    path = tmp_path / SESSION_ENC_FILENAME
+    path.write_bytes(b"not-ciphertext")
+    ring = EncryptedFileKeyring(path, InMemoryWrappingKey())
+    ring.set_password("pipefy", "acct", "recovered")
+    assert ring.get_password("pipefy", "acct") == "recovered"
+
+
+def test_set_password_overwrites_session_sealed_with_a_different_wrapping_key(
+    tmp_path: Path,
+):
+    path = tmp_path / SESSION_ENC_FILENAME
+    EncryptedFileKeyring(path, InMemoryWrappingKey(key=os.urandom(32))).set_password(
+        "pipefy", "acct", "old"
+    )
+    ring = EncryptedFileKeyring(path, InMemoryWrappingKey(key=os.urandom(32)))
+    ring.set_password("pipefy", "acct", "new")
+    assert ring.get_password("pipefy", "acct") == "new"
+
+
+def test_get_password_does_not_mint_wrapping_key_when_session_file_exists(
+    tmp_path: Path,
+):
+    path = tmp_path / SESSION_ENC_FILENAME
+    path.write_bytes(b"not-ciphertext")
+    wrap = InMemoryWrappingKey()
+    ring = EncryptedFileKeyring(path, wrap)
+    with pytest.raises(KeyringError, match="wrapping key is missing"):
+        ring.get_password("pipefy", "acct")
+    assert wrap.load() is None
+
+
+def test_set_password_unlinks_stranded_file_before_minting_wrapping_key(
+    tmp_path: Path,
+):
+    path = tmp_path / SESSION_ENC_FILENAME
+    path.write_bytes(b"not-ciphertext")
+    wrap = InMemoryWrappingKey()
+    ring = EncryptedFileKeyring(path, wrap)
+    ring.set_password("pipefy", "acct", "fresh")
+    assert wrap.load() is not None
+    assert ring.get_password("pipefy", "acct") == "fresh"
+
+
+def test_get_password_rejects_non_dict_service_bucket(tmp_path: Path):
+    wrap = InMemoryWrappingKey()
+    key = wrap.load_or_create()
+    path = tmp_path / SESSION_ENC_FILENAME
+    path.write_bytes(
+        seal_session_blob(json.dumps({"pipefy": ["not-a-map"]}).encode(), key)
+    )
+    ring = EncryptedFileKeyring(path, wrap)
+    with pytest.raises(KeyringError, match="expected object"):
+        ring.get_password("pipefy", "acct")
+
+
+def test_sequential_set_password_keeps_both_usernames(tmp_path: Path):
+    ring = EncryptedFileKeyring(tmp_path / SESSION_ENC_FILENAME, InMemoryWrappingKey())
+    ring.set_password("pipefy", "alice", "secret-a")
+    ring.set_password("pipefy", "bob", "secret-b")
+    assert ring.get_password("pipefy", "alice") == "secret-a"
+    assert ring.get_password("pipefy", "bob") == "secret-b"
+
+
+def test_concurrent_set_password_keeps_both_usernames(tmp_path: Path):
+    ring = EncryptedFileKeyring(tmp_path / SESSION_ENC_FILENAME, InMemoryWrappingKey())
+    barrier = threading.Barrier(2)
+    errors: list[BaseException] = []
+
+    def write(username: str, secret: str) -> None:
+        try:
+            barrier.wait()
+            ring.set_password("pipefy", username, secret)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=write, args=("alice", "secret-a")),
+        threading.Thread(target=write, args=("bob", "secret-b")),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    assert ring.get_password("pipefy", "alice") == "secret-a"
+    assert ring.get_password("pipefy", "bob") == "secret-b"
+    assert not (tmp_path / "session.enc.tmp").exists()

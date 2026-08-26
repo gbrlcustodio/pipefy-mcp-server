@@ -276,6 +276,17 @@ def test_encrypted_backend_is_accepted_on_macos_and_windows(
 
 
 @pytest.mark.unit
+def test_keychain_backend_normalizes_class_name_aliases(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", "EncryptedFileKeyring")
+    monkeypatch.setattr("pipefy_auth.settings.sys.platform", "darwin")
+    assert AuthSettings().keychain_backend == "encrypted"
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", "PlaintextKeyring")
+    assert AuthSettings().keychain_backend == "file"
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("platform", ["linux", "freebsd"])
 def test_encrypted_backend_is_rejected_off_macos_and_windows(
     monkeypatch: pytest.MonkeyPatch, platform: str

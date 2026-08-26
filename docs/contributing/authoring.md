@@ -73,7 +73,7 @@ Change the order when something outside this file changes what matters:
 **`Stakeholders`, arc42 1.3.** A role, a contact, and expectations in prose.
 
 - A party earns a row when it should know the architecture, has to be convinced of it, works with the architecture or the code, needs the documentation for its work, or decides about the system. Those are arc42's five criteria, and a party that is not a person can meet them.
-- Expectations cover the architecture and its documentation, which is what arc42 tip 1-20 asks for.
+- Expectations cover the architecture and its documentation, which is what arc42 asks for.
 - Name no `FR` and no `QR`. A run of IDs costs every reader legibility, and it pays only a completeness check, which is a different artifact.
 
 **`Architecture constraints`, arc42 2.** The limits every decision works inside, in two tables: technical, then organizational.
@@ -86,7 +86,7 @@ Change the order when something outside this file changes what matters:
 - Ask whether we could remove the limit today. If we could, it is not a constraint but a gap, and `Known gaps` records it with the fix as its target.
 - A link that points at an owner goes under the table, never in a cell. See [Point at the owner of a fact](#point-at-the-owner-of-a-fact).
 
-**`Quality requirements`, arc42 10.** Three tables of `QR` rows, split by stimulus: normal use, a serious failure, and a change to the system or to what it depends on. Those are arc42's three scenario categories, in tip 1-12.
+**`Quality requirements`, arc42 10.** Three tables of `QR` rows, split by stimulus: normal use, a serious failure, and a change to the system or to what it depends on. Those are arc42's three scenario categories.
 
 - A permanent ID, such as `QR-7`, under the same rule as a convention ID above.
 - Its dimensions. Find the row's quality in the Q42 catalog at [`quality.arc42.org`](https://quality.arc42.org/), then copy that quality's dimensions. The nine overlap by design, so a row can carry several. Never force a row to one. Arc42 10.1 offers ISO 25010 or Q42, and we take Q42.

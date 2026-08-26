@@ -48,7 +48,7 @@ PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
 
 Three credential sources, in CLI precedence order:
 
-1. **Interactive (`pipefy auth login`)** — browser OAuth flow, session stored in the OS keychain. Best for human developers. Status and revocation via `pipefy auth status` and `pipefy auth logout`.
+1. **Interactive (`pipefy auth login`)** — browser OAuth flow, session stored in the OS keychain by default (`PIPEFY_KEYCHAIN_BACKEND=file` or `encrypted` select other stores). Best for human developers. Status and revocation via `pipefy auth status` and `pipefy auth logout`.
 2. **Static bearer (`PIPEFY_TOKEN` or `--token`)** — direct bearer token, no OAuth. Intended for CI and scripted use. Overrides everything else.
 3. **Service-account OAuth (`PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` + `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`)** — unattended OAuth client-credentials grant. Used by the MCP server.
 

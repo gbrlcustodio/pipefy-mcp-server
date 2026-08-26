@@ -265,3 +265,15 @@ def test_auth_url_validation(
                 base_url_flag=None,
                 allow_insecure_urls_flag=True if allow_insecure else None,
             )
+
+
+def test_encrypted_backend_on_linux_is_a_value_error(
+    clean_pipefy_env,
+    saved_cwd,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("pipefy_auth.settings.sys.platform", "linux")
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", "encrypted")
+    with pytest.raises(ValueError, match="only supported on macOS and Windows") as info:
+        resolve_cli_settings(base_url_flag=None, allow_insecure_urls_flag=None)
+    assert "pydantic" not in str(info.value).lower()

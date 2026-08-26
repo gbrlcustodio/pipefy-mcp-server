@@ -79,7 +79,7 @@ Credential variables reject leading and trailing whitespace; `PIPEFY_ORG_ID` (be
 | `PIPEFY_ORG_ID` | unset | Convenience: pins a default org for CLI and MCP tools that take an optional `org_id` argument. |
 | `PIPEFY_PORTAL_ORG_UUID` | unset | SDK portal integration tests only (`pytest -m integration -k portal`). Set in local `.env` to an organization **UUID** (or numeric org id string) where the active token has **`manage_portals`** (and usually `create_portal`). Never committed; runtime MCP/CLI do not read this. Many default orgs return `PERMISSION_DENIED` on portal writes — pick an org with portal admin scope. See [`mcp/tools/portal.md`](mcp/tools/portal.md#testing). |
 | `PIPEFY_DISABLE_STORED_SESSION` | `0` | Set to `1` (or `disable_stored_session = true` in TOML) to skip the keychain-backed stored-session tier entirely. `pipefy auth login` / `auth logout` refuse with exit code 2 when set. |
-| `PIPEFY_KEYCHAIN_BACKEND` | `auto` | Set to `file` (or `keychain_backend = "file"` in TOML) to use a file-backed plaintext keyring under `~/.config/pipefy/keyring.cfg` (`%APPDATA%\pipefy\keyring.cfg` on Windows). Unblocks headless Linux and CI runners. Plaintext on disk; opt-in only. |
+| `PIPEFY_KEYCHAIN_BACKEND` | `auto` | `auto` uses OS keyring discovery (macOS Keychain, Windows Credential Manager, Linux Secret Service). `file` is a plaintext keyring under `~/.config/pipefy/keyring.cfg` (`%APPDATA%\pipefy\keyring.cfg` on Windows) for headless Linux and CI. `encrypted` (macOS and Windows) writes AES-GCM ciphertext to `session.enc` in that same directory and keeps a create-once wrapping key in the OS, so unsigned `python3.xx` processes do not re-prompt on every run. Rejected on Linux at settings load (exit 2). TOML key: `keychain_backend`. |
 | `PIPEFY_ALLOW_INSECURE_URLS` | `false` | Disables the SSRF host check on URL variables. Local development only. |
 | `PIPEFY_CONFIG_FILE` | unset | Overrides the default `config.toml` path. See [File path](#file-path) above. |
 
@@ -103,7 +103,7 @@ Setting `PIPEFY_BASE_URL=https://staging.pipefy.com` in the shell wins over a `b
 
 Storing OAuth credentials in `config.toml` puts them on disk in plain text. The file is created with the default umask (typically `0o644`); tighten with `chmod 600 ~/.config/pipefy/config.toml` if other users share the host. The recommended channels remain unchanged:
 
-- Interactive user sessions: `pipefy auth login` (token stored in the OS keychain, never in `config.toml`).
+- Interactive user sessions: `pipefy auth login` (token stored in the OS keychain or, with `PIPEFY_KEYCHAIN_BACKEND=encrypted`, in `session.enc`; never in `config.toml`).
 - CI / service accounts: shell environment variables, injected by the CI runner's secret manager.
 - Local dev: `.env` file in the working directory.
 
@@ -111,15 +111,16 @@ Storing OAuth credentials in `config.toml` puts them on disk in plain text. The 
 
 ## Relationship to the OS keychain
 
-`config.toml` is hand-edited declarative configuration. It does not hold the user session minted by `pipefy auth login` — that lives in the OS keychain (`StoredSession` JSON keyed by issuer + client ID). The two files coexist under `~/.config/pipefy/`:
+`config.toml` is hand-edited declarative configuration. It does not hold the user session minted by `pipefy auth login` — that lives in the OS keychain by default (`StoredSession` JSON keyed by issuer + client ID), or in `session.enc` / `keyring.cfg` when a file backend is selected. The files coexist under `~/.config/pipefy/`:
 
 ```
 ~/.config/pipefy/
 ├── config.toml      # operator-edited (this file)
-└── refresh.lock     # cross-process refresh lock (auto-managed)
+├── refresh.lock     # cross-process refresh lock (auto-managed)
+├── keyring.cfg      # only with PIPEFY_KEYCHAIN_BACKEND=file (plaintext)
+├── session.enc      # only with PIPEFY_KEYCHAIN_BACKEND=encrypted
+└── wrapping.key     # Windows only; DPAPI-encrypted AES wrapping key
 ```
-
-A future file-backed keyring backend (#237) will write its credential store as `~/.config/pipefy/keyring.cfg` next to these — a separate file with its own format.
 
 ## MCP server (`pipefy-mcp-server`)
 

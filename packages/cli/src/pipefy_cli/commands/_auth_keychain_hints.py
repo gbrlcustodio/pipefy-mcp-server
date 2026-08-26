@@ -4,35 +4,51 @@ from __future__ import annotations
 
 import platform
 
+from pipefy_auth.keychain_choice import (
+    SESSION_ENC_FILENAME,
+    WRAPPING_KEY_FILENAME,
+    WRAPPING_KEYCHAIN_ACCOUNT,
+    WRAPPING_KEYCHAIN_SERVICE,
+)
 from pipefy_infra.config import config_dir
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 
-_ESCAPE_HATCH = (
-    f"Alternatively set PIPEFY_KEYCHAIN_BACKEND=file or use a static "
-    f"PIPEFY_TOKEN. See {DOCS_CLI_AUTH_REF}."
+_DARWIN_WINDOWS_ESCAPE = (
+    f"Alternatively set PIPEFY_KEYCHAIN_BACKEND=encrypted (macOS/Windows, "
+    f"AES-GCM {SESSION_ENC_FILENAME} plus an OS wrapping key), "
+    f"PIPEFY_KEYCHAIN_BACKEND=file (plaintext), or use a static PIPEFY_TOKEN. "
+    f"See {DOCS_CLI_AUTH_REF}."
+)
+
+_LINUX_ESCAPE = (
+    f"Alternatively set PIPEFY_KEYCHAIN_BACKEND=file (plaintext) or use a "
+    f"static PIPEFY_TOKEN. See {DOCS_CLI_AUTH_REF}."
 )
 
 _LINUX_HINT = (
     "On headless Linux, ensure a Secret Service daemon "
     "(gnome-keyring, kwallet) is running. "
-    f"{_ESCAPE_HATCH}"
+    f"{_LINUX_ESCAPE}"
 )
 
 _MACOS_HINT = (
     "macOS Keychain rejected the write (often errSecInvalidOwnerEdit, -25244: "
-    "invalid attempt to change the owner of this item). Clear the entry with "
-    "`pipefy auth logout`; if that fails, remove it directly with "
-    "`security delete-generic-password -s pipefy`. Then run "
-    "`pipefy auth login` again from Terminal.app and click Always Allow if "
-    f"prompted. {_ESCAPE_HATCH}"
+    "invalid attempt to change the owner of this item). Prefer "
+    "`PIPEFY_KEYCHAIN_BACKEND=encrypted` so refresh does not re-prompt unsigned "
+    "Python interpreters. Or clear the entry with `pipefy auth logout`; if that "
+    "fails, remove it directly with `security delete-generic-password -s pipefy`. "
+    "Then run `pipefy auth login` again from Terminal.app and click Always Allow "
+    f"if prompted. {_DARWIN_WINDOWS_ESCAPE}"
 )
 
 _WINDOWS_HINT = (
-    "On Windows, Credential Manager may reject the write. Run "
-    "`pipefy auth login` once from an interactive Command Prompt or "
-    "PowerShell window. "
-    f"{_ESCAPE_HATCH}"
+    "On Windows, Credential Manager may reject the write (including WinError "
+    "1783 when the session blob exceeds the credential size cap). Set "
+    f"`PIPEFY_KEYCHAIN_BACKEND=encrypted` (AES-GCM {SESSION_ENC_FILENAME} plus "
+    f"DPAPI {WRAPPING_KEY_FILENAME}, no blob cap) or run `pipefy auth login` "
+    "once from an interactive Command Prompt or PowerShell window. "
+    f"{_DARWIN_WINDOWS_ESCAPE}"
 )
 
 _GENERIC_HINT = (
@@ -40,10 +56,22 @@ _GENERIC_HINT = (
     f"{DOCS_CLI_AUTH_REF} for keychain troubleshooting."
 )
 
+_FILE_BACKED_TOKENS = frozenset(
+    {"file", "encrypted", "PlaintextKeyring", "EncryptedFileKeyring"}
+)
+
 
 def keychain_store_failure_hint(*, backend: str) -> str:
     """Return a remediation hint after ``store_session`` fails post-login."""
-    if backend == "PlaintextKeyring":
+    if backend in {"encrypted", "EncryptedFileKeyring"}:
+        return (
+            f"Ensure the config directory is writable ({config_dir()}) and that "
+            f"the create-once wrapping key is readable (macOS Keychain service "
+            f"{WRAPPING_KEYCHAIN_SERVICE!r} account {WRAPPING_KEYCHAIN_ACCOUNT!r}; "
+            f"Windows {WRAPPING_KEY_FILENAME} under the config directory). "
+            f"Or use a static PIPEFY_TOKEN. See {DOCS_CLI_AUTH_REF}."
+        )
+    if backend in _FILE_BACKED_TOKENS:
         return (
             f"Ensure the config directory is writable ({config_dir()}), "
             f"or use a static PIPEFY_TOKEN. See {DOCS_CLI_AUTH_REF}."

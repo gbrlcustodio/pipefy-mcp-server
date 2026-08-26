@@ -122,6 +122,14 @@ def test_kill_switch_and_backend_load_from_toml(tmp_path: Path) -> None:
     assert settings.to_oidc_client() is None
 
 
+def test_encrypted_backend_loads_from_toml_on_supported_platform(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("pipefy_auth.settings.sys.platform", "darwin")
+    _write(tmp_path / "config.toml", 'keychain_backend = "encrypted"\n')
+    assert AuthSettings().keychain_backend == "encrypted"
+
+
 def test_env_wins_over_toml_for_kill_switch(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

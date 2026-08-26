@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Literal, Self
+from typing import Self
 
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
@@ -46,6 +46,11 @@ from pipefy_auth.identity import (
     DEFAULT_AUTH_CLIENT_ID,
     OidcClient,
 )
+from pipefy_auth.keychain_choice import (
+    ENCRYPTED_KEYCHAIN_PLATFORMS,
+    KeychainBackendChoice,
+    encrypted_unsupported_platform_message,
+)
 from pipefy_auth.resolver import ServiceAccount
 
 # Production defaults.
@@ -55,6 +60,11 @@ DEFAULT_BASE_URL = "https://app.pipefy.com"
 # Opaque secret / identifier strings: reject leading / trailing whitespace and
 # blank values. Anything in between is opaque to us (the IdP defines the format).
 _OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
+
+_KEYCHAIN_BACKEND_ALIASES: dict[str, KeychainBackendChoice] = {
+    "encryptedfilekeyring": "encrypted",
+    "plaintextkeyring": "file",
+}
 
 # Legacy ``PIPEFY_OAUTH_*`` env vars still resolve to the new
 # ``PIPEFY_SERVICE_ACCOUNT_*`` fields. The mapping is exported for
@@ -191,13 +201,14 @@ class AuthSettings(BaseSettings):
     @field_validator("keychain_backend", mode="before")
     @classmethod
     def _normalize_keychain_backend(cls, value: object) -> object:
-        # ``keychain_backend`` is ``Literal["auto", "file"]``; copy-pasted env
+        # ``keychain_backend`` is ``KeychainBackendChoice``; copy-pasted env
         # values like ``PIPEFY_KEYCHAIN_BACKEND=' AUTO '`` should normalize to
         # ``"auto"`` rather than fail Literal validation with a cryptic enum
         # error. Case is meaningful for credential fields (kept strict via
         # ``_strip_str``), so the lowering applies only here.
         if isinstance(value, str):
-            return value.strip().lower()
+            normalized = value.strip().lower()
+            return _KEYCHAIN_BACKEND_ALIASES.get(normalized, normalized)
         return value
 
     # ``AliasChoices`` lists ONLY fully-prefixed env-var names. Unprefixed
@@ -301,7 +312,7 @@ class AuthSettings(BaseSettings):
         ),
     )
 
-    keychain_backend: Literal["auto", "file"] = Field(
+    keychain_backend: KeychainBackendChoice = Field(
         default="auto",
         description=(
             "Active ``keyring`` backend (env: PIPEFY_KEYCHAIN_BACKEND). ``auto`` "
@@ -309,7 +320,10 @@ class AuthSettings(BaseSettings):
             "``keyrings.alt.file.PlaintextKeyring`` writing under "
             "``config_dir()/keyring.cfg``. The file backend stores credentials "
             "in plaintext on disk; opt-in only, intended for headless Linux "
-            "without Secret Service or for CI runners."
+            "without Secret Service or for CI runners. ``encrypted`` (macOS and "
+            "Windows) writes AES-GCM ciphertext to ``config_dir()/session.enc`` "
+            "and keeps a create-once wrapping key in the OS so unsigned Python "
+            "interpreters do not re-prompt on every process."
         ),
     )
 
@@ -373,6 +387,14 @@ class AuthSettings(BaseSettings):
             allow_insecure=self.allow_insecure_urls,
         )
         return self
+
+    @model_validator(mode="after")
+    def _reject_encrypted_off_platform(self) -> Self:
+        if self.keychain_backend != "encrypted":
+            return self
+        if sys.platform in ENCRYPTED_KEYCHAIN_PLATFORMS:
+            return self
+        raise ValueError(encrypted_unsupported_platform_message(sys.platform))
 
 
 class JwtValidationSettings(BaseSettings):

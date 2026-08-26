@@ -46,7 +46,7 @@ def _mock_settings(monkeypatch):
     """Stub settings so enrichment reads a fixed timeout budget."""
     mock_settings = MagicMock()
     mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
-    monkeypatch.setattr(settings_mod, "settings", mock_settings)
+    monkeypatch.setattr(settings_mod, "get_settings", lambda: mock_settings)
 
 
 @pytest.mark.unit
@@ -115,12 +115,12 @@ class TestEnrichPermissionDeniedError:
         assert result is None
 
     async def test_uses_configured_enrichment_timeout(self, mock_client, monkeypatch):
-        """Waits for ``settings.pipefy.permission_denied_enrichment_timeout_seconds``."""
+        """Waits for ``get_settings().pipefy.permission_denied_enrichment_timeout_seconds``."""
         import asyncio
 
         mock_settings = MagicMock()
         mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 0.1
-        monkeypatch.setattr(settings_mod, "settings", mock_settings)
+        monkeypatch.setattr(settings_mod, "get_settings", lambda: mock_settings)
 
         exc = _make_permission_denied_exc()
 

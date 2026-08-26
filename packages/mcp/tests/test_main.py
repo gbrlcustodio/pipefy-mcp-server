@@ -236,3 +236,39 @@ def test_rejects_an_empty_host(mocker, bad_host):
 
     assert excinfo.value.code == 2
     server_mock.assert_not_called()
+
+
+@pytest.mark.unit
+def test_linux_encrypted_backend_is_a_usage_error(
+    clear_auth_env, monkeypatch, mocker, capsys
+):
+    """Serve path rejects ``encrypted`` on Linux with exit 2, not a pydantic traceback."""
+    monkeypatch.setattr("pipefy_auth.settings.sys.platform", "linux")
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", "encrypted")
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main([])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()
+    err = capsys.readouterr().err
+    assert "only supported on macOS and Windows" in err
+    assert "traceback" not in err.lower()
+    assert "pydantic" not in err.lower()
+
+
+@pytest.mark.unit
+def test_help_skips_settings_construction_on_linux_encrypted(
+    clear_auth_env, monkeypatch, mocker, capsys
+):
+    monkeypatch.setattr("pipefy_auth.settings.sys.platform", "linux")
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", "encrypted")
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--help"])
+
+    assert excinfo.value.code == 0
+    server_mock.assert_not_called()
+    assert "pipefy-mcp-server" in capsys.readouterr().out

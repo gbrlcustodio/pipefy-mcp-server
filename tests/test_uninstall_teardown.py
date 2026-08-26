@@ -1457,3 +1457,43 @@ def test_client_none_is_refused_rather_than_stranding_registrations(tmp_path):
     assert "uv tool uninstall pipefy-cli" in bare.stdout
     # Nothing was touched on either run.
     assert json.loads((home / ".cursor" / "mcp.json").read_text())["mcpServers"]
+
+
+def test_darwin_wrapping_key_teardown_uses_canonical_service_and_account(tmp_path):
+    from pipefy_auth.keychain_choice import (
+        WRAPPING_KEYCHAIN_ACCOUNT,
+        WRAPPING_KEYCHAIN_SERVICE,
+    )
+
+    home = _home(tmp_path)
+    stub = _stub_path(tmp_path, os_name="Darwin")
+    _no_uv_tools(stub)
+    _write_exec(
+        stub / "security",
+        "#!/bin/sh\n"
+        'printf \'%s\\n\' "security $*" >> "$STUBLOG"\n'
+        'svc=""\n'
+        'prev=""\n'
+        'for arg in "$@"; do\n'
+        '    if [ "$prev" = "-s" ]; then svc="$arg"; fi\n'
+        '    prev="$arg"\n'
+        "done\n"
+        'case "$1" in\n'
+        "    find-generic-password)\n"
+        f'        [ "$svc" = "{WRAPPING_KEYCHAIN_SERVICE}" ] && exit 0\n'
+        "        exit 44\n"
+        "        ;;\n"
+        "    dump-keychain) exit 0 ;;\n"
+        "    delete-generic-password) exit 0 ;;\n"
+        "esac\n"
+        "exit 1\n",
+    )
+
+    run = _run(home, stub)
+
+    assert any(
+        line.startswith("security delete-generic-password")
+        and f"-s {WRAPPING_KEYCHAIN_SERVICE}" in line
+        and f"-a {WRAPPING_KEYCHAIN_ACCOUNT}" in line
+        for line in run.stubs
+    )

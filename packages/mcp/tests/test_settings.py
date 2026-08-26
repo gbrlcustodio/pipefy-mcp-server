@@ -389,3 +389,27 @@ def test_ipaas_settings_from_env(monkeypatch):
     settings = IpaasSettings()
     assert settings.oauth_client_id == "custom-client"
     assert settings.oauth_client_secret == "custom-secret"
+
+
+@pytest.mark.unit
+def test_importing_settings_module_does_not_construct_on_linux_encrypted(
+    monkeypatch,
+):
+    monkeypatch.setattr("pipefy_auth.settings.sys.platform", "linux")
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", "encrypted")
+    import pipefy_mcp.settings as settings_mod
+
+    monkeypatch.setattr(settings_mod, "_settings", None)
+    assert settings_mod.Settings is Settings
+    with pytest.raises(
+        ValueError, match="only supported on macOS and Windows"
+    ) as constructed:
+        settings_mod.get_settings()
+    assert "pydantic" not in str(constructed.value).lower()
+    with pytest.raises(
+        ValueError, match="only supported on macOS and Windows"
+    ) as resolved:
+        resolve_mcp_settings(
+            profile=None, transport=None, host=None, port=None, toolsets=None
+        )
+    assert "pydantic" not in str(resolved.value).lower()

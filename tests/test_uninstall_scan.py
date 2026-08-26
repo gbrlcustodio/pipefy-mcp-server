@@ -861,8 +861,17 @@ def _security_stub(log: Path) -> str:
     return (
         "#!/bin/sh\n"
         f'printf "%s\\n" "$*" >> "{log}"\n'
+        'svc=""\n'
+        'prev=""\n'
+        'for arg in "$@"; do\n'
+        '    if [ "$prev" = "-s" ]; then svc="$arg"; fi\n'
+        '    prev="$arg"\n'
+        "done\n"
         'case "$1" in\n'
-        "    find-generic-password) exit 0 ;;\n"
+        "    find-generic-password)\n"
+        '        [ "$svc" = "pipefy" ] && exit 0\n'
+        "        exit 44\n"
+        "        ;;\n"
         f"    dump-keychain) printf '%s' '{dump}' ; exit 0 ;;\n"
         "esac\n"
         "exit 1\n"
@@ -907,6 +916,9 @@ def test_macos_keychain_absent_is_reported_without_dumping(tmp_path):
 
     assert result.returncode == 0
     assert "keychain: no item with service 'pipefy'" in result.stdout
+    assert (
+        "keychain: no wrapping key with service 'pipefy-wrapping-key'" in result.stdout
+    )
     assert "dump-keychain" not in log.read_text(encoding="utf-8")
 
 
@@ -1071,6 +1083,37 @@ def test_effective_session_store_from_config_toml(tmp_path):
     assert result.returncode == 1
     assert "effective session store: the file backend" in out
     assert f"PIPEFY_KEYCHAIN_BACKEND is set in {toml}" in out
+
+
+def test_effective_session_store_encrypted_from_the_process_environment(tmp_path):
+    home = _home(tmp_path)
+    result = _run(
+        home, _stub_path(tmp_path), env_extra={"PIPEFY_KEYCHAIN_BACKEND": "encrypted"}
+    )
+    out = result.stdout
+    assert (
+        f"effective session store: the encrypted backend at {home}/.config/pipefy/session.enc"
+        in out
+    )
+    assert "PIPEFY_KEYCHAIN_BACKEND is set in the process environment" in out
+
+
+def test_encrypted_session_file_is_planned_for_removal(tmp_path):
+    home = _home(tmp_path)
+    enc = home / ".config" / "pipefy" / "session.enc"
+    wrap = home / ".config" / "pipefy" / "wrapping.key"
+    enc.parent.mkdir(parents=True)
+    enc.write_bytes(b"ciphertext")
+    wrap.write_bytes(b"dpapi")
+
+    result = _run(home, _stub_path(tmp_path))
+
+    out = result.stdout
+    assert result.returncode == 1
+    assert f"encrypted session store: {enc}" in out
+    assert f"encrypted wrapping key: {wrap}" in out
+    assert f"{enc} (reported under stored credentials)" in out
+    assert f"{wrap} (reported under stored credentials)" in out
 
 
 def test_an_unrecognized_backend_value_is_never_echoed(tmp_path):

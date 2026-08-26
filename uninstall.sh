@@ -42,6 +42,8 @@ set -eu
 REPO="pipefy/ai-toolkit"
 CANONICAL_NAME="pipefy"        # the name install.sh writes; the documented invariant
 KEYCHAIN_SERVICE="pipefy"      # keyring service attribute
+KEYCHAIN_WRAPPING_SERVICE="pipefy-wrapping-key"
+KEYCHAIN_WRAPPING_ACCOUNT="aes-256-gcm"
 SERVER_BINARY="pipefy-mcp-server"
 HOSTED_HOST="mcp.pipefy.com"   # the documented hosted endpoint, and the only one
 RUNNERS="uvx uv npx python python3 pipx"
@@ -1857,6 +1859,8 @@ scan_keychain_backend() {
     case "$_backend" in
         file)
             note "effective session store: the file backend at $CONFIG_DIR/keyring.cfg" ;;
+        encrypted)
+            note "effective session store: the encrypted backend at $CONFIG_DIR/session.enc" ;;
         auto)
             note "effective session store: the OS keychain (no override in effect)" ;;
         *)
@@ -1867,7 +1871,7 @@ scan_keychain_backend() {
         finding "PIPEFY_KEYCHAIN_BACKEND is set in $_source"
         detail "Removing that setting changes which store holds the session: the next login"
         detail "writes to the OS keychain instead, while anything already in keyring.cfg"
-        detail "stays there, still signed in and invisible to a keychain-only sweep."
+        detail "or session.enc stays there, still signed in and invisible to a keychain-only sweep."
     fi
     detail "both stores are checked below, whichever one is effective"
 }
@@ -1888,11 +1892,13 @@ scan_credentials() {
     section "Stored credentials"
     scan_keychain_backend
     _cfg="$CONFIG_DIR/keyring.cfg"
+    _enc="$CONFIG_DIR/session.enc"
+    _wrap="$CONFIG_DIR/wrapping.key"
     # `pipefy auth logout` is the only step that can revoke server-side, so it
     # is planned ahead of every local delete and only when there is a session
     # to revoke.
     if [ "$COLLECTING" -eq 1 ]; then
-        if [ -f "$_cfg" ] || keychain_has_entry; then
+        if [ -f "$_cfg" ] || [ -f "$_enc" ] || keychain_has_entry; then
             plan_add 1 credential logout - - - - - - - \
                 "revoke and delete the stored session (pipefy auth logout)"
         fi
@@ -1901,6 +1907,16 @@ scan_credentials() {
         Darwin) scan_keychain_macos ;;
         Linux) scan_keychain_linux ;;
     esac
+    if [ -f "$_enc" ]; then
+        finding "encrypted session store: $_enc"
+        plan_add 2 credential rmpath "$_enc" - - - - - - \
+            "delete the encrypted session file $_enc"
+    fi
+    if [ -f "$_wrap" ]; then
+        finding "encrypted wrapping key: $_wrap"
+        plan_add 2 credential rmpath "$_wrap" - - - - - - \
+            "delete the DPAPI wrapping key $_wrap"
+    fi
     if [ ! -f "$_cfg" ]; then
         note "no file-backend store at $_cfg"
         return 0
@@ -1949,25 +1965,32 @@ scan_keychain_macos() {
     # secret and never raises a keychain access prompt.
     if ! security find-generic-password -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1; then
         note "keychain: no item with service '$KEYCHAIN_SERVICE'"
-        return 0
-    fi
-    # find-generic-password returns the first match only. Enumerating the rest
-    # needs dump-keychain, which lists attributes for every item and, without
-    # -d, never reads a secret.
-    _found=0
-    while IFS= read -r _acct; do
-        [ -n "$_acct" ] || continue
-        _found=1
-        finding "keychain: service $KEYCHAIN_SERVICE, account $_acct"
-        plan_add 2 credential keychain "$_acct" - - - - - - \
-            "delete the keychain item $KEYCHAIN_SERVICE / $_acct"
-    done <<EOF
+    else
+        # find-generic-password returns the first match only. Enumerating the rest
+        # needs dump-keychain, which lists attributes for every item and, without
+        # -d, never reads a secret.
+        _found=0
+        while IFS= read -r _acct; do
+            [ -n "$_acct" ] || continue
+            _found=1
+            finding "keychain: service $KEYCHAIN_SERVICE, account $_acct"
+            plan_add 2 credential keychain "$_acct" - - - - - - \
+                "delete the keychain item $KEYCHAIN_SERVICE / $_acct"
+        done <<EOF
 $(security dump-keychain 2>/dev/null | keychain_accounts)
 EOF
-    if [ "$_found" -eq 0 ]; then
-        finding "keychain: at least one item with service '$KEYCHAIN_SERVICE' (accounts not enumerated)"
+        if [ "$_found" -eq 0 ]; then
+            finding "keychain: at least one item with service '$KEYCHAIN_SERVICE' (accounts not enumerated)"
+        else
+            detail "one item per (issuer, client_id); a non-production PIPEFY_AUTH_URL adds more"
+        fi
+    fi
+    if security find-generic-password -s "$KEYCHAIN_WRAPPING_SERVICE" >/dev/null 2>&1; then
+        finding "keychain: wrapping key service $KEYCHAIN_WRAPPING_SERVICE"
+        plan_add 2 credential keychain "$KEYCHAIN_WRAPPING_ACCOUNT" "$KEYCHAIN_WRAPPING_SERVICE" - - - - - \
+            "delete the keychain wrapping key $KEYCHAIN_WRAPPING_SERVICE / $KEYCHAIN_WRAPPING_ACCOUNT"
     else
-        detail "one item per (issuer, client_id); a non-production PIPEFY_AUTH_URL adds more"
+        note "keychain: no wrapping key with service '$KEYCHAIN_WRAPPING_SERVICE'"
     fi
 }
 
@@ -2041,7 +2064,7 @@ scan_config_dir() {
                 finding "$CONFIG_DIR/$_name (user-authored; never remove without consent)"
                 plan_add 8 userconfig rmpath "$CONFIG_DIR/$_name" - - - - - - \
                     "delete your $CONFIG_DIR/$_name" ;;
-            keyring.cfg)
+            keyring.cfg|session.enc|wrapping.key)
                 note "$CONFIG_DIR/$_name (reported under stored credentials)" ;;
             *.bak.*)
                 note "$CONFIG_DIR/$_name (a backup; kept on purpose)" ;;
@@ -2460,7 +2483,7 @@ EOF
 #   uvtool      a1 tool name  a2 UV_TOOL_DIR the receipt named, or "-"
 #   logout      -
 #   mcplogout   a1 registration name
-#   keychain    a1 account
+#   keychain    a1 account  a2 service or "-"
 #   rmpath      a1 path
 #   rmdir       a1 path, removed only when empty
 #   rmlock      a1 skills lock file, removed only when it records no skills
@@ -3187,13 +3210,18 @@ act_logout() {
 }
 
 act_keychain() {
+    _acct="$1"
+    _svc="$KEYCHAIN_SERVICE"
+    if [ -n "${2:-}" ] && [ "$2" != "-" ]; then
+        _svc="$2"
+    fi
     case "$OS" in
         Darwin)
             command -v security >/dev/null 2>&1 || return 1
-            run security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$1" ;;
+            run security delete-generic-password -s "$_svc" -a "$_acct" ;;
         Linux)
             command -v secret-tool >/dev/null 2>&1 || return 1
-            run secret-tool clear service "$KEYCHAIN_SERVICE" username "$1" ;;
+            run secret-tool clear service "$_svc" username "$_acct" ;;
         *) return 1 ;;
     esac
 }
@@ -3263,7 +3291,7 @@ do_action() {
         uvtool) act_uvtool "$1" "$2" ;;
         logout) act_logout ;;
         mcplogout) act_mcplogout "$1" ;;
-        keychain) act_keychain "$1" ;;
+        keychain) act_keychain "$1" "$2" ;;
         rmpath) act_rmpath "$1" "$_ac_class" ;;
         rmdir) act_rmdir "$1" ;;
         rmlock) act_rmlock "$1" ;;

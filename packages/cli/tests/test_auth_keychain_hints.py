@@ -18,6 +18,7 @@ from pipefy_cli.commands import _auth_keychain_hints as hints
                 "security delete-generic-password -s pipefy",
                 "Terminal.app",
                 "Always Allow",
+                "PIPEFY_KEYCHAIN_BACKEND=encrypted",
                 "PIPEFY_KEYCHAIN_BACKEND=file",
                 "PIPEFY_TOKEN",
                 "docs/cli/auth.md",
@@ -38,6 +39,8 @@ from pipefy_cli.commands import _auth_keychain_hints as hints
             "Windows",
             [
                 "Credential Manager",
+                "WinError 1783",
+                "PIPEFY_KEYCHAIN_BACKEND=encrypted",
                 "PIPEFY_KEYCHAIN_BACKEND=file",
                 "PIPEFY_TOKEN",
                 "docs/cli/auth.md",
@@ -69,3 +72,12 @@ def test_plaintext_backend_hint_ignores_platform(
     assert "config directory is writable" in hint
     assert "errSecInvalidOwnerEdit" not in hint
     assert "docs/cli/auth.md" in hint
+
+
+def test_encrypted_backend_hint_ignores_platform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    hint = hints.keychain_store_failure_hint(backend="EncryptedFileKeyring")
+    assert "config directory is writable" in hint
+    assert "errSecInvalidOwnerEdit" not in hint

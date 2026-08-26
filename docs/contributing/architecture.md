@@ -12,7 +12,11 @@ The map explains rather than instructs. It points at the owner of a fact rather 
 
 Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
 
-## Requirements overview
+## Introduction and goals
+
+The functions the toolkit delivers, the qualities that dominate every decision about them, and the parties that hold a stake in either.
+
+### Requirements overview
 
 These are the functions a consumer comes to the toolkit for. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
 
@@ -34,7 +38,7 @@ Those functions act on the Pipefy capabilities below. Each name is a sub-domain 
 - Billing: read the AI credits an organization consumed.
 - System Integration: register a webhook, and reach an iPaaS flow.
 
-## Quality goals
+### Quality goals
 
 Five qualities dominate every decision on this map, in this order. A trade that spends one of them needs an argument that names it. [Quality requirements](#quality-requirements) holds every row named below.
 
@@ -46,7 +50,7 @@ Five qualities dominate every decision on this map, in this order. A trade that 
 | 4 | Stability | Pipefy reshapes a GraphQL response. The change never reaches the consumer's code. (`QR-2`) |
 | 5 | Backward compatibility | After v1.0, a release deprecates a public SDK function. The function keeps working for two more minor releases, and `DEPRECATION.md` sets that period. (`QR-11`) |
 
-## Stakeholders
+### Stakeholders
 
 These roles hold a stake in the architecture and in the documents that describe it. [Requirements overview](#requirements-overview) and [Quality requirements](#quality-requirements) state what the toolkit owes them.
 
@@ -140,7 +144,11 @@ The legend:
 - Where a crossing has a port, [Ports and dependency inversion](#ports-and-dependency-inversion) names it, and [Known gaps](#known-gaps) carries every one that has none.
 - Which application each consumer uses is in [Applications](#applications), and what each one does about a credential is in [Identity lifetime](#identity-lifetime). A deployment profile decides which channel the MCP server serves.
 
-## Package decomposition
+## Building block view
+
+Level 1 is the package graph. What follows descends into it: the packages a consumer uses, and the roles that the modules of a package take.
+
+### Package decomposition
 
 Three applications and two shared libraries. The MCP server and the CLI never depend on each other, and a shared library never depends on an application. That is the reason for the split.
 
@@ -184,7 +192,7 @@ Each package also carries its own ruff `TID251` ban list, with one message per b
 
 What each package depends on, and why, is in [`dependencies.md`](dependencies.md).
 
-## Applications
+### Applications
 
 An application is what a consumer uses. Each one exposes the same domain, and each one matches its consumer. [Architecture constraints](#architecture-constraints) names which limits each one works inside.
 
@@ -206,7 +214,7 @@ Today the server does more than that. A destructive tool returns a preview, and 
 
 The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. `SURF-1` in [`conventions.md`](conventions.md) admits a new tool, method, or flag, and `TOOL-1` there states the shape one takes. What outcome each shipped tool expresses is in the MCP docs.
 
-## Layer model
+### Layer model
 
 The code has a hexagonal shape with a thin core. Most of this codebase is an adapter. `pipefy-mcp-server` wraps the MCP SDK and the Pipefy SDK. `pipefy-cli` wraps Typer over the Pipefy SDK.
 
@@ -228,7 +236,11 @@ The layers of the MCP package map onto those roles, and their names come from it
 
 The CLI has no such layers, so this mapping belongs to the MCP package alone. The module list stays in the import-linter contract at `packages/mcp/pyproject.toml`, which CI runs.
 
-## Dependency rule
+## Cross-cutting concepts
+
+These rules hold whichever building block you are in, which is why none of them sits under one. A rule that one application alone obeys today still sits here, because the rule and not its reach makes it a concept.
+
+### Dependency rule
 
 Imports point inward. An outer role can import an inner one, never the reverse.
 
@@ -236,13 +248,13 @@ Between packages, ruff `TID251` bans the inward-breaking imports. Each package l
 
 An application is entered through a driving port, for example an MCP tool call or a CLI command. A shared support library is not entered this way. It is called as a library.
 
-## Ports and dependency inversion
+### Ports and dependency inversion
 
 Business logic depends on an interface shaped by what it needs, and the adapter implements it. This rule names where the boundary sits, so "invert" does not mean "invert everything". The boundary is domain to infrastructure: a third-party SDK, the network, a database. Ports are not universal, and the rules that add one are `PORT-1` to `PORT-3` in [`conventions.md`](conventions.md).
 
 These are the ports the repository owns today. `GraphQLExecutor` in the SDK is a driven port over the GraphQL client. The attachment service owns `S3Uploader` and `UrlDownloader`. A test injects a fake against each, which is `QR-13`. Each one serves `QR-2` too, because a change behind a port stops at that port. The outbound HTTP chain of the iPaaS gateway has no port, and [Known gaps](#known-gaps) carries it.
 
-## Composition root
+### Composition root
 
 The composition root does two jobs at startup: it parses raw input into decisions, and it builds effects once. Raw input means the environment, a config file, and the startup flags. Parsed types cost no I/O, so we construct them freely. At startup an effect happens only here: a keychain read, a network call, or the construction of a client. Downstream code then receives a decision it can rely on, and never a raw value it must re-read. That parse is `QR-1` applied to configuration, under `VALID-2` in [`conventions.md`](conventions.md), so an invalid value fails at startup and not in the code that later reads it.
 
@@ -250,7 +262,7 @@ There is one composition root per application, not one for the repo. Each one pa
 
 A tool module does not construct a concrete client. It receives what it needs from the composition root. A shared package exports parsed types and resolvers, not application wiring or effects. An application can wire eagerly and fail fast at boot, or it can keep effectful members lazy. That is a per-application choice.
 
-## Tool surface
+### Tool surface
 
 A deployment decides how many tools a model sees, and that decision is separate from how many the catalog holds. `QR-9` is the requirement.
 
@@ -262,7 +274,7 @@ A build-time guard keys the partition to the registered tool names, so a new too
 
 The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and tool profile boundaries, and the reasoning behind them, are in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 
-## Response shape
+### Response shape
 
 This section is `PARSE-5` in [`conventions.md`](conventions.md) applied to what a tool returns.
 
@@ -276,7 +288,7 @@ A partial result is not a failure. A read that the caller may perform in part re
 
 Two limits on reach. The envelope is the MCP application's shape, because the CLI prints the underlying payload instead, and [`docs/parity.md`](../parity.md) records where the two differ. And the shape arrives by wrapping rather than as a tool's own return type. A flag switches it, it covers migrated tools only, and it reaches an internal of the MCP SDK. The requirement is right and the mechanism is not settled, so [Known gaps](#known-gaps) carries it.
 
-## Identity lifetime
+### Identity lifetime
 
 The local profile runs one process per user. The remote profile runs one process that serves many callers at the same time. That fact about the infrastructure decides the rest of this section. The static view above cannot express it, because the modules and the imports are identical under both profiles.
 

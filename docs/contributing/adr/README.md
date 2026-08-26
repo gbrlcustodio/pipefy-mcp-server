@@ -8,7 +8,7 @@ There are four records, one per principle. Today all four are proposed. None is 
 |---|---|---|---|
 | [0001](0001-layered-responsibility.md) | Layered responsibility | proposed | [`architecture.md`](../architecture.md) |
 | [0002](0002-typed-single-form-contract.md) | Typed, single-form contract | proposed, typed-output rollout later | [`conventions.md`](../conventions.md) |
-| [0003](0003-mcp-tools-express-outcomes.md) | MCP tools express outcomes | proposed, consolidation, resolver migration, and gate reshaping deferred | [`mcp/README.md`](../../mcp/README.md) |
+| [0003](0003-mcp-tools-express-outcomes.md) | MCP tools express outcomes | proposed, consolidation, resolver migration, and gate reshaping deferred | [`conventions.md`](../conventions.md) |
 | [0004](0004-vertical-slice-structure.md) | Vertical-slice structure and naming | proposed, deferred | none while deferred |
 
 The governance rule that a self-imposed constraint is a refactor candidate lives in [`conventions.md`](../conventions.md), not as a separate record.

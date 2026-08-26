@@ -37,11 +37,11 @@ Clients do not read the declaration the same way. Some key on the tool name alon
 
 The gate that ships today is the reverse of this decision, so the migration breaks the contract of every destructive tool. It is cheapest before v1.0, because a break after that owes a deprecation period first.
 
-The current rules live in [`mcp/README.md`](../../mcp/README.md).
+The current rules live in [`conventions.md`](../conventions.md).
 
 ## Target rule
 
-No living doc carries this rule while the migration is deferred. On adoption it joins the tool-design rules in [`mcp/README.md`](../../mcp/README.md):
+No living doc carries these while the migration is deferred. On adoption they join the tool rules in [`conventions.md`](../conventions.md):
 
 - A value the caller cannot supply is a resolved parameter. Declare the parameter with its resolver, keep the fallback in the resolver, and read neither the protocol revision nor the channel in a tool body.
-- A tool declares what it changes, and it asks for no consent. State permanence in a destructive description, state the kind of change in the annotations, and offer a dry run only where the caller cannot compute the reach.
+- Where an effect reaches past the arguments the caller passed, the tool offers a dry run that reports the reach and changes nothing.

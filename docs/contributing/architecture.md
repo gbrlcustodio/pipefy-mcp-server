@@ -92,7 +92,7 @@ Every decision on this map works inside these limits. Each row names the limit a
 | No assumed operating system | All three | A credential store, a config path, and a file lock each take an OS-specific form |
 | No keychain in some environments | CLI, MCP | Credential storage carries a file backend as well as the OS keychain |
 
-The hosted wrapper that runs the remote profile is built outside this repository. [`docs/ipaas.md`](../ipaas.md) owns the iPaaS flow, and `install.sh` covers the POSIX platforms alone.
+[`docs/ipaas.md`](../ipaas.md) owns the iPaaS flow, and `install.sh` covers the POSIX platforms alone.
 
 **Organizational.**
 
@@ -143,6 +143,23 @@ The legend:
 - The table names what crosses as a concept, and never the class that implements it. [Package decomposition](#package-decomposition) draws the same partners on the package whose code performs each crossing.
 - Where a crossing has a port, [Ports and dependency inversion](#ports-and-dependency-inversion) names it, and [Known gaps](#known-gaps) carries every one that has none.
 - Which application each consumer uses is in [Applications](#applications), and what each one does about a credential is in [Identity lifetime](#identity-lifetime). A deployment profile decides which channel the MCP server serves.
+
+## Solution strategy
+
+These are the decisions everything else rests on. Some answer a goal that [Quality goals](#quality-goals) ranks, and those come first. The rest answer a stated requirement, or a commitment this project made.
+
+| Driver | Decision | Details |
+|---|---|---|
+| Authenticity | Only the identity provider says who a caller is. A credential is read once for a process, or once for a request, and never held as shared state | [Identity lifetime](#identity-lifetime) |
+| Resource utilization | A tool does the whole job in code, so the model spends one call rather than a chain of them. A deployment also narrows the catalog it sees | [Tool surface](#tool-surface) |
+| Diagnosability | An application turns input into typed values at its edge, so nothing unchecked reaches the code behind it. Every reply has one shape, and a failure says what probably went wrong and what to do next | [Response shape](#response-shape), [Composition root](#composition-root) |
+| Stability | Most of the code is an adapter around a small hexagonal core, so a vendor change stops at the adapter that wraps it | [Layer model](#layer-model), [Ports and dependency inversion](#ports-and-dependency-inversion) |
+| Backward compatibility | Each public surface keeps a deprecated path working for a stated period | [`DEPRECATION.md`](../DEPRECATION.md) |
+| A programmer, a shell, and an LLM client reach the same domain | Each consumer gets an application shaped for it, and the three share libraries beneath. Dependencies point one way, so no application imports another | [Package decomposition](#package-decomposition), [Applications](#applications) |
+| A layer order that holds without human code review (`QR-14`) | Each package declares what it must not import, and CI fails a merge that breaks the order | [Dependency rule](#dependency-rule), [Layer model](#layer-model) |
+| A change to shared behavior that lands in one pull request (`QR-26`) | Every package lives in one repository and ships on one version. One test run covers all of them | [`RELEASE.md`](../../RELEASE.md) |
+| A smaller learning curve for a contributor | The toolkit is written in Python, which was the default language for work on artificial intelligence when this project began | [`dependencies.md`](dependencies.md) |
+| A commitment to ship in the open | Everything in this repository is published, so a deployment's configuration and credentials cannot sit in it. The hosted wrapper that runs the remote profile is built elsewhere | [Architecture constraints](#architecture-constraints), [`CONTRIBUTING.md`](../../CONTRIBUTING.md) |
 
 ## Building block view
 
@@ -304,7 +321,7 @@ A caller can also carry state between calls, such as a vendor cursor or an expor
 
 ## Architecture decisions
 
-[`adr/`](adr/README.md) holds the set, one record per decision. This document carries the rule a record produced, and the record keeps the why.
+[`adr/`](adr/README.md) holds one decision record per decision. [Solution strategy](#solution-strategy) already carries the decisions that shape everything else, so the set reaches further than that section does. This document carries the rule each decision record produced, and the reasoning stays with it.
 
 ## Quality requirements
 

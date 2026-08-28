@@ -351,6 +351,7 @@ Each row carries the dimensions of the quality it instantiates, and [`quality.ar
 | `QR-13` | `#suitable` `#maintainable` | A test can be written for any unit, and a test that passes tells the truth about the released code |
 | `QR-14` | `#maintainable` | A merged change never breaks the layer order |
 | `QR-21` | `#flexible` `#usable` | A deployment picks which tools it exposes by configuration, and never by changing the source |
+| `QR-26` | `#flexible` `#maintainable` | A change to a behavior that more than one application uses lands as one reviewed change, tested against all of them |
 
 Each section names the requirement that it serves. Where another document owns the answer instead, the row names that document. If neither holds, [Known gaps](#known-gaps) names the row.
 

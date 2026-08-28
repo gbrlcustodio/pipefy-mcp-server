@@ -101,6 +101,26 @@ Change the order when something outside this file changes what matters:
 - The legend says what a reader cannot read off the diagram or the table, and it points at the section that owns each fact they leave out.
 - Mark no risk and no quality goal on a partner, though arc42 offers both. `Quality requirements` and `Known gaps` own them, and a second copy on a diagram would drift.
 
+**`Solution strategy`, arc42 4.** The most important decisions, in one table: a driver, the decision it produced, and the section that details it. The goal rows come first, in the priority order `Quality goals` sets.
+
+- A decision earns a place here on one of two tests. It answers a goal in `Quality goals`, or it is impactful enough that a contributor holds it whatever they change. Arc42 9 holds the important decisions that pass neither, and it refers back here.
+- The second test is the loose one. A decision that matters inside one application only fails it, and the section that owns that application takes it instead.
+- One table, because arc42's own first column holds a goal, a requirement, or a constraint. A second table would put a second grammar in one section, and a narrative above it would restate the rows below.
+- Every row states a driver, because arc42 asks this section to justify each decision. A driver says what happens, in words a person would say, and a compressed noun phrase hides whether the row answers the whole demand or half of it. Open the cell with the phrase and put a `QR` handle in parentheses after it, the way `Quality goals` cites its rows.
+- A driver names what drove the decision, and never the category it falls in. "A smaller learning curve for a contributor" is a driver, and "a technology decision" is not.
+- A driver that no `QR` carries is still a driver, and a stakeholder expectation is one place to find it. Write it out rather than borrow the nearest `QR`, because a borrowed handle sends the reader to a demand the row does not answer.
+- Where a `QR` admits more than one mechanism, the driver says which demand rules the others out. A `QR` that a manual process could meet leaves an automated answer unjustified.
+- A decision and the check that keeps it true are two rows. One row for both puts several sections in the last column, and the driver then covers half of what the cell claims.
+- A decision names the mechanism that meets its driver, and never the outcome alone. It states that mechanism and never explains it, because the section in the last column owns the explanation. Two short sentences are allowed where the mechanism has two parts.
+- A cell reads on its own, takes no referent from the section in the last column, and answers the whole scenario its driver states. Write it as a third-person declarative, because the map explains rather than instructs, and match the meaning of the `QR` row without overclaiming past it.
+- Where a goal's scenario has a half that no settled mechanism serves, leave that half out and let `Known gaps` carry it. A row states what the code does.
+- An organizational commitment earns a row only where it shapes the architecture, which is what arc42 means by a relevant one. Name the structural consequence, or leave the commitment where it is set.
+- The last column is a link, and a row that cannot point at an owner does not belong here. No row links a decision record: the section that details the decision already names it, and [`adr/`](adr/README.md) already maps each one to the rule it produced.
+- The goal rows come from `Quality goals`, so they grow only when that section does, and arc42 caps that section at five.
+- The language and the distribution shape are stated here, with the reason that drove them. No other document owns them at this altitude, and [`dependencies.md`](dependencies.md) answers the lower question of why a given third-party package is present.
+
+A decision here is a settled choice, and a concept at arc42 8 is a standing rule. Both hold whichever part you are in, so sort by whether a contributor follows it while writing code.
+
 **`Quality requirements`, arc42 10.** Three tables of `QR` rows, split by stimulus: normal use, a serious failure, and a change to the system or to what it depends on. Those are arc42's three scenario categories.
 
 - A permanent ID, such as `QR-7`, under the same rule as a convention ID above.

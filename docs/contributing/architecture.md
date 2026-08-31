@@ -207,13 +207,13 @@ That second force is what makes `pipefy-auth` and `pipefy-infra` two packages ra
 
 The match of consumer to package then decides where a behavior lives. The SDK executes a named operation, whereas the CLI and the MCP server own intent, orchestration, and outcomes. The determinism of a behavior settles the rest, so deterministic resolution, such as a friendly identifier to a uuid, lives in the SDK. Ambiguous resolution lives above it, where a human or an LLM can decide.
 
-| Building block | Functions | Interface | Responsibility |
-|---|---|---|---|
-| `pipefy-mcp-server` (`packages/mcp`) | `FR-2`, `FR-3`, `FR-4`, `FR-5` | A tool call, over stdio or HTTP | Serves the domain to an LLM that acts on intent, and keeps identifiers internal to the tool |
-| `pipefy-cli` (`packages/cli`) | `FR-1`, `FR-2`, `FR-3`, `FR-4` | A command in a shell | Serves the domain to a person or a script, thin over the SDK, with discovery as a separate command |
-| `pipefy` (`packages/sdk`) | `FR-3` | The package root, held closed by a check | Executes a named operation deterministically and returns a domain value |
-| `pipefy-auth` (`packages/auth`) | `FR-1` | The package root, with nothing holding it closed | Owns every credential operation: a browser login, storage, and the validation of an inbound bearer |
-| `pipefy-infra` (`packages/infra`) | none | The package root, with nothing holding it closed | Holds the small utilities that every package needs and none owns: configuration, paths, URL checks, and telemetry headers |
+| Name | Functions | Responsibility | Interfaces | Code |
+|---|---|---|---|---|
+| `pipefy-mcp-server` | `FR-2`, `FR-3`, `FR-4`, `FR-5` | Serves the domain to an LLM that acts on intent, and keeps identifiers internal to the tool | A tool call, over stdio or HTTP | `packages/mcp` |
+| `pipefy-cli` | `FR-1`, `FR-2`, `FR-3`, `FR-4` | Serves the domain to a person or a script, thin over the SDK, with discovery as a separate command | A command in a shell | `packages/cli` |
+| `pipefy` | `FR-3` | Executes a named operation deterministically and returns a domain value | The package root, held closed by a check | `packages/sdk` |
+| `pipefy-auth` | `FR-1` | Owns every credential operation: a browser login, storage, and the validation of an inbound bearer | The package root, with nothing holding it closed | `packages/auth` |
+| `pipefy-infra` | none | Holds the small utilities that every package needs and none owns: configuration, paths, URL checks, and telemetry headers | The package root, with nothing holding it closed | `packages/infra` |
 
 Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, which [Known gaps](#known-gaps) carries.
 

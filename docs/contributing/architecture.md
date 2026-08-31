@@ -279,23 +279,56 @@ A `_helpers` suffix predicts no block. `tools/graphql_error_helpers.py`, `tools/
 
 import-linter holds a contract in `packages/mcp/pyproject.toml`, and CI runs it. That contract orders the folders, which runs `server > tools > core > auth > settings`, and no contract orders the blocks above. [Dependency rule](#dependency-rule) states what else that file holds, while [Known gaps](#known-gaps) names what runs unheld.
 
-#### SDK modules
+#### SDK
 
-The SDK folders are role-pure, so most of this table names a folder. The package root is where the roles mix, because a facade, a use case, a port, and a domain type all sit there.
+The SDK folders are role-pure, so a folder is one block here. The package root is where the roles mix, because a facade, a use case, a port, and a domain type all sit in it. So the table names the block, and `Code` says which modules hold it.
 
-| Part | Role | Responsibility |
-|---|---|---|
-| `client.py` | Facade | Constructs each service, and delegates one call per public method |
-| `ai_preflight.py`, `ai_pipe_validation.py`, `ai_phase_transition_validation.py`, `automation_preflight.py` | Use case | Checks a change against the API rules before a consumer applies it, which is `FR-3` |
-| `services/`, with the documents it sends under `queries/`, and `utils/organization_identifiers.py` | Driven adapter | Runs a named operation against the Pipefy API, where a few services fan out over several calls |
-| `graphql_executor.py` | Driven adapter | Declares the `GraphQLExecutor` port, and ships the authenticated implementation behind it |
-| `models/`, `settings.py`, `exceptions.py`, `graphql_problem.py`, the pure root modules such as `field_filters.py` and `report_filter_preflight.py`, and the rest of `utils/` | Domain type | Input models, validators, parsed configuration, and the classification of an error, with no I/O |
+```mermaid
+flowchart TB
+    subgraph sdk["SDK"]
+        direction TB
+        preflight["Preflight checks"]
+        facade["Facade"]
+        services["Domain services"]
+        documents["Wire documents"]
+        port["GraphQL port and executor"]
+        models["Input models"]
+        errors["Error classification"]
+        helpers["Pure helpers"]
+        config["Configuration and telemetry"]
+    end
 
-A row imports the row below it. A library owns no composition root, because the caller wires it, so `client.py` constructs the services that it delegates to.
+    preflight --> facade
+    facade --> services
+    facade --> port
+    facade --> models
+    facade --> config
+    services --> documents
+    services --> port
+    services --> models
+    services --> helpers
+    port --> errors
+```
 
-The `utils/` folder mixes two positions, because `organization_identifiers.py` reaches a query document while the rest are pure. [Known gaps](#known-gaps) carries that grouping.
+| Name | Role | Responsibility | Interfaces | Code |
+|---|---|---|---|---|
+| Facade | Facade | Constructs each service, and delegates one call per public method | `PipefyClient`, at a package root that a check holds closed | `client.py` |
+| Preflight checks | Use case | Checks a change against the API rules before a consumer applies it, which is `FR-3` | Functions that a consumer calls ahead of the change | `ai_preflight.py`, `ai_pipe_validation.py`, `ai_phase_transition_validation.py`, `automation_preflight.py` |
+| Domain services | Driven adapter | Runs a named operation against the Pipefy API, where a few services fan out over several calls | One method per named operation, which the facade delegates to | `services/`, and `utils/organization_identifiers.py` |
+| Wire documents | Driven adapter | Holds the GraphQL document that each service sends | A document that a service imports | `queries/` |
+| GraphQL port and executor | Driven adapter | Declares the `GraphQLExecutor` port, and ships the authenticated implementation behind it | The port that a service takes, and the transport that fulfills it | `graphql_executor.py` |
+| Input models | Domain type | Validates what a consumer passes, before any call leaves | A pydantic model that a public method takes | `models/` |
+| Error classification | Domain type | Turns a GraphQL problem into the exception that a consumer catches | The exception hierarchy, and the problem parser behind it | `exceptions.py`, `graphql_problem.py` |
+| Pure helpers | Domain type | Filters a field, reads a phase inventory, formats a hint, and picks a label color, with no I/O | Functions that a service or a consumer calls | `field_filters.py`, `phase_inventory.py`, `transition_hints.py`, `label_color.py`, `behavior_placeholders.py`, `automation_input.py`, `report_filter_preflight.py`, and the rest of `utils/` |
+| Configuration and telemetry | Domain type | Holds the parsed configuration, and builds the outbound headers that name the caller | A settings object, and the `User-Agent` that every request carries | `settings.py`, `telemetry.py` |
 
-The SDK declares no order inside itself, so no check holds the chain above. Several root modules break it today, because each one takes a `PipefyClient` and calls it, which [Known gaps](#known-gaps) carries.
+An arrow is an import, and the diagram draws the ones that set the direction rather than every one. The `Role` column places each block on the chain that [Dependency rule](#dependency-rule) draws. A library owns no composition root, because the caller wires it, so the facade constructs the services that it delegates to.
+
+The preflight checks sit above the facade rather than below it, because each one takes a `PipefyClient` and calls it. That inverts the chain, and [Known gaps](#known-gaps) carries it.
+
+The `utils/` folder splits between two blocks, because `organization_identifiers.py` reaches a query document while the rest are pure. [Known gaps](#known-gaps) carries that grouping too.
+
+The SDK declares no order inside itself, so no check holds the chain above. `packages/sdk/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one.
 
 #### CLI modules
 

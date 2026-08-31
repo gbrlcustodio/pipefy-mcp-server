@@ -213,7 +213,7 @@ The match of consumer to package then decides where a behavior lives. The SDK ex
 | CLI | `FR-1`, `FR-2`, `FR-3`, `FR-4` | Serves the domain to a person or a script, thin over the SDK, with discovery as a separate command | A command in a shell | `packages/cli` |
 | SDK | `FR-3` | Executes a named operation deterministically and returns a domain value | The package root, held closed by a check | `packages/sdk` |
 | Identity | `FR-1` | Owns every credential operation: a browser login, storage, and the validation of an inbound bearer | The package root, with nothing holding it closed | `packages/auth` |
-| Commons | none | Holds the small utilities that every package needs and none owns: configuration, paths, URL checks, and telemetry headers | The package root, with nothing holding it closed | `packages/infra` |
+| Commons | none | Holds what carries no Pipefy concept and what more than one package needs, which today is coercion, configuration discovery, local file reads, URL checks, and telemetry headers | The package root, with nothing holding it closed | `packages/infra` |
 
 Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, which [Known gaps](#known-gaps) carries.
 

@@ -256,6 +256,25 @@ The `utils/` folder mixes two positions, because `organization_identifiers.py` r
 
 The SDK declares no order inside itself, so no check holds the chain above. Four root modules break it today, because each one takes a `PipefyClient` and calls it, which [Known gaps](#known-gaps) carries.
 
+### CLI modules
+
+The two CLI folders name a file kind rather than a position, and a directory listing already gives that split. So the table follows the request path instead, from registration to rendering.
+
+| Part | Role | Responsibility |
+|---|---|---|
+| `main.py` | Composition root | Registers every command group, parses the global flags, and picks the keychain backend |
+| `auth.py`, and the client build inside `commands/_common.py` | Composition root | Resolves the credential precedence chain, and builds the authenticated client |
+| The run harness inside `commands/_common.py` | Driving adapter | Runs a command body, maps an exception to an exit code, and calls the chosen renderer |
+| `commands/<resource>.py` | Facade and use case | Declares the command with its flags, then orchestrates the SDK calls behind it |
+| `output/` | Driven adapter | Writes JSON lines for a script, or a Rich table for a person |
+| `settings.py`, `_docs.py`, `commands/_auth_keychain_hints.py`, and the validators inside `commands/_common.py` | Domain type | Parsed configuration, a documentation reference, and the hints a keychain failure prints |
+
+A row imports the row below it. A command module holds three positions at once, because a Typer command is what the outside touches, and the same function then orchestrates the calls behind it.
+
+`commands/_common.py` holds three positions too, which the table above splits by function rather than by file.
+
+The CLI declares no order inside itself, so no check holds the chain above. `packages/cli/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one.
+
 ## Cross-cutting concepts
 
 These rules hold whichever building block you are in, which is why none of them sits under one. A rule that one application alone obeys today still sits here, because the rule and not its reach makes it a concept.

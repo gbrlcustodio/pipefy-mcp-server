@@ -163,7 +163,7 @@ These are the decisions everything else rests on. Some answer a goal that [Quali
 
 ## Building block view
 
-Level 1 is the package graph. Three sections below it are level 2, one for each package that a consumer reaches, and each one places that package's modules on the role chain that [Dependency rule](#dependency-rule) draws. `pipefy-auth` and `pipefy-infra` get none, because each holds more than one subject, so a whitebox would fix a shape that is still open. A package `__init__.py` re-exports and takes no role.
+Level 1 is the package graph. The sections below it are level 2, one for each package that a consumer reaches, and each one places that package's modules on the role chain that [Dependency rule](#dependency-rule) draws. `pipefy-auth` and `pipefy-infra` get none, because each holds more than one subject, so a whitebox would fix a shape that is still open. A package `__init__.py` re-exports and takes no role.
 
 ### Package decomposition
 
@@ -254,11 +254,11 @@ A row imports the row below it. A library owns no composition root, because the 
 
 The `utils/` folder mixes two positions, because `organization_identifiers.py` reaches a query document while the rest are pure. [Known gaps](#known-gaps) carries that grouping.
 
-The SDK declares no order inside itself, so no check holds the chain above. Four root modules break it today, because each one takes a `PipefyClient` and calls it, which [Known gaps](#known-gaps) carries.
+The SDK declares no order inside itself, so no check holds the chain above. Several root modules break it today, because each one takes a `PipefyClient` and calls it, which [Known gaps](#known-gaps) carries.
 
 ### CLI modules
 
-The two CLI folders name a file kind rather than a position, and a directory listing already gives that split. So the table follows the request path instead, from registration to rendering.
+The CLI folders name a file kind rather than a position, and a directory listing already gives that split. So the table follows the request path instead, from registration to rendering.
 
 | Part | Role | Responsibility |
 |---|---|---|

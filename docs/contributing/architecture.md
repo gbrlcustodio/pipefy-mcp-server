@@ -171,11 +171,11 @@ Level 1 is the package graph. The sections below it are level 2, one for each pa
 flowchart LR
     subgraph toolkit["AI Toolkit"]
         direction TB
-        mcp["pipefy-mcp-server (packages/mcp)"]
-        cli["pipefy-cli (packages/cli)"]
-        sdk["pipefy (packages/sdk)"]
-        auth["pipefy-auth (packages/auth)"]
-        infra["pipefy-infra (packages/infra)"]
+        mcp["MCP server (pipefy-mcp-server)"]
+        cli["CLI (pipefy-cli)"]
+        sdk["SDK (pipefy)"]
+        auth["Identity (pipefy-auth)"]
+        infra["Commons (pipefy-infra)"]
 
         mcp --> sdk
         mcp --> auth
@@ -209,11 +209,11 @@ The match of consumer to package then decides where a behavior lives. The SDK ex
 
 | Name | Functions | Responsibility | Interfaces | Code |
 |---|---|---|---|---|
-| `pipefy-mcp-server` | `FR-2`, `FR-3`, `FR-4`, `FR-5` | Serves the domain to an LLM that acts on intent, and keeps identifiers internal to the tool | A tool call, over stdio or HTTP | `packages/mcp` |
-| `pipefy-cli` | `FR-1`, `FR-2`, `FR-3`, `FR-4` | Serves the domain to a person or a script, thin over the SDK, with discovery as a separate command | A command in a shell | `packages/cli` |
-| `pipefy` | `FR-3` | Executes a named operation deterministically and returns a domain value | The package root, held closed by a check | `packages/sdk` |
-| `pipefy-auth` | `FR-1` | Owns every credential operation: a browser login, storage, and the validation of an inbound bearer | The package root, with nothing holding it closed | `packages/auth` |
-| `pipefy-infra` | none | Holds the small utilities that every package needs and none owns: configuration, paths, URL checks, and telemetry headers | The package root, with nothing holding it closed | `packages/infra` |
+| MCP server | `FR-2`, `FR-3`, `FR-4`, `FR-5` | Serves the domain to an LLM that acts on intent, and keeps identifiers internal to the tool | A tool call, over stdio or HTTP | `packages/mcp` |
+| CLI | `FR-1`, `FR-2`, `FR-3`, `FR-4` | Serves the domain to a person or a script, thin over the SDK, with discovery as a separate command | A command in a shell | `packages/cli` |
+| SDK | `FR-3` | Executes a named operation deterministically and returns a domain value | The package root, held closed by a check | `packages/sdk` |
+| Identity | `FR-1` | Owns every credential operation: a browser login, storage, and the validation of an inbound bearer | The package root, with nothing holding it closed | `packages/auth` |
+| Commons | none | Holds the small utilities that every package needs and none owns: configuration, paths, URL checks, and telemetry headers | The package root, with nothing holding it closed | `packages/infra` |
 
 Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, which [Known gaps](#known-gaps) carries.
 
@@ -510,4 +510,4 @@ These names carry a second meaning elsewhere, so each one is fixed here.
 - Record. Qualified at each use. A table record is one row of a Pipefy database table, which [Context and scope](#context-and-scope) places. A decision record is one architectural decision, and [`adr/`](adr/README.md) holds the set. A bare "record" in this document means the table record, because that is the sense Pipefy's domain model carries.
 - Role. The position a module takes in the inward chain inside a package, which is a domain type, a driven adapter, a use case, or a facade. In an application a driving adapter sits outside the facade, and the composition root sits off that chain. [Dependency rule](#dependency-rule) states the direction between them. The `Stakeholders` table spends the word on a person instead, and Pipefy's own product sense, which [Requirements overview](#requirements-overview) names, is a member's permission set.
 - SDK. A bare "SDK" means the Pipefy SDK, the `pipefy` distribution. A third-party SDK is always named, for example the MCP SDK.
-- auth. `pipefy-auth` is the shared package. The `auth` layer is the driven adapter inside `pipefy-mcp-server`.
+- auth. `pipefy-auth` is the shared package, and Identity is the name that [Package decomposition](#package-decomposition) gives that block. The `auth` layer is the driven adapter inside `pipefy-mcp-server`. Identity and Access Management is a sub-domain of the product, which [Requirements overview](#requirements-overview) names, and the block serves the toolkit's own calls rather than that sub-domain.

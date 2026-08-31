@@ -1,6 +1,6 @@
 # ADR-0004: Vertical-slice structure and naming
 
-Status: proposed, deferred to its own initiative
+Status: proposed, slice folders and the `Pipefy` rename deferred
 Date: 2026-07-20
 
 ## Context
@@ -23,9 +23,9 @@ The domain-type, primitive, use-case, and facade distinction is a dependency con
 
 ## Consequences
 
-This is the largest bet. It spans three packages and changes the SDK public surface, including a `PipefyClient` to `Pipefy` rename that touches hundreds of references. It is deferred to its own initiative. The service-by-service split work-list is tracked in that rollout epic.
+This is the largest bet. It spans three packages and changes the SDK public surface, including a `PipefyClient` to `Pipefy` rename that touches hundreds of references. The folder axis and that rename are deferred to their own initiative. The service-by-service split work-list is tracked in that rollout epic.
 
-No living doc carries a rule from this decision while it stays deferred. [`architecture.md`](../architecture.md) maps the structure that holds today, which is the horizontal one. This record is the only place that describes the target.
+The role half of this decision carries a living rule, whereas the folder half stays deferred. [`architecture.md`](../architecture.md) states the direction between the roles, and [`conventions.md`](../conventions.md) places a module by the role it takes. `OWN-1` in that file already demanded the purity half of the contract before this record adopted anything, because it bars a framework type from a domain type. The slice folders and the `Pipefy` rename appear in no living doc, so this record stays the only description of that target.
 
 ## Target slices
 

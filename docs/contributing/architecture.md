@@ -330,22 +330,43 @@ The `utils/` folder splits between two blocks, because `organization_identifiers
 
 The SDK declares no order inside itself, so no check holds the chain above. `packages/sdk/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one.
 
-#### CLI modules
+#### CLI
 
-The CLI folders name a file kind rather than a position, and a directory listing already gives that split. So the table follows the request path instead, from registration to rendering.
+The CLI folders name a file kind rather than a block, and a directory listing already gives that split. So the table names the block, and `Code` says which modules hold it.
 
-| Part | Role | Responsibility |
-|---|---|---|
-| `main.py` | Composition root | Registers every command group, parses the global flags, and picks the keychain backend |
-| `auth.py`, and the client build inside `commands/_common.py` | Composition root | Resolves the credential precedence chain, and builds the authenticated client |
-| The run harness inside `commands/_common.py` | Driving adapter | Runs a command body, maps an exception to an exit code, and calls the chosen renderer |
-| `commands/<resource>.py` | Facade and use case | Declares the command with its flags, then orchestrates the SDK calls behind it |
-| `output/` | Driven adapter | Writes JSON lines for a script, or a Rich table for a person |
-| `settings.py`, `_docs.py`, `commands/_auth_keychain_hints.py`, and the validators inside `commands/_common.py` | Domain type | Parsed configuration, a documentation reference, and the hints a keychain failure prints |
+```mermaid
+flowchart TB
+    subgraph cli["CLI"]
+        direction TB
+        registration["Registration"]
+        surface["Command surface"]
+        harness["Run harness"]
+        credentials["Credential resolution"]
+        renderers["Renderers"]
+        config["Configuration"]
+    end
 
-A row imports the row below it. A command module holds three positions at once, because a Typer command is what the outside touches, and the same function then orchestrates the calls behind it.
+    registration --> surface
+    registration --> credentials
+    registration --> config
+    surface --> harness
+    harness --> credentials
+    harness --> renderers
+    credentials --> config
+```
 
-`commands/_common.py` holds three positions too, which the table above splits by function rather than by file. [Known gaps](#known-gaps) carries that grouping.
+| Name | Role | Responsibility | Interfaces | Code |
+|---|---|---|---|---|
+| Registration | Composition root | Registers every command group, parses the global flags, and picks the keychain backend | The `pipefy` entry point | `main.py` |
+| Command surface | Facade and use case | Declares the command with its flags, then orchestrates the SDK calls behind it | One command group per resource | `commands/<resource>.py`, apart from `commands/auth.py` |
+| Run harness | Driving adapter | Runs a command body, validates a shared argument, maps an exception to an exit code, and calls the chosen renderer | A wrapper that every command body runs inside | The run harness, the shared validators, and the confirmation prompt in `commands/_common.py` |
+| Credential resolution | Composition root | Resolves the credential precedence chain, builds the authenticated client, and says what a keychain failure means | The `auth` command group, and the client that a command body receives | `auth.py`, `commands/auth.py`, `commands/_auth_keychain_hints.py`, and the client build in `commands/_common.py` |
+| Renderers | Driven adapter | Writes JSON lines for a script, or a Rich table for a person | Two renderers, one of which the run harness picks per call | `output/` |
+| Configuration | Domain type | Holds the parsed configuration, and the documentation reference that an error message points at | A settings object that every block reads | `settings.py`, `_docs.py` |
+
+An arrow is an import, and the diagram draws the ones that set the direction rather than every one. The `Role` column places each block on the chain that [Dependency rule](#dependency-rule) draws. A command module holds two positions at once, because the function that declares the command is also the function that orchestrates the calls behind it. The run harness is this application's driving adapter, because every command body runs inside it.
+
+Two blocks share `commands/_common.py`, which the table splits by function rather than by file. [Known gaps](#known-gaps) carries that grouping.
 
 The CLI declares no order inside itself, so no check holds the chain above. `packages/cli/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one.
 

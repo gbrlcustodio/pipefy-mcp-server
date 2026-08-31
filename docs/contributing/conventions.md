@@ -152,7 +152,7 @@ Why: the type already carries the guarantee. A second check invites a third, and
 
 Do
 
-- Decide the role before the file name: a domain type, a primitive, a use case, or a facade.
+- Decide the role before the file name: a domain type, a driven adapter, a use case, or a facade.
 - Treat a module that takes a client and orchestrates calls against it as a use case.
 - Treat a module with no client and no I/O as a domain type.
 

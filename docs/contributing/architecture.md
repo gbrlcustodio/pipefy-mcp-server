@@ -1,6 +1,6 @@
 # Architecture
 
-The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one application for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three.
+The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one package for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three.
 
 These readers arrive here:
 
@@ -20,11 +20,11 @@ The functions the toolkit delivers, the qualities that dominate every decision a
 
 These are the functions a consumer comes to the toolkit for. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
 
-- `FR-1` Persistent sign-in. The CLI signs a consumer in through a browser on one command, and every later call uses the stored session. The toolkit refreshes that session before it expires, and a logout revokes it.
-- `FR-2` Name resolution. When a consumer names a resource instead of giving its id, the CLI and the MCP server find that resource, and an incomplete or misspelled name still finds it.
+- `FR-1` Persistent sign-in. A consumer signs in through a browser on one command, and every later call uses the stored session. The toolkit refreshes that session before it expires, and a logout revokes it.
+- `FR-2` Name resolution. When a consumer names a resource instead of giving its id, the toolkit finds that resource, and an incomplete or misspelled name still finds it.
 - `FR-3` Validation without execution. Before a consumer applies a change, the toolkit checks it against the rules the API enforces and reports what would fail. The check applies nothing.
-- `FR-4` Escape hatch. When no tool wraps an operation, the CLI and the MCP server still reach it, through a raw GraphQL call and schema introspection.
-- `FR-5` iPaaS reach. The MCP server reaches the flows of a pipe's iPaaS workspace, and it performs the credential exchange that a separate engine needs.
+- `FR-4` Escape hatch. When no tool wraps an operation, the toolkit still reaches it, through a raw GraphQL call and schema introspection.
+- `FR-5` iPaaS reach. The toolkit reaches the flows of a pipe's iPaaS workspace, and it performs the credential exchange that a separate engine needs.
 
 Those functions act on the Pipefy capabilities below. Each name is a sub-domain of Pipefy's domain model, which lives outside this repository.
 
@@ -126,7 +126,7 @@ flowchart LR
     toolkit --> files["Local filesystem"]
 ```
 
-No install reaches every partner, so the table says which of the three applications reaches each one.
+No install reaches every partner, so the table says whether the SDK, the CLI, or the MCP server reaches each one.
 
 | Partner | What crosses | Reached by |
 |---|---|---|
@@ -142,7 +142,7 @@ The legend:
 
 - The table names what crosses as a concept, and never the class that implements it. [Package decomposition](#package-decomposition) draws the same partners on the package whose code performs each crossing.
 - Where a crossing has a port, [Ports and dependency inversion](#ports-and-dependency-inversion) names it, and [Known gaps](#known-gaps) carries every one that has none.
-- Which application each consumer uses is in [Applications](#applications), and what each one does about a credential is in [Identity lifetime](#identity-lifetime). A deployment profile decides which channel the MCP server serves.
+- Which application each consumer uses is in [Package decomposition](#package-decomposition), and what each one does about a credential is in [Identity lifetime](#identity-lifetime). A deployment profile decides which channel the MCP server serves.
 
 ## Solution strategy
 
@@ -155,7 +155,7 @@ These are the decisions everything else rests on. Some answer a goal that [Quali
 | Diagnosability | An application turns input into typed values at its edge, so nothing unchecked reaches the code behind it. Every reply has one shape, and a failure says what probably went wrong and what to do next | [Response shape](#response-shape), [Composition root](#composition-root) |
 | Stability | Most of the code is an adapter around a small hexagonal core, so a vendor change stops at the adapter that wraps it | [Layer model](#layer-model), [Ports and dependency inversion](#ports-and-dependency-inversion) |
 | Backward compatibility | Each public surface keeps a deprecated path working for a stated period | [`DEPRECATION.md`](../DEPRECATION.md) |
-| A programmer, a shell, and an LLM client reach the same domain | Each consumer gets an application shaped for it, and the three share libraries beneath. Dependencies point one way, so no application imports another | [Package decomposition](#package-decomposition), [Applications](#applications) |
+| A programmer, a shell, and an LLM client reach the same domain | Each consumer gets a package shaped for it, and the three share libraries beneath. Dependencies point one way, so no application imports another | [Package decomposition](#package-decomposition) |
 | A layer order that holds without human code review (`QR-14`) | Each package declares what it must not import, and CI fails a merge that breaks the order | [Dependency rule](#dependency-rule), [Layer model](#layer-model) |
 | A change to shared behavior that lands in one pull request (`QR-26`) | Every package lives in one repository and ships on one version. One test run covers all of them | [`RELEASE.md`](../../RELEASE.md) |
 | A smaller learning curve for a contributor | The toolkit is written in Python, which was the default language for work on artificial intelligence when this project began | [`dependencies.md`](dependencies.md) |
@@ -163,11 +163,9 @@ These are the decisions everything else rests on. Some answer a goal that [Quali
 
 ## Building block view
 
-Level 1 is the package graph. What follows descends into it: the packages a consumer uses, and the roles that the modules of a package take.
+Level 1 is the package graph. [Layer model](#layer-model) then names the roles that the modules of a package take, and it maps the layers of the MCP package onto them.
 
 ### Package decomposition
-
-Three applications and two shared libraries. The MCP server and the CLI never depend on each other, and a shared library never depends on an application. That is the reason for the split.
 
 ```mermaid
 flowchart LR
@@ -200,22 +198,26 @@ flowchart LR
 
 The legend:
 
-- An arrow between two packages is a dependency that the package declares in its own `pyproject.toml`.
-- An arrow that leaves the box carries no label here. [Context and scope](#context-and-scope) says what crosses each one.
+- An arrow between two packages is a dependency that the package declares in its own `pyproject.toml`, and [Dependency rule](#dependency-rule) holds those arrows pointing one way.
+- An arrow that leaves the box says which package performs that crossing. It carries no label, because [Context and scope](#context-and-scope) says what crosses each one, and which install reaches it.
 
-The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, and [Known gaps](#known-gaps) carries that.
+Two forces produced these five packages. The first is the shape of the consumer, which produced the three at the top. A programmer imports, a person types a command, and an LLM calls a tool. The second is the cost of an install, which produced the two beneath, so that one consumer never pays another's dependencies.
 
-What each package depends on, and why, is in [`dependencies.md`](dependencies.md).
+That second force is what makes `pipefy-auth` and `pipefy-infra` two packages rather than one. Because `packages/sdk/pyproject.toml` declares `pipefy-infra` and not `pipefy-auth`, a program that imports the SDK installs no keychain and no crypto stack. `packages/infra/pyproject.toml` declares pydantic alone, so every package takes it cheaply. One shared package instead of two puts the login machinery in every SDK install.
 
-### Applications
+The match of consumer to package then decides where a behavior lives. The SDK executes a named operation, whereas the CLI and the MCP server own intent, orchestration, and outcomes. The determinism of a behavior settles the rest, so deterministic resolution, such as a friendly identifier to a uuid, lives in the SDK. Ambiguous resolution lives above it, where a human or an LLM can decide.
 
-An application is what a consumer uses. Each one exposes the same domain, and each one matches its consumer. [Architecture constraints](#architecture-constraints) names which limits each one works inside.
+| Building block | Functions | Interface | Responsibility |
+|---|---|---|---|
+| `pipefy-mcp-server` (`packages/mcp`) | `FR-2`, `FR-3`, `FR-4`, `FR-5` | A tool call, over stdio or HTTP | Serves the domain to an LLM that acts on intent, and keeps identifiers internal to the tool |
+| `pipefy-cli` (`packages/cli`) | `FR-1`, `FR-2`, `FR-3`, `FR-4` | A command in a shell | Serves the domain to a person or a script, thin over the SDK, with discovery as a separate command |
+| `pipefy` (`packages/sdk`) | `FR-3` | The package root, held closed by a check | Executes a named operation deterministically and returns a domain value |
+| `pipefy-auth` (`packages/auth`) | `FR-1` | The package root, with nothing holding it closed | Owns every credential operation: a browser login, storage, and the validation of an inbound bearer |
+| `pipefy-infra` (`packages/infra`) | none | The package root, with nothing holding it closed | Holds the small utilities that every package needs and none owns: configuration, paths, URL checks, and telemetry headers |
 
-- The SDK is for a programmer. It executes a named operation deterministically and returns a domain value. It is the deterministic execution layer.
-- The CLI is for a human or a script in a shell. It is thin over the SDK. Discovery is a separate command, which is idiomatic in a shell.
-- The MCP server is for an LLM that acts on intent. It takes a human intent and keeps identifiers internal to the tool.
+Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, which [Known gaps](#known-gaps) carries.
 
-That match of application to consumer decides the layer split. The SDK executes. The CLI and the MCP server own intent, orchestration, and outcomes. The determinism of a behavior decides where that behavior lives. Deterministic resolution, such as a friendly identifier to a uuid, lives in the SDK. Ambiguous resolution lives in the CLI and the MCP server, where a human or an LLM can decide.
+[Architecture constraints](#architecture-constraints) names which limits each package works inside, while [`dependencies.md`](dependencies.md) says which third-party packages each one needs, and why.
 
 ### Layer model
 
@@ -254,7 +256,7 @@ Between packages, ruff `TID251` bans the inward-breaking imports, where two rule
 
 Each package's own `pyproject.toml` holds its list, with one message per banned package. Within the MCP package, import-linter holds the layer order that [Layer model](#layer-model) names, which is `QR-14`. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read or as a startup type import. The enforced spine is the acyclic import chain that holds today, and this section restates neither list.
 
-An application is entered through a driving port, for example an MCP tool call or a CLI command. A shared support library is not entered this way. It is called as a library.
+An application is entered through a driving port, for example an MCP tool call or a CLI command. A library is not entered this way, because a caller imports it and calls it directly.
 
 ### Ports and dependency inversion
 
@@ -272,7 +274,7 @@ A tool module does not construct a concrete client. It receives what it needs fr
 
 ### Identifier resolution
 
-Each application picks its own identifier form. The SDK takes numeric identifiers first, whereas the CLI takes deterministic ones. Where the CLI resolves a name, it does so behind an explicit flag, which fails closed under automation. The MCP server differs from both, because it takes the human intent as its primary input.
+No global choice sets the identifier form, because each package that a consumer reaches picks its own. The SDK takes numeric identifiers first, whereas the CLI takes deterministic ones. Where the CLI resolves a name, it does so behind an explicit flag, which fails closed under automation. The MCP server differs from both, because it takes the human intent as its primary input.
 
 `QR-7` demands that an identifier which fits more than one resource never resolves silently. Rather than pick one resource for an ambiguous name, the MCP server returns every match.
 
@@ -421,8 +423,8 @@ The map above holds today, with the exceptions below. Each entry ends by naming 
 - Nobody chose what a read returns by default. Four card reads take `include_fields` and default it to false, and the envelope carries the `pagination` block that `pagination_helpers` builds, so the smaller shape is the default on those four. Every other read returns whatever its query selected, and no pass has asked whether that is the right default. That is `QR-10`. The target is a per-tool review of what each default returns, with an opt-in where more is genuinely needed. A field list on every read is the wrong target, because it spends at connect the budget that `QR-9` protects.
 - `QR-2` does not hold for CLI output. The CLI prints the payload it received, so a vendor schema change reaches a script that parses `--json`. The machine-readable half of `QR-19` therefore ships without a shape anyone declared. The target is a declared output contract for the CLI.
 - The skills check copies the CLI command names. A build check compares every playbook in `skills/` against the current MCP tool names and the top-level `pipefy` commands. It reads the tool names from the registered tools, and it carries its own list of the command names. The CLI registers `service-account`, and that list does not carry it, so a playbook that names the command breaks the build for the wrong reason. The target is a check that reads the registered commands, as it already reads the registered tools.
-- Four functions in `Requirements overview` reach no section: `FR-1`, `FR-3`, `FR-4`, and `FR-5`. The diagram draws the login edge, and no prose describes the flow. `Identity lifetime` states how long a credential lives without saying where it came from. No section mentions a check that runs without applying a change, which is `QR-20`, and `Response shape` covers what a failure says afterwards instead. `Tool surface` names the raw GraphQL tools once, as members of the `power` branch, and no section states that they exist for what no tool wraps. The token exchange that reaches a pipe's iPaaS workspace lives in `packages/mcp/src/pipefy_mcp/core/ipaas_gateway.py`, and no section describes it. The target is a section for each, and each one then earns a requirement.
-- The SDK's typed surface reaches no consumer, which is where `QR-2` stops holding. `Applications` says the SDK returns a domain value, and most service reads return an untyped mapping instead, so a vendor entity change reaches the consumer's code. The models the SDK owns are input models, and validation is the half that ships. No package ships a `py.typed` marker either, so a type checker treats the distribution as untyped and offers nothing from the annotations that do exist. The targets are a return type per read and that marker, in each distributed package.
+- Four functions in `Requirements overview` have no section that describes them: `FR-1`, `FR-3`, `FR-4`, and `FR-5`. The diagram draws the login edge, and no prose describes the flow. `Identity lifetime` states how long a credential lives without saying where it came from. No section mentions a check that runs without applying a change, which is `QR-20`, and `Response shape` covers what a failure says afterwards instead. `Tool surface` names the raw GraphQL tools once, as members of the `power` branch, and no section states that they exist for what no tool wraps. The token exchange that reaches a pipe's iPaaS workspace lives in `packages/mcp/src/pipefy_mcp/core/ipaas_gateway.py`, and no section describes it. The target is a section for each, and each one then earns a requirement.
+- The SDK's typed surface reaches no consumer, which is where `QR-2` stops holding. `Package decomposition` says the SDK returns a domain value, and most service reads return an untyped mapping instead, so a vendor entity change reaches the consumer's code. The models the SDK owns are input models, and validation is the half that ships. No package ships a `py.typed` marker either, so a type checker treats the distribution as untyped and offers nothing from the annotations that do exist. The targets are a return type per read and that marker, in each distributed package.
 - The tool domains are not the product's sub-domains. `DOMAINS` in `packages/mcp/src/pipefy_mcp/tools/toolsets.py` partitions every tool eight ways, and a build guard holds that partition disjoint and total. Those eight are feature areas of the product. Pipefy's domain model names ten sub-domains instead, and it treats AI as a technology woven through several of them. A builder defines an agent in Process Modeling, and the agent then acts inside Work Execution as a non-human assignee. Model choice and agent logs are one facet of Governance and Audit, and credit consumption is Billing. A woven technology does not survive a partition, so the catalog collects 36 AI tools under one key instead. That is `QR-17`. The target is one taxonomy, chosen against the model, and it costs the `--toolsets` vocabulary that a caller types today.
 - A coined name where the product has one. The key holding those 36 tools is `intelligence`, and the domain model names every AI element with the product's own prefix: AI Agent, AI Automation, AI Governance, AI credit. `skills/process-intelligence` coins a second name that the model does not carry. Neither is the partition above, because re-homing no tool would fix either one. That is `QR-17`. The target is the product's word in both places, plus an audit of `skills/` for the same coinage. That rename reaches the `PIPEFY_MCP_TOOLSETS` vocabulary in [`docs/config.md`](../config.md), and it is cheapest before v1.0, when `QR-11` starts to demand a warning first.
 - No stated bound on a call that cannot complete. Twelve timeout constants sit in three packages, and `VALIDATE_FETCH_TIMEOUT_SECONDS` is defined twice, as `30` in `packages/mcp/src/pipefy_mcp/tools/ai_agent_tools.py` and as `30.0` in `packages/sdk/src/pipefy_sdk/ai_preflight.py`. No section states what a caller is owed when a call cannot finish. That is `QR-18`. The target is one owner for that bound.
@@ -439,9 +441,9 @@ The map above holds today, with the exceptions below. Each entry ends by naming 
 These names carry a second meaning elsewhere, so each one is fixed here.
 
 - Contract. Qualified at each use. The typed input contract is the parsed model at the edge of an application. The import-linter contract is the layer order in `packages/mcp/pyproject.toml`.
-- Application. A package that a consumer uses, and one that owns a driving port. The SDK, the CLI, and the MCP server are the three, and a shared library is not one. The code labels the same concept `surface`, in `ClientSurface` and in a call such as `surface="mcp"`, and stamps it into the outbound `User-Agent`. This document says application instead, because the rest of the repository spends the word surface on the set of tools a deployment exposes.
-- Consumer. The party that uses an application: a program that imports the SDK, a person or a script at a terminal, or an LLM. This document never calls that party a client. The word client names two other things here: the program that speaks the MCP protocol, and a constructed object such as the GraphQL client.
-- Domain. Qualified at each use. Pipefy's domain is the product, and all three applications expose it. A sub-domain is one area of it, and [Requirements overview](#requirements-overview) names them. A tool domain is the one subject a tool is about, which [Tool surface](#tool-surface) describes. The domain layer is the model free of transport and framework, which [Layer model](#layer-model) places.
+- Application. A package that a consumer uses, and one that owns a driving port. The CLI and the MCP server are the two. The SDK is a public library, whereas `pipefy-auth` and `pipefy-infra` are shared support libraries. The code labels a related concept `surface`, in `ClientSurface` and in a call such as `surface="mcp"`, and stamps it into the outbound `User-Agent`. That `Literal["mcp", "cli", "sdk"]` in `packages/infra/src/pipefy_infra/telemetry.py` names the same three that [`DEPRECATION.md`](../DEPRECATION.md) puts in scope. This document says application instead, because the rest of the repository spends the word surface on the set of tools a deployment exposes.
+- Consumer. The party that reaches the toolkit: a program that imports the SDK, a person or a script at a terminal, or an LLM. This document never calls that party a client. The word client names two other things here: the program that speaks the MCP protocol, and a constructed object such as the GraphQL client.
+- Domain. Qualified at each use. Pipefy's domain is the product, and the SDK, the CLI, and the MCP server all expose it. A sub-domain is one area of it, and [Requirements overview](#requirements-overview) names them. A tool domain is the one subject a tool is about, which [Tool surface](#tool-surface) describes. The domain layer is the model free of transport and framework, which [Layer model](#layer-model) places.
 - Profile. Qualified at each use. A deployment profile is local or remote, it decides the transport default and the credential source, and [Identity lifetime](#identity-lifetime) turns on that difference. A tool profile is a persona-shaped selection that [Tool surface](#tool-surface) describes, and `--toolsets` names it. A bare "profile" in this document means the deployment profile, because that is the sense the rest of the repository carries.
 - Record. Qualified at each use. A table record is one row of a Pipefy database table, which [Context and scope](#context-and-scope) places. A decision record is one architectural decision, and [`adr/`](adr/README.md) holds the set. A bare "record" in this document means the table record, because that is the sense Pipefy's domain model carries.
 - SDK. A bare "SDK" means the Pipefy SDK, the `pipefy` distribution. A third-party SDK is always named, for example the MCP SDK.

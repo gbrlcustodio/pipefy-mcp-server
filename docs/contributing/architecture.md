@@ -221,7 +221,7 @@ Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and 
 
 ### Inside each package
 
-Each section below is the whitebox of one package. The three packages that a consumer reaches get one, and `pipefy-auth` and `pipefy-infra` get none, because each holds more than one subject, so a whitebox would fix a shape that is still open. A package `__init__.py` re-exports and takes no role.
+Arc42 asks for a whitebox where a block is important, surprising, risky, complex, or volatile, rather than for one per block. Each section below is the whitebox of one package. The three packages that a consumer reaches earn one, and `pipefy-auth` earns one because every credential operation lives in it. `pipefy-infra` gets none, because it holds no subject to refine. A module that only re-exports, such as a package `__init__.py`, belongs to no block.
 
 #### MCP server
 
@@ -369,6 +369,59 @@ An arrow is an import, and the diagram draws the ones that set the direction rat
 Two blocks share `commands/_common.py`, which the table splits by function rather than by file. [Known gaps](#known-gaps) carries that grouping.
 
 The CLI declares no order inside itself, so no check holds the chain above. `packages/cli/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one.
+
+#### Identity
+
+This package holds one subject, and it splits along the direction a credential travels. One half obtains a credential and attaches it to an outbound call, while the other half validates a credential that arrives from outside. The files are flat here, so the table names the block, and `Code` says which modules hold it.
+
+```mermaid
+flowchart TB
+    subgraph identity["Identity"]
+        direction TB
+        flow["Login flow"]
+        loopback["Loopback callback"]
+        chain["Credential chain"]
+        refresh["Refresh grant"]
+        store["Session store"]
+        issuer["Issuer client"]
+        attach["Bearer attachment"]
+        verify["Bearer validation"]
+        types["Identity types"]
+        config["Configuration"]
+    end
+
+    flow --> loopback
+    flow --> issuer
+    flow --> types
+    chain --> refresh
+    chain --> attach
+    chain --> store
+    chain --> types
+    refresh --> issuer
+    refresh --> store
+    refresh --> types
+    store --> types
+    verify --> issuer
+    config --> chain
+    config --> types
+```
+
+| Name | Role | Responsibility | Interfaces | Code |
+|---|---|---|---|---|
+| Credential chain | Facade and use case | Decides which credential a consumer holds, which is a static token, a service account, or a stored session, and builds the authentication that a client takes | `resolve_pipefy_auth`, which every application calls, and the message that names what is missing | `resolver.py` |
+| Login flow | Use case | Runs the browser login end to end, which is `FR-1`, and returns the tokens without storing them | The `pipefy auth login` command reaches it through the package root | `flow.py` |
+| Loopback callback | Driving adapter | Serves the one redirect that the browser sends back on a loopback port, then stops | A redirect URI on localhost, with a port that the flow picks | `loopback.py` |
+| Issuer client | Driven adapter | Finds the OIDC endpoints, exchanges a code, and revokes a token | The endpoints that discovery returns, over one shared HTTP client | `discovery.py`, `revoke.py`, `_http.py` |
+| Refresh grant | Use case | Trades a refresh token for a fresh access token, under a lock that keeps two processes from racing | A refreshed token, and the lock file that guards it | `refresh.py`, `locks.py` |
+| Session store | Driven adapter | Writes the session to the OS keychain, and falls back to a file where no keychain exists | The stored session that the chain and the refresh grant read | `storage.py` |
+| Bearer attachment | Driven adapter | Attaches `Authorization: Bearer` to an outbound request, and refreshes the token when it expires | An `httpx.Auth` that a client takes | `bearer.py` |
+| Bearer validation | Use case | Validates a bearer that arrives from outside, against the issuer's keys | The check that the MCP server runs on an inbound call | `verification.py` |
+| Identity types | Domain type | Holds the OIDC client identity, the parsed token response, and the PKCE pair, with no I/O | Types that every block above takes | `identity.py`, `responses.py`, `pkce.py` |
+| Configuration | Domain type | Holds the parsed authentication settings, and the settings that the inbound check reads | `AuthSettings` and `JwtValidationSettings` | `settings.py` |
+
+An arrow is an import, and the diagram draws the ones that set the direction rather than every one. The `Role` column places each block on the chain that [Dependency rule](#dependency-rule) draws. The login flow starts the loopback callback and stops it again, so a use case owns a driving adapter for the length of one login.
+
+This package declares no order inside itself, so no check holds the chain above. `packages/auth/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one. [Known gaps](#known-gaps) names what this package leaves open.
 
 ## Cross-cutting concepts
 
@@ -580,7 +633,7 @@ The map above holds today, with the exceptions below. Each entry ends by naming 
 - Nobody chose what a read returns by default. Four card reads take `include_fields` and default it to false, and the envelope carries the `pagination` block that `pagination_helpers` builds, so the smaller shape is the default on those four. Every other read returns whatever its query selected, and no pass has asked whether that is the right default. That is `QR-10`. The target is a per-tool review of what each default returns, with an opt-in where more is genuinely needed. A field list on every read is the wrong target, because it spends at connect the budget that `QR-9` protects.
 - `QR-2` does not hold for CLI output. The CLI prints the payload it received, so a vendor schema change reaches a script that parses `--json`. The machine-readable half of `QR-19` therefore ships without a shape anyone declared. The target is a declared output contract for the CLI.
 - The skills check copies the CLI command names. A build check compares every playbook in `skills/` against the current MCP tool names and the top-level `pipefy` commands. It reads the tool names from the registered tools, and it carries its own list of the command names. The CLI registers `service-account`, and that list does not carry it, so a playbook that names the command breaks the build for the wrong reason. The target is a check that reads the registered commands, as it already reads the registered tools.
-- Three functions in `Requirements overview` have no section that describes them: `FR-1`, `FR-4`, and `FR-5`. The diagram draws the login edge, and no prose describes the flow. `Identity lifetime` states how long a credential lives without saying where it came from. `Tool surface` names the raw GraphQL tools once, as members of the `power` branch, and no section states that they exist for what no tool wraps. The token exchange that reaches a pipe's iPaaS workspace lives in `packages/mcp/src/pipefy_mcp/core/ipaas_gateway.py`, and no section describes it. The target is a section for each, and each one then earns a requirement.
+- Three functions in `Requirements overview` have no section that describes them: `FR-1`, `FR-4`, and `FR-5`. [Identity](#identity) names the blocks that run the login, and no prose walks that flow from the command to the stored session. `Tool surface` names the raw GraphQL tools once, as members of the `power` branch, and no section states that they exist for what no tool wraps. The token exchange that reaches a pipe's iPaaS workspace lives in `packages/mcp/src/pipefy_mcp/core/ipaas_gateway.py`, and no section describes it. The target is a section for each, and each one then earns a requirement.
 - The SDK's typed surface reaches no consumer, which is where `QR-2` stops holding. `Package decomposition` says the SDK returns a domain value, and most service reads return an untyped mapping instead, so a vendor entity change reaches the consumer's code. The models the SDK owns are input models, and validation is the half that ships. No package ships a `py.typed` marker either, so a type checker treats the distribution as untyped and offers nothing from the annotations that do exist. The targets are a return type per read and that marker, in each distributed package.
 - The tool domains are not the product's sub-domains. `DOMAINS` in `packages/mcp/src/pipefy_mcp/tools/toolsets.py` partitions every tool eight ways, and a build guard holds that partition disjoint and total. Those eight are feature areas of the product. Pipefy's domain model names ten sub-domains instead, and it treats AI as a technology woven through several of them. A builder defines an agent in Process Modeling, and the agent then acts inside Work Execution as a non-human assignee. Model choice and agent logs are one facet of Governance and Audit, and credit consumption is Billing. A woven technology does not survive a partition, so the catalog collects 36 AI tools under one key instead. That is `QR-17`. The target is one taxonomy, chosen against the model, and it costs the `--toolsets` vocabulary that a caller types today.
 - A coined name where the product has one. The key holding those 36 tools is `intelligence`, and the domain model names every AI element with the product's own prefix: AI Agent, AI Automation, AI Governance, AI credit. `skills/process-intelligence` coins a second name that the model does not carry. Neither is the partition above, because re-homing no tool would fix either one. That is `QR-17`. The target is the product's word in both places, plus an audit of `skills/` for the same coinage. That rename reaches the `PIPEFY_MCP_TOOLSETS` vocabulary in [`docs/config.md`](../config.md), and it is cheapest before v1.0, when `QR-11` starts to demand a warning first.

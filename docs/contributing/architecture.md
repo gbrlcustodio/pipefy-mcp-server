@@ -234,7 +234,7 @@ The folders do not name the roles. `tools/` holds a facade, a use case, and a do
 
 A row imports the row below it, and the composition root imports every one. A tool module is the driving adapter of the application as well, because a tool call is what the outside touches, and a middleware wraps it from further out.
 
-The suffix on a helpers module predicts no role. `tools/graphql_error_helpers.py` maps a GraphQL error, and it also takes a client to look up a membership.
+The suffix on a helpers module predicts no role. `tools/graphql_error_helpers.py` maps a GraphQL error, and it also takes a client to look up a membership. [Known gaps](#known-gaps) carries that grouping.
 
 import-linter holds a contract in `packages/mcp/pyproject.toml`, and CI runs it. That contract orders the folders, which runs `server > tools > core > auth > settings`, and no contract orders the roles above. [Dependency rule](#dependency-rule) states what else that file holds, while [Known gaps](#known-gaps) names what runs unheld.
 
@@ -252,7 +252,7 @@ The SDK folders are role-pure, so most of this table names a folder. The package
 
 A row imports the row below it. A library owns no composition root, because the caller wires it, so `client.py` constructs the services that it delegates to.
 
-The `utils/` folder mixes two positions, because `organization_identifiers.py` reaches a query document while the rest are pure.
+The `utils/` folder mixes two positions, because `organization_identifiers.py` reaches a query document while the rest are pure. [Known gaps](#known-gaps) carries that grouping.
 
 The SDK declares no order inside itself, so no check holds the chain above. Four root modules break it today, because each one takes a `PipefyClient` and calls it, which [Known gaps](#known-gaps) carries.
 
@@ -271,7 +271,7 @@ The two CLI folders name a file kind rather than a position, and a directory lis
 
 A row imports the row below it. A command module holds three positions at once, because a Typer command is what the outside touches, and the same function then orchestrates the calls behind it.
 
-`commands/_common.py` holds three positions too, which the table above splits by function rather than by file.
+`commands/_common.py` holds three positions too, which the table above splits by function rather than by file. [Known gaps](#known-gaps) carries that grouping.
 
 The CLI declares no order inside itself, so no check holds the chain above. `packages/cli/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one.
 
@@ -471,6 +471,7 @@ The map above holds today, with the exceptions below. Each entry ends by naming 
 - The framework-free core. The `core` layer of `pipefy-mcp-server` still imports `settings` and Starlette in places. The import-linter contract that locks it is written but disabled, because the pure domain has no single home module yet. That is `QR-14`. The target is a single home module for the pure domain, so the written contract can turn on.
 - Use cases at the SDK package root. Several modules at the root of `packages/sdk/src/pipefy_sdk/` take a `PipefyClient` and orchestrate calls against it, so each one is a use case that imports the facade above it. Some import it at runtime, and the rest import it under `TYPE_CHECKING`. That is `QR-14`, and `MODULE-2` in [`conventions.md`](conventions.md) stops the next one from arriving. The target is a home under `services/` for each of them.
 - The role order runs unchecked in every package. `.github/workflows/ci.yml` runs `lint-imports` for `packages/mcp` alone, and no other package declares an order inside itself. That contract holds the folder order that [MCP server modules](#mcp-server-modules) names, and that order places `core` above `auth`. In role terms it therefore permits a domain type to import a driven adapter, and `core/tool_middleware.py` and `core/transport_security.py` both take that import. Between packages the order does hold, because ruff `TID251` bans the breaking imports in every one. That is `QR-14`. The target is an import contract per package, written on the role order rather than on the folder order. The SDK can express its domain half today, because its pure modules are already identifiable, whereas its use-case half waits on the folder axis that [ADR-0004](adr/0004-vertical-slice-structure.md) defers.
+- Modules grouped by file kind, which `MODULE-1` bars. The MCP `tools/` folder holds helpers modules that split between a use case and a domain type, and `graphql_error_helpers.py` holds both at once. The SDK `utils/` folder mixes a module that reaches a query document with pure ones. `commands/_common.py` in the CLI holds a client build, a run harness, and validators in one file. That is `QR-14`, through `MODULE-1`, because a reader cannot place such a module by its name and a check cannot hold it. The target is a role-named home for each one, and the SDK half arrives with the folder axis that [ADR-0004](adr/0004-vertical-slice-structure.md) defers.
 - A port over the filesystem, the OS, the network, and the keychain. `pipefy-infra` wraps the filesystem, the OS, and the network boundary. `pipefy-auth` owns network and keychain I/O. The MCP `IpaasGateway` is a concrete class that builds its own HTTP client, and a test mocks that class rather than a fake behind an interface. None of the three sits behind a port that its caller owns. That is `QR-13`. The target is a port declared under `PORT-1` to `PORT-3`.
 - Two of the three platforms ship unverified. Every job in `.github/workflows/` runs on `ubuntu-latest`, and three modules branch on the platform: the config directory in `packages/infra/src/pipefy_infra/config.py`, the file lock in `packages/auth/src/pipefy_auth/locks.py`, and the keychain hints in `packages/cli/src/pipefy_cli/commands/_auth_keychain_hints.py`. The Windows branch of that lock therefore never runs in a build. [`docs/cli/auth.md`](../cli/auth.md) records a credential-store failure on macOS and one on Windows, both found by hand. That is `QR-13`, because a suite that passes on one platform tells the truth about one platform. The target is an operating-system matrix on the job that runs the tests.
 - The outcome-shaped tool set, which is `QR-5`. The tool names copy the API operations today, so one piece of work can cost several calls, and a model pays a round trip for each one. `SURF-1` in [`conventions.md`](conventions.md) admits each replacement, and the gap closes when the tool set expresses outcomes.

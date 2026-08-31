@@ -223,24 +223,61 @@ Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and 
 
 Each section below is the whitebox of one package. The three packages that a consumer reaches get one, and `pipefy-auth` and `pipefy-infra` get none, because each holds more than one subject, so a whitebox would fix a shape that is still open. A package `__init__.py` re-exports and takes no role.
 
-#### MCP server modules
+#### MCP server
 
-The folders do not name the roles. `tools/` holds a facade, a use case, and a domain type together, while `core/` holds a driven adapter beside the envelope that every tool returns. So the table groups a module by the position it takes on the chain that [Dependency rule](#dependency-rule) draws.
+The folders name a file kind rather than a block. `tools/` holds a tool body, the helper beside it, and a pure planner, while `core/` holds a driven adapter next to the envelope that every tool returns. So the table names the block, and `Code` says where that block lives.
 
-| Part | Role | Responsibility |
-|---|---|---|
-| `main.py`, `server.py`, `core/runtime.py`, `core/transport_security.py`, `tools/registry.py`, `tools/tool_context.py`, `observability/wiring.py` | Composition root | Parses the startup flags, builds every effect once, assembles the tool surface, and hands each request the objects it needs |
-| `core/tool_middleware.py`, `observability/request_log_middleware.py`, `observability/tool_log_middleware.py`, `tools/validation_envelope.py` | Driving adapter | Wraps every inbound call, before a tool body runs |
-| `tools/*_tools.py`, with `tools/destructive_tool_guard.py` and `tools/mcp_capabilities.py` shared between them | Facade | Declares a tool with its annotations, parses its arguments, and returns the envelope |
-| The helpers modules that reach the client, such as `tools/member_tool_helpers.py` | Use case | Orchestrates several calls behind one tool, and decides what the answer says |
-| `auth/`, `core/ipaas_gateway.py`, `observability/json_logging.py` | Driven adapter | Reaches the identity provider and the keychain, a pipe's iPaaS workspace, and the log stream |
-| `settings.py`, `_docs.py`, `core/tool_error_envelope.py`, `tools/toolsets.py`, `tools/remote_profile.py`, `tools/field_condition_planner.py`, `tools/behavior_placeholder_interpolation.py`, and the helpers modules that reach none | Domain type | Holds parsed configuration, the response envelope, the tool taxonomy, the exposure marker, and the pure planners |
+```mermaid
+flowchart TB
+    subgraph server["MCP server"]
+        direction TB
+        startup["Startup and wiring"]
+        middleware["Inbound middleware"]
+        surface["Tool surface"]
+        curation["Surface curation"]
+        envelope["Response envelope"]
+        caller["Caller identity"]
+        gateway["iPaaS gateway"]
+        logging["Logging"]
+        config["Configuration"]
+    end
 
-A row imports the row below it, and the composition root imports every one. A tool module is the driving adapter of the application as well, because a tool call is what the outside touches, and a middleware wraps it from further out.
+    startup --> middleware
+    startup --> surface
+    startup --> curation
+    startup --> envelope
+    startup --> caller
+    startup --> gateway
+    startup --> logging
+    startup --> config
+    middleware --> caller
+    middleware --> envelope
+    middleware --> logging
+    surface --> curation
+    surface --> envelope
+    surface --> gateway
+    envelope --> config
+```
 
-The suffix on a helpers module predicts no role. `tools/graphql_error_helpers.py` maps a GraphQL error, and it also takes a client to look up a membership. `tools/portal_tool_helpers.py` reaches the client through an injected callable rather than a parameter. [Known gaps](#known-gaps) carries that grouping.
+| Name | Role | Responsibility | Interfaces | Code |
+|---|---|---|---|---|
+| Tool surface | Facade and use case | Declares each tool with its annotations, parses the arguments, orchestrates the calls behind it, and decides what the answer says | A registered tool, called over stdio or HTTP | `tools/*_tools.py` apart from `tools/meta_tools.py`, the `tools/*_tool_helpers.py` beside them, `tools/phase_transition_helpers.py`, `tools/field_condition_planner.py`, `tools/behavior_placeholder_interpolation.py` |
+| Surface curation | Domain type, with a facade for the discovery tools | Decides which tools a deployment exposes, by subject domain, by persona profile, and by the remote marker, and holds a destructive call behind a confirmation | The `--toolsets` flag, the `meta=REMOTE` marker, and the discovery tools of the `power` profile | `tools/toolsets.py`, `tools/remote_profile.py`, `tools/meta_tools.py`, `tools/destructive_tool_guard.py`, `tools/mcp_capabilities.py` |
+| Inbound middleware | Driving adapter | Wraps every inbound call before a tool body runs, and carries the logging, the quota, and the protection of what sits downstream | An ordered chain that the composition root builds | `core/tool_middleware.py`, `observability/request_log_middleware.py`, `observability/tool_log_middleware.py` |
+| Response envelope | Domain type, with one driving adapter patch | Builds the single response shape that every tool returns, for a success, for an error, and for a page | Functions that a tool body calls, and one patch that startup installs | `tools/validation_envelope.py`, `core/tool_error_envelope.py`, `tools/graphql_error_helpers.py`, `tools/pagination_helpers.py`, `tools/validation_helpers.py` |
+| Caller identity | Driven adapter | Holds the startup identity and the request-scoped identity, and validates an inbound bearer against the issuer | The identity that a tool body reads from its request context | `auth/` |
+| iPaaS gateway | Driven adapter | Reaches a pipe's iPaaS workspace over HTTP | An async client that a tool body calls | `core/ipaas_gateway.py` |
+| Logging | Driven adapter | Writes one JSON line per event to the log stream | A configured logger | `observability/json_logging.py` |
+| Startup and wiring | Composition root | Parses the startup flags, builds every effect once, assembles the tool surface, and hands each request the objects it needs | The `pipefy-mcp-server` entry point | `main.py`, `server.py`, `core/runtime.py`, `core/transport_security.py`, `observability/wiring.py`, `tools/registry.py`, `tools/tool_context.py` |
+| Configuration | Domain type | Holds the parsed configuration, and the documentation reference that an error message points at | A settings object that every block reads | `settings.py`, `_docs.py` |
 
-import-linter holds a contract in `packages/mcp/pyproject.toml`, and CI runs it. That contract orders the folders, which runs `server > tools > core > auth > settings`, and no contract orders the roles above. [Dependency rule](#dependency-rule) states what else that file holds, while [Known gaps](#known-gaps) names what runs unheld.
+An arrow is an import, and the diagram draws the ones that set the direction rather than every one. The `Role` column places each block on the chain that [Dependency rule](#dependency-rule) draws. Startup and wiring sits off that chain, because it builds every other block once. The tool surface is this application's driving adapter as well, because a tool call is what the outside touches, and inbound middleware wraps that call from further out.
+
+[Tool surface](#tool-surface) at arc42 8 partitions that block by subject domain and by persona profile. That partition refines one block into a level 3, and this document does not take it.
+
+A `_helpers` suffix predicts no block. `tools/graphql_error_helpers.py`, `tools/pagination_helpers.py`, and `tools/validation_helpers.py` build the envelope, `tools/phase_transition_helpers.py` runs a check for the tool surface, and a `tools/*_tool_helpers.py` module sits beside the tool it serves. [Known gaps](#known-gaps) carries that grouping.
+
+import-linter holds a contract in `packages/mcp/pyproject.toml`, and CI runs it. That contract orders the folders, which runs `server > tools > core > auth > settings`, and no contract orders the blocks above. [Dependency rule](#dependency-rule) states what else that file holds, while [Known gaps](#known-gaps) names what runs unheld.
 
 #### SDK modules
 
@@ -300,7 +337,7 @@ Between packages, ruff `TID251` bans the inward-breaking imports, where two rule
 - An import never runs against the direction of the level-1 diagram.
 - Neither the MCP server nor the CLI imports the other, or the private modules of the SDK.
 
-Each package's own `pyproject.toml` holds its list, with one message per banned package. Within the MCP package, import-linter holds the folder order that [MCP server modules](#mcp-server-modules) names, which is `QR-14`. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read or as a startup type import. The enforced spine is the acyclic import chain that holds today, and this section restates neither list.
+Each package's own `pyproject.toml` holds its list, with one message per banned package. Within the MCP package, import-linter holds the folder order that [MCP server](#mcp-server) names, which is `QR-14`. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read or as a startup type import. The enforced spine is the acyclic import chain that holds today, and this section restates neither list.
 
 Inside a package, a role is the position a module takes in the inward chain, which is a domain type, a driven adapter, a use case, or a facade. The first two are the parts above at module scale, and the last two have no counterpart there. A facade imports a use case, a use case imports a driven adapter, and a driven adapter imports a domain type, whereas a domain type imports none of them. In an application a driving adapter sits outside the facade, because the outside touches it first, and a middleware around an inbound call is one. The composition root sits off that chain, because it constructs every part and therefore imports across the direction. [ADR-0004](adr/0004-vertical-slice-structure.md) holds that contract and the reasoning behind it, while `MODULE-1` and `MODULE-2` in [`conventions.md`](conventions.md) place a module by the role it takes. No package declares a check for this order, because the one contract that exists holds a folder order instead, and [Known gaps](#known-gaps) names what that leaves unheld.
 
@@ -474,7 +511,7 @@ The map above holds today, with the exceptions below. Each entry ends by naming 
 - An undeclared CLI dependency. `packages/cli/src/pipefy_cli/commands/_auth_keychain_hints.py` imports `pipefy_infra.config`, and `packages/cli/pyproject.toml` declares no `pipefy-infra`. The import resolves today because the SDK and `pipefy-auth` both bring that package in. No check catches it, because a `TID251` list bans an import and cannot demand a declaration. That is `QR-14`. The target is the declared dependency, and the arrow in the diagram follows it.
 - The framework-free core. The `core` layer of `pipefy-mcp-server` still imports `settings` and Starlette in places. The import-linter contract that locks it is written but disabled, because the pure domain has no single home module yet. That is `QR-14`. The target is a single home module for the pure domain, so the written contract can turn on.
 - Use cases at the SDK package root. Several modules at the root of `packages/sdk/src/pipefy_sdk/` take a `PipefyClient` and orchestrate calls against it, so each one is a use case that imports the facade above it. Some import it at runtime, and the rest import it under `TYPE_CHECKING`. That is `QR-14`, and `MODULE-2` in [`conventions.md`](conventions.md) stops the next one from arriving. The target is a home under `services/` for each of them.
-- The role order runs unchecked in every package. `.github/workflows/ci.yml` runs `lint-imports` for `packages/mcp` alone, and no other package declares an order inside itself. That contract holds the folder order that [MCP server modules](#mcp-server-modules) names, and that order places `core` above `auth`. In role terms it therefore permits a domain type to import a driven adapter, and `core/tool_middleware.py` and `core/transport_security.py` both take that import. Between packages the order does hold, because ruff `TID251` bans the breaking imports in every one. That is `QR-14`. The target is an import contract per package, written on the role order rather than on the folder order. The SDK can express its domain half today, because its pure modules are already identifiable, whereas its use-case half waits on the folder axis that [ADR-0004](adr/0004-vertical-slice-structure.md) defers.
+- The role order runs unchecked in every package. `.github/workflows/ci.yml` runs `lint-imports` for `packages/mcp` alone, and no other package declares an order inside itself. That contract holds the folder order that [MCP server](#mcp-server) names, and that order places `core` above `auth`. In role terms it therefore permits a domain type to import a driven adapter, and `core/tool_middleware.py` and `core/transport_security.py` both take that import. Between packages the order does hold, because ruff `TID251` bans the breaking imports in every one. That is `QR-14`. The target is an import contract per package, written on the role order rather than on the folder order. The SDK can express its domain half today, because its pure modules are already identifiable, whereas its use-case half waits on the folder axis that [ADR-0004](adr/0004-vertical-slice-structure.md) defers.
 - Modules grouped by file kind, which `MODULE-1` bars. The MCP `tools/` folder holds helpers modules that split between a use case and a domain type, and `graphql_error_helpers.py` holds both at once. The SDK `utils/` folder mixes a module that reaches a query document with pure ones. `commands/_common.py` in the CLI holds a client build, a run harness, and validators in one file. That is `QR-14`, through `MODULE-1`, because a reader cannot place such a module by its name and a check cannot hold it. The target is a role-named home for each one, and the SDK half arrives with the folder axis that [ADR-0004](adr/0004-vertical-slice-structure.md) defers.
 - A port over the filesystem, the OS, the network, and the keychain. `pipefy-infra` wraps the filesystem, the OS, and the network boundary. `pipefy-auth` owns network and keychain I/O. The MCP `IpaasGateway` is a concrete class that builds its own HTTP client, and a test mocks that class rather than a fake behind an interface. None of the three sits behind a port that its caller owns. That is `QR-13`. The target is a port declared under `PORT-1` to `PORT-3`.
 - Two of the three platforms ship unverified. Every job in `.github/workflows/` runs on `ubuntu-latest`, and three modules branch on the platform: the config directory in `packages/infra/src/pipefy_infra/config.py`, the file lock in `packages/auth/src/pipefy_auth/locks.py`, and the keychain hints in `packages/cli/src/pipefy_cli/commands/_auth_keychain_hints.py`. The Windows branch of that lock therefore never runs in a build. [`docs/cli/auth.md`](../cli/auth.md) records a credential-store failure on macOS and one on Windows, both found by hand. That is `QR-13`, because a suite that passes on one platform tells the truth about one platform. The target is an operating-system matrix on the job that runs the tests.

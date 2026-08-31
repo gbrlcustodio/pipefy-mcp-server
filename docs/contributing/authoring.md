@@ -121,6 +121,14 @@ Change the order when something outside this file changes what matters:
 
 A decision here is a settled choice, and a concept at arc42 8 is a standing rule. Both hold whichever part you are in, so sort by whether a contributor follows it while writing code.
 
+**`Building block view`, arc42 5.** The static structure, with one subsection per whitebox, named after the axis that whitebox splits on.
+
+- Every part the diagram draws carries a responsibility line, because arc42 counts those lines as part of the level. A drawn part with no line leaves the level incomplete, which is how `pipefy-auth` and `pipefy-infra` went undescribed.
+- The reason says why the decomposition has these parts. A rule that the structure obeys fails as a reason, such as the import direction that `Package decomposition` gave, because every correct split obeys it.
+- Where the level needs a fact another document owns, it names the fact and points there. The kinds come from the scope list in [`DEPRECATION.md`](../DEPRECATION.md). The interface column says a check holds the SDK root closed, and it names no banned module, because `Dependency rule` owns those lists. Arc42's quality and open-issues blackbox fields stay out, because `Identity lifetime` and `Known gaps` own them.
+- `Requirements overview` states what the toolkit does, and this level states which block does it. Where a function text names a package, the naming belongs here instead.
+- This level draws the external partners, although the HtmlSanityCheck, Traffic Pursuit Unit, and biking2 examples each draw internal blocks alone. It is the only place that says which package performs a crossing, whereas [Context and scope](architecture.md#context-and-scope) says which install reaches a partner.
+
 **`Quality requirements`, arc42 10.** Three tables of `QR` rows, split by stimulus: normal use, a serious failure, and a change to the system or to what it depends on. Those are arc42's three scenario categories.
 
 - A permanent ID, such as `QR-7`, under the same rule as a convention ID above.

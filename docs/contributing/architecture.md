@@ -256,6 +256,21 @@ Each package's own `pyproject.toml` holds its list, with one message per banned 
 
 Inside a package, a role is the position a module takes in the inward chain, which is a domain type, a driven adapter, a use case, or a facade. The first two are the parts above at module scale, and the last two have no counterpart there. A facade imports a use case, a use case imports a driven adapter, and a driven adapter imports a domain type, whereas a domain type imports none of them. In an application a driving adapter sits outside the facade, because the outside touches it first, and a middleware around an inbound call is one. The composition root sits off that chain, because it constructs every part and therefore imports across the direction. [ADR-0004](adr/0004-vertical-slice-structure.md) holds that contract and the reasoning behind it, while `MODULE-1` and `MODULE-2` in [`conventions.md`](conventions.md) place a module by the role it takes. Only the MCP package declares a check for this order, and [Known gaps](#known-gaps) names what runs unheld.
 
+```mermaid
+flowchart LR
+    root["Composition root"]
+    subgraph chain["The inward chain"]
+        direction LR
+        driving["Driving adapter"] --> facade["Facade"]
+        facade --> usecase["Use case"]
+        usecase --> driven["Driven adapter"]
+        driven --> domain["Domain type"]
+    end
+    root -.->|constructs| chain
+```
+
+A solid arrow is an import that the chain permits. The dotted arrow is construction, and the composition root imports across the chain to perform it.
+
 An application is entered through a driving port, and its driving adapter is what the outside touches, for example an MCP tool call or a CLI command. The core calls a driven adapter to reach the outside, for example Pipefy data access. A library is not entered this way, because a caller imports it and calls it directly.
 
 ### Ports and dependency inversion

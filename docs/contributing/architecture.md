@@ -163,7 +163,7 @@ These are the decisions everything else rests on. Some answer a goal that [Quali
 
 ## Building block view
 
-Level 1 is the package graph. [MCP server modules](#mcp-server-modules) then places every module of that package on the role chain that [Dependency rule](#dependency-rule) draws.
+Level 1 is the package graph. Three sections below it are level 2, one for each package that a consumer reaches, and each one places that package's modules on the role chain that [Dependency rule](#dependency-rule) draws. `pipefy-auth` and `pipefy-infra` get none, because each holds more than one subject, so a whitebox would fix a shape that is still open. A package `__init__.py` re-exports and takes no role.
 
 ### Package decomposition
 

@@ -219,18 +219,6 @@ An application is what a consumer uses. Each one exposes the same domain, and ea
 
 That match of application to consumer decides the layer split. The SDK executes. The CLI and the MCP server own intent, orchestration, and outcomes. The determinism of a behavior decides where that behavior lives. Deterministic resolution, such as a friendly identifier to a uuid, lives in the SDK. Ambiguous resolution lives in the CLI and the MCP server, where a human or an LLM can decide.
 
-Each application decides its own identifier form, and there is no global choice. The SDK takes numeric identifiers first. The CLI takes deterministic identifiers. If the CLI resolves a name, it does so behind an explicit flag that fails closed under automation. An identifier that can match more than one resource therefore never resolves silently, which is what `QR-7` requires. `ARG-1` in [`conventions.md`](conventions.md) holds each argument to one form, and [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md) names which one, per tool and per argument. These identifier rules come from the decision record [ADR-0002](adr/0002-typed-single-form-contract.md).
-
-The MCP server takes the human intent as the primary input. It never picks one resource for an ambiguous name. It returns the matches, which is how it meets `QR-7`. Where a tool lacks an input it needs, it asks for that input rather than failing, which is `QR-22`, and [Known gaps](#known-gaps) states which callers it can ask. Whether the caller can be asked decides between interactive behavior and ambient behavior, so a caller that cannot be asked stays deterministic, which is what `QR-3` requires.
-
-Destruction looks like the same problem, and it is not. An ambiguous name is a question about data, and the MCP server is the only party that can answer it. A delete raises a question about permission, and the consumer answered that one when they set up their client. The server therefore does not ask it again, which is `QR-25`. `QR-3` rules out asking anyway: when nobody is present to answer, no run waits for one.
-
-Each party then does the part it is placed to do. The MCP server says what a tool changes, in the tool's description and in its annotations. The client decides whether to put that in front of its human, under settings that human chose. Pipefy's API authorizes, and it alone can refuse. The CLI has nobody in front of it, so it both describes and decides, and `--yes` is where its consumer sets the policy. [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md) owns the protocol.
-
-Today the server does more than that. A destructive tool returns a preview, and it acts only on a second call that sets `confirm`. The model makes that second call, so the preview informs the model and no person agrees to anything. [Known gaps](#known-gaps) carries the correction.
-
-The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint, which is what `QR-5` asks for. The tool count tracks user intent, not the wire. `SURF-1` in [`conventions.md`](conventions.md) admits a new tool, method, or flag, and `TOOL-1` there states the shape one takes. What outcome each shipped tool expresses is in the MCP docs. The reasoning is in the decision record [ADR-0003](adr/0003-mcp-tools-express-outcomes.md).
-
 ### Layer model
 
 The code has a hexagonal shape with a thin core. Most of this codebase is an adapter. `pipefy-mcp-server` wraps the MCP SDK and the Pipefy SDK. `pipefy-cli` wraps Typer over the Pipefy SDK.
@@ -279,6 +267,33 @@ There is one composition root per application, not one for the repo. Each one pa
 
 A tool module does not construct a concrete client. It receives what it needs from the composition root. A shared package exports parsed types and resolvers, not application wiring or effects. An application can wire eagerly and fail fast at boot, or it can keep effectful members lazy. That is a per-application choice.
 
+### Identifier resolution
+
+Each application picks its own identifier form. The SDK takes numeric identifiers first, whereas the CLI takes deterministic ones. Where the CLI resolves a name, it does so behind an explicit flag, which fails closed under automation. The MCP server differs from both, because it takes the human intent as its primary input.
+
+`QR-7` demands that an identifier which fits more than one resource never resolves silently. Rather than pick one resource for an ambiguous name, the MCP server returns every match.
+
+`ARG-1` in [`conventions.md`](conventions.md) holds each argument to one form, while [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md) names which form each MCP tool and argument takes. These identifier rules come from the decision record [ADR-0002](adr/0002-typed-single-form-contract.md).
+
+### Asking the caller
+
+A tool faces two kinds of question that look alike, although it must treat them differently. A question about data asks what to act on, whereas a question about permission asks whether to act at all. Only the first kind ever reaches the caller.
+
+Where a tool lacks an input it needs, it asks the caller for that input, which is what `QR-22` demands. Because not every client can take a question, [Known gaps](#known-gaps) names which callers a tool can ask, and what a tool does with the rest.
+
+When the consumer sets up their client, they settle permission for good, so `QR-25` leaves that decision where they made it. `QR-3` rules the question out in any case, because no run waits for an answer when nobody is present to give one.
+
+Each party does the one thing it alone can do:
+
+- The MCP server states what a tool changes, both in the tool's description and in its annotations.
+- The client then decides whether a human sees that statement, under settings that the human chose.
+- Pipefy's API authorizes the call, so it alone can refuse one.
+- Because the CLI has nobody in front of it, it both states and decides. Its consumer sets that policy with `--yes`.
+
+[`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md) owns the protocol.
+
+Today the server does more than this, because a destructive tool returns a preview and acts only on a second call that sets `confirm`. Since the model makes that second call, the preview reaches the model, and no person agrees to anything. [Known gaps](#known-gaps) carries the correction.
+
 ### Tool surface
 
 A deployment decides how many tools a model sees, and that decision is separate from how many the catalog holds. `QR-9` is the requirement.
@@ -288,6 +303,8 @@ Two axes classify the catalog. A domain is the one subject a tool is about, and 
 The remote profile applies a default-deny floor before any selection runs. Selection only removes, so it narrows within the floor and never widens past it. The `power` branch takes a different route. It withdraws the curated tools from the listing and registers the catalog meta-tools over them, alongside the raw GraphQL tools. The model-facing set is then a constant, whatever the catalog holds, which is `QR-9` met at its strongest.
 
 A build-time guard keys the partition to the registered tool names, so a new tool with no domain fails the build. The guard also holds the domains disjoint, and it writes no tool count down. It reads names and not subjects, so a tool filed under the wrong domain still passes.
+
+The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. That is `QR-5`. The tool count tracks user intent, not the wire. `SURF-1` in [`conventions.md`](conventions.md) admits a new tool, method, or flag, and `TOOL-1` there states the shape one takes. The MCP docs name the outcome each shipped tool expresses. The decision record [ADR-0003](adr/0003-mcp-tools-express-outcomes.md) holds the reasoning.
 
 The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and tool profile boundaries, and the reasoning behind them, are in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 

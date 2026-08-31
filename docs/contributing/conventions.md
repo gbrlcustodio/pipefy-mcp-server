@@ -146,6 +146,35 @@ Do not
 
 Why: the type already carries the guarantee. A second check invites a third, and the interior stops being total.
 
+## Module placement
+
+**MODULE-1. Place a module by the role it takes, not by the kind of file it is.**
+
+Do
+
+- Decide the role before the file name: a domain type, a primitive, a use case, or a facade.
+- Treat a module that takes a client and orchestrates calls against it as a use case.
+- Treat a module with no client and no I/O as a domain type.
+
+Do not
+
+- Group by file kind, such as a `validators` or a `helpers` module.
+
+Why: `QR-14` demands that a merged change never breaks the layer order, and a misplaced module breaks it in silence. [`architecture.md`](architecture.md) states the direction between the roles, and [ADR-0004](adr/0004-vertical-slice-structure.md) holds the reasoning.
+
+**MODULE-2. A use case lives with its package's use cases, never at the package root.**
+
+Do
+
+- Put SDK orchestration under `services/`.
+- Put an MCP tool's orchestration in that tool's helpers module.
+
+Do not
+
+- Let a module at the package root take a facade and call it.
+
+Why: `QR-14` again. A root use case sits in no layer, so no contract can hold it, and it reaches back to the facade that imports it.
+
 ## Type ownership
 
 **OWN-1. A domain type carries no framework or third-party SDK type.**
@@ -159,7 +188,7 @@ Do not
 - Hold one as a field.
 - Take one in a public signature.
 
-Why: every consumer of that type then depends on the framework transitively, and the domain stops being swappable.
+Why: every consumer of that type then depends on the framework transitively, and the domain stops being swappable. `MODULE-1` classifies the module, and this rule binds what a domain type inside it can hold.
 
 **OWN-2. An adapter can hold an outside type as its own currency.**
 

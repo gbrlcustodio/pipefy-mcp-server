@@ -163,7 +163,7 @@ These are the decisions everything else rests on. Some answer a goal that [Quali
 
 ## Building block view
 
-Level 1 is the package graph. The sections below it are level 2, one for each package that a consumer reaches, and each one places that package's modules on the role chain that [Dependency rule](#dependency-rule) draws. `pipefy-auth` and `pipefy-infra` get none, because each holds more than one subject, so a whitebox would fix a shape that is still open. A package `__init__.py` re-exports and takes no role.
+Level 1 is the package graph, and [Inside each package](#inside-each-package) holds level 2.
 
 ### Package decomposition
 
@@ -219,7 +219,11 @@ Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and 
 
 [Architecture constraints](#architecture-constraints) names which limits each package works inside, while [`dependencies.md`](dependencies.md) says which third-party packages each one needs, and why.
 
-### MCP server modules
+### Inside each package
+
+Each section below is the whitebox of one package. The three packages that a consumer reaches get one, and `pipefy-auth` and `pipefy-infra` get none, because each holds more than one subject, so a whitebox would fix a shape that is still open. A package `__init__.py` re-exports and takes no role.
+
+#### MCP server modules
 
 The folders do not name the roles. `tools/` holds a facade, a use case, and a domain type together, while `core/` holds a driven adapter beside the envelope that every tool returns. So the table groups a module by the position it takes on the chain that [Dependency rule](#dependency-rule) draws.
 
@@ -238,7 +242,7 @@ The suffix on a helpers module predicts no role. `tools/graphql_error_helpers.py
 
 import-linter holds a contract in `packages/mcp/pyproject.toml`, and CI runs it. That contract orders the folders, which runs `server > tools > core > auth > settings`, and no contract orders the roles above. [Dependency rule](#dependency-rule) states what else that file holds, while [Known gaps](#known-gaps) names what runs unheld.
 
-### SDK modules
+#### SDK modules
 
 The SDK folders are role-pure, so most of this table names a folder. The package root is where the roles mix, because a facade, a use case, a port, and a domain type all sit there.
 
@@ -256,7 +260,7 @@ The `utils/` folder mixes two positions, because `organization_identifiers.py` r
 
 The SDK declares no order inside itself, so no check holds the chain above. Several root modules break it today, because each one takes a `PipefyClient` and calls it, which [Known gaps](#known-gaps) carries.
 
-### CLI modules
+#### CLI modules
 
 The CLI folders name a file kind rather than a position, and a directory listing already gives that split. So the table follows the request path instead, from registration to rendering.
 

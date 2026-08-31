@@ -40,6 +40,7 @@ A code example names no shipped symbol. A symbol in an example rots on the next 
 
 - A section that arc42 numbers takes arc42's position and arc42's name.
 - Every heading sits under a numbered one. A `##` heading takes arc42's name, and a `###` heading under it is ours to name.
+- A heading deeper than `###` marks a deeper arc42 level. Arc42 5 holds each level 2 whitebox at `####`.
 - A section whose content another owner holds is a pointer to that owner, and never a copy. `Architecture decisions` at arc42 9 points at [`adr/`](adr/README.md).
 - A section that nothing owns yet stays absent, and `Known gaps` names it as the target. Arc42 6 and arc42 7 stay absent today.
 

@@ -153,17 +153,17 @@ These are the decisions everything else rests on. Some answer a goal that [Quali
 | Authenticity | Only the identity provider says who a caller is. A credential is read once for a process, or once for a request, and never held as shared state | [Identity lifetime](#identity-lifetime) |
 | Resource utilization | A tool does the whole job in code, so the model spends one call rather than a chain of them. A deployment also narrows the catalog it sees | [Tool surface](#tool-surface) |
 | Diagnosability | An application turns input into typed values at its edge, so nothing unchecked reaches the code behind it. Every reply has one shape, and a failure says what probably went wrong and what to do next | [Response shape](#response-shape), [Composition root](#composition-root) |
-| Stability | Most of the code is an adapter around a small hexagonal core, so a vendor change stops at the adapter that wraps it | [Layer model](#layer-model), [Ports and dependency inversion](#ports-and-dependency-inversion) |
+| Stability | Most of the code is an adapter around a small hexagonal core, so a vendor change stops at the adapter that wraps it | [Dependency rule](#dependency-rule), [Ports and dependency inversion](#ports-and-dependency-inversion) |
 | Backward compatibility | Each public surface keeps a deprecated path working for a stated period | [`DEPRECATION.md`](../DEPRECATION.md) |
 | A programmer, a shell, and an LLM client reach the same domain | Each consumer gets a package shaped for it, and the three share libraries beneath. Dependencies point one way, so no application imports another | [Package decomposition](#package-decomposition) |
-| A layer order that holds without human code review (`QR-14`) | Each package declares what it must not import, and CI fails a merge that breaks the order | [Dependency rule](#dependency-rule), [Layer model](#layer-model) |
+| A layer order that holds without human code review (`QR-14`) | Each package declares what it must not import, and CI fails a merge that breaks the order | [Dependency rule](#dependency-rule) |
 | A change to shared behavior that lands in one pull request (`QR-26`) | Every package lives in one repository and ships on one version. One test run covers all of them | [`RELEASE.md`](../../RELEASE.md) |
 | A smaller learning curve for a contributor | The toolkit is written in Python, which was the default language for work on artificial intelligence when this project began | [`dependencies.md`](dependencies.md) |
 | A commitment to ship in the open | Everything in this repository is published, so a deployment's configuration and credentials cannot sit in it. The hosted wrapper that runs the remote profile is built elsewhere | [Architecture constraints](#architecture-constraints), [`CONTRIBUTING.md`](../../CONTRIBUTING.md) |
 
 ## Building block view
 
-Level 1 is the package graph. [Layer model](#layer-model) then names the roles that the modules of a package take, and it maps the layers of the MCP package onto them.
+Level 1 is the package graph. [Layer model](#layer-model) then maps the layers of the MCP package onto the hexagonal parts that [Dependency rule](#dependency-rule) names.
 
 ### Package decomposition
 
@@ -221,17 +221,7 @@ Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and 
 
 ### Layer model
 
-The code has a hexagonal shape with a thin core. Most of this codebase is an adapter. `pipefy-mcp-server` wraps the MCP SDK and the Pipefy SDK. `pipefy-cli` wraps Typer over the Pipefy SDK.
-
-The logic that is genuinely ours is small, so the core is small. A module that touches a framework does the work of an adapter, and it is not a leak. This shape serves `QR-2`, because a vendor change stops at the adapter that wraps it.
-
-The roles:
-
-- Domain (core). Pure types and logic. It owns the ports that it needs from the outside. It imports no framework and no third-party SDK.
-- Adapter. It translates an outside type into a domain type, or it registers domain behavior with a framework. Framework and third-party SDK imports live here. A driving adapter is entered from the outside, for example an MCP tool call or a CLI command. The core calls a driven adapter to reach the outside, for example Pipefy data access.
-- Composition root. The per-application wiring, built once at startup. It is the only place that constructs concrete adapters and framework objects.
-
-The layers of the MCP package map onto those roles, and their names come from its import-linter contract.
+The layers of the MCP package map onto the hexagonal parts that [Dependency rule](#dependency-rule) names, and their own names come from its import-linter contract.
 
 - `server` and `core/runtime.py` are the composition root.
 - `tools` are driving adapters.
@@ -239,7 +229,7 @@ The layers of the MCP package map onto those roles, and their names come from it
 - The `auth` layer is a driven adapter over network and keychain I/O.
 - `settings` is parsed configuration at the innermost point.
 
-The CLI has no such layers, so this mapping belongs to the MCP package alone. The module list stays in the import-linter contract at `packages/mcp/pyproject.toml`, which CI runs. The reasoning behind the model is in the decision record [ADR-0001](adr/0001-layered-responsibility.md).
+The CLI declares no such contract, so this mapping belongs to the MCP package alone. The module list stays in the import-linter contract at `packages/mcp/pyproject.toml`, which CI runs.
 
 ## Cross-cutting concepts
 
@@ -247,7 +237,15 @@ These rules hold whichever building block you are in, which is why none of them 
 
 ### Dependency rule
 
-Imports point inward. An outer role can import an inner one, never the reverse.
+The code has a hexagonal shape with a thin core. Most of this codebase is an adapter, because `pipefy-mcp-server` wraps the MCP SDK and the Pipefy SDK, while `pipefy-cli` wraps Typer over the Pipefy SDK. The logic that is genuinely ours is small, so the core is small. A module that touches a framework does the work of an adapter, and it is not a leak. This shape serves `QR-2`, because a vendor change stops at the adapter that wraps it. The reasoning behind the model is in the decision record [ADR-0001](adr/0001-layered-responsibility.md).
+
+The hexagonal shape has these parts:
+
+- Domain (core). Pure types and logic. It owns the ports that it needs from the outside. It imports no framework and no third-party SDK.
+- Adapter. It translates an outside type into a domain type, or it registers domain behavior with a framework. Framework and third-party SDK imports live here.
+- Composition root. The per-application wiring, which [Composition root](#composition-root) describes.
+
+Imports point inward. An outer part can import an inner one, never the reverse. The direction holds between packages, and it holds between the layers of one package.
 
 Between packages, ruff `TID251` bans the inward-breaking imports, where two rules produce every entry:
 
@@ -256,7 +254,7 @@ Between packages, ruff `TID251` bans the inward-breaking imports, where two rule
 
 Each package's own `pyproject.toml` holds its list, with one message per banned package. Within the MCP package, import-linter holds the layer order that [Layer model](#layer-model) names, which is `QR-14`. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read or as a startup type import. The enforced spine is the acyclic import chain that holds today, and this section restates neither list.
 
-An application is entered through a driving port, for example an MCP tool call or a CLI command. A library is not entered this way, because a caller imports it and calls it directly.
+An application is entered through a driving port, and its driving adapter is what the outside touches, for example an MCP tool call or a CLI command. The core calls a driven adapter to reach the outside, for example Pipefy data access. A library is not entered this way, because a caller imports it and calls it directly.
 
 ### Ports and dependency inversion
 
@@ -443,7 +441,7 @@ These names carry a second meaning elsewhere, so each one is fixed here.
 - Contract. Qualified at each use. The typed input contract is the parsed model at the edge of an application. The import-linter contract is the layer order in `packages/mcp/pyproject.toml`.
 - Application. A package that a consumer uses, and one that owns a driving port. The CLI and the MCP server are the two. The SDK is a public library, whereas `pipefy-auth` and `pipefy-infra` are shared support libraries. The code labels a related concept `surface`, in `ClientSurface` and in a call such as `surface="mcp"`, and stamps it into the outbound `User-Agent`. That `Literal["mcp", "cli", "sdk"]` in `packages/infra/src/pipefy_infra/telemetry.py` names the same three that [`DEPRECATION.md`](../DEPRECATION.md) puts in scope. This document says application instead, because the rest of the repository spends the word surface on the set of tools a deployment exposes.
 - Consumer. The party that reaches the toolkit: a program that imports the SDK, a person or a script at a terminal, or an LLM. This document never calls that party a client. The word client names two other things here: the program that speaks the MCP protocol, and a constructed object such as the GraphQL client.
-- Domain. Qualified at each use. Pipefy's domain is the product, and the SDK, the CLI, and the MCP server all expose it. A sub-domain is one area of it, and [Requirements overview](#requirements-overview) names them. A tool domain is the one subject a tool is about, which [Tool surface](#tool-surface) describes. The domain layer is the model free of transport and framework, which [Layer model](#layer-model) places.
+- Domain. Qualified at each use. Pipefy's domain is the product, and the SDK, the CLI, and the MCP server all expose it. A sub-domain is one area of it, and [Requirements overview](#requirements-overview) names them. A tool domain is the one subject a tool is about, which [Tool surface](#tool-surface) describes. The domain layer is the model free of transport and framework, which [Dependency rule](#dependency-rule) places.
 - Profile. Qualified at each use. A deployment profile is local or remote, it decides the transport default and the credential source, and [Identity lifetime](#identity-lifetime) turns on that difference. A tool profile is a persona-shaped selection that [Tool surface](#tool-surface) describes, and `--toolsets` names it. A bare "profile" in this document means the deployment profile, because that is the sense the rest of the repository carries.
 - Record. Qualified at each use. A table record is one row of a Pipefy database table, which [Context and scope](#context-and-scope) places. A decision record is one architectural decision, and [`adr/`](adr/README.md) holds the set. A bare "record" in this document means the table record, because that is the sense Pipefy's domain model carries.
 - SDK. A bare "SDK" means the Pipefy SDK, the `pipefy` distribution. A third-party SDK is always named, for example the MCP SDK.

@@ -7,7 +7,7 @@ Date: 2026-07-20
 
 Every package is organized horizontally, and each one sits at a different point on the same problem.
 
-The SDK splits into `services/`, `models/`, and `queries/`, and a crowd of cross-cutting modules sits homeless at the package root. Some of those root modules take a `PipefyClient` and orchestrate calls against it, so a use case sits above the facade that it imports. The driven-adapter layer is named `services/` although it holds only wire wrappers, so the name misdescribes it.
+The SDK splits into `services/`, `models/`, and `queries/`, and a crowd of cross-cutting modules sits homeless at the package root. Some of those root modules take a `PipefyClient` and orchestrate calls against it, so a use case sits above the facade that it imports. The driven-adapter layer is named `services/`, and most of its modules only wrap a wire call, so the name misdescribes them. Some of the rest call a peer service, and where that call chains or branches, a use case sits inside the adapter layer.
 
 The MCP server splits by layer, and its import-linter contract names them: `server`, `tools`, `core`, `auth`, and `settings`. Its `tools` layer already cuts the facade from the use case across part of its surface, because a tool module can carry a `_tool_helpers.py` partner, although many tool modules carry none.
 

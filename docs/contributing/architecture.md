@@ -201,7 +201,7 @@ The legend:
 - An arrow between two packages is a dependency that the package declares in its own `pyproject.toml`, and [Dependency rule](#dependency-rule) holds those arrows pointing one way.
 - An arrow that leaves the box says which package performs that crossing. It carries no label, because [Context and scope](#context-and-scope) says what crosses each one, and which install reaches it.
 
-Two forces produced these five packages. The first is the shape of the consumer, which produced the three at the top. A programmer imports, a person types a command, and an LLM calls a tool. The second is the cost of an install, which produced the two beneath, so that one consumer never pays another's dependencies.
+Two forces produced this split. The first is the shape of the consumer, which produced the packages at the top. A programmer imports, a person types a command, and an LLM calls a tool. The second is the cost of an install, which produced the libraries beneath, so that one consumer never pays another's dependencies.
 
 That second force is what makes `pipefy-auth` and `pipefy-infra` two packages rather than one. Because `packages/sdk/pyproject.toml` declares `pipefy-infra` and not `pipefy-auth`, a program that imports the SDK installs no keychain and no crypto stack. `packages/infra/pyproject.toml` declares pydantic alone, so every package takes it cheaply. One shared package instead of two puts the login machinery in every SDK install.
 

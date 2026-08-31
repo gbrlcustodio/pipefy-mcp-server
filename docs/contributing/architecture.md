@@ -230,7 +230,7 @@ The folders do not name the roles. `tools/` holds a facade, a use case, and a do
 | `tools/*_tools.py`, with `tools/destructive_tool_guard.py` and `tools/mcp_capabilities.py` shared between them | Facade | Declares a tool with its annotations, parses its arguments, and returns the envelope |
 | The helpers modules that take a client, such as `tools/member_tool_helpers.py` | Use case | Orchestrates several calls behind one tool, and decides what the answer says |
 | `auth/`, `core/ipaas_gateway.py`, `observability/json_logging.py` | Driven adapter | Reaches the identity provider and the keychain, a pipe's iPaaS workspace, and the log stream |
-| `settings.py`, `_docs.py`, `core/tool_error_envelope.py`, `tools/toolsets.py`, `tools/remote_profile.py`, and the helpers modules that take no client | Domain type | Holds parsed configuration, the response envelope, the tool taxonomy, the exposure marker, and the pure planners |
+| `settings.py`, `_docs.py`, `core/tool_error_envelope.py`, `tools/toolsets.py`, `tools/remote_profile.py`, `tools/field_condition_planner.py`, `tools/behavior_placeholder_interpolation.py`, and the helpers modules that take no client | Domain type | Holds parsed configuration, the response envelope, the tool taxonomy, the exposure marker, and the pure planners |
 
 A row imports the row below it, and the composition root imports every one. A tool module is the driving adapter of the application as well, because a tool call is what the outside touches, and a middleware wraps it from further out.
 

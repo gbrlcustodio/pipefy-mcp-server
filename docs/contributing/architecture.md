@@ -205,8 +205,6 @@ The legend:
 
 The CLI declares no edge to `pipefy-infra`, so the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, and [Known gaps](#known-gaps) carries that.
 
-Each package also carries its own ruff `TID251` ban list, with one message per banned package. That list holds the edges that must never appear, and two rules produce every entry. An import never runs against the direction of the diagram. The MCP server and the CLI also never import each other, or the private modules of the SDK. Each package's own `pyproject.toml` holds its list.
-
 What each package depends on, and why, is in [`dependencies.md`](dependencies.md).
 
 ### Applications
@@ -249,7 +247,12 @@ These rules hold whichever building block you are in, which is why none of them 
 
 Imports point inward. An outer role can import an inner one, never the reverse.
 
-Between packages, ruff `TID251` bans the inward-breaking imports. Each package lists the modules it must not import. Within the MCP package, import-linter holds the layer order that [Layer model](#layer-model) names, which is `QR-14`. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read or as a startup type import. The enforced spine is the acyclic import chain that holds today. It is recorded in each package's `pyproject.toml`, not restated here.
+Between packages, ruff `TID251` bans the inward-breaking imports, where two rules produce every entry:
+
+- An import never runs against the direction of the level-1 diagram.
+- Neither the MCP server nor the CLI imports the other, or the private modules of the SDK.
+
+Each package's own `pyproject.toml` holds its list, with one message per banned package. Within the MCP package, import-linter holds the layer order that [Layer model](#layer-model) names, which is `QR-14`. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read or as a startup type import. The enforced spine is the acyclic import chain that holds today, and this section restates neither list.
 
 An application is entered through a driving port, for example an MCP tool call or a CLI command. A shared support library is not entered this way. It is called as a library.
 

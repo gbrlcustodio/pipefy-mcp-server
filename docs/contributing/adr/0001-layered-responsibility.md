@@ -13,7 +13,7 @@ The SDK is the deterministic execution layer. The application layer, which is th
 
 Place a behavior by its determinism. Deterministic resolution, where the scoping id makes exactly one answer correct, lives in the SDK. The technique is to require the scoping id that makes the key unique, for example resolving `(repo_id, slug)` rather than a bare slug. Genuine ambiguity, where choosing an answer is a judgment call, lives in the application layer.
 
-This split covers the three applications (SDK, CLI, MCP server) and the shared support libraries (`auth`, `infra`). A shared library is not an application. It owns no driving port. It adds a driven port only where there is payoff, so a pure-utility library holds none.
+This split covers the SDK, the CLI, the MCP server, and the shared support libraries (`auth`, `infra`). A library owns no driving port. It adds a driven port only where there is payoff, so a pure-utility library holds none.
 
 ## Consequences
 

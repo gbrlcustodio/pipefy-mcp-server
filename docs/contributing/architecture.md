@@ -25,7 +25,7 @@ This section holds the forces that shape the map. It names what the toolkit must
 
 - `FR-1` Persistent sign-in. A consumer signs in through a browser on one command, and every later call uses the stored session. The toolkit refreshes that session before it expires, and a logout revokes it.
 - `FR-2` Name resolution. When a consumer names a resource instead of giving its id, the toolkit finds that resource, and an incomplete or misspelled name still finds it.
-- `FR-3` Validation without execution. Before a consumer applies a change, the toolkit checks it against the rules the API enforces and reports what would fail. The check applies nothing.
+- `FR-3` Validation without execution. Before a consumer applies a change, the toolkit reports what would fail. The check changes nothing.
 - `FR-4` Escape hatch. When no tool wraps an operation, the toolkit still reaches it, through a raw GraphQL call and schema introspection.
 - `FR-5` iPaaS reach. The toolkit reaches the flows of a pipe's iPaaS workspace, and it performs the credential exchange that a separate engine needs.
 

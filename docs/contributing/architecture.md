@@ -547,6 +547,8 @@ Resolved once per process. The SDK takes its credential from settings or from th
 
 Resolved once per request. The MCP remote profile holds no caller credential at startup, and it snapshots the bearer off each request. The `pipefy-auth` package then validates that bearer as the resource server. The startup identity and the request-scoped identity are the two shapes in code, and both delegate to `pipefy-auth`.
 
+A credential also ends. `pipefy auth logout` revokes the refresh token at the provider and deletes the stored entry, so nothing can renew that credential. No process keeps a copy of a stored credential either, because every request reads it again. A token already issued keeps working until it expires, because the provider keeps no record that can recall one. `QR-27` states that bound, and [`docs/cli/auth.md`](../cli/auth.md) owns what the command reports when a step of that logout fails.
+
 One rule follows, and it is what `QR-4` requires of any application here. With a per-process identity, downstream code can hold what it received. With a per-request identity, nothing caches it, and process-global state never answers a question about the caller. That is why the import-linter contract bans a `settings` import from the `tools` layer, and the full reasoning is in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 
 A caller can also carry state between calls, such as a vendor cursor or an export id. The API authorizes that value on each request. A handle that we mint ourselves obeys the same rule.

@@ -6,7 +6,7 @@ These readers arrive here:
 
 - A contributor who changes code starts at [Package decomposition](#package-decomposition) and reads inward from there.
 - A consumer of one application wants to know how to use it rather than how it is built, and [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), and [`docs/sdk`](../sdk/README.md) are the references.
-- A reviewer wants an ID:
+- A reviewer settles a point with an ID rather than an argument:
   - A convention ID names how we write code, and [`conventions.md`](conventions.md) is the reference.
   - An `FR` ID names a function the toolkit delivers, and [Requirements overview](#requirements-overview) is the list.
   - A `QR` ID names a demand the code must meet, and [Quality requirements](#quality-requirements) is the table.

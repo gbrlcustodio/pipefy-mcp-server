@@ -17,7 +17,7 @@ Where the code does not match the map, [Known gaps](#known-gaps) names the diffe
 
 ## Introduction and goals
 
-The functions the toolkit delivers, the qualities that dominate every decision about them, and the parties that hold a stake in either.
+This section holds the forces that shape the map. It names what the toolkit must do, which qualities outrank the rest, and who holds a stake in either.
 
 ### Requirements overview
 

@@ -21,7 +21,7 @@ This section holds the forces that shape the map. It names what the toolkit must
 
 ### Requirements overview
 
-These are the functions a consumer comes to the toolkit for. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
+**Toolkit functions.** A consumer comes to the toolkit for these. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
 
 - `FR-1` Persistent sign-in. A consumer signs in through a browser on one command, and every later call uses the stored session. The toolkit refreshes that session before it expires, and a logout revokes it.
 - `FR-2` Name resolution. When a consumer names a resource instead of giving its id, the toolkit finds that resource, and an incomplete or misspelled name still finds it.
@@ -29,7 +29,7 @@ These are the functions a consumer comes to the toolkit for. Each one is work th
 - `FR-4` Escape hatch. When no tool wraps an operation, the toolkit still reaches it, through a raw GraphQL call and schema introspection.
 - `FR-5` iPaaS reach. The toolkit reaches the flows of a pipe's iPaaS workspace, and it performs the credential exchange that a separate engine needs.
 
-Those functions act on the Pipefy capabilities below. Each name is a sub-domain of Pipefy's domain model, which lives outside this repository.
+**Pipefy capabilities.** The functions above act on these. Each name is a sub-domain of Pipefy's domain model, which lives outside this repository.
 
 - Work Execution: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email.
 - Process Modeling: create and change a pipe, its phases, its fields, its field conditions, its labels, and its automations. Create and change an AI agent, with the behaviors it runs and the knowledge it reads.

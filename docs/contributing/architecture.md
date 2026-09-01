@@ -582,6 +582,7 @@ Each row carries the dimensions of the quality it instantiates, and [`quality.ar
 | `QR-23` | `#usable` `#efficient` | A tool's description says briefly what the tool does, and it never teaches how to use it |
 | `QR-24` | `#secure` | A credential the toolkit stores is usable only by whoever it was issued to |
 | `QR-25` | `#safe` `#flexible` | A consumer is stopped for approval only where they chose to be stopped |
+| `QR-27` | `#secure` | A logout ends the credential, and only a token already issued outlives it, until that token expires |
 
 **Failure.** A demand that a caller holds when a call cannot complete, or a component it needs fails.
 

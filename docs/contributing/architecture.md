@@ -616,6 +616,7 @@ These trades are real:
 - `QR-25` gives up the stop that every destructive call gets today. A consumer then gets their client's default, or the auto-approval they chose, and the toolkit adds nothing on top of either. What `QR-6` still owes them moves into a dry run, so a caller who wants the reach pays a round trip and a caller who does not pays nothing.
 - The `power` branch in [Tool surface](#tool-surface) holds the tool count constant, and every call then routes through a meta-tool, so `QR-9` spends what `QR-5` saves.
 - A port makes a unit injectable, and a port with one implementation is indirection, so `QR-13` spends what a reader of the code saves. `PORT-2` in [`conventions.md`](conventions.md) sets where that trade lands.
+- `QR-27` stops at the token already issued, because the alternative asks the provider on every call whether the session still exists, and every call then pays that round trip. A short token lifetime bounds the window instead, and the provider's realm sets that lifetime rather than this repository.
 
 ## Known gaps
 

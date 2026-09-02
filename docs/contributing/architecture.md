@@ -30,7 +30,7 @@ Pipefy is fully invested in the AI ecosystem. Its own AI agents already do the w
 
 ### Quality goals
 
-Five qualities dominate every decision on this map, in this order. The scenario in each row is the requirement itself, and [Quality scenarios](#quality-scenarios) references it rather than restating it.
+These qualities dominate every decision on this map. Where two of them conflict, the higher row wins. Each row pairs a goal with the scenario that makes it concrete, and [Quality scenarios](#quality-scenarios) holds the rest of the set.
 
 | Priority | Quality goal | Scenario |
 |---|---|---|

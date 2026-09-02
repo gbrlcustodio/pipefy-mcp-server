@@ -583,40 +583,40 @@ Each row belongs to one or more categories, and [`quality.arc42.org`](https://qu
 
 **Usage.** A demand that a caller holds while the system runs, including when a call cannot complete or a component it needs fails.
 
-| ID | Demand |
-|---|---|
-| `QR-1` | An invalid request names the field and the rule it broke |
-| `QR-3` | When no human is present, a run never waits for an answer, and it either goes ahead with what it has or fails |
-| `QR-4` | A request acts as the person who sent it, and never as anyone else |
-| `QR-5` | A request finishes without the model making a chain of tool calls to get there |
-| `QR-6` | What a destructive operation will destroy can be learned without running it |
-| `QR-7` | A name that fits more than one resource never quietly picks one, and the caller gets the matches instead |
-| `QR-8` | A failure names its cause, whether a retry can succeed, and the next step |
-| `QR-9` | A model sees only the tools the consumer's work needs |
-| `QR-10` | A tool keeps its answer short, and a caller who needs more asks for more |
-| `QR-12` | A partial result names what did not succeed |
-| `QR-15` | The toolkit checks where a URL points before it fetches it, and it refuses a private address |
-| `QR-16` | A token issued for another service is refused |
-| `QR-17` | A name in the toolkit matches the name the Pipefy product uses |
-| `QR-18` | A call that cannot finish gives up within a time the toolkit states |
-| `QR-19` | One CLI command prints for a person to read and for a program to parse |
-| `QR-20` | An invalid change is refused before it reaches the API |
-| `QR-22` | A tool that is missing something it needs asks for it, rather than failing |
-| `QR-23` | A tool's description says briefly what the tool does, and it never teaches how to use it |
-| `QR-24` | A credential the toolkit stores is usable only by whoever it was issued to |
-| `QR-25` | A consumer is stopped for approval only where they chose to be stopped |
-| `QR-27` | A logout ends the credential, and only a token already issued outlives it, until that token expires |
+| ID | Demand | Acceptance criterion |
+|---|---|---|
+| `QR-1` | An invalid request names the field and the rule it broke | The response names one field and one rule, and a caller can locate the input that failed |
+| `QR-3` | When no human is present, a run never waits for an answer, and it either goes ahead with what it has or fails | No run blocks on input where no terminal is attached |
+| `QR-4` | A request acts as the person who sent it, and never as anyone else | A request's effect is limited to what its own caller may do |
+| `QR-5` | A request finishes without the model making a chain of tool calls to get there | One tool call completes one unit of user work |
+| `QR-6` | What a destructive operation will destroy can be learned without running it | The reach a caller learns before the call equals what the call destroys |
+| `QR-7` | A name that fits more than one resource never quietly picks one, and the caller gets the matches instead | The caller chooses between the matches, and the toolkit chooses none |
+| `QR-8` | A failure names its cause, whether a retry can succeed, and the next step | A caller can decide from the response alone whether to retry, change the input, or stop |
+| `QR-9` | A model sees only the tools the consumer's work needs | The listed tool set holds no tool outside the consumer's selection |
+| `QR-10` | A tool keeps its answer short, and a caller who needs more asks for more | Every read names the fields it returns by default, and an argument widens that set |
+| `QR-12` | A partial result names what did not succeed | A consumer can tell which parts succeeded and which did not from the response alone |
+| `QR-15` | The toolkit checks where a URL points before it fetches it, and it refuses a private address | A URL the toolkit fetches is refused where it points at a private address, as a literal and after it resolves |
+| `QR-16` | A token issued for another service is refused | The bearer's audience is checked against this resource |
+| `QR-17` | A name in the toolkit matches the name the Pipefy product uses | A name the toolkit exposes can be found in the Pipefy domain model |
+| `QR-18` | A call that cannot finish gives up within a time the toolkit states | The call fails with a timeout rather than hanging, and one module declares the value |
+| `QR-19` | One CLI command prints for a person to read and for a program to parse | A program can parse the command's output against a shape this repository declares |
+| `QR-20` | An invalid change is refused before it reaches the API | No request leaves for a change the toolkit can reject |
+| `QR-22` | A tool that is missing something it needs asks for it, rather than failing | The tool asks the client for the input, and it says in its answer when it could not ask |
+| `QR-23` | A tool's description says briefly what the tool does, and it never teaches how to use it | A description states what the tool does and no steps for using it |
+| `QR-24` | A credential the toolkit stores is usable only by whoever it was issued to | A file the toolkit creates for a credential is readable by its owner alone |
+| `QR-25` | A consumer is stopped for approval only where they chose to be stopped | A consumer is stopped where their client's settings say, and nowhere else |
+| `QR-27` | A logout ends the credential, and only a token already issued outlives it, until that token expires | After a logout, no new token can be issued, and the last one stops at its own expiry |
 
 **Change.** A demand that a holder has when the system, or something it depends on, changes.
 
-| ID | Demand |
-|---|---|
-| `QR-2` | A vendor API change does not reach the consumer's code |
-| `QR-11` | After v1.0, a deprecated path keeps working for a stated period, and a warning comes before every breaking change, both defined in [`DEPRECATION.md`](../DEPRECATION.md) |
-| `QR-13` | A test can be written for any unit, and a test that passes tells the truth about the released code |
-| `QR-14` | A merged change never breaks the layer order |
-| `QR-21` | A deployment picks which tools it exposes by configuration, and never by changing the source |
-| `QR-26` | A change to a behavior that more than one application uses lands as one reviewed change, tested against all of them |
+| ID | Demand | Acceptance criterion |
+|---|---|---|
+| `QR-2` | A vendor API change does not reach the consumer's code | A vendor schema change touches no type or signature that a consumer imports |
+| `QR-11` | After v1.0, a deprecated path keeps working for a stated period, and a warning comes before every breaking change, both defined in [`DEPRECATION.md`](../DEPRECATION.md) | A deprecated path keeps working for at least two minor releases |
+| `QR-13` | A test can be written for any unit, and a test that passes tells the truth about the released code | A unit can be exercised with a fake in place of every dependency, and the suite runs on every platform the toolkit ships to |
+| `QR-14` | A merged change never breaks the layer order | A merge that inverts the role direction fails a build check |
+| `QR-21` | A deployment picks which tools it exposes by configuration, and never by changing the source | A deployment changes its tool set without a release |
+| `QR-26` | A change to a behavior that more than one application uses lands as one reviewed change, tested against all of them | One test run gates the change, and no application ships it separately |
 
 Four of these are costs, and each one lands at a different moment. `QR-9` and `QR-23` are the catalog, which costs context once at connect, before the consumer asks for anything, and costs it in tool count and in words per tool. `QR-5` is the chain, which costs a model round trip per link. `QR-10` is the answer, which costs context once per call. A script pays the chain cost once and a model pays it every link.
 
@@ -652,7 +652,7 @@ The map above holds today, with the exceptions below. Each entry ends by naming 
 - The SDK's typed surface reaches no consumer, which is where `QR-2` stops holding. `Package decomposition` says the SDK returns a domain value, and most service reads return an untyped mapping instead, so a vendor entity change reaches the consumer's code. The models the SDK owns are input models, and validation is the half that ships. No package ships a `py.typed` marker either, so a type checker treats the distribution as untyped and offers nothing from the annotations that do exist. The targets are a return type per read and that marker, in each distributed package.
 - The tool domains are not the product's sub-domains. `DOMAINS` in `packages/mcp/src/pipefy_mcp/tools/toolsets.py` partitions every tool eight ways, and a build guard holds that partition disjoint and total. Those eight are feature areas of the product. Pipefy's domain model names ten sub-domains instead, and it treats AI as a technology woven through several of them. A builder defines an agent in Process Modeling, and the agent then acts inside Work Execution as a non-human assignee. Model choice and agent logs are one facet of Governance and Audit, and credit consumption is Billing. A woven technology does not survive a partition, so the catalog collects 36 AI tools under one key instead. That is `QR-17`. The target is one taxonomy, chosen against the model, and it costs the `--toolsets` vocabulary that a caller types today.
 - A coined name where the product has one. The key holding those 36 tools is `intelligence`, and the domain model names every AI element with the product's own prefix: AI Agent, AI Automation, AI Governance, AI credit. `skills/process-intelligence` coins a second name that the model does not carry. Neither is the partition above, because re-homing no tool would fix either one. That is `QR-17`. The target is the product's word in both places, plus an audit of `skills/` for the same coinage. That rename reaches the `PIPEFY_MCP_TOOLSETS` vocabulary in [`docs/config.md`](../config.md), and it is cheapest before v1.0, when `QR-11` starts to demand a warning first.
-- No stated bound on a call that cannot complete. Twelve timeout constants sit in three packages, and `VALIDATE_FETCH_TIMEOUT_SECONDS` is defined twice, as `30` in `packages/mcp/src/pipefy_mcp/tools/ai_agent_tools.py` and as `30.0` in `packages/sdk/src/pipefy_sdk/ai_preflight.py`. No section states what a caller is owed when a call cannot finish. That is `QR-18`. The target is one owner for that bound.
+- No stated bound on a call that cannot complete. Twelve timeout constants sit in three packages, and `VALIDATE_FETCH_TIMEOUT_SECONDS` is defined twice, as `30` in `packages/mcp/src/pipefy_mcp/tools/ai_agent_tools.py` and as `30.0` in `packages/sdk/src/pipefy_sdk/ai_preflight.py`. `QR-18` states what a caller is owed, and no module owns the value. The target is one owner for that bound.
 - The audience check is off by default. `JwtValidationSettings` in `packages/auth/src/pipefy_auth/settings.py` defaults `verify_audience` to false, for the interim that runs before the identity provider issues an `aud` claim, so a deployment accepts a bearer that the same issuer minted for another resource. That is `QR-16`. The target is a remote profile that requires an audience.
 - The DNS gate stops short of the identity provider. `pipefy_infra.security` holds a synchronous gate that rejects a literal private IP, an asynchronous gate that rejects a hostname resolving to one, and a composite that runs both. The two paths that fetch a URL taken from data run both, and `packages/sdk/src/pipefy_sdk/services/attachment_service.py` re-checks at connect time against a rebinding record. `packages/auth/src/pipefy_auth/discovery.py` is the exception. It takes `token_endpoint` and `jwks_uri` from the provider's own discovery document, runs the synchronous gate alone, and `pipefy-auth` then posts to the first and fetches keys from the second. A hostname that resolves to an internal address passes. That is `QR-15`. The target is the DNS gate on an endpoint a discovery document supplies, which costs an async path through a call that is synchronous today.
 - A credential reaches the disk by two paths, and neither one sets a mode. The first is the file keyring, which `PIPEFY_KEYCHAIN_BACKEND=file` turns on. It writes the credential in plaintext, and `keyrings.alt` picks the mode. The code is `configure_keychain_backend` in `packages/auth/src/pipefy_auth/storage.py`. The second is `config.toml`. The toolkit reads a credential from that file and never checks its mode, and [`docs/config.md`](../config.md) tells the reader to run `chmod 600` instead. That is `QR-24`. The target is a mode on the file the toolkit creates, and a stated position on the file it only reads.

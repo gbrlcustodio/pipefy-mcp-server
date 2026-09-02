@@ -9,7 +9,7 @@ These readers arrive here:
 - A reviewer settles a point with an ID rather than an argument:
   - A convention ID names how we write code, and [`conventions.md`](conventions.md) is the reference.
   - An `FR` ID names a function the toolkit delivers, and [Requirements overview](#requirements-overview) is the list.
-  - A `QR` ID names a demand the code must meet, and [Quality requirements](#quality-requirements) is the table.
+  - A `QR` ID names a demand the code must meet, and [Quality requirements](#quality-requirements) is the list.
 
 The map explains rather than instructs. It points at the owner of a fact rather than repeat it. The reader pays one hop for that. A copy appears here only where the argument on this page depends on it, and [`authoring.md`](authoring.md) states the rule for every document under `docs/`.
 
@@ -561,51 +561,62 @@ A caller can also carry state between calls, such as a vendor cursor or an expor
 
 The architecture on this map exists to serve the demands below, so a section above can name what its decision satisfies, and a review can cite one ID instead of reopening the argument.
 
-Each row carries the dimensions of the quality it instantiates, and [`quality.arc42.org`](https://quality.arc42.org/) owns both. A dimension is a label over a catalog of qualities, so it overlaps with the others by design and it never holds one row alone.
+Each section names the requirement that it satisfies, in whole or in part. Where another document owns the answer instead, the row names that document. If neither holds, [Known gaps](#known-gaps) names the row.
 
-**Usage.** A demand that a caller holds while the system runs normally.
+### Quality requirements overview
 
-| ID | Dimensions | Demand |
-|---|---|---|
-| `QR-1` | `#operable` `#reliable` | An invalid request names the field and the rule it broke |
-| `QR-3` | `#usable` `#operable` | When no human is present, a run never waits for an answer, and it either goes ahead with what it has or fails |
-| `QR-4` | `#secure` | A request acts as the person who sent it, and never as anyone else |
-| `QR-5` | `#efficient` | A request finishes without the model making a chain of tool calls to get there |
-| `QR-6` | `#safe` `#reliable` | What a destructive operation will destroy can be learned without running it |
-| `QR-7` | `#usable` `#reliable` `#suitable` | A name that fits more than one resource never quietly picks one, and the caller gets the matches instead |
-| `QR-9` | `#usable` `#reliable` `#suitable` | A model sees only the tools the consumer's work needs |
-| `QR-10` | `#efficient` | A tool keeps its answer short, and a caller who needs more asks for more |
-| `QR-15` | `#secure` | The toolkit checks where a URL points before it fetches it, and it refuses a private address |
-| `QR-16` | `#secure` | A token issued for another service is refused |
-| `QR-17` | `#usable` `#operable` | A name in the toolkit matches the name the Pipefy product uses |
-| `QR-19` | `#usable` `#operable` | One CLI command prints for a person to read and for a program to parse |
-| `QR-20` | `#usable` `#operable` | An invalid change is refused before it reaches the API |
-| `QR-22` | `#usable` `#operable` | A tool that is missing something it needs asks for it, rather than failing |
-| `QR-23` | `#usable` `#efficient` | A tool's description says briefly what the tool does, and it never teaches how to use it |
-| `QR-24` | `#secure` | A credential the toolkit stores is usable only by whoever it was issued to |
-| `QR-25` | `#safe` `#flexible` | A consumer is stopped for approval only where they chose to be stopped |
-| `QR-27` | `#secure` | A logout ends the credential, and only a token already issued outlives it, until that token expires |
+Each row belongs to one or more categories, and [`quality.arc42.org`](https://quality.arc42.org/) owns the set. A category is a label over a catalog of qualities, so the categories overlap by design and none holds a row alone. Arc42 10.1 offers ISO 25010 or Q42, and this table is Q42.
 
-**Failure.** A demand that a caller holds when a call cannot complete, or a component it needs fails.
+| Category | Rows |
+|---|---|
+| `#efficient` | `QR-5`, `QR-10`, `QR-18`, `QR-23` |
+| `#flexible` | `QR-21`, `QR-25`, `QR-26` |
+| `#maintainable` | `QR-13`, `QR-14`, `QR-26` |
+| `#operable` | `QR-1`, `QR-3`, `QR-8`, `QR-11`, `QR-12`, `QR-17`, `QR-19`, `QR-20`, `QR-22` |
+| `#reliable` | `QR-1`, `QR-2`, `QR-6`, `QR-7`, `QR-8`, `QR-9`, `QR-11`, `QR-12` |
+| `#safe` | `QR-6`, `QR-25` |
+| `#secure` | `QR-4`, `QR-15`, `QR-16`, `QR-24`, `QR-27` |
+| `#suitable` | `QR-7`, `QR-9`, `QR-13` |
+| `#usable` | `QR-3`, `QR-7`, `QR-9`, `QR-11`, `QR-17`, `QR-19`, `QR-20`, `QR-21`, `QR-22`, `QR-23` |
 
-| ID | Dimensions | Demand |
-|---|---|---|
-| `QR-8` | `#operable` `#reliable` | A failure names its cause, whether a retry can succeed, and the next step |
-| `QR-12` | `#operable` `#reliable` | A partial result names what did not succeed |
-| `QR-18` | `#efficient` | A call that cannot finish gives up within a time the toolkit states |
+### Quality scenarios
+
+**Usage.** A demand that a caller holds while the system runs, including when a call cannot complete or a component it needs fails.
+
+| ID | Demand |
+|---|---|
+| `QR-1` | An invalid request names the field and the rule it broke |
+| `QR-3` | When no human is present, a run never waits for an answer, and it either goes ahead with what it has or fails |
+| `QR-4` | A request acts as the person who sent it, and never as anyone else |
+| `QR-5` | A request finishes without the model making a chain of tool calls to get there |
+| `QR-6` | What a destructive operation will destroy can be learned without running it |
+| `QR-7` | A name that fits more than one resource never quietly picks one, and the caller gets the matches instead |
+| `QR-8` | A failure names its cause, whether a retry can succeed, and the next step |
+| `QR-9` | A model sees only the tools the consumer's work needs |
+| `QR-10` | A tool keeps its answer short, and a caller who needs more asks for more |
+| `QR-12` | A partial result names what did not succeed |
+| `QR-15` | The toolkit checks where a URL points before it fetches it, and it refuses a private address |
+| `QR-16` | A token issued for another service is refused |
+| `QR-17` | A name in the toolkit matches the name the Pipefy product uses |
+| `QR-18` | A call that cannot finish gives up within a time the toolkit states |
+| `QR-19` | One CLI command prints for a person to read and for a program to parse |
+| `QR-20` | An invalid change is refused before it reaches the API |
+| `QR-22` | A tool that is missing something it needs asks for it, rather than failing |
+| `QR-23` | A tool's description says briefly what the tool does, and it never teaches how to use it |
+| `QR-24` | A credential the toolkit stores is usable only by whoever it was issued to |
+| `QR-25` | A consumer is stopped for approval only where they chose to be stopped |
+| `QR-27` | A logout ends the credential, and only a token already issued outlives it, until that token expires |
 
 **Change.** A demand that a holder has when the system, or something it depends on, changes.
 
-| ID | Dimensions | Demand |
-|---|---|---|
-| `QR-2` | `#reliable` | A vendor API change does not reach the consumer's code |
-| `QR-11` | `#usable` `#operable` `#reliable` | After v1.0, a deprecated path keeps working for a stated period, and a warning comes before every breaking change, both defined in [`DEPRECATION.md`](../DEPRECATION.md) |
-| `QR-13` | `#suitable` `#maintainable` | A test can be written for any unit, and a test that passes tells the truth about the released code |
-| `QR-14` | `#maintainable` | A merged change never breaks the layer order |
-| `QR-21` | `#flexible` `#usable` | A deployment picks which tools it exposes by configuration, and never by changing the source |
-| `QR-26` | `#flexible` `#maintainable` | A change to a behavior that more than one application uses lands as one reviewed change, tested against all of them |
-
-Each section names the requirement that it satisfies, in whole or in part. Where another document owns the answer instead, the row names that document. If neither holds, [Known gaps](#known-gaps) names the row.
+| ID | Demand |
+|---|---|
+| `QR-2` | A vendor API change does not reach the consumer's code |
+| `QR-11` | After v1.0, a deprecated path keeps working for a stated period, and a warning comes before every breaking change, both defined in [`DEPRECATION.md`](../DEPRECATION.md) |
+| `QR-13` | A test can be written for any unit, and a test that passes tells the truth about the released code |
+| `QR-14` | A merged change never breaks the layer order |
+| `QR-21` | A deployment picks which tools it exposes by configuration, and never by changing the source |
+| `QR-26` | A change to a behavior that more than one application uses lands as one reviewed change, tested against all of them |
 
 Four of these are costs, and each one lands at a different moment. `QR-9` and `QR-23` are the catalog, which costs context once at connect, before the consumer asks for anything, and costs it in tool count and in words per tool. `QR-5` is the chain, which costs a model round trip per link. `QR-10` is the answer, which costs context once per call. A script pays the chain cost once and a model pays it every link.
 

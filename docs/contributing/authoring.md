@@ -135,6 +135,7 @@ A decision here is a settled choice, and a concept at arc42 8 is a standing rule
 - A permanent ID, such as `QR-7`, under the same rule as a convention ID above.
 - Its dimensions. Find the row's quality in the Q42 catalog at [`quality.arc42.org`](https://quality.arc42.org/), then copy that quality's dimensions. The nine overlap by design, so a row can carry several. Never force a row to one. Arc42 10.1 offers ISO 25010 or Q42, and we take Q42.
 - The demand, in one line, in the words of the party that holds it.
+- After the tables, the section names the pairs of rows that read as rivals, and each entry says whether the two conflict. A cost that one decision produced belongs beside that decision, and never in this list.
 
 **`Known gaps`, arc42 11.** See [Where a gap is documented](#where-a-gap-is-documented). Arc42 11 wants those entries ordered by priority.
 

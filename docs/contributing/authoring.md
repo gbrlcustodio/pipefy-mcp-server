@@ -104,7 +104,7 @@ Change the order when something outside this file changes what matters:
 
 **`Solution strategy`, arc42 4.** The most important decisions, in one table: a driver, the decision it produced, and the section that details it. The goal rows come first, in the priority order `Quality goals` sets.
 
-- A decision earns a place here on one of two tests. It answers a goal in `Quality goals`, or it is impactful enough that a contributor holds it whatever they change. Arc42 9 holds the important decisions that pass neither, and it refers back here.
+- A decision earns a place here on one of two tests. It satisfies a goal in `Quality goals`, or it is impactful enough that a contributor holds it whatever they change. Arc42 9 holds the important decisions that pass neither, and it refers back here.
 - The second test is the loose one. A decision that matters inside one application only fails it, and the section that owns that application takes it instead.
 - One table, because arc42's own first column holds a goal, a requirement, or a constraint. A second table would put a second grammar in one section, and a narrative above it would restate the rows below.
 - Every row states a driver, because arc42 asks this section to justify each decision. A driver says what happens, in words a person would say, and a compressed noun phrase hides whether the row answers the whole demand or half of it. Open the cell with the phrase and put a `QR` handle in parentheses after it, the way `Quality goals` cites its rows.

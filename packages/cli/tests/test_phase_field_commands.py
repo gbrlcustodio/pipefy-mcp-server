@@ -5,6 +5,12 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from pipefy_sdk.graphql_inputs import (
+    CreatePhaseFieldInput,
+    UpdatePhaseFieldInput,
+    UpdatePhaseInput,
+)
+
 from pipefy_cli.main import app
 
 
@@ -60,7 +66,9 @@ def test_phase_update_resolves_name_json(
             ["phase", "update", "3", "--description", "x", "--json"],
         )
     assert result.exit_code == 0
-    mock_client.update_phase.assert_awaited_once_with("3", description="x", name="Todo")
+    mock_client.update_phase.assert_awaited_once_with(
+        UpdatePhaseInput(id="3", description="x", name="Todo")
+    )
 
 
 def test_phase_delete_yes(runner, clean_pipefy_env, saved_cwd, oauth_env):
@@ -114,18 +122,19 @@ def test_field_create_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
         )
     assert result.exit_code == 0
     mock_client.create_phase_field.assert_awaited_once_with(
-        "2", "Owner", "assignee_select"
+        CreatePhaseFieldInput(phase_id="2", label="Owner", type="assignee_select")
     )
 
 
 def test_field_update_forwards_extra_phase_id_for_slug_resolution(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):
-    """``--extra '{"phase_id": ...}'`` reaches ``client.update_phase_field`` verbatim.
+    """``--extra '{"phase_id": ...}'`` reaches ``client.update_phase_field``.
 
     Locks the CLI side of the smoke-2026-05-15 slug-resolution fix: the SDK can only
-    map ``"priority"`` to its ``internal_id`` if the CLI forwards ``phase_id`` as a
-    keyword argument.
+    map ``"priority"`` to its ``internal_id`` if the CLI forwards ``phase_id``.
+    ``UpdatePhaseFieldInput`` has no such field, so the CLI lifts it out of
+    ``--extra`` and passes it as the keyword argument instead of sending it.
     """
     oauth_env("fld-upd")
     mock_client = MagicMock()
@@ -149,7 +158,9 @@ def test_field_update_forwards_extra_phase_id_for_slug_resolution(
         )
     assert result.exit_code == 0, result.stdout
     mock_client.update_phase_field.assert_awaited_once_with(
-        "priority", label="Priority", phase_id="343162749"
+        UpdatePhaseFieldInput(id="priority", label="Priority"),
+        phase_id="343162749",
+        pipe_id=None,
     )
 
 

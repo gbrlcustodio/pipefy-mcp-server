@@ -6,6 +6,15 @@ from pipefy_auth import StaticBearerAuth
 from pipefy_sdk import __version__
 from pipefy_sdk.client import PipefyClient, build_executors
 from pipefy_sdk.graphql_executor import GraphQLResult
+from pipefy_sdk.graphql_inputs import (
+    CreateFieldConditionInput,
+    CreatePhaseFieldInput,
+    UpdateFieldConditionInput,
+    UpdateLabelInput,
+    UpdatePhaseFieldInput,
+    UpdatePhaseInput,
+    UpdatePipeInput,
+)
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_service import AutomationService
@@ -345,8 +354,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.create_pipe("P", 100) == {"ok": "create_pipe"}
     pipe_config_service.create_pipe.assert_awaited_once_with("P", 100)
 
-    assert await client.update_pipe(200, name="N") == {"ok": "update_pipe"}
-    pipe_config_service.update_pipe.assert_awaited_once_with(200, name="N")
+    update_pipe_input = UpdatePipeInput(id="200", name="N")
+    assert await client.update_pipe(update_pipe_input) == {"ok": "update_pipe"}
+    pipe_config_service.update_pipe.assert_awaited_once_with(update_pipe_input)
 
     assert await client.delete_pipe(300) == {"ok": "delete_pipe"}
     pipe_config_service.delete_pipe.assert_awaited_once_with(300)
@@ -361,29 +371,28 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         1, "P1", done=True, index=2.0, description=None
     )
 
-    assert await client.update_phase(9, name="N") == {"ok": "update_phase"}
-    pipe_config_service.update_phase.assert_awaited_once_with(9, name="N")
+    update_phase_input = UpdatePhaseInput(id="9", name="N")
+    assert await client.update_phase(update_phase_input) == {"ok": "update_phase"}
+    pipe_config_service.update_phase.assert_awaited_once_with(update_phase_input)
 
     assert await client.delete_phase(8) == {"ok": "delete_phase"}
     pipe_config_service.delete_phase.assert_awaited_once_with(8)
 
-    assert await client.create_phase_field(
-        11,
-        "Title",
-        "short_text",
-        required=True,
-    ) == {"ok": "create_phase_field"}
-    pipe_config_service.create_phase_field.assert_awaited_once_with(
-        11,
-        "Title",
-        "short_text",
-        required=True,
+    create_field_input = CreatePhaseFieldInput(
+        phase_id="11", label="Title", type="short_text", required=True
     )
+    assert await client.create_phase_field(create_field_input) == {
+        "ok": "create_phase_field"
+    }
+    pipe_config_service.create_phase_field.assert_awaited_once_with(create_field_input)
 
-    assert await client.update_phase_field(12, label="L") == {
+    update_field_input = UpdatePhaseFieldInput(id="12", label="L")
+    assert await client.update_phase_field(update_field_input) == {
         "ok": "update_phase_field"
     }
-    pipe_config_service.update_phase_field.assert_awaited_once_with(12, label="L")
+    pipe_config_service.update_phase_field.assert_awaited_once_with(
+        update_field_input, phase_id=None, pipe_id=None
+    )
 
     assert await client.delete_phase_field(13) == {"ok": "delete_phase_field"}
     pipe_config_service.delete_phase_field.assert_awaited_once_with(13, pipe_uuid=None)
@@ -391,33 +400,31 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.create_label(14, "Bug", "red") == {"ok": "create_label"}
     pipe_config_service.create_label.assert_awaited_once_with(14, "Bug", "red")
 
-    assert await client.update_label(15, name="Story") == {"ok": "update_label"}
-    pipe_config_service.update_label.assert_awaited_once_with(15, name="Story")
+    update_label_input = UpdateLabelInput(id="15", name="Story", color="#FF0000")
+    assert await client.update_label(update_label_input) == {"ok": "update_label"}
+    pipe_config_service.update_label.assert_awaited_once_with(update_label_input)
 
     assert await client.delete_label(16) == {"ok": "delete_label"}
     pipe_config_service.delete_label.assert_awaited_once_with(16)
 
     expr = {"expressions": [], "expressions_structure": []}
     acts = [{"phaseFieldId": "pf-target"}]
-    assert await client.create_field_condition(
-        "pf-1",
-        expr,
-        acts,
-        name="R1",
-    ) == {"ok": "create_field_condition"}
+    create_condition_input = CreateFieldConditionInput(
+        phaseId="pf-1", condition=expr, actions=acts, name="R1"
+    )
+    assert await client.create_field_condition(create_condition_input) == {
+        "ok": "create_field_condition"
+    }
     pipe_config_service.create_field_condition.assert_awaited_once_with(
-        "pf-1",
-        expr,
-        acts,
-        name="R1",
+        create_condition_input
     )
 
-    assert await client.update_field_condition("c1", name="N") == {
+    update_condition_input = UpdateFieldConditionInput(id="c1", name="N")
+    assert await client.update_field_condition(update_condition_input) == {
         "ok": "update_field_condition"
     }
     pipe_config_service.update_field_condition.assert_awaited_once_with(
-        "c1",
-        name="N",
+        update_condition_input
     )
 
     assert await client.delete_field_condition("c2") == {"ok": "delete_field_condition"}

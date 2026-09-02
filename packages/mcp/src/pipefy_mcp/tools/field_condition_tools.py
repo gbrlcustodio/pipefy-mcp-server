@@ -7,6 +7,11 @@ from typing import Any
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
+from pipefy_sdk.graphql_inputs import (
+    CreateFieldConditionInput,
+    UpdateFieldConditionInput,
+)
+from pipefy_sdk.utils import normalize_field_condition_fields
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -25,6 +30,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
 from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
+    build_graphql_input,
     validate_tool_id,
 )
 
@@ -449,13 +455,22 @@ class FieldConditionTools:
             lint_err = await _lint_required_hidden_actions(client, pid, actions)
             if lint_err is not None:
                 return lint_err
+            create_input, err = build_graphql_input(
+                CreateFieldConditionInput,
+                normalize_field_condition_fields(
+                    {
+                        "phaseId": pid,
+                        "condition": condition,
+                        "actions": actions,
+                        **merged,
+                    }
+                ),
+                operation="create_field_condition",
+            )
+            if create_input is None:
+                return err
             try:
-                raw = await client.create_field_condition(
-                    pid,
-                    condition,
-                    actions,
-                    **merged,
-                )
+                raw = await client.create_field_condition(create_input)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,
@@ -520,7 +535,11 @@ class FieldConditionTools:
                 actions: Optional list of ``FieldConditionActionInput`` dicts (same as create).
                     Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``phaseFieldId``.
                 name: Optional new rule name.
-                extra_input: Additional fields to merge into ``UpdateFieldConditionInput``.
+                extra_input: Additional fields to merge into ``UpdateFieldConditionInput``:
+                    ``phase_id`` or ``clientMutationId``. The two mutations spell the
+                    phase differently — ``createFieldConditionInput`` takes ``phaseId``
+                    and this one takes ``phase_id`` — and ``index`` exists only on
+                    create.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -607,8 +626,15 @@ class FieldConditionTools:
                             return lint_err
                 except Exception:  # noqa: BLE001
                     pass
+            update_input, err = build_graphql_input(
+                UpdateFieldConditionInput,
+                normalize_field_condition_fields({"id": cid_str, **update_attrs}),
+                operation="update_field_condition",
+            )
+            if update_input is None:
+                return err
             try:
-                raw = await client.update_field_condition(cid_str, **update_attrs)
+                raw = await client.update_field_condition(update_input)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,

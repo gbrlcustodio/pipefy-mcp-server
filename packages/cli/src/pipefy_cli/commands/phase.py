@@ -6,6 +6,9 @@ from typing import Any
 
 import typer
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.graphql_inputs import (
+    UpdatePhaseInput,
+)
 from pipefy_sdk.phase_inventory import (
     get_phase_not_found_message,
     is_get_phase_not_found_error,
@@ -14,6 +17,7 @@ from pipefy_sdk.phase_inventory import (
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    graphql_input_or_bad_parameter,
     parse_json_object,
     resource_id_argument,
     run_cli_command,
@@ -240,7 +244,12 @@ def phase_update(
                     f"Phase {phase_id} not found or has no name; pass --name explicitly."
                 )
             update_attrs["name"] = current
-        return await client.update_phase(phase_id, **update_attrs)
+        return await client.update_phase(
+            graphql_input_or_bad_parameter(
+                UpdatePhaseInput,
+                {"id": phase_id, **update_attrs},
+            )
+        )
 
     run_cli_command(ctx, json_out, factory)
 

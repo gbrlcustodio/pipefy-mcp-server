@@ -5,6 +5,13 @@ from typing import Any
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk.graphql_inputs import (
+    CreatePhaseFieldInput,
+    UpdateLabelInput,
+    UpdatePhaseFieldInput,
+    UpdatePhaseInput,
+    UpdatePipeInput,
+)
 from pipefy_sdk.phase_inventory import (
     get_phase_not_found_message,
     is_get_phase_not_found_error,
@@ -43,6 +50,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import find_label_dependents
 from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
+    build_graphql_input,
     validate_optional_tool_id,
     validate_tool_id,
 )
@@ -208,14 +216,21 @@ class PipeConfigTools:
                     ),
                     code="INVALID_ARGUMENTS",
                 )
+            update_input, err = build_graphql_input(
+                UpdatePipeInput,
+                {
+                    "id": pipe_id_str,
+                    "name": name,
+                    "icon": icon,
+                    "color": color,
+                    "preferences": preferences,
+                },
+                operation="update_pipe",
+            )
+            if update_input is None:
+                return err
             try:
-                raw = await client.update_pipe(
-                    pipe_id_str,
-                    name=name,
-                    icon=icon,
-                    color=color,
-                    preferences=preferences,
-                )
+                raw = await client.update_pipe(update_input)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,
@@ -704,8 +719,15 @@ class PipeConfigTools:
                     )
                 update_attrs["name"] = current
 
+            update_input, err = build_graphql_input(
+                UpdatePhaseInput,
+                {"id": phase_id, **update_attrs},
+                operation="update_phase",
+            )
+            if update_input is None:
+                return err
             try:
-                raw = await client.update_phase(phase_id, **update_attrs)
+                raw = await client.update_phase(update_input)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,
@@ -854,13 +876,20 @@ class PipeConfigTools:
                 merged["description"] = description
             if required is not None:
                 merged["required"] = required
-            try:
-                raw = await client.create_phase_field(
-                    phase_id,
-                    label.strip(),
-                    field_type.strip(),
+            create_input, err = build_graphql_input(
+                CreatePhaseFieldInput,
+                {
+                    "phase_id": phase_id,
+                    "label": label.strip(),
+                    "type": field_type.strip(),
                     **merged,
-                )
+                },
+                operation="create_phase_field",
+            )
+            if create_input is None:
+                return err
+            try:
+                raw = await client.create_phase_field(create_input)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,
@@ -953,6 +982,11 @@ class PipeConfigTools:
                 for k, v in (extra_input or {}).items()
                 if k not in _UPDATE_PHASE_FIELD_EXTRA_RESERVED
             }
+            # phase_id / pipe_id are not fields of UpdatePhaseFieldInput, so they
+            # are lifted out of extra_input rather than rejected. The declared
+            # arguments win when both carry one.
+            extra_phase_id = update_attrs.pop("phase_id", None)
+            extra_pipe_id = update_attrs.pop("pipe_id", None)
             update_attrs["label"] = label
             if description is not None:
                 update_attrs["description"] = description
@@ -962,13 +996,20 @@ class PipeConfigTools:
                 update_attrs["options"] = options
             if uuid is not None:
                 update_attrs["uuid"] = uuid
-            if phase_id_norm is not None:
-                update_attrs["phase_id"] = phase_id_norm
-            if pipe_id_norm is not None:
-                update_attrs["pipe_id"] = pipe_id_norm
             fid = field_id.strip() if isinstance(field_id, str) else field_id
+            update_input, err = build_graphql_input(
+                UpdatePhaseFieldInput,
+                {"id": fid, **update_attrs},
+                operation="update_phase_field",
+            )
+            if update_input is None:
+                return err
             try:
-                raw = await client.update_phase_field(fid, **update_attrs)
+                raw = await client.update_phase_field(
+                    update_input,
+                    phase_id=phase_id_norm or extra_phase_id,
+                    pipe_id=pipe_id_norm or extra_pipe_id,
+                )
             except ValueError as exc:
                 return build_pipe_tool_error_payload(
                     message=str(exc),
@@ -1225,8 +1266,15 @@ class PipeConfigTools:
             }
             update_attrs["name"] = name.strip()
             update_attrs["color"] = color
+            update_input, err = build_graphql_input(
+                UpdateLabelInput,
+                {"id": label_id, **update_attrs},
+                operation="update_label",
+            )
+            if update_input is None:
+                return err
             try:
-                raw = await client.update_label(label_id, **update_attrs)
+                raw = await client.update_label(update_input)
             except ValueError as exc:
                 return build_pipe_tool_error_payload(
                     message=str(exc),

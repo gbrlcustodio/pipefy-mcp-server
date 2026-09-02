@@ -212,6 +212,108 @@ def test_field_condition_list_json(
     assert body["field_conditions"] == [{"id": "1"}]
 
 
+def test_field_condition_create_rejects_a_reserved_extra_key(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``--extra`` may not restate a key a dedicated argument already sets.
+
+    One typed input is a flat mapping, so a ``phaseId`` in ``--extra`` would
+    otherwise overwrite the ``PHASE_ID`` argument and file the rule on a
+    different phase.
+    """
+    oauth_env("fc-reserved")
+    mock_client = MagicMock()
+    mock_client.create_field_condition = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "field-condition",
+                "create",
+                "--phase",
+                "9",
+                "--name",
+                "R",
+                "--condition",
+                '{"expressions": []}',
+                "--actions",
+                '[{"phaseFieldId": "1", "actionId": "show"}]',
+                "--extra",
+                '{"phaseId": "999"}',
+            ],
+        )
+    assert r.exit_code == 2
+    mock_client.create_field_condition.assert_not_called()
+    assert "phaseId" in r.stdout + str(r.stderr)
+
+
+def test_field_condition_update_rejects_a_reserved_id_in_extra(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``--extra '{"id": ...}'`` would patch a different condition than the argument names."""
+    oauth_env("fc-reserved-id")
+    mock_client = MagicMock()
+    mock_client.update_field_condition = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "field-condition",
+                "update",
+                "cond-2",
+                "--extra",
+                '{"id": "OTHER", "name": "x"}',
+            ],
+        )
+    assert r.exit_code == 2
+    mock_client.update_field_condition.assert_not_called()
+    assert "'id'" in r.stdout + str(r.stderr)
+
+
+def test_field_condition_create_accepts_a_flat_expressions_structure(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """GraphQL coerces a bare value into a single-item list, so the CLI must too.
+
+    The API stores ``expressions_structure: [0]`` as ``[["0"]]``; the typed input
+    mirrors ``[[ID]]`` and would refuse it, so the shape is repaired first.
+    """
+    oauth_env("fc-flat")
+    mock_client = MagicMock()
+    mock_client.create_field_condition = AsyncMock(
+        return_value={"createFieldCondition": {"fieldCondition": {"id": "c1"}}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "field-condition",
+                "create",
+                "--phase",
+                "9",
+                "--name",
+                "R",
+                "--condition",
+                '{"expressions": [], "expressions_structure": [0, 1]}',
+                "--actions",
+                '[{"phaseFieldId": "1", "actionId": "show"}]',
+                "--json",
+            ],
+        )
+    assert r.exit_code == 0, r.stdout
+    sent = mock_client.create_field_condition.await_args[0][0]
+    assert sent.condition.expressions_structure == [[0], [1]]
+
+
 def test_email_inbox_list_json(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):

@@ -5,8 +5,18 @@ from unittest.mock import AsyncMock
 import pytest
 from _shared.mock_clients import mock_executor
 from graphql import print_ast
+from pydantic import ValidationError
 
 from pipefy_sdk import PipefyGraphQLError
+from pipefy_sdk.graphql_inputs import (
+    CreateFieldConditionInput,
+    CreatePhaseFieldInput,
+    UpdateFieldConditionInput,
+    UpdateLabelInput,
+    UpdatePhaseFieldInput,
+    UpdatePhaseInput,
+    UpdatePipeInput,
+)
 from pipefy_sdk.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
     CREATE_FIELD_CONDITION_MUTATION,
@@ -65,7 +75,9 @@ async def test_update_pipe_merges_id_and_non_none_attrs():
     service, executor = _make_service(
         {"updatePipe": {"pipe": {"id": "2", "name": "Beta"}}}
     )
-    result = await service.update_pipe(2, name="Beta", icon="star", color=None)
+    result = await service.update_pipe(
+        UpdatePipeInput(id="2", name="Beta", icon="star", color=None)
+    )
 
     query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_PIPE_MUTATION
@@ -82,7 +94,7 @@ async def test_update_pipe_accepts_alphanumeric_id():
     service, executor = _make_service(
         {"updatePipe": {"pipe": {"id": "Yr5RUVCi", "name": "X"}}}
     )
-    await service.update_pipe("Yr5RUVCi", name="X")
+    await service.update_pipe(UpdatePipeInput(id="Yr5RUVCi", name="X"))
 
     variables = executor.execute_query.call_args[0][1]
     assert variables == {"input": {"id": "Yr5RUVCi", "name": "X"}}
@@ -176,7 +188,9 @@ async def test_update_phase_merges_id_and_attrs():
     service, executor = _make_service(
         {"updatePhase": {"phase": {"id": "3", "name": "Renamed", "done": True}}},
     )
-    result = await service.update_phase(3, name="Renamed", description=None, done=True)
+    result = await service.update_phase(
+        UpdatePhaseInput(id="3", name="Renamed", description=None, done=True)
+    )
 
     query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_PHASE_MUTATION
@@ -217,11 +231,13 @@ async def test_create_phase_field_sends_type_and_optional_attrs():
         },
     )
     result = await service.create_phase_field(
-        10,
-        "Email",
-        "email",
-        description="Work email",
-        required=True,
+        CreatePhaseFieldInput(
+            phase_id="10",
+            label="Email",
+            type="email",
+            description="Work email",
+            required=True,
+        )
     )
 
     query, variables = executor.execute_query.call_args[0]
@@ -258,7 +274,9 @@ async def test_update_phase_field_merges_id_and_attrs():
             },
         },
     )
-    result = await service.update_phase_field(5, label="Renamed", description=None)
+    result = await service.update_phase_field(
+        UpdatePhaseFieldInput(id="5", label="Renamed", description=None)
+    )
 
     query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_PHASE_FIELD_MUTATION
@@ -284,7 +302,9 @@ async def test_update_phase_field_accepts_string_slug():
             },
         },
     )
-    result = await service.update_phase_field("detalhe_mcp", label="Renamed")
+    result = await service.update_phase_field(
+        UpdatePhaseFieldInput(id="detalhe_mcp", label="Renamed")
+    )
 
     _query, variables = executor.execute_query.call_args[0]
     assert variables == {"input": {"id": "detalhe_mcp", "label": "Renamed"}}
@@ -330,9 +350,7 @@ async def test_update_phase_field_resolves_slug_via_phase_id():
         pipe_svc,
     )
     result = await service.update_phase_field(
-        "priority",
-        label="Priority",
-        description="x",
+        UpdatePhaseFieldInput(id="priority", label="Priority", description="x"),
         phase_id="343162749",
     )
     pipe_svc.get_phase_fields.assert_awaited_once_with("343162749")
@@ -392,9 +410,7 @@ async def test_update_phase_field_resolves_slug_via_pipe_id():
         pipe_svc,
     )
     result = await service.update_phase_field(
-        "priority",
-        label="Priority",
-        description="x",
+        UpdatePhaseFieldInput(id="priority", label="Priority", description="x"),
         pipe_id="501",
     )
     _q, variables = executor.execute_query.call_args[0]
@@ -446,7 +462,9 @@ async def test_update_phase_field_ambiguous_slug_raises():
     service, executor = _make_service_with_pipe({}, pipe_svc)
     executor.execute_query = AsyncMock()
     with pytest.raises(ValueError, match="uuid"):
-        await service.update_phase_field("status", label="L", pipe_id="9")
+        await service.update_phase_field(
+            UpdatePhaseFieldInput(id="status", label="L"), pipe_id="9"
+        )
     executor.execute_query.assert_not_called()
 
 
@@ -489,7 +507,9 @@ async def test_update_phase_field_parallel_phase_fetches_resolve_slug():
         },
         pipe_svc,
     )
-    await service.update_phase_field("priority", label="P", pipe_id="1")
+    await service.update_phase_field(
+        UpdatePhaseFieldInput(id="priority", label="P"), pipe_id="1"
+    )
     assert pipe_svc.get_phase_fields.await_count == 3
     _q, variables = executor.execute_query.call_args[0]
     assert variables == {
@@ -535,7 +555,9 @@ async def test_update_phase_field_slug_raises_when_any_phase_fetch_fails():
     service, executor = _make_service_with_pipe({}, pipe_svc)
     executor.execute_query = AsyncMock()
     with pytest.raises(ValueError, match="Could not load fields"):
-        await service.update_phase_field("priority", label="L", pipe_id="9")
+        await service.update_phase_field(
+            UpdatePhaseFieldInput(id="priority", label="L"), pipe_id="9"
+        )
     executor.execute_query.assert_not_called()
 
 
@@ -563,7 +585,9 @@ async def test_update_phase_field_slug_raises_when_zero_matches_and_partial_fail
     service, executor = _make_service_with_pipe({}, pipe_svc)
     executor.execute_query = AsyncMock()
     with pytest.raises(ValueError, match="Could not load fields"):
-        await service.update_phase_field("missing_slug", label="L", pipe_id="9")
+        await service.update_phase_field(
+            UpdatePhaseFieldInput(id="missing_slug", label="L"), pipe_id="9"
+        )
     executor.execute_query.assert_not_called()
 
 
@@ -655,7 +679,7 @@ async def test_create_label_rejects_non_hex_color():
 @pytest.mark.asyncio
 async def test_update_label_normalizes_color():
     service, executor = _make_service({"updateLabel": {"label": {"id": "2"}}})
-    await service.update_label(2, name="Feature", color="#abc")
+    await service.update_label(UpdateLabelInput(id="2", name="Feature", color="#abc"))
 
     variables = executor.execute_query.call_args[0][1]
     assert variables["input"]["color"] == "#AABBCC"
@@ -667,22 +691,26 @@ async def test_update_label_rejects_non_hex_color():
     service, executor = _make_service({})
 
     with pytest.raises(ValueError, match="expected #RGB or #RRGGBB hex color"):
-        await service.update_label(2, name="Feature", color="blue")
+        await service.update_label(
+            UpdateLabelInput(id="2", name="Feature", color="blue")
+        )
 
     executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_label_merges_id_and_attrs():
+async def test_update_label_sends_the_whole_input():
     service, executor = _make_service(
         {"updateLabel": {"label": {"id": "2", "name": "Feature", "color": "blue"}}},
     )
-    result = await service.update_label(2, name="Feature", color=None)
+    result = await service.update_label(
+        UpdateLabelInput(id="2", name="Feature", color="#abcdef")
+    )
 
     query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_LABEL_MUTATION
-    assert variables == {"input": {"id": "2", "name": "Feature"}}
+    assert variables == {"input": {"id": "2", "name": "Feature", "color": "#ABCDEF"}}
     assert result == {
         "updateLabel": {"label": {"id": "2", "name": "Feature", "color": "blue"}},
     }
@@ -733,11 +761,13 @@ async def test_create_field_condition_success():
         },
     )
     result = await service.create_field_condition(
-        99,
-        expr,
-        act,
-        name="Rule A",
-        index=None,
+        CreateFieldConditionInput(
+            phaseId="99",
+            condition=expr,
+            actions=act,
+            name="Rule A",
+            index=None,
+        )
     )
 
     query, variables = executor.execute_query.call_args[0]
@@ -776,7 +806,11 @@ async def test_create_field_condition_normalizes_actions_and_condition():
         {"createFieldCondition": {"fieldCondition": {"id": "cond-norm"}}},
     )
 
-    await service.create_field_condition(99, expr, actions, name="R")
+    await service.create_field_condition(
+        CreateFieldConditionInput(
+            phaseId="99", condition=expr, actions=actions, name="R"
+        )
+    )
 
     _, variables = executor.execute_query.call_args[0]
     payload = variables["input"]
@@ -784,33 +818,34 @@ async def test_create_field_condition_normalizes_actions_and_condition():
     assert payload["condition"]["expressions"][0]["structure_id"] == 0
     assert payload["condition"]["expressions_structure"] == [[0]]
     assert payload["actions"][0]["actionId"] == "hide"
-    assert payload["actions"] is not actions
-    assert payload["actions"][0] is not actions[0]
+    # The caller's own dicts are untouched by the normalization.
+    assert actions[0]["actionId"] == "hidden"
+    assert expr["expressions_structure"] == [["0"]]
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_field_condition_rejects_reserved_phaseId_attr():
-    """``phaseId`` via ``**attrs`` raises instead of silently overriding the positional phase_id.
+async def test_create_field_condition_takes_the_phase_from_the_input():
+    """``phaseId`` is a field of the input, so there is no second source to disagree with it.
 
-    Snake-case ``phase_id``, ``condition``, and ``actions`` cannot reach ``**attrs``
-    at all — Python's call binding raises :class:`TypeError` first because those
-    names collide with the explicit positional parameters.
+    The service used to take ``phase_id`` positionally and reject a ``phaseId``
+    passed through ``**attrs``. One typed input leaves nothing to reconcile.
     """
     service, executor = _make_service(
         {"createFieldCondition": {"fieldCondition": {"id": "x"}}},
     )
 
-    with pytest.raises(ValueError, match="phaseId"):
-        await service.create_field_condition(
-            "99",
-            {"expressions": []},
-            [{"phaseFieldId": "1"}],
+    await service.create_field_condition(
+        CreateFieldConditionInput(
+            phaseId="99",
+            condition={"expressions": []},
+            actions=[{"phaseFieldId": "1"}],
             name="R",
-            phaseId="override",
         )
+    )
 
-    executor.execute_query.assert_not_called()
+    _, variables = executor.execute_query.call_args[0]
+    assert variables["input"]["phaseId"] == "99"
 
 
 @pytest.mark.unit
@@ -820,9 +855,11 @@ async def test_create_field_condition_transport_error():
     service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
     with pytest.raises(PipefyGraphQLError):
         await service.create_field_condition(
-            "pf-1",
-            {"expressions": []},
-            [{"phaseFieldId": "x"}],
+            CreateFieldConditionInput(
+                phaseId="pf-1",
+                condition={"expressions": []},
+                actions=[{"phaseFieldId": "x"}],
+            )
         )
 
 
@@ -837,9 +874,7 @@ async def test_update_field_condition_success():
         },
     )
     result = await service.update_field_condition(
-        "cond-2",
-        name="Updated label",
-        ignored=None,
+        UpdateFieldConditionInput(id="cond-2", name="Updated label")
     )
 
     query, variables = executor.execute_query.call_args[0]
@@ -861,8 +896,9 @@ async def test_update_field_condition_normalizes_actions():
     )
 
     await service.update_field_condition(
-        "c",
-        actions=[{"phaseFieldId": "1", "actionId": "hidden"}],
+        UpdateFieldConditionInput(
+            id="c", actions=[{"phaseFieldId": "1", "actionId": "hidden"}]
+        )
     )
 
     _, variables = executor.execute_query.call_args[0]
@@ -871,14 +907,14 @@ async def test_update_field_condition_normalizes_actions():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_field_condition_rejects_reserved_id_attr():
-    """The ``id`` key must come via the positional ``condition_id`` argument."""
+async def test_update_field_condition_rejects_an_unknown_field():
+    """The input is built before the call, so a stray key never reaches the API."""
     service, executor = _make_service(
         {"updateFieldCondition": {"fieldCondition": {"id": "c"}}},
     )
 
-    with pytest.raises(ValueError, match="id"):
-        await service.update_field_condition("c", id="other-id")
+    with pytest.raises(ValidationError):
+        UpdateFieldConditionInput(id="c", conditon={"expressions": []})
 
     executor.execute_query.assert_not_called()
 
@@ -889,7 +925,9 @@ async def test_update_field_condition_transport_error():
     executor = mock_executor(side_effect=PipefyGraphQLError([{"message": "not found"}]))
     service = PipeConfigService(executor=executor, pipe_service=AsyncMock())
     with pytest.raises(PipefyGraphQLError):
-        await service.update_field_condition("missing-id", name=None, phase_id="88")
+        await service.update_field_condition(
+            UpdateFieldConditionInput(id="missing-id", phase_id="88")
+        )
 
 
 @pytest.mark.unit

@@ -8,6 +8,15 @@ from typing import Any
 from pipefy_infra.coerce import optional_str
 
 from pipefy_sdk.graphql_executor import GraphQLExecutor
+from pipefy_sdk.graphql_inputs import (
+    CreateFieldConditionInput,
+    CreatePhaseFieldInput,
+    UpdateFieldConditionInput,
+    UpdateLabelInput,
+    UpdatePhaseFieldInput,
+    UpdatePhaseInput,
+    UpdatePipeInput,
+)
 from pipefy_sdk.label_color import normalize_label_color
 from pipefy_sdk.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
@@ -36,14 +45,28 @@ from pipefy_sdk.utils import (
     slug_like_field_token,
 )
 
-_CREATE_FIELD_CONDITION_RESERVED_ATTRS = frozenset({"phaseId"})
-_UPDATE_FIELD_CONDITION_RESERVED_ATTRS = frozenset({"id"})
-
 _PHASE_FIELD_SLUG_RESOLVE_FETCH_FAILED = (
     "Could not load fields for one or more phases while resolving this slug; "
     "pass `uuid` from get_phase_fields or `phase_id` so the lookup does not "
     "depend on every phase."
 )
+
+
+def _normalized_field_condition_input(
+    input: CreateFieldConditionInput | UpdateFieldConditionInput,
+) -> dict[str, Any]:
+    """Render a field-condition input with its two payload shapes corrected.
+
+    The normalizers work on the serialized payload rather than on the model so
+    the generated models stay inert mirrors of the schema. Both mutations need
+    the same treatment, and the schema types the two inputs identically here.
+    """
+    payload = input.to_graphql_input()
+    if "condition" in payload:
+        payload["condition"] = normalize_field_condition_payload(payload["condition"])
+    if "actions" in payload:
+        payload["actions"] = normalize_field_condition_actions(payload["actions"])
+    return payload
 
 
 class PipeConfigService:
@@ -65,14 +88,11 @@ class PipeConfigService:
         }
         return await self._executor.execute_query(CREATE_PIPE_MUTATION, variables)
 
-    async def update_pipe(self, pipe_id: str | int, **attrs: Any) -> dict:
-        """Update a pipe by ID. Pass only Pipefy `UpdatePipeInput` fields (e.g. name, icon, color, preferences)."""
-        payload: dict[str, Any] = {"id": str(pipe_id)}
-        for key, value in attrs.items():
-            if value is not None:
-                payload[key] = value
-        variables = {"input": payload}
-        return await self._executor.execute_query(UPDATE_PIPE_MUTATION, variables)
+    async def update_pipe(self, input: UpdatePipeInput) -> dict:
+        """Update a pipe. Fields left unset on the input are not sent."""
+        return await self._executor.execute_query(
+            UPDATE_PIPE_MUTATION, {"input": input.to_graphql_input()}
+        )
 
     async def delete_pipe(self, pipe_id: str | int) -> dict:
         """Delete a pipe by ID (permanent). Caller must enforce preview/confirm UX."""
@@ -113,14 +133,10 @@ class PipeConfigService:
             CREATE_PHASE_MUTATION, {"input": input_obj}
         )
 
-    async def update_phase(self, phase_id: str | int, **attrs: Any) -> dict:
-        """Update a phase by ID. Pass only Pipefy `UpdatePhaseInput` fields (e.g. name, description, done)."""
-        payload: dict[str, Any] = {"id": str(phase_id)}
-        for key, value in attrs.items():
-            if value is not None:
-                payload[key] = value
+    async def update_phase(self, input: UpdatePhaseInput) -> dict:
+        """Update a phase. ``name`` is required by the API on every update."""
         return await self._executor.execute_query(
-            UPDATE_PHASE_MUTATION, {"input": payload}
+            UPDATE_PHASE_MUTATION, {"input": input.to_graphql_input()}
         )
 
     async def delete_phase(self, phase_id: str | int) -> dict:
@@ -129,34 +145,24 @@ class PipeConfigService:
             DELETE_PHASE_MUTATION, {"input": {"id": str(phase_id)}}
         )
 
-    async def create_phase_field(
-        self,
-        phase_id: str | int,
-        label: str,
-        field_type: str,
-        **attrs: Any,
-    ) -> dict:
+    async def create_phase_field(self, input: CreatePhaseFieldInput) -> dict:
         """Create a field on a phase.
 
-        Args:
-            phase_id: Phase that will receive the field.
-            label: Field label shown in the UI.
-            field_type: Pipefy field type string (maps to `type` on `CreatePhaseFieldInput`; not validated here).
-            **attrs: Additional `CreatePhaseFieldInput` fields (e.g. description, required), when not None.
+        ``type`` is the Pipefy field type. It is a soft enum: any value is sent
+        and the API validates it, so a field type added server-side works
+        without an SDK release.
         """
-        input_obj: dict[str, Any] = {
-            "phase_id": str(phase_id),
-            "label": label,
-            "type": field_type,
-        }
-        for key, value in attrs.items():
-            if value is not None:
-                input_obj[key] = value
         return await self._executor.execute_query(
-            CREATE_PHASE_FIELD_MUTATION, {"input": input_obj}
+            CREATE_PHASE_FIELD_MUTATION, {"input": input.to_graphql_input()}
         )
 
-    async def update_phase_field(self, field_id: str | int, **attrs: Any) -> dict:
+    async def update_phase_field(
+        self,
+        input: UpdatePhaseFieldInput,
+        *,
+        phase_id: str | int | None = None,
+        pipe_id: str | int | None = None,
+    ) -> dict:
         """Update a phase field by slug (or numeric/uuid field id) on Pipefy.
 
         Pipefy's ``UpdatePhaseFieldInput`` takes the field **slug** as ``id`` and
@@ -165,21 +171,19 @@ class PipeConfigService:
         **not** a valid ``id`` here — use the slug.
 
         Args:
-            field_id: Phase field slug (preferred), uuid, or numeric ``id``.
-            **attrs: ``UpdatePhaseFieldInput`` fields. Optional ``phase_id`` /
-                ``pipe_id`` (stripped before the mutation) trigger a slug-only
-                disambiguation: the SDK looks up the field's ``uuid`` and injects
-                it into ``attrs["uuid"]`` when the match is unique. ``phase_id``
-                scans one phase; ``pipe_id`` scans the start form and every phase.
+            input: The mutation input. ``id`` is the slug, uuid, or numeric id,
+                and is stripped and sent as a string — the slug lookup needs one,
+                and every form of this id is a string in practice.
+            phase_id: Narrows a slug lookup to that phase's fields. The mutation
+                has no such field, so it is a parameter rather than part of
+                ``input``: when ``input.uuid`` is unset and ``id`` looks like a
+                slug, the SDK resolves the field's ``uuid`` and fills it in.
+            pipe_id: Same, scanning the start form and every phase. Used only
+                when ``phase_id`` is absent.
         """
-        attrs = dict(attrs)
-        phase_id = attrs.pop("phase_id", None)
-        pipe_id = attrs.pop("pipe_id", None)
-        uuid_val = attrs.get("uuid")
-        raw_token = str(field_id).strip()
-
-        if uuid_val is None and slug_like_field_token(raw_token):
-            resolved_uuid: str | None = None
+        raw_token = str(input.id).strip()
+        resolved_uuid: str | None = None
+        if input.uuid is None and slug_like_field_token(raw_token):
             if phase_id is not None:
                 resolved_uuid = await self._resolve_phase_field_uuid_with_phase(
                     raw_token, str(phase_id).strip()
@@ -188,13 +192,10 @@ class PipeConfigService:
                 resolved_uuid = await self._resolve_phase_field_uuid_with_pipe(
                     raw_token, str(pipe_id).strip()
                 )
-            if resolved_uuid is not None:
-                attrs["uuid"] = resolved_uuid
-
-        payload: dict[str, Any] = {"id": raw_token}
-        for key, value in attrs.items():
-            if value is not None:
-                payload[key] = value
+        updates: dict[str, Any] = {"id": raw_token}
+        if resolved_uuid is not None:
+            updates["uuid"] = resolved_uuid
+        payload = input.model_copy(update=updates).to_graphql_input()
         return await self._executor.execute_query(
             UPDATE_PHASE_FIELD_MUTATION, {"input": payload}
         )
@@ -322,21 +323,16 @@ class PipeConfigService:
             CREATE_LABEL_MUTATION, {"input": input_obj}
         )
 
-    async def update_label(self, label_id: str | int, **attrs: Any) -> dict:
-        """Update a label by ID.
+    async def update_label(self, input: UpdateLabelInput) -> dict:
+        """Update a label.
 
-        Args:
-            label_id: Label ID.
-            **attrs: `UpdateLabelInput` fields to set (omit or pass None to skip).
-                ``color`` is normalized to hex ``#RRGGBB`` (raises ``ValueError``
-                on non-hex input).
+        The API requires ``name`` and ``color`` on every update, so both are
+        required on the input; pass the current value for the one not changing.
+        ``color`` is normalized to hex ``#RRGGBB`` (raises ``ValueError`` on
+        non-hex input).
         """
-        if attrs.get("color") is not None:
-            attrs["color"] = normalize_label_color(attrs["color"])
-        payload: dict[str, Any] = {"id": str(label_id)}
-        for key, value in attrs.items():
-            if value is not None:
-                payload[key] = value
+        payload = input.to_graphql_input()
+        payload["color"] = normalize_label_color(payload["color"])
         return await self._executor.execute_query(
             UPDATE_LABEL_MUTATION, {"input": payload}
         )
@@ -351,85 +347,29 @@ class PipeConfigService:
             DELETE_LABEL_MUTATION, {"input": {"id": str(label_id)}}
         )
 
-    async def create_field_condition(
-        self,
-        phase_id: str | int,
-        condition: dict[str, Any],
-        actions: list[dict[str, Any]],
-        **attrs: Any,
-    ) -> dict:
+    async def create_field_condition(self, input: CreateFieldConditionInput) -> dict:
         """Create a field condition (Pipefy ``createFieldConditionInput``).
 
-        Args:
-            phase_id: Phase ID (sent as ``phaseId`` on the mutation input).
-            condition: ``ConditionInput`` (e.g. ``expressions``, ``expressions_structure``).
-            actions: Non-empty list of ``FieldConditionActionInput`` dicts (use ``phaseFieldId``).
-            **attrs: Optional fields such as ``name``, ``index``, ``clientMutationId``;
-                keys with value ``None`` are omitted. The camelCase ``phaseId`` is
-                rejected here to prevent callers from silently overriding the
-                positional ``phase_id`` (the snake_case forms ``phase_id``,
-                ``condition``, ``actions`` are auto-rejected by Python because they
-                collide with the explicit positional parameters).
+        ``condition`` and ``actions`` are normalized on the way out; see
+        :func:`normalize_field_condition_payload` for the two shapes the
+        mutation answers with an opaque 500.
         """
-        reserved = sorted(
-            k for k in attrs if k in _CREATE_FIELD_CONDITION_RESERVED_ATTRS
-        )
-        if reserved:
-            raise ValueError(
-                "create_field_condition received reserved key(s) via **attrs: "
-                f"{', '.join(reserved)}. Pass them as positional arguments instead."
-            )
-        phase_key = phase_id.strip() if isinstance(phase_id, str) else str(phase_id)
-        normalized_condition = normalize_field_condition_payload(condition)
-        normalized_actions = normalize_field_condition_actions(actions)
-        input_obj: dict[str, Any] = {
-            "phaseId": phase_key,
-            "condition": normalized_condition,
-            "actions": normalized_actions,
-        }
-        for key, value in attrs.items():
-            if value is not None:
-                input_obj[key] = value
         return await self._executor.execute_query(
-            CREATE_FIELD_CONDITION_MUTATION, {"input": input_obj}
+            CREATE_FIELD_CONDITION_MUTATION,
+            {"input": _normalized_field_condition_input(input)},
         )
 
-    async def update_field_condition(
-        self,
-        condition_id: str,
-        **attrs: Any,
-    ) -> dict:
+    async def update_field_condition(self, input: UpdateFieldConditionInput) -> dict:
         """Update an existing field condition (`UpdateFieldConditionInput`).
 
-        Args:
-            condition_id: Field condition ID.
-            **attrs: Fields to set; keys with value ``None`` are omitted. ``id``
-                is reserved and must be passed positionally via ``condition_id``.
-                When ``condition`` is a dict, the SDK normalizes it
-                (drops persisted ``expression.id``, coerces ``structure_id`` /
-                ``expressions_structure`` entries to ``int``). When ``actions``
-                is a list, ``actionId: "hidden"`` is canonicalized to ``"hide"``.
+        ``condition`` is normalized (persisted ``expression.id`` dropped,
+        ``structure_id`` and ``expressions_structure`` entries coerced to
+        ``int``) and ``actions`` has ``actionId: "hidden"`` canonicalized to
+        ``"hide"``.
         """
-        reserved = sorted(
-            k for k in attrs if k in _UPDATE_FIELD_CONDITION_RESERVED_ATTRS
-        )
-        if reserved:
-            raise ValueError(
-                "update_field_condition received reserved key(s) via **attrs: "
-                f"{', '.join(reserved)}. 'id' must be passed as condition_id."
-            )
-        payload: dict[str, Any] = {"id": condition_id}
-        for key, value in attrs.items():
-            if value is None:
-                continue
-            if key == "condition" and isinstance(value, dict):
-                payload[key] = normalize_field_condition_payload(value)
-            elif key == "actions" and isinstance(value, list):
-                payload[key] = normalize_field_condition_actions(value)
-            else:
-                payload[key] = value
         return await self._executor.execute_query(
-            UPDATE_FIELD_CONDITION_MUTATION, {"input": payload}
+            UPDATE_FIELD_CONDITION_MUTATION,
+            {"input": _normalized_field_condition_input(input)},
         )
 
     async def delete_field_condition(self, condition_id: str) -> dict:

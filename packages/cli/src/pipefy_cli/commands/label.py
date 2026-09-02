@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import typer
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.graphql_inputs import (
+    UpdateLabelInput,
+)
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    graphql_input_or_bad_parameter,
     normalize_label_color_cli,
     resource_id_argument,
     run_cli_command,
@@ -86,8 +90,13 @@ def label_update(
     nm = validate_label_name_cli(name)
     clr = normalize_label_color_cli(color)
 
+    update_input = graphql_input_or_bad_parameter(
+        UpdateLabelInput,
+        {"id": label_id, "name": nm, "color": clr},
+    )
+
     async def factory(client: PipefyClient):
-        return await client.update_label(label_id, name=nm, color=clr)
+        return await client.update_label(update_input)
 
     run_cli_command(ctx, json_out, factory)
 

@@ -10,6 +10,36 @@ This tree summarizes how to work with **`pipefy`**: the vendor GraphQL client, s
 
 For a short in-repo overview and dev commands, see **[`../../packages/sdk/README.md`](../../packages/sdk/README.md)**.
 
+## Typed mutation inputs
+
+Write methods take one typed input model that mirrors the GraphQL input object, field for field:
+
+```python
+from pipefy_sdk.graphql_inputs import UpdatePipeInput
+
+await client.update_pipe(UpdatePipeInput(id=pipe_id, name="Onboarding", color="blue"))
+```
+
+The model carries the `id`, because `UpdatePipeInput.id` is `ID!` in the schema. Fields you leave unset are not sent, so a partial update stays partial. The consequence is that no field can be sent as an explicit `null`.
+
+A misspelled field is rejected by name, before the request:
+
+```python
+UpdatePipeInput(id=pipe_id, nmae="Onboarding")
+# pydantic_core.ValidationError: nmae — Extra inputs are not permitted
+```
+
+This adds no rule of its own. Pipefy answers the same call with `InputObject 'UpdatePipeInput' doesn't accept argument 'nmae'`; the model only moves the rejection to before the round trip. `pipefy_sdk.graphql_inputs.describe_input_rejection` turns that `ValidationError` into one line naming the field, which is how the MCP tools and the CLI word their own message.
+
+Three details are worth knowing:
+
+- **`ID` is not coerced.** A GraphQL `ID` accepts a string or an integer and the models pass through whichever you gave. `createFieldCondition` needs integers in `expressions_structure` and answers strings with an opaque 500, so coercing either way would break one caller to serve another.
+- **Enums are soft.** A GraphQL enum is typed `str`, and the documented values are exported as a tuple (`COLORS_VALUES`). Any value is sent and the API validates it, so a value added server-side works without an SDK release.
+- **A resolution hint is a parameter, not a field.** `update_phase_field` takes `phase_id` / `pipe_id` keyword arguments, which the mutation has no fields for. They let the SDK resolve a slug `id` to the field's `uuid` before it calls the API.
+- **A field condition needs its shape repaired first.** GraphQL coerces a bare value into a single-item list, so `expressions_structure: [0]` is a legal way to write `[[0]]` on the wire. A model mirroring `[[ID]]` refuses it, so run `normalize_field_condition_fields` on the raw mapping before constructing `CreateFieldConditionInput` or `UpdateFieldConditionInput`. It is idempotent, and the service runs the same repair on the serialized payload for callers who skip it.
+
+The models are generated from a snapshot of the live schema by `scripts/generate_graphql_inputs.py`; see [`../../packages/sdk/README.md`](../../packages/sdk/README.md) for regenerating them. Methods that still take `**attrs` are migrating one batch at a time.
+
 ## Errors
 
 `PipefyError` is the root of the API error types. Catch it to handle a failure

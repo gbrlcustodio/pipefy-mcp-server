@@ -6,15 +6,29 @@ from typing import Any
 
 import typer
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.graphql_inputs import (
+    CreateFieldConditionInput,
+    UpdateFieldConditionInput,
+)
+from pipefy_sdk.utils import normalize_field_condition_fields
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    graphql_input_or_bad_parameter,
     parse_json_object,
     parse_json_value,
+    reject_reserved_extra_keys,
     resource_id_argument,
     run_cli_command,
 )
+
+# Keys a dedicated argument already sets, so `--extra` may not also carry them.
+# The same policy the MCP tools apply through their own reserved sets.
+_CREATE_FIELD_CONDITION_RESERVED = frozenset(
+    {"phaseId", "phase_id", "condition", "actions", "name"}
+)
+_UPDATE_FIELD_CONDITION_RESERVED = frozenset({"id"})
 
 field_condition_app = typer.Typer(
     help="Field conditions (dynamic form rules on phases).",
@@ -130,16 +144,26 @@ def field_condition_create(
         if not isinstance(item, dict):
             raise typer.BadParameter(f"--actions[{i}] must be a JSON object")
         actions_list.append(item)
-    extra_obj = parse_json_object(extra, "--extra") or {}
+    extra_obj = reject_reserved_extra_keys(
+        parse_json_object(extra, "--extra"),
+        reserved=_CREATE_FIELD_CONDITION_RESERVED,
+    )
+
+    create_input = graphql_input_or_bad_parameter(
+        CreateFieldConditionInput,
+        normalize_field_condition_fields(
+            {
+                **extra_obj,
+                "phaseId": phase_id,
+                "condition": cond_obj,
+                "actions": actions_list,
+                "name": name,
+            }
+        ),
+    )
 
     async def factory(client: PipefyClient):
-        return await client.create_field_condition(
-            phase_id,
-            cond_obj,
-            actions_list,
-            name=name,
-            **extra_obj,
-        )
+        return await client.create_field_condition(create_input)
 
     run_cli_command(ctx, json_out, factory)
 
@@ -164,9 +188,17 @@ def field_condition_update(
     extra_obj = parse_json_value(extra, "--extra")
     if not isinstance(extra_obj, dict):
         raise typer.BadParameter("--extra must be a JSON object")
+    extra_obj = reject_reserved_extra_keys(
+        extra_obj, reserved=_UPDATE_FIELD_CONDITION_RESERVED
+    )
+
+    update_input = graphql_input_or_bad_parameter(
+        UpdateFieldConditionInput,
+        normalize_field_condition_fields({**extra_obj, "id": condition_id}),
+    )
 
     async def factory(client: PipefyClient):
-        return await client.update_field_condition(condition_id, **extra_obj)
+        return await client.update_field_condition(update_input)
 
     run_cli_command(ctx, json_out, factory)
 

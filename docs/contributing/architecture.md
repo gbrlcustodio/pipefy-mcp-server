@@ -43,15 +43,15 @@ This section holds the forces that shape the map. It names what the toolkit must
 
 ### Quality goals
 
-Five qualities dominate every decision on this map, in this order. [Quality requirements](#quality-requirements) holds every row named below.
+Five qualities dominate every decision on this map, in this order. The scenario in each row is the requirement itself, and [Quality scenarios](#quality-scenarios) references it rather than restating it.
 
 | Priority | Quality goal | Scenario |
 |---|---|---|
-| 1 | Authenticity | Two callers hold sessions on one remote process. Neither one can act as the other, and neither one can read the other's data. (`QR-4`, `QR-16`) |
-| 2 | Resource utilization | A model asks for one card by name. One tool call answers it, and the response carries what was asked for rather than the whole entity. (`QR-5`, `QR-10`, `QR-18`, `QR-23`) |
-| 3 | Diagnosability | A GraphQL call is denied. The response names the likely cause, the next step, and on request the vendor error codes and a correlation id. (`QR-1`, `QR-8`, `QR-12`) |
+| 1 | Authenticity | Two callers hold sessions on one remote process. Each request acts as the person who sent it, so neither caller can act as the other or read the other's data. (`QR-4`) |
+| 2 | Resource utilization | A model asks for one card by name. One tool call answers it, and no second call is needed to get there. (`QR-5`) |
+| 3 | Diagnosability | A GraphQL call is denied. The response names the likely cause, whether a retry can succeed, and the next step. (`QR-8`) |
 | 4 | Stability | Pipefy reshapes a GraphQL response. The change never reaches the consumer's code. (`QR-2`) |
-| 5 | Backward compatibility | After v1.0, a release deprecates a public SDK function. The function keeps working for two more minor releases, and `DEPRECATION.md` sets that period. (`QR-11`) |
+| 5 | Backward compatibility | After v1.0, a release deprecates a public SDK function. A warning comes first, the function keeps working for two more minor releases, and `DEPRECATION.md` sets that period. (`QR-11`) |
 
 ### Stakeholders
 
@@ -583,17 +583,19 @@ Each row belongs to one or more categories, and [`quality.arc42.org`](https://qu
 
 ### Quality scenarios
 
+A row states its demand, unless [Quality goals](#quality-goals) ranks it, in which case the goal states it and the row points there.
+
 **Usage.** A demand that a caller holds while the system runs, including when a call cannot complete or a component it needs fails.
 
 | ID | Demand | Acceptance criterion |
 |---|---|---|
 | `QR-1` | An invalid request names the field and the rule it broke | The response names one field and one rule, and a caller can locate the input that failed |
 | `QR-3` | When no human is present, a run never waits for an answer, and it either goes ahead with what it has or fails | No run blocks on input where no terminal is attached |
-| `QR-4` | A request acts as the person who sent it, and never as anyone else | A request's effect is limited to what its own caller may do |
-| `QR-5` | A request finishes without the model making a chain of tool calls to get there | One tool call completes one unit of user work |
+| `QR-4` | [Quality goals](#quality-goals), priority 1 | A request's effect is limited to what its own caller may do |
+| `QR-5` | [Quality goals](#quality-goals), priority 2 | One tool call completes one unit of user work |
 | `QR-6` | What a destructive operation will destroy can be learned without running it | The reach a caller learns before the call equals what the call destroys |
 | `QR-7` | A name that fits more than one resource never quietly picks one, and the caller gets the matches instead | The caller chooses between the matches, and the toolkit chooses none |
-| `QR-8` | A failure names its cause, whether a retry can succeed, and the next step | A caller can decide from the response alone whether to retry, change the input, or stop |
+| `QR-8` | [Quality goals](#quality-goals), priority 3 | A caller can decide from the response alone whether to retry, change the input, or stop |
 | `QR-9` | A model sees only the tools the consumer's work needs | The listed tool set holds no tool outside the consumer's selection |
 | `QR-10` | A tool keeps its answer short, and a caller who needs more asks for more | Every read names the fields it returns by default, and an argument widens that set |
 | `QR-12` | A partial result names what did not succeed | A consumer can tell which parts succeeded and which did not from the response alone |
@@ -613,8 +615,8 @@ Each row belongs to one or more categories, and [`quality.arc42.org`](https://qu
 
 | ID | Demand | Acceptance criterion |
 |---|---|---|
-| `QR-2` | A vendor API change does not reach the consumer's code | A vendor schema change touches no type or signature that a consumer imports |
-| `QR-11` | After v1.0, a deprecated path keeps working for a stated period, and a warning comes before every breaking change, both defined in [`DEPRECATION.md`](../DEPRECATION.md) | A deprecated path keeps working for at least two minor releases |
+| `QR-2` | [Quality goals](#quality-goals), priority 4 | A vendor schema change touches no type or signature that a consumer imports |
+| `QR-11` | [Quality goals](#quality-goals), priority 5 | A deprecated path keeps working for at least two minor releases |
 | `QR-13` | A test can be written for any unit, and a test that passes tells the truth about the released code | A unit can be exercised with a fake in place of every dependency, and the suite runs on every platform the toolkit ships to |
 | `QR-14` | A merged change never breaks the layer order | A merge that inverts the role direction fails a build check |
 | `QR-21` | A deployment picks which tools it exposes by configuration, and never by changing the source | A deployment changes its tool set without a release |

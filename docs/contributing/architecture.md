@@ -43,7 +43,7 @@ This section holds the forces that shape the map. It names what the toolkit must
 
 ### Quality goals
 
-Five qualities dominate every decision on this map, in this order. A trade that spends one of them needs an argument that names it. [Quality requirements](#quality-requirements) holds every row named below.
+Five qualities dominate every decision on this map, in this order. [Quality requirements](#quality-requirements) holds every row named below.
 
 | Priority | Quality goal | Scenario |
 |---|---|---|

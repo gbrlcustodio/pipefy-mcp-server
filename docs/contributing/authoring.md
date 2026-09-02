@@ -39,7 +39,7 @@ A code example names no shipped symbol. A symbol in an example rots on the next 
 [`architecture.md`](architecture.md) fills part of the [arc42 template](https://docs.arc42.org). Where a rule below is arc42's, it says so. The rest are ours. These rules cover every heading:
 
 - A section that arc42 numbers takes arc42's position and arc42's name.
-- Every heading sits under a numbered one. A `##` heading takes arc42's name, and a `###` heading under it is ours to name.
+- Every heading sits under a numbered one. A `##` heading takes arc42's name. A `###` heading under it takes arc42's name where arc42 numbers that sublevel, and it is ours to name where arc42 does not.
 - A heading deeper than `###` marks a deeper arc42 level. Arc42 5 holds each level 2 whitebox at `####`.
 - A section whose content another owner holds is a pointer to that owner, and never a copy. `Architecture decisions` at arc42 9 points at [`adr/`](adr/README.md).
 - A section that nothing owns yet stays absent, and `Known gaps` names it as the target. Arc42 6 and arc42 7 stay absent today.
@@ -61,9 +61,9 @@ A subsection that names a part of the system goes under arc42 5, and one that st
 
 **`Quality goals`, arc42 1.2.** The three to five qualities that dominate, in priority order.
 
-- A goal is a name, one concrete scenario, and the IDs of the `QR` rows it rests on.
-- Take the name from the quality catalog at [`quality.arc42.org`](https://quality.arc42.org/), and never from the nine dimensions. A dimension covers several `QR` rows, so it can never name one goal.
-- The goal name is abstract, and the scenario makes it concrete, which is why a number lives in the scenario and never in a `QR` row.
+- A goal is a name and one concrete scenario, and that scenario is the most important requirement in the goal's category. The scenario cites the one `QR` row it owns, and `Quality scenarios` points back rather than restating it. Arc42 10 asks for that direction.
+- Take the name from the quality catalog at [`quality.arc42.org`](https://quality.arc42.org/), and never from a Q42 category. A category covers several `QR` rows, so it can never name one goal.
+- The goal name is abstract, and the scenario makes it concrete.
 - Arc42 asks for the priority order here. The `QR` rows carry none, because a rank there would reopen where each new row slots in.
 
 Change the order when something outside this file changes what matters:
@@ -130,12 +130,13 @@ A decision here is a settled choice, and a concept at arc42 8 is a standing rule
 - `Requirements overview` states what the toolkit does, and this level states which block does it. Where a function text names a package, the naming belongs here instead.
 - This level draws the external partners, although the HtmlSanityCheck, Traffic Pursuit Unit, and biking2 examples each draw internal blocks alone. It is the only place that says which package performs a crossing, whereas [Context and scope](architecture.md#context-and-scope) says which install reaches a partner.
 
-**`Quality requirements`, arc42 10.** Three tables of `QR` rows, split by stimulus: normal use, a serious failure, and a change to the system or to what it depends on. Those are arc42's three scenario categories.
+**`Quality requirements`, arc42 10.** Two subsections, as arc42 10.1 and 10.2 divide it. An overview by category, then the scenarios in arc42's two categories: a reaction while the system runs, and a change to the system or to what it depends on.
 
-- A permanent ID, such as `QR-7`, under the same rule as a convention ID above.
-- Its dimensions. Find the row's quality in the Q42 catalog at [`quality.arc42.org`](https://quality.arc42.org/), then copy that quality's dimensions. The nine overlap by design, so a row can carry several. Never force a row to one. Arc42 10.1 offers ISO 25010 or Q42, and we take Q42.
-- The demand, in one line, in the words of the party that holds it.
-- After the tables, the section names the pairs of rows that read as rivals, and each entry says whether the two conflict. A cost that one decision produced belongs beside that decision, and never in this list.
+- The overview at 10.1 groups every row by its Q42 category, and it is the only place that mapping is written. Find the row's quality in the catalog at [`quality.arc42.org`](https://quality.arc42.org/), then file the row under that quality's categories. The categories overlap by design, so a row can appear under several. Never force a row to one. Arc42 10.1 offers ISO 25010 or Q42, and we take Q42.
+- A scenario row at 10.2 carries a permanent ID, such as `QR-7`, under the same rule as a convention ID above, then the demand in one line in the words of the party that holds it, then an acceptance criterion.
+- A criterion is observable, and it carries a number only where this repository owns that number. It states what must hold, and where the code differs, `Known gaps` names the difference.
+- A row that `Quality goals` ranks states no demand of its own, because the goal states it.
+- The section states no cost and no conflict. Arc42 10 holds neither, and both belong beside the decision or the concept that produced them.
 
 **`Known gaps`, arc42 11.** See [Where a gap is documented](#where-a-gap-is-documented). Arc42 11 wants those entries ordered by priority.
 

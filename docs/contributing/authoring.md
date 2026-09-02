@@ -63,7 +63,7 @@ A subsection that names a part of the system goes under arc42 5, and one that st
 - Each function carries a permanent `FR` ID, under the same rule as a convention ID above.
 - Say who acts, what the act is, and what the consumer gets. Put the trigger first, where there is one.
 - Never say how it works, because a mechanism changes without the function changing.
-- Take every capability name, and what that name covers, from Pipefy's domain model. Never from the tool catalog or the CLI tree.
+- Take every capability name, and what that name covers, from Pipefy's domain model. Never from the tool catalog or the CLI tree. The model is internal to Pipefy, so a contributor outside it asks the domain expert rather than coins a name.
 - Where the domain model leaves a question open, name the capability and settle nothing. Carry nothing that model marks as internal.
 - Name no tool, no command, and no count. The code owns all three.
 - If a new tool would add a bullet, the list is too detailed.

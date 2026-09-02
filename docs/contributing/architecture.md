@@ -18,7 +18,7 @@ The MCP server has one consumer, an LLM agent. The CLI has three: that agent, a 
 - `FR-4` Escape hatch. When no tool wraps an operation, a consumer still reaches it, and can discover what the API offers.
 - `FR-5` iPaaS reach. A consumer reaches the flows of a pipe's iPaaS workspace, and needs no second credential for the engine behind them.
 
-**Pipefy capabilities.** The functions above act on these. Each name is a sub-domain of Pipefy's domain model, which lives outside this repository.
+**Pipefy capabilities.** The functions above act on these. Each name is a sub-domain of Pipefy's domain model. Pipefy maintains that model internally and does not publish it, so the Domain expert row in [Stakeholders](#stakeholders) is the way to reach its owners.
 
 - Work Execution: create a card, move it through the phases of a pipe, fill what a phase requires, comment on it, attach a file, and read or send its email.
 - Process Modeling: create and change a pipe, its phases, its fields, its field conditions, its labels, and its automations. Create and change an AI agent, with the behaviors it runs and the knowledge it reads.
@@ -59,7 +59,7 @@ The contributor row also holds what a tester, a code reviewer, and a developer w
 | Security reviewer | Whoever answers `security@pipefy.com`, per [`SECURITY.md`](../../SECURITY.md) | Trust boundaries, token validation, credential storage, and outbound URL policy |
 | Privacy, Legal and Compliance | Pipefy's review team, per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | A human decides anything that touches a natural person, and a blueprint states the autonomy it assumes |
 | Release manager | The maintainers who cut a release, at `dev@pipefy.com` | What counts as a breaking change, and what is owed before one ships |
-| Domain expert | The owners of Pipefy's domain model, maintained outside this repository | Names that match the Pipefy product, and a vocabulary that does not drift |
+| Domain expert | The owners of Pipefy's domain model, which Pipefy maintains internally and does not publish | Names that match the Pipefy product, and a vocabulary that does not drift |
 | Pipefy platform | The team that owns the GraphQL API, outside this repository | A caller that identifies itself, that does not chain calls it could make in one, that gives up rather than hold a connection open, and that honors a refusal to serve |
 | Operator of the remote deployment | Whoever runs the remote profile. Not named here | A bearer minted for another service refused, which tools a deployment exposes, a stored credential only the deployment can use, the credential source, the deploy shape, what reaches a log, and what one caller costs another |
 

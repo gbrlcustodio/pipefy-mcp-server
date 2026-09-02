@@ -51,6 +51,7 @@ Missing or mismatched `name` fails CI.
 - **Skill folder names:** kebab-case, prefixed with `pipefy-` (e.g., `pipefy-process-design`).
 - **Domain folders:** match the existing domains in `skills/`. Open an issue before creating a new domain.
 - **Stable IDs:** once merged, renames need a CHANGELOG note and skill-lint allowlist update.
+- **Product words only:** use the name the Pipefy product uses, never a new one. The domain model that settles a name is internal to Pipefy, so open an issue and ask rather than coin a term.
 
 ### Style guide
 

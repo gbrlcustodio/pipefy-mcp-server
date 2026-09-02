@@ -2,11 +2,13 @@
 
 ## Introduction and goals
 
-This document maps the architecture. This section holds the forces that shape the map. It names what the toolkit must do, which qualities outrank the rest, and who holds a stake in either.
+This document maps the architecture. This section holds the forces that shape the map. It names why the toolkit exists and what it must do, which qualities outrank the rest, and who holds a stake in either.
 
 ### Requirements overview
 
-The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one package for each: the SDK, the CLI, and the MCP server.
+Pipefy is invested in the AI ecosystem. Its own AI agents already do the work inside a process and change how the process runs. This toolkit opens the same reach to an LLM agent that Pipefy did not build.
+
+The MCP server has one consumer, an LLM agent. The CLI has three: that agent, a person at a terminal, and a script. The SDK is what both of them build on, and it ships because a program can use it directly.
 
 **Toolkit functions.** A consumer comes to the toolkit for these. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
 

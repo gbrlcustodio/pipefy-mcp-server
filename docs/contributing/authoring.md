@@ -55,8 +55,10 @@ A code example names no shipped symbol. A symbol in an example rots on the next 
 
 A subsection that names a part of the system goes under arc42 5, and one that states a rule that holds whichever part you are in goes under arc42 8. Arc42 asks for practices, patterns, and regulations at 8, and it never asks that a concept reach every part, so a rule that one application alone obeys still belongs there.
 
-**`Requirements overview`, arc42 1.1.** The functions the toolkit delivers, then the capabilities they act on, one line each.
+**`Requirements overview`, arc42 1.1.** The business goal, then the functions the toolkit delivers, then the capabilities they act on. A function and a capability take one line each.
 
+- The opening states the business goal, which arc42 asks for here as the driving force. It says why Pipefy invests in reaching a Pipefy organization from outside, and which consumer each package carries that investment to. Every benefit it claims maps to a function or a capability below.
+- The opening defines no domain term and no package responsibility. Arc42 3 owns the first, and arc42 5 owns the second.
 - A function is the toolkit's own work. What Pipefy's API already offers is a capability instead.
 - Each function carries a permanent `FR` ID, under the same rule as a convention ID above.
 - Say who acts, what the act is, and what the consumer gets. Put the trigger first, where there is one.

@@ -609,14 +609,10 @@ Each section names the requirement that it serves. Where another document owns t
 
 Four of these are costs, and each one lands at a different moment. `QR-9` and `QR-23` are the catalog, which costs context once at connect, before the consumer asks for anything, and costs it in tool count and in words per tool. `QR-5` is the chain, which costs a model round trip per link. `QR-10` is the answer, which costs context once per call. A script pays the chain cost once and a model pays it every link.
 
-These trades are real:
+A demand can read as a rival to another demand:
 
-- A question the model must answer costs a round trip, so `QR-22` spends what `QR-5` saves. A question that goes to the client costs `QR-5` nothing, which is why `QR-22` is the cheap way to meet `QR-5` and not a rival to it.
-- `QR-3` holds when no human is present, so nothing the toolkit runs can wait for an answer. A question about permission survives that, because the consumer settled it before the run began, and `QR-25` puts their client in charge of it. A question about data does not survive, because nobody can settle a value in advance. `QR-22` therefore pays, and [Known gaps](#known-gaps) states what a tool does instead.
-- `QR-25` gives up the stop that every destructive call gets today. A consumer then gets their client's default, or the auto-approval they chose, and the toolkit adds nothing on top of either. What `QR-6` still owes them moves into a dry run, so a caller who wants the reach pays a round trip and a caller who does not pays nothing.
-- The `power` branch in [Tool surface](#tool-surface) holds the tool count constant, and every call then routes through a meta-tool, so `QR-9` spends what `QR-5` saves.
-- A port makes a unit injectable, and a port with one implementation is indirection, so `QR-13` spends what a reader of the code saves. `PORT-2` in [`conventions.md`](conventions.md) sets where that trade lands.
-- `QR-27` stops at the token already issued, because the alternative asks the provider on every call whether the session still exists, and every call then pays that round trip. A short token lifetime bounds the window instead, and the provider's realm sets that lifetime rather than this repository.
+- A question the model must answer costs a round trip, so `QR-5` is partly satisfied. A question that goes to the client costs `QR-5` nothing, which is why `QR-22` is the cheap way to satisfy `QR-5` and not a rival to it.
+- `QR-3` holds when no human is present, so nothing the toolkit runs can wait for an answer. A question about permission survives that, because the consumer settled it before the run began, and `QR-25` puts their client in charge of it. A question about data does not survive, because nobody can settle a value in advance. There `QR-22` conflicts with `QR-3`, and [Known gaps](#known-gaps) states what a tool does instead.
 
 ## Known gaps
 

@@ -134,7 +134,7 @@ A decision here is a settled choice, and a concept at arc42 8 is a standing rule
 
 - The overview at 10.1 groups every row by its Q42 category, and it is the only place that mapping is written. Find the row's quality in the catalog at [`quality.arc42.org`](https://quality.arc42.org/), then file the row under that quality's categories. The categories overlap by design, so a row can appear under several. Never force a row to one. Arc42 10.1 offers ISO 25010 or Q42, and we take Q42.
 - A scenario row at 10.2 carries a permanent ID, such as `QR-7`, under the same rule as a convention ID above, then the demand in one line in the words of the party that holds it, then an acceptance criterion.
-- A criterion is observable, and it carries a number only where this repository owns that number. It states what must hold, and where the code differs, `Known gaps` names the difference.
+- A criterion is observable, it states what must hold, and it carries a number only where this repository owns that number. Where the code differs from a criterion, `Known gaps` names the difference.
 - A row that `Quality goals` ranks states no demand of its own, because the goal states it.
 - The section states no cost and no conflict. Arc42 10 holds neither, and both belong beside the decision or the concept that produced them.
 

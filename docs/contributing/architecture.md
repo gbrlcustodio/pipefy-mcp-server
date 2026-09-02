@@ -511,7 +511,7 @@ Today the server does more than this, because a destructive tool returns a previ
 
 ### Tool surface
 
-A deployment decides how many tools a model sees, and that decision is separate from how many the catalog holds. `QR-9` is the requirement. The catalog costs context once at connect, before the consumer asks for anything, and it costs that in tool count and in words per tool, so `QR-23` bounds the second half.
+A deployment decides how many tools a model sees, and that decision is separate from how many the catalog holds. `QR-9` is the requirement. The catalog costs context once at connect, before the consumer asks for anything, and it costs that in tool count and in words per tool, so `QR-23` bounds the words per tool.
 
 Two axes classify the catalog. A domain is the one subject a tool is about, and the domains partition it, so every registered tool has exactly one. A tool profile is a journey-sized selection that crosses domains, and profiles overlap. `--toolsets` and `PIPEFY_MCP_TOOLSETS` name either kind, or a reserved keyword, so a deployment chooses without a source change, which is `QR-21`. [`docs/config.md`](../config.md) is the reference for those names and their precedence.
 
@@ -583,7 +583,7 @@ Each row belongs to one or more categories, and [`quality.arc42.org`](https://qu
 
 ### Quality scenarios
 
-A row states its demand, unless [Quality goals](#quality-goals) ranks it, in which case the goal states it and the row points there.
+A row states its demand, unless [Quality goals](#quality-goals) ranks that row, in which case the goal states the demand and the row points there.
 
 **Usage.** A demand that a caller holds while the system runs, including when a call cannot complete or a component it needs fails.
 

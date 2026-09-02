@@ -11,7 +11,7 @@ Pipefy is fully invested in the AI ecosystem. Its own AI agents already do the w
 **Toolkit functions.** A consumer comes to the toolkit for these. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
 
 - `FR-1` Persistent sign-in. A consumer signs in through a browser once, and later calls need no second sign-in.
-- `FR-2` Name resolution. When a consumer names a resource instead of giving its id, the toolkit finds that resource, and an incomplete or misspelled name still finds it.
+- `FR-2` Name resolution. When a consumer names a resource instead of its id, the toolkit finds that resource, and an incomplete or misspelled name still finds it.
 - `FR-3` Validation without execution. Before a consumer applies a change, the toolkit reports what would fail. The check changes nothing.
 - `FR-4` Escape hatch. When no tool wraps an operation, a consumer still reaches it, and can discover what the API offers.
 - `FR-5` iPaaS reach. A consumer reaches the flows of a pipe's iPaaS workspace, and needs no second credential for the engine behind them.
@@ -38,7 +38,7 @@ Five qualities dominate every decision on this map, in this order. The scenario 
 | 2 | Resource utilization | A model asks for one card by name. One tool call answers it, and no second call is needed to get there. (`QR-5`) |
 | 3 | Diagnosability | A GraphQL call is denied. The response names the likely cause, whether a retry can succeed, and the next step. (`QR-8`) |
 | 4 | Stability | Pipefy reshapes a GraphQL response. The change never reaches the consumer's code. (`QR-2`) |
-| 5 | Backward compatibility | After v1.0, a release deprecates a public SDK function. A warning comes first, the function keeps working for two more minor releases, and `DEPRECATION.md` sets that period. (`QR-11`) |
+| 5 | Backward compatibility | After v1.0, a release deprecates a public SDK function. A warning comes first, the function works for two more minor releases, and `DEPRECATION.md` sets that period. (`QR-11`) |
 
 ### Stakeholders
 
@@ -49,10 +49,10 @@ The contributor row also holds what a tester, a code reviewer, and a developer w
 | Role/Name | Contact | Expectations |
 |---|---|---|
 | SDK consumer | A programmer whose code imports the `pipefy` distribution | A stable typed surface, an upstream change that does not reach their code, and use answered by [`docs/sdk`](../sdk/README.md) rather than by this map |
-| CLI consumer | A person at a terminal, and a script in CI | Deterministic behavior, parseable output, no prompt when nobody is watching, a stored credential that nobody else can use, and use answered by [`docs/cli`](../cli/README.md) rather than by this map |
-| MCP consumer | A person working through an LLM client | The assistant does what they asked, acts on no guess, destroys nothing unannounced, and works from a stored credential that nobody else can use, with use answered by [`docs/mcp`](../mcp/README.md) rather than by this map |
-| LLM agent | AI assistants that reach the toolkit through the MCP server or the CLI, following the playbooks in [`skills/`](../../skills/README.md) | A schema it can fill without a second call, a catalog and an answer that fit in its context, a description that names rather than teaches, output it can pipe into the next call, a playbook that names only tools the server still exposes, and a success criterion it can check for itself |
-| Contributor | Anyone opening a pull request, under [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | Where a change goes, what it may import, whether a passing test means anything, and an entry point at [Package decomposition](#package-decomposition) that reads inward from there |
+| CLI consumer | A person at a terminal, and a script in CI | Deterministic behavior, parseable output, no prompt when no human is present, a stored credential that nobody else can use, and use answered by [`docs/cli`](../cli/README.md) rather than by this map |
+| MCP consumer | A person who works through an LLM client | The assistant does what they asked, acts on no guess, destroys nothing unannounced, and works from a stored credential that nobody else can use, with use answered by [`docs/mcp`](../mcp/README.md) rather than by this map |
+| LLM agent | AI assistants that reach the toolkit through the MCP server or the CLI, under the playbooks in [`skills/`](../../skills/README.md) | A schema it can fill without a second call, a catalog and an answer that fit in its context, a description that names rather than teaches, output it can pipe into the next call, a playbook that names only tools the server still exposes, and a success criterion it can check for itself |
+| Contributor | Anyone who opens a pull request, under [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | Where a change goes, what it may import, whether a passing test means anything, and an entry point at [Package decomposition](#package-decomposition) that reads inward from there |
 | Maintainer | The core team, at `dev@pipefy.com` | A stack it controls, a layer order a merge cannot break, and a decision that outlives whoever made it |
 | Security reviewer | Whoever answers `security@pipefy.com`, per [`SECURITY.md`](../../SECURITY.md) | Trust boundaries, token validation, credential storage, and outbound URL policy |
 | Privacy, Legal and Compliance | Pipefy's review team, per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | A human decides anything that touches a natural person, and a blueprint states the autonomy it assumes |

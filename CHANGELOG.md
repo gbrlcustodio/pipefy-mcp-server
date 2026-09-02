@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **SDK destructive-confirmation helpers**: `mint_confirmation_token`, `verify_confirmation_token`, `classify_confirmation_token_failure`, `confirmation_signing_key`, `DESTRUCTIVE_CONFIRMATION_TTL_SECONDS` and `ConfirmationTokenFailure` are exported from `pipefy_sdk` (module `pipefy_sdk.destructive_confirmation`). Signatures and token wire format are unchanged, so a token minted by one build verifies on the other. An in-process SDK consumer can now honour the "caller must enforce preview/confirm UX" contract without depending on `pipefy-mcp-server`. `confirmation_signing_key` is new: it derives one caller's HMAC key from that caller's credential, which is what stops one caller's token from confirming another's deletion. `signing_key_for` in the MCP guard now calls it, so both sides share one derivation. The internal `pipefy_mcp.tools.destructive_confirmation_token` module is removed; it was never an exported path (`pipefy_mcp.tools.__init__` exports only `PIPEFY_TOOL_NAMES` and `ToolRegistry`) and no MCP tool contract changes.
 - **Claude Code plugin MCP**: `.mcp.json` is the hosted `mcp.pipefy.com` server with in-client OAuth, the same file the Cursor plugin points at. Local stdio (`uvx`) remains the Quick-install / `claude mcp add` path.
 
 ## [0.5.0-beta.1] - 2026-08-21

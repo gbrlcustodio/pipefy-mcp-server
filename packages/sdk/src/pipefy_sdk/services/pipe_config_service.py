@@ -75,7 +75,11 @@ class PipeConfigService:
         return await self._executor.execute_query(UPDATE_PIPE_MUTATION, variables)
 
     async def delete_pipe(self, pipe_id: str | int) -> dict:
-        """Delete a pipe by ID (permanent). Caller must enforce preview/confirm UX."""
+        """Delete a pipe by ID (permanent).
+
+        Caller must enforce preview/confirm UX; :mod:`pipefy_sdk.destructive_confirmation`
+        ships the token helpers for it.
+        """
         variables: dict[str, Any] = {"input": {"id": str(pipe_id)}}
         return await self._executor.execute_query(DELETE_PIPE_MUTATION, variables)
 

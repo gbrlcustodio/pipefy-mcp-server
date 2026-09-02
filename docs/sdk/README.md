@@ -48,6 +48,52 @@ Other exported error types sit outside this root. Catch these by name:
 Transport-level failures (connection refused, timeouts) surface as `gql`'s
 `TransportError`, which the SDK does not wrap.
 
+## Destructive operations
+
+The SDK does not gate deletion. Every `delete_*` and `remove_*` method runs the mutation as soon as you call it. Enforcing a preview/confirm step is the caller's job, for all of them — `delete_pipe` and `delete_table` say so in their docstrings, and the same obligation applies to the rest.
+
+`pipefy_sdk.destructive_confirmation` ships the helpers that step needs, so an in-process consumer runs the same protocol the MCP server runs:
+
+```python
+import time
+
+from pipefy_sdk import (
+    confirmation_signing_key,
+    mint_confirmation_token,
+    verify_confirmation_token,
+)
+
+# Derive the key from THIS caller's own credential, never a shared constant.
+key = confirmation_signing_key(caller_bearer)
+identity = {"pipe_id": pipe_id}
+
+# First call: describe what would be deleted, and hand the token back.
+token = mint_confirmation_token(
+    tool_name="delete_pipe",
+    resource_identity=identity,
+    key=key,
+    now=int(time.time()),
+)
+
+# Second call: the caller returns the token. Delete only when it verifies.
+if verify_confirmation_token(
+    token,
+    tool_name="delete_pipe",
+    resource_identity=identity,
+    key=key,
+    now=int(time.time()),
+):
+    await client.delete_pipe(pipe_id)
+```
+
+The token binds one operation name, one canonicalized resource identity, and one `key`. It expires after `DESTRUCTIVE_CONFIRMATION_TTL_SECONDS`. Verification is stateless HMAC, so no server-side store is needed. `tool_name` is any stable label for the operation: the MCP server passes its tool name, and a library consumer passes its own.
+
+`confirmation_signing_key` derives the `key` from one caller's credential. Use it per caller. A single module-level key defeats the binding, because every token then verifies for every caller, and nothing in the SDK can catch that for you.
+
+`classify_confirmation_token_failure` says **why** verification would fail (`missing`, `invalid_or_expired`, `identity_mismatch`) so you can word the rejection. It is diagnostic only. Never let it authorize the deletion — that stays behind `verify_confirmation_token`.
+
+The token orders the two steps. It is not an authorization control: the API permission on the credential remains the boundary that allows or denies the deletion.
+
 ## Configuration
 
 OAuth and endpoint variables are documented in **[`../config.md`](../config.md)** and **[`../../.env.example`](../../.env.example)**. Integration tests use `@pytest.mark.integration` and the same `PIPEFY_*` keys from local **`.env`** (e.g. `PIPEFY_PORTAL_ORG_UUID` for portal live tests). Unit tests use fictional ids in **[`../../packages/sdk/tests/_shared/fixture_ids.py`](../../packages/sdk/tests/_shared/fixture_ids.py)** — not production org UUIDs.

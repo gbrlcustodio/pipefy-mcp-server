@@ -13,22 +13,22 @@ control. API permission remains the boundary that allows or denies the deletion.
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Literal
 
 from mcp.server.mcpserver import Context
-from typing_extensions import NotRequired, TypedDict
-
-from pipefy_mcp.auth.request_identity import require_request_bearer
-from pipefy_mcp.tools.destructive_confirmation_token import (
+from pipefy_sdk import (
     ConfirmationTokenFailure,
     classify_confirmation_token_failure,
+    confirmation_signing_key,
     mint_confirmation_token,
     verify_confirmation_token,
 )
+from typing_extensions import NotRequired, TypedDict
+
+from pipefy_mcp.auth.request_identity import require_request_bearer
 
 _PROCESS_SIGNING_KEY = secrets.token_bytes(32)
 
@@ -53,7 +53,7 @@ def signing_key_for(ctx: Context) -> bytes:
         bearer = require_request_bearer(ctx.request_context.request)
     except Exception:  # noqa: BLE001
         return _PROCESS_SIGNING_KEY
-    return hashlib.sha256(bearer.encode("utf-8")).digest()
+    return confirmation_signing_key(bearer)
 
 
 async def check_destructive_confirmation(

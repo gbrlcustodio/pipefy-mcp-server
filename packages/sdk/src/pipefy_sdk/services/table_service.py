@@ -140,7 +140,11 @@ class TableService:
         )
 
     async def delete_table(self, table_id: str | int) -> dict[str, Any]:
-        """Delete a database table by ID (permanent). Caller must enforce preview/confirm UX."""
+        """Delete a database table by ID (permanent).
+
+        Caller must enforce preview/confirm UX; :mod:`pipefy_sdk.destructive_confirmation`
+        ships the token helpers for it.
+        """
         return await self._executor.execute_query(
             DELETE_TABLE_MUTATION,
             {"input": {"id": str(table_id)}},

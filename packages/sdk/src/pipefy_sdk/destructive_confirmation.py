@@ -1,4 +1,7 @@
-"""Pure planner that mints and verifies HMAC confirmation tokens."""
+"""Pure planner for the HMAC confirmation tokens that order a destructive call.
+
+Derives the per-caller signing key, mints a token, and verifies one.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +17,23 @@ _TOKEN_VERSION = "v1"
 _B64URL_SEGMENT_RE = re.compile(r"[A-Za-z0-9_-]*")
 
 ConfirmationTokenFailure = Literal["missing", "invalid_or_expired", "identity_mismatch"]
+
+
+def confirmation_signing_key(caller_secret: str | bytes) -> bytes:
+    """Derive one caller's HMAC key from that caller's own credential.
+
+    Deriving per caller is what stops one caller's token from confirming
+    another's deletion. A single module-level key defeats that binding, because
+    every token then verifies for everyone.
+
+    Args:
+        caller_secret: The caller's credential (a bearer token, a session
+            secret). Encoded as UTF-8 when given as ``str``. Never stored, and
+            never recoverable from the returned key or from a minted token.
+    """
+    if isinstance(caller_secret, str):
+        caller_secret = caller_secret.encode("utf-8")
+    return hashlib.sha256(caller_secret).digest()
 
 
 def mint_confirmation_token(

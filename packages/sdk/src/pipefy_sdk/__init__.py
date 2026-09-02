@@ -5,6 +5,14 @@ from __future__ import annotations
 __version__ = "0.5.0-beta.1"
 
 from pipefy_sdk.client import PipefyClient, PipefyEngine
+from pipefy_sdk.destructive_confirmation import (
+    DESTRUCTIVE_CONFIRMATION_TTL_SECONDS,
+    ConfirmationTokenFailure,
+    classify_confirmation_token_failure,
+    confirmation_signing_key,
+    mint_confirmation_token,
+    verify_confirmation_token,
+)
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.field_filters import (
     filter_editable_field_definitions,
@@ -123,10 +131,12 @@ __all__ = [
     "CommentInput",
     "CONDITION_OPERATIONS",
     "ConditionExpressionInput",
+    "ConfirmationTokenFailure",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
     "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
+    "DESTRUCTIVE_CONFIRMATION_TTL_SECONDS",
     "DataLookupCondition",
     "DeleteCommentInput",
     "GraphQLProblem",
@@ -145,8 +155,10 @@ __all__ = [
     "LlmProviderWritePayload",
     "ProviderAccessProbeResult",
     "ProviderDependenciesResult",
+    "classify_confirmation_token_failure",
     "classify_exception",
     "classify_graphql_error_dicts",
+    "confirmation_signing_key",
     "download_bytes",
     "filter_editable_field_definitions",
     "filter_fields_by_definitions",
@@ -170,6 +182,8 @@ __all__ = [
     "copy_card_search",
     "create_form_model",
     "infer_content_type",
+    "mint_confirmation_token",
     "skipped_field_ids",
     "stream_bytes",
+    "verify_confirmation_token",
 ]

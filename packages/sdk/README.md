@@ -1,6 +1,6 @@
 # pipefy
 
-**Vendor API SDK** for Pipefy's GraphQL API: the shared library consumed by `pipefy-mcp-server` and `pipefy-cli` (not a generic “shared utils” layer). It owns HTTP/GraphQL transport, service classes, query constants, Pydantic models, shared settings, exceptions, and utilities.
+**Vendor API SDK** for Pipefy's GraphQL API: the shared library consumed by `pipefy-mcp-server` and `pipefy-cli` (not a generic “shared utils” layer). It owns HTTP/GraphQL transport, service classes, query constants, Pydantic models, shared settings, exceptions, the destructive-confirmation token helpers, and utilities.
 
 ## Status
 

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _rs_fixtures import authenticated_user, request_with_user
+from pipefy_sdk import confirmation_signing_key
 
 from pipefy_mcp.tools import destructive_tool_guard as guard_mod
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -379,3 +380,23 @@ async def test_signing_key_is_absent_from_preview_and_token_error_envelopes(
         resource_identity={"phase_id": "other"},
     )
     assert_key_absent(mismatch)
+
+
+def test_signing_key_for_derives_the_bearer_key_through_the_sdk_helper():
+    """The guard owns the ctx and the fallback; the SDK owns the derivation.
+
+    Both sides must agree, or a token minted here stops verifying for an
+    in-process SDK consumer running the same protocol.
+    """
+    bearer = "rs-validated-bearer"
+    ctx = _make_ctx(request=request_with_user(authenticated_user(bearer)))
+
+    assert guard_mod.signing_key_for(ctx) == confirmation_signing_key(bearer)
+
+
+def test_signing_key_for_falls_back_to_the_process_key_without_a_bearer():
+    ctx = _make_ctx(request=request_with_user(None))
+
+    key = guard_mod.signing_key_for(ctx)
+    assert key == guard_mod._PROCESS_SIGNING_KEY
+    assert key != confirmation_signing_key("")

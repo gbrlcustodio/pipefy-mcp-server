@@ -8,9 +8,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from pipefy_mcp.tools.destructive_confirmation_token import (
+from pipefy_sdk.destructive_confirmation import (
     DESTRUCTIVE_CONFIRMATION_TTL_SECONDS,
     classify_confirmation_token_failure,
+    confirmation_signing_key,
     mint_confirmation_token,
     verify_confirmation_token,
 )
@@ -520,7 +521,7 @@ def test_tampered_version_prefix_is_rejected():
 def test_verify_uses_hmac_compare_digest(monkeypatch):
     import hmac as hmac_mod
 
-    from pipefy_mcp.tools import destructive_confirmation_token as planner
+    from pipefy_sdk import destructive_confirmation as planner
 
     spy = MagicMock(wraps=hmac_mod.compare_digest)
     monkeypatch.setattr(planner.hmac, "compare_digest", spy)
@@ -547,7 +548,7 @@ def test_verify_uses_hmac_compare_digest(monkeypatch):
 def test_planner_has_no_io():
     import inspect
 
-    from pipefy_mcp.tools import destructive_confirmation_token as planner
+    from pipefy_sdk import destructive_confirmation as planner
 
     source = inspect.getsource(planner)
     assert "Context" not in source
@@ -572,3 +573,73 @@ def test_token_payload_does_not_contain_key_and_has_canonical_fields():
     assert KEY.decode("latin-1") not in token
     assert payload["tool"] == TOOL
     assert payload["exp"] == NOW + DESTRUCTIVE_CONFIRMATION_TTL_SECONDS
+
+
+def test_helpers_are_exported_from_the_package_root():
+    import pipefy_sdk
+    from pipefy_sdk import destructive_confirmation as planner
+
+    for name in (
+        "DESTRUCTIVE_CONFIRMATION_TTL_SECONDS",
+        "ConfirmationTokenFailure",
+        "classify_confirmation_token_failure",
+        "confirmation_signing_key",
+        "mint_confirmation_token",
+        "verify_confirmation_token",
+    ):
+        assert name in pipefy_sdk.__all__
+        assert getattr(pipefy_sdk, name) is getattr(planner, name)
+
+
+def test_wire_format_matches_the_pinned_vector():
+    """Pin the token bytes so a mint and a verify on different builds agree.
+
+    Verification derives its key from the caller, not from server state, so a
+    rolling deploy has one build mint and another verify. Changing the payload
+    layout, the MAC message, or the base64 spelling breaks that pair mid-deploy.
+    """
+    assert (
+        mint_confirmation_token(
+            tool_name=TOOL,
+            resource_identity=IDENTITY,
+            key=KEY,
+            now=NOW,
+        )
+        == "v1.eyJleHAiOjE3MDAwMDAzMDAsImlkZW50aXR5Ijp7ImZpZWxkX2lkIjoiMSIsInBpcGVfdXVpZCI6ImFiYyJ9LCJ0b29sIjoiZGVsZXRlX3BoYXNlX2ZpZWxkIn0"
+        ".SO7bsGv4zk4uNJLxdn6dYJihtYV2ybCysDaLq8U8PoE"
+    )
+
+
+def test_signing_key_is_sha256_of_the_utf8_credential():
+    bearer = "caller-a-bearer"
+
+    assert (
+        confirmation_signing_key(bearer)
+        == hashlib.sha256(bearer.encode("utf-8")).digest()
+    )
+    assert confirmation_signing_key(bearer) == confirmation_signing_key(
+        bearer.encode("utf-8")
+    )
+
+
+def test_each_caller_gets_a_distinct_key():
+    """One caller's token must not confirm another caller's deletion.
+
+    ``test_wrong_key_fails`` pins the half that rejects a foreign key. This pins
+    the half that hands two callers two different keys in the first place.
+    """
+    assert confirmation_signing_key("caller-a") != confirmation_signing_key("caller-b")
+
+
+def test_signing_key_does_not_leak_the_credential():
+    bearer = "caller-a-bearer"
+    key = confirmation_signing_key(bearer)
+
+    assert bearer.encode("utf-8") not in key
+    token = mint_confirmation_token(
+        tool_name=TOOL,
+        resource_identity=IDENTITY,
+        key=key,
+        now=NOW,
+    )
+    assert bearer not in token

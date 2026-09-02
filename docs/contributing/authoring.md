@@ -50,12 +50,10 @@ A code example names no shipped symbol. A symbol in an example rots on the next 
 - Every heading sits under a numbered one. A `##` heading takes arc42's name. A `###` heading under it takes arc42's name where arc42 numbers that sublevel, and it is ours to name where arc42 does not.
 - A heading deeper than `###` marks a deeper arc42 level. Arc42 5 holds each level 2 whitebox at `####`.
 - A section whose content another owner holds is a pointer to that owner, and never a copy. `Architecture decisions` at arc42 9 points at [`adr/`](adr/README.md).
-- A section that nothing owns yet stays absent, and `Known gaps` names it as the target. Arc42 6 and arc42 7 stay absent today.
+- A section that nothing owns yet stays absent, and `Risks and technical debt` names it as the target. Arc42 6 and arc42 7 stay absent today.
 - The map explains rather than instructs, so every claim is a third-person declarative.
 
 A subsection that names a part of the system goes under arc42 5, and one that states a rule that holds whichever part you are in goes under arc42 8. Arc42 asks for practices, patterns, and regulations at 8, and it never asks that a concept reach every part, so a rule that one application alone obeys still belongs there.
-
-`Known gaps` at arc42 11 and `Vocabulary` at arc42 12 still carry an earlier name. Each one is a rename this review has not run yet, so neither sets a precedent.
 
 **`Requirements overview`, arc42 1.1.** The functions the toolkit delivers, then the capabilities they act on, one line each.
 
@@ -96,8 +94,8 @@ Change the order when something outside this file changes what matters:
 - Name a limit, and never a capability. A reader finds a constraint by the word that removes freedom.
 - A limit earns a row when it bounds a decision this map describes. One that binds Pipefy, a contributor, or a deployer stays off the map and lives where it is set, in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) or [`TERMS.md`](../../TERMS.md).
 - A cell reads on its own. Use no term the map leaves undefined, and take no referent from the neighboring cell.
-- Name the applications a limit applies to, in the words `Vocabulary` fixes. A contributor on one application reads that column and stops.
-- Ask whether we could remove the limit today. If we could, it is not a constraint but a gap, and `Known gaps` records it with the fix as its target.
+- Name the applications a limit applies to, in the words `Glossary` fixes. A contributor on one application reads that column and stops.
+- Ask whether we could remove the limit today. If we could, it is not a constraint but a gap, and `Risks and technical debt` records it with the fix as its target.
 - A link that points at an owner goes under the table, never in a cell. See [Point at the owner of a fact](#point-at-the-owner-of-a-fact).
 
 **`Context and scope`, arc42 3.** The parties the toolkit exchanges data with, in one diagram and one table, under prose that states the domain it all acts on.
@@ -109,7 +107,7 @@ Change the order when something outside this file changes what matters:
 - One diagram carries the business context and the technical context, which arc42 allows. Technology appears only where it marks the boundary. A deployment fact that another section owns is a pointer here, and never a second statement.
 - The prose states what the toolkit acts on and who it acts as. It names no capability, because `Requirements overview` owns that list, and it names no endpoint, which is the altitude [Name no vendor behind a capability](#name-no-vendor-behind-a-capability) sets.
 - The legend says what a reader cannot read off the diagram or the table, and it points at the section that owns each fact they leave out.
-- Mark no risk and no quality goal on a partner, though arc42 offers both. `Quality requirements` and `Known gaps` own them, and a second copy on a diagram would drift.
+- Mark no risk and no quality goal on a partner, though arc42 offers both. `Quality requirements` and `Risks and technical debt` own them, and a second copy on a diagram would drift.
 
 **`Solution strategy`, arc42 4.** The most important decisions, in one table: a driver, the decision it produced, and the section that details it. The goal rows come first, in the priority order `Quality goals` sets.
 
@@ -123,7 +121,7 @@ Change the order when something outside this file changes what matters:
 - A decision and the check that keeps it true are two rows. One row for both puts several sections in the last column, and the driver then covers half of what the cell claims.
 - A decision names the mechanism that meets its driver, and never the outcome alone. It states that mechanism and never explains it, because the section in the last column owns the explanation. Two short sentences are allowed where the mechanism has two parts.
 - A cell reads on its own, takes no referent from the section in the last column, and answers the whole scenario its driver states. Write it as a third-person declarative, because the map explains rather than instructs, and match the meaning of the `QR` row without overclaiming past it.
-- Where a goal's scenario has a half that no settled mechanism serves, leave that half out and let `Known gaps` carry it. A row states what the code does.
+- Where a goal's scenario has a half that no settled mechanism serves, leave that half out and let `Risks and technical debt` carry it. A row states what the code does.
 - An organizational commitment earns a row only where it shapes the architecture, which is what arc42 means by a relevant one. Name the structural consequence, or leave the commitment where it is set.
 - The last column is a link, and a row that cannot point at an owner does not belong here. No row links a decision record: the section that details the decision already names it, and [`adr/`](adr/README.md) already maps each one to the rule it produced.
 - The goal rows come from `Quality goals`, so they grow only when that section does, and arc42 caps that section at five.
@@ -135,7 +133,7 @@ A decision here is a settled choice, and a concept at arc42 8 is a standing rule
 
 - Every part the diagram draws carries a responsibility line, because arc42 counts those lines as part of the level. A drawn part with no line leaves the level incomplete, which is how `pipefy-auth` and `pipefy-infra` went undescribed.
 - The reason says why the decomposition has these parts. A rule that the structure obeys fails as a reason, such as the import direction that `Package decomposition` gave, because every correct split obeys it.
-- Where the level needs a fact another document owns, it names the fact and points there. The kinds come from the scope list in [`DEPRECATION.md`](../DEPRECATION.md). The interface column says a check holds the SDK root closed, and it names no banned module, because `Dependency rule` owns those lists. Arc42's quality and open-issues blackbox fields stay out, because `Identity lifetime` and `Known gaps` own them.
+- Where the level needs a fact another document owns, it names the fact and points there. The kinds come from the scope list in [`DEPRECATION.md`](../DEPRECATION.md). The interface column says a check holds the SDK root closed, and it names no banned module, because `Dependency rule` owns those lists. Arc42's quality and open-issues blackbox fields stay out, because `Identity lifetime` and `Risks and technical debt` own them.
 - `Requirements overview` states what the toolkit does, and this level states which block does it. Where a function text names a package, the naming belongs here instead.
 - This level draws the external partners, although the HtmlSanityCheck, Traffic Pursuit Unit, and biking2 examples each draw internal blocks alone. It is the only place that says which package performs a crossing, whereas [Context and scope](architecture.md#context-and-scope) says which install reaches a partner.
 
@@ -143,17 +141,17 @@ A decision here is a settled choice, and a concept at arc42 8 is a standing rule
 
 - The overview at 10.1 groups every row by its Q42 category, and it is the only place that mapping is written. Find the row's quality in the catalog at [`quality.arc42.org`](https://quality.arc42.org/), then file the row under that quality's categories. The categories overlap by design, so a row can appear under several. Never force a row to one. Arc42 10.1 offers ISO 25010 or Q42, and we take Q42.
 - A scenario row at 10.2 carries a permanent ID, such as `QR-7`, under the same rule as a convention ID above, then the demand in one line in the words of the party that holds it, then an acceptance criterion.
-- A criterion is observable, it states what must hold, and it carries a number only where this repository owns that number. Where the code differs from a criterion, `Known gaps` names the difference.
+- A criterion is observable, it states what must hold, and it carries a number only where this repository owns that number. Where the code differs from a criterion, `Risks and technical debt` names the difference.
 - A row that `Quality goals` ranks states no demand of its own, because the goal states it.
 - The section states no cost and no conflict. Arc42 10 holds neither, and both belong beside the decision or the concept that produced them.
 
-**`Known gaps`, arc42 11.** See [Where a gap is documented](#where-a-gap-is-documented). Arc42 11 wants those entries ordered by priority.
+**`Risks and technical debt`, arc42 11.** See [Where a gap is documented](#where-a-gap-is-documented). Arc42 11 wants those entries ordered by priority.
 
 ## Where a gap is documented
 
 `conventions.md` states what we commit to, and it names no gap. A convention governs the next change, so older code that predates it is legacy rather than a shortfall.
 
-[`architecture.md`](architecture.md) is a map rather than a rule set, so it works the other way. A map claim is either true of the code or not, and the document owes the reader every place the code is behind it. Those places gather in one final section, `Known gaps`, and each entry names the target that closes it. A disabled import-linter contract is one such target, because it sits beside the live contracts and one edit enables it. This split follows [the arc42 template](#authoring-a-section-of-architecturemd), which keeps the building block view apart from risks and technical debt.
+[`architecture.md`](architecture.md) is a map rather than a rule set, so it works the other way. A map claim is either true of the code or not, and the document owes the reader every place the code is behind it. Those places gather in one final section, `Risks and technical debt`, and each entry names the target that closes it. A disabled import-linter contract is one such target, because it sits beside the live contracts and one edit enables it. This split follows [the arc42 template](#authoring-a-section-of-architecturemd), which keeps the building block view apart from risks and technical debt.
 
 Neither document carries the inventory or the remediation plan for a gap. A concrete step is closeable work, so it belongs in an issue.
 

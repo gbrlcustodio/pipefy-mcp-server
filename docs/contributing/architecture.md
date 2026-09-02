@@ -61,7 +61,7 @@ The contributor row also holds what a tester, a code reviewer, and a developer w
 | Pipefy platform | The team that owns the GraphQL API, outside this repository | A caller that identifies itself, that does not chain calls it could make in one, that gives up rather than hold a connection open, and that honors a refusal to serve |
 | Operator of the remote deployment | Whoever runs the remote profile. Not named here | A bearer minted for another service refused, which tools a deployment exposes, a stored credential only the deployment can use, the credential source, the deploy shape, what reaches a log, and what one caller costs another |
 
-Four expectations here rest on nothing: an operator's deploy shape, the platform team's identification and refusal to serve, and a blueprint's stated autonomy. Every other shortfall behind this table has an entry in [Known gaps](#known-gaps).
+Four expectations here rest on nothing: an operator's deploy shape, the platform team's identification and refusal to serve, and a blueprint's stated autonomy. Every other shortfall behind this table has an entry in [Risks and technical debt](#risks-and-technical-debt).
 
 The contributor, the maintainer, the domain expert, and Privacy, Legal and Compliance hold no quality goal.
 
@@ -131,7 +131,7 @@ No install reaches every partner, so the table says whether the SDK, the CLI, or
 The legend:
 
 - The table names what crosses as a concept, and never the class that implements it. [Package decomposition](#package-decomposition) draws the same partners on the package whose code performs each crossing.
-- Where a crossing has a port, [Ports and dependency inversion](#ports-and-dependency-inversion) names it, and [Known gaps](#known-gaps) carries every one that has none.
+- Where a crossing has a port, [Ports and dependency inversion](#ports-and-dependency-inversion) names it, and [Risks and technical debt](#risks-and-technical-debt) carries every one that has none.
 - Which application each consumer uses is in [Package decomposition](#package-decomposition), and what each one does about a credential is in [Identity lifetime](#identity-lifetime). A deployment profile decides which channel the MCP server serves.
 
 ## Solution strategy
@@ -205,7 +205,7 @@ The match of consumer to package then decides where a behavior lives. The SDK ex
 | Identity | `FR-1` | Owns every credential operation: a browser login, storage, and the validation of an inbound bearer | The package root, with nothing holding it closed | `packages/auth` |
 | Commons | none | Holds what carries no Pipefy concept and what more than one package needs, which today is coercion, configuration discovery, local file reads, URL checks, and telemetry headers | The package root, with nothing holding it closed | `packages/infra` |
 
-Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, which [Known gaps](#known-gaps) carries.
+Because the CLI declares no edge to `pipefy-infra`, the diagram draws none, and that package arrives as a transitive of the SDK and of `pipefy-auth`. One CLI module imports it directly, which [Risks and technical debt](#risks-and-technical-debt) carries.
 
 [Architecture constraints](#architecture-constraints) names which limits each package works inside, while [`dependencies.md`](dependencies.md) says which third-party packages each one needs, and why.
 
@@ -265,9 +265,9 @@ An arrow is an import, and the diagram draws the ones that set the direction rat
 
 [Tool surface](#tool-surface) at arc42 8 partitions that block by subject domain and by persona profile. That partition refines one block into a level 3, and this document does not take it.
 
-A `_helpers` suffix predicts no block. `tools/graphql_error_helpers.py`, `tools/pagination_helpers.py`, and `tools/validation_helpers.py` build the envelope, `tools/phase_transition_helpers.py` runs a check for the tool surface, and a `tools/*_tool_helpers.py` module sits beside the tool it serves. [Known gaps](#known-gaps) carries that grouping.
+A `_helpers` suffix predicts no block. `tools/graphql_error_helpers.py`, `tools/pagination_helpers.py`, and `tools/validation_helpers.py` build the envelope, `tools/phase_transition_helpers.py` runs a check for the tool surface, and a `tools/*_tool_helpers.py` module sits beside the tool it serves. [Risks and technical debt](#risks-and-technical-debt) carries that grouping.
 
-import-linter holds a contract in `packages/mcp/pyproject.toml`, and CI runs it. That contract orders the folders, which runs `server > tools > core > auth > settings`, and no contract orders the blocks above. [Dependency rule](#dependency-rule) states what else that file holds, while [Known gaps](#known-gaps) names what runs unheld.
+import-linter holds a contract in `packages/mcp/pyproject.toml`, and CI runs it. That contract orders the folders, which runs `server > tools > core > auth > settings`, and no contract orders the blocks above. [Dependency rule](#dependency-rule) states what else that file holds, while [Risks and technical debt](#risks-and-technical-debt) names what runs unheld.
 
 #### SDK
 
@@ -314,9 +314,9 @@ flowchart TB
 
 An arrow is an import, and the diagram draws the ones that set the direction rather than every one. The `Role` column places each block on the chain that [Dependency rule](#dependency-rule) draws. A library owns no composition root, because the caller wires it, so the facade constructs the services that it delegates to.
 
-The preflight checks sit above the facade rather than below it, because each one takes a `PipefyClient` and calls it. That inverts the chain, and [Known gaps](#known-gaps) carries it.
+The preflight checks sit above the facade rather than below it, because each one takes a `PipefyClient` and calls it. That inverts the chain, and [Risks and technical debt](#risks-and-technical-debt) carries it.
 
-The `utils/` folder splits between two blocks, because `organization_identifiers.py` reaches a query document while the rest are pure. [Known gaps](#known-gaps) carries that grouping too.
+The `utils/` folder splits between two blocks, because `organization_identifiers.py` reaches a query document while the rest are pure. [Risks and technical debt](#risks-and-technical-debt) carries that grouping too.
 
 The SDK declares no order inside itself, so no check holds the chain above. `packages/sdk/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one.
 
@@ -356,7 +356,7 @@ flowchart TB
 
 An arrow is an import, and the diagram draws the ones that set the direction rather than every one. The `Role` column places each block on the chain that [Dependency rule](#dependency-rule) draws. A command module holds two positions at once, because the function that declares the command is also the function that orchestrates the calls behind it. The run harness is this application's driving adapter, because every command body runs inside it.
 
-Two blocks share `commands/_common.py`, which the table splits by function rather than by file. [Known gaps](#known-gaps) carries that grouping.
+Two blocks share `commands/_common.py`, which the table splits by function rather than by file. [Risks and technical debt](#risks-and-technical-debt) carries that grouping.
 
 The CLI declares no order inside itself, so no check holds the chain above. `packages/cli/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one.
 
@@ -411,7 +411,7 @@ flowchart TB
 
 An arrow is an import, and the diagram draws the ones that set the direction rather than every one. The `Role` column places each block on the chain that [Dependency rule](#dependency-rule) draws. The login flow starts the loopback callback and stops it again, so a use case owns a driving adapter for the length of one login.
 
-This package declares no order inside itself, so no check holds the chain above. `packages/auth/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one. [Known gaps](#known-gaps) names what this package leaves open.
+This package declares no order inside itself, so no check holds the chain above. `packages/auth/pyproject.toml` carries the ruff `TID251` list that holds the direction between packages, and it carries nothing that holds the direction within this one. [Risks and technical debt](#risks-and-technical-debt) names what this package leaves open.
 
 ## Cross-cutting concepts
 
@@ -436,7 +436,7 @@ Between packages, ruff `TID251` bans the inward-breaking imports, where two rule
 
 Each package's own `pyproject.toml` holds its list, with one message per banned package. Within the MCP package, import-linter holds the folder order that [MCP server](#mcp-server) names, which is `QR-14`. A second import-linter contract forbids a `pipefy_mcp.settings` import from the `tools` layer, and every exception in it is reviewed as a per-deployment read or as a startup type import. The enforced spine is the acyclic import chain that holds today, and this section restates neither list.
 
-Inside a package, a role is the position a module takes in the inward chain, which is a domain type, a driven adapter, a use case, or a facade. The first two are the parts above at module scale, and the last two have no counterpart there. A facade imports a use case, a use case imports a driven adapter, and a driven adapter imports a domain type, whereas a domain type imports none of them. In an application a driving adapter sits outside the facade, because the outside touches it first, and a middleware around an inbound call is one. The composition root sits off that chain, because it constructs every part and therefore imports across the direction. [ADR-0004](adr/0004-vertical-slice-structure.md) holds that contract and the reasoning behind it, while `MODULE-1` and `MODULE-2` in [`conventions.md`](conventions.md) place a module by the role it takes. No package declares a check for this order, because the one contract that exists holds a folder order instead, and [Known gaps](#known-gaps) names what that leaves unheld.
+Inside a package, a role is the position a module takes in the inward chain, which is a domain type, a driven adapter, a use case, or a facade. The first two are the parts above at module scale, and the last two have no counterpart there. A facade imports a use case, a use case imports a driven adapter, and a driven adapter imports a domain type, whereas a domain type imports none of them. In an application a driving adapter sits outside the facade, because the outside touches it first, and a middleware around an inbound call is one. The composition root sits off that chain, because it constructs every part and therefore imports across the direction. [ADR-0004](adr/0004-vertical-slice-structure.md) holds that contract and the reasoning behind it, while `MODULE-1` and `MODULE-2` in [`conventions.md`](conventions.md) place a module by the role it takes. No package declares a check for this order, because the one contract that exists holds a folder order instead, and [Risks and technical debt](#risks-and-technical-debt) names what that leaves unheld.
 
 ```mermaid
 flowchart LR
@@ -459,7 +459,7 @@ An application is entered through a driving port, and its driving adapter is wha
 
 Business logic depends on an interface shaped by what it needs, and the adapter implements it. This rule names where the boundary sits, so "invert" does not mean "invert everything". The boundary is domain to infrastructure: a third-party SDK, the network, a database. Ports are not universal, and the rules that add one are `PORT-1` to `PORT-3` in [`conventions.md`](conventions.md).
 
-These are the ports the repository owns today. `GraphQLExecutor` in the SDK is a driven port over the GraphQL client. The attachment service owns `S3Uploader` and `UrlDownloader`. A test injects a fake against each, which is `QR-13`. Each one serves `QR-2` too, because a change behind a port stops at that port. The outbound HTTP chain of the iPaaS gateway has no port, and [Known gaps](#known-gaps) carries it.
+These are the ports the repository owns today. `GraphQLExecutor` in the SDK is a driven port over the GraphQL client. The attachment service owns `S3Uploader` and `UrlDownloader`. A test injects a fake against each, which is `QR-13`. Each one serves `QR-2` too, because a change behind a port stops at that port. The outbound HTTP chain of the iPaaS gateway has no port, and [Risks and technical debt](#risks-and-technical-debt) carries it.
 
 ### Composition root
 
@@ -481,7 +481,7 @@ No global choice sets the identifier form, because each package that a consumer 
 
 A tool faces two kinds of question that look alike, although it must treat them differently. A question about data asks what to act on, whereas a question about permission asks whether to act at all. Only the first kind ever reaches the caller.
 
-Where a tool lacks an input it needs, it asks the caller for that input, which is what `QR-22` demands. A question the model must answer costs a round trip, whereas a question that goes to the client costs `QR-5` nothing, so `QR-22` is the cheap way to satisfy `QR-5` and not a rival to it. Because not every client can take a question, [Known gaps](#known-gaps) names which callers a tool can ask, and what a tool does with the rest.
+Where a tool lacks an input it needs, it asks the caller for that input, which is what `QR-22` demands. A question the model must answer costs a round trip, whereas a question that goes to the client costs `QR-5` nothing, so `QR-22` is the cheap way to satisfy `QR-5` and not a rival to it. Because not every client can take a question, [Risks and technical debt](#risks-and-technical-debt) names which callers a tool can ask, and what a tool does with the rest.
 
 When the consumer sets up their client, they settle permission for good, so `QR-25` leaves that decision where they made it. `QR-3` rules out any wait for an answer when nobody is present, and a question about permission survives that, because the consumer settled it before the run began. A question about data does not survive, because nobody can settle a value in advance, so there `QR-22` conflicts with `QR-3`.
 
@@ -494,7 +494,7 @@ Each party does the one thing it alone can do:
 
 [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md) owns the protocol.
 
-Today the server does more than this, because a destructive tool returns a preview and acts only on a second call that sets `confirm`. Since the model makes that second call, the preview reaches the model, and no person agrees to anything. [Known gaps](#known-gaps) carries the correction.
+Today the server does more than this, because a destructive tool returns a preview and acts only on a second call that sets `confirm`. Since the model makes that second call, the preview reaches the model, and no person agrees to anything. [Risks and technical debt](#risks-and-technical-debt) carries the correction.
 
 ### Tool surface
 
@@ -508,7 +508,7 @@ A build-time guard keys the partition to the registered tool names, so a new too
 
 The MCP layer prefers a tool that expresses an outcome over one tool per API endpoint. That is `QR-5`. A chain costs the model one round trip per link, so a script pays that cost once and a model pays it every link. The tool count tracks user intent, not the wire. `SURF-1` in [`conventions.md`](conventions.md) admits a new tool, method, or flag, and `TOOL-1` there states the shape one takes. The MCP docs name the outcome each shipped tool expresses. The decision record [ADR-0003](adr/0003-mcp-tools-express-outcomes.md) holds the reasoning.
 
-The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Known gaps](#known-gaps), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Known gaps](#known-gaps) carries that. The domain and tool profile boundaries, and the reasoning behind them, are in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
+The machinery is this large because the catalog is. The tool names copy the API operations today, which is the `QR-5` entry in [Risks and technical debt](#risks-and-technical-debt), so this section narrows a surface that a smaller one would not need. Closing that gap shrinks what this section has to do. The taxonomy itself is not settled either, and [Risks and technical debt](#risks-and-technical-debt) carries that. The domain and tool profile boundaries, and the reasoning behind them, are in [`packages/mcp/AGENTS.md`](../../packages/mcp/AGENTS.md).
 
 ### Response shape
 
@@ -518,13 +518,13 @@ One shape carries both outcomes, so a consumer reads success and failure the sam
 
 An invalid argument does not reach a tool body. The argument error is reshaped into that same envelope, so a caller receives the field and the rule rather than a stack trace. That is `QR-1` at the tool boundary, and [Composition root](#composition-root) is the same requirement applied to configuration.
 
-A denial names the likely cause and the next step. A `debug` argument adds the vendor error codes and a correlation id to any GraphQL error. That is the cause half of `QR-8`. No response states whether a retry can succeed, so [Known gaps](#known-gaps) holds the other half.
+A denial names the likely cause and the next step. A `debug` argument adds the vendor error codes and a correlation id to any GraphQL error. That is the cause half of `QR-8`. No response states whether a retry can succeed, so [Risks and technical debt](#risks-and-technical-debt) holds the other half.
 
 A partial result is not a failure. A read that the caller may perform in part returns what succeeded, plus a list naming what was denied, which is `QR-12`. One limit comes with it: `success` stays true on that response, so the list is the only signal and a consumer that reads `success` alone misses it.
 
-An answer costs the caller context once per call, which is `QR-10`. What a read returns by default is therefore part of its shape, and [Known gaps](#known-gaps) holds the review of those defaults.
+An answer costs the caller context once per call, which is `QR-10`. What a read returns by default is therefore part of its shape, and [Risks and technical debt](#risks-and-technical-debt) holds the review of those defaults.
 
-Two limits on reach. The envelope is the MCP application's shape, because the CLI prints the underlying payload instead, and [`docs/parity.md`](../parity.md) records where the two differ. And the shape arrives by wrapping rather than as a tool's own return type. A flag switches it, it covers migrated tools only, and it reaches an internal of the MCP SDK. The requirement is right and the mechanism is not settled, so [Known gaps](#known-gaps) carries it.
+Two limits on reach. The envelope is the MCP application's shape, because the CLI prints the underlying payload instead, and [`docs/parity.md`](../parity.md) records where the two differ. And the shape arrives by wrapping rather than as a tool's own return type. A flag switches it, it covers migrated tools only, and it reaches an internal of the MCP SDK. The requirement is right and the mechanism is not settled, so [Risks and technical debt](#risks-and-technical-debt) carries it.
 
 ### Identity lifetime
 
@@ -550,7 +550,7 @@ A caller can also carry state between calls, such as a vendor cursor or an expor
 
 The architecture on this map exists to serve the demands below, so a section above can name what its decision satisfies, and a review can cite one ID instead of reopening the argument.
 
-Each section names the requirement that it satisfies, in whole or in part. Where another document owns the answer instead, the row names that document. If neither holds, [Known gaps](#known-gaps) names the row.
+Each section names the requirement that it satisfies, in whole or in part. Where another document owns the answer instead, the row names that document. If neither holds, [Risks and technical debt](#risks-and-technical-debt) names the row.
 
 ### Quality requirements overview
 
@@ -609,7 +609,7 @@ A row states its demand, unless [Quality goals](#quality-goals) ranks that row, 
 | `QR-21` | A deployment picks which tools it exposes by configuration, and never by changing the source | A deployment changes its tool set without a release |
 | `QR-26` | A change to a behavior that more than one application uses lands as one reviewed change, tested against all of them | One test run gates the change, and no application ships it separately |
 
-## Known gaps
+## Risks and technical debt
 
 The map above holds today, with the exceptions below. Each entry ends by naming its target, and the entry disappears once that target exists. Where the target is not yet chosen, the entry says so.
 
@@ -645,7 +645,7 @@ The map above holds today, with the exceptions below. Each entry ends by naming 
 - Nothing bounds what one caller costs another. The remote profile runs one process for many callers. `packages/mcp/src/pipefy_mcp/core/tool_middleware.py` names a per-user quota and a rate limit as what the hosted profile needs, and it builds the seam that would carry them. The chain seeds one middleware, structured tool-call logging, so no inbound concurrency or rate control ships. The timeouts in `packages/mcp/src/pipefy_mcp/core/ipaas_gateway.py` bound one call, not one caller. The target is not yet chosen.
 - This map has no named owner. This repository has no `CODEOWNERS` file, and the five review rubric items in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) are all about a skill. Only a regulated domain has a named reviewer, at Pipefy's Privacy, Legal and Compliance team. So nothing states who has to agree before the priority order in `Quality goals` changes. A decision here therefore does not outlive the person who made it. That is the third expectation on the maintainer row in [Stakeholders](#stakeholders). The target is not yet chosen.
 
-## Vocabulary
+## Glossary
 
 These names carry a second meaning elsewhere, so each one is fixed here.
 

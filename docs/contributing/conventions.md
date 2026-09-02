@@ -1,6 +1,6 @@
 # Conventions
 
-This document settles the decisions that recur when we write code, so a review applies a rule instead of reopening the argument. A rule belongs here when a reviewer applies it by judgment to one unit of code. For the decomposition, the dependency rule, and the split by application, see [`architecture.md`](architecture.md). That document is the map of the architecture, and CI enforces the import bans that its dependency rule produces. The role order inside a package is checked in one package alone, which its `Known gaps` section records.
+This document settles the decisions that recur when we write code, so a review applies a rule instead of reopening the argument. A rule belongs here when a reviewer applies it by judgment to one unit of code. For the decomposition, the dependency rule, and the split by application, see [`architecture.md`](architecture.md). That document is the map of the architecture, and CI enforces the import bans that its dependency rule produces. The role order inside a package is checked in one package alone, which its `Risks and technical debt` section records.
 
 How to read it. Each rule has a permanent ID, so a review comment cites `PARSE-3` rather than quoting a paragraph. A retired rule keeps its ID. Every code block is illustrative and names no shipped symbol. This document states what we commit to, and it names no gap in the current code.
 

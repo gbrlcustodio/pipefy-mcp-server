@@ -224,7 +224,7 @@ Do not
 
 - Add a port for purity.
 
-Why: `GraphQLExecutor` and the attachment service ports each have a fake in a test, which is the payoff. A port with one implementation and no fake is indirection.
+Why: a port is what makes a unit injectable, which is `QR-13`. `GraphQLExecutor` and the attachment service ports each have a fake in a test, which is the payoff. A port with one implementation and no fake is indirection, so `QR-13` costs a reader of the code what `SURF-1` protects.
 
 **PORT-3. The module that performs the I/O owns the port question.**
 

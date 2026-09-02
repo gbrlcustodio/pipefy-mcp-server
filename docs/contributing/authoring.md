@@ -18,6 +18,14 @@ Then keep a doc to one kind where practical. The Diataxis kinds are tutorial, ho
 
 A decision record is contributor explanation of a distinct kind: one architectural decision, immutable once adopted. The set lives under `docs/contributing/adr/`, one file per decision. To change a decision, add a record that supersedes the old one. Do not edit an adopted record. The rule a record produces graduates to `architecture.md` or `conventions.md`, where a contributor reads the current rule. The record keeps the reasoning. In its `Consequences` section, each consequence names what it changes, which is a `QR` row, a convention rule, or a constraint, and grades that change as satisfied, partly satisfied, or violated. A consequence that changes no row, no rule, and no constraint says so.
 
+## Citing by ID
+
+A reviewer settles a point with an ID rather than an argument. Three families exist, and each one has one home:
+
+- A convention ID, such as `PARSE-3`, names how we write code, and [`conventions.md`](conventions.md) is the reference.
+- An `FR` ID names a function the toolkit delivers, and `Requirements overview` in [`architecture.md`](architecture.md) is the list.
+- A `QR` ID names a demand the code must meet, and `Quality requirements` in [`architecture.md`](architecture.md) is the list.
+
 ## Authoring a convention
 
 [`conventions.md`](conventions.md) is a rule reference, and every rule takes the same form:
@@ -43,6 +51,7 @@ A code example names no shipped symbol. A symbol in an example rots on the next 
 - A heading deeper than `###` marks a deeper arc42 level. Arc42 5 holds each level 2 whitebox at `####`.
 - A section whose content another owner holds is a pointer to that owner, and never a copy. `Architecture decisions` at arc42 9 points at [`adr/`](adr/README.md).
 - A section that nothing owns yet stays absent, and `Known gaps` names it as the target. Arc42 6 and arc42 7 stay absent today.
+- The map explains rather than instructs, so every claim is a third-person declarative.
 
 A subsection that names a part of the system goes under arc42 5, and one that states a rule that holds whichever part you are in goes under arc42 8. Arc42 asks for practices, patterns, and regulations at 8, and it never asks that a concept reach every part, so a rule that one application alone obeys still belongs there.
 
@@ -150,7 +159,7 @@ Neither document carries the inventory or the remediation plan for a gap. A conc
 
 ## Point at the owner of a fact
 
-Every fact has one owner: the code, a schema, an enforced contract, or another document. A document that restates a fact it does not own holds a copy, and that copy drifts. A reader then cannot tell which copy is current, so name the owner and point there. [`architecture.md`](architecture.md) names the import-linter contract rather than listing the layer modules, and it names the GraphQL schema rather than describing entity shape.
+Every fact has one owner: the code, a schema, an enforced contract, or another document. A document that restates a fact it does not own holds a copy, and that copy drifts. A reader then cannot tell which copy is current, so name the owner and point there. A document holds a copy only where the argument on its own page depends on that copy. [`architecture.md`](architecture.md) names the import-linter contract rather than listing the layer modules, and it names the GraphQL schema rather than describing entity shape.
 
 Where the code owns a list, generate the document from that code: docstrings, pydantic `Field(description=...)`, the tool registry, or Typer help. Hand-author only where there is no code source, such as a concept doc. Do not keep a generated table and durable prose in the same file.
 

@@ -1,25 +1,12 @@
 # Architecture
 
-The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one package for each: the SDK, the CLI, and the MCP server. This document is the map of the architecture that serves all three.
-
-These readers arrive here:
-
-- A contributor who changes code starts at [Package decomposition](#package-decomposition) and reads inward from there.
-- A consumer of one application wants to know how to use it rather than how it is built, and [`docs/mcp`](../mcp/README.md), [`docs/cli`](../cli/README.md), and [`docs/sdk`](../sdk/README.md) are the references.
-- A reviewer settles a point with an ID rather than an argument:
-  - A convention ID names how we write code, and [`conventions.md`](conventions.md) is the reference.
-  - An `FR` ID names a function the toolkit delivers, and [Requirements overview](#requirements-overview) is the list.
-  - A `QR` ID names a demand the code must meet, and [Quality requirements](#quality-requirements) is the list.
-
-The map explains rather than instructs. It points at the owner of a fact rather than repeat it. The reader pays one hop for that. A copy appears here only where the argument on this page depends on it, and [`authoring.md`](authoring.md) states the rule for every document under `docs/`.
-
-Where the code does not match the map, [Known gaps](#known-gaps) names the difference.
-
 ## Introduction and goals
 
-This section holds the forces that shape the map. It names what the toolkit must do, which qualities outrank the rest, and who holds a stake in either.
+This document maps the architecture. This section holds the forces that shape the map. It names what the toolkit must do, which qualities outrank the rest, and who holds a stake in either.
 
 ### Requirements overview
+
+The toolkit gives a programmer, a script, and an LLM access to their Pipefy organizations. It ships one package for each: the SDK, the CLI, and the MCP server.
 
 **Toolkit functions.** A consumer comes to the toolkit for these. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
 
@@ -61,11 +48,11 @@ The contributor row also holds what a tester, a code reviewer, and a developer w
 
 | Role/Name | Contact | Expectations |
 |---|---|---|
-| SDK consumer | A programmer whose code imports the `pipefy` distribution | A stable typed surface, and an upstream change that does not reach their code |
-| CLI consumer | A person at a terminal, and a script in CI | Deterministic behavior, parseable output, no prompt when nobody is watching, and a stored credential that nobody else can use |
-| MCP consumer | A person working through an LLM client | The assistant does what they asked, acts on no guess, destroys nothing unannounced, and works from a stored credential that nobody else can use |
+| SDK consumer | A programmer whose code imports the `pipefy` distribution | A stable typed surface, an upstream change that does not reach their code, and use answered by [`docs/sdk`](../sdk/README.md) rather than by this map |
+| CLI consumer | A person at a terminal, and a script in CI | Deterministic behavior, parseable output, no prompt when nobody is watching, a stored credential that nobody else can use, and use answered by [`docs/cli`](../cli/README.md) rather than by this map |
+| MCP consumer | A person working through an LLM client | The assistant does what they asked, acts on no guess, destroys nothing unannounced, and works from a stored credential that nobody else can use, with use answered by [`docs/mcp`](../mcp/README.md) rather than by this map |
 | LLM agent | AI assistants that reach the toolkit through the MCP server or the CLI, following the playbooks in [`skills/`](../../skills/README.md) | A schema it can fill without a second call, a catalog and an answer that fit in its context, a description that names rather than teaches, output it can pipe into the next call, a playbook that names only tools the server still exposes, and a success criterion it can check for itself |
-| Contributor | Anyone opening a pull request, under [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | Where a change goes, what it may import, and whether a passing test means anything |
+| Contributor | Anyone opening a pull request, under [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | Where a change goes, what it may import, whether a passing test means anything, and an entry point at [Package decomposition](#package-decomposition) that reads inward from there |
 | Maintainer | The core team, at `dev@pipefy.com` | A stack it controls, a layer order a merge cannot break, and a decision that outlives whoever made it |
 | Security reviewer | Whoever answers `security@pipefy.com`, per [`SECURITY.md`](../../SECURITY.md) | Trust boundaries, token validation, credential storage, and outbound URL policy |
 | Privacy, Legal and Compliance | Pipefy's review team, per [`CONTRIBUTING.md`](../../CONTRIBUTING.md) | A human decides anything that touches a natural person, and a blueprint states the autonomy it assumes |

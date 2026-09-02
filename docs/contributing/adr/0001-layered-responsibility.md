@@ -17,6 +17,6 @@ This split covers the SDK, the CLI, the MCP server, and the shared support libra
 
 ## Consequences
 
-A reader locates any behavior by one question: is it how to execute an operation (SDK) or what the user wants (application layer). This is the mainstream hexagonal split, so the model is recognizable to any contributor. Resolution placement is the sharpest rule and the least standardized, so it carries the highest teaching burden. A newcomer will not arrive knowing it, and mis-classifying an ambiguous resolution as deterministic puts a judgment call in the wrong layer.
+A reader locates any behavior by one question: is it how to execute an operation (SDK) or what the user wants (application layer). This is the mainstream hexagonal split, so the model is recognizable to any contributor. Resolution placement is the sharpest rule and the least standardized, so it carries the highest teaching burden. A newcomer will not arrive knowing it, and mis-classifying an ambiguous resolution as deterministic puts a judgment call in the wrong layer. No row demands that placement, so a review holds the placement rather than a check.
 
 The current rule lives in [`architecture.md`](../architecture.md).

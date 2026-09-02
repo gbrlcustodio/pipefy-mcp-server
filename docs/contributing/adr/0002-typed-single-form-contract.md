@@ -17,6 +17,6 @@ Methods return domain models named in Pipefy vocabulary, not wire dicts. Wire co
 
 ## Consequences
 
-Each application is homogeneous on its own terms, and both client products shed the dict-shuffling glue. The cost is more fields and more methods than a polymorphic argument would need. If uuid-first were ever wanted, the two-tier structure makes it a reskin, not a rewrite. The typed-output change is breaking, so it rolls out resource by resource behind the stable facade, with Card first. The resource sequence is tracked in the typed-output rollout epic.
+Each application is homogeneous on its own terms, and both client products shed the dict-shuffling glue. The cost is more fields and more methods than a polymorphic argument would need, and no row demands a smaller surface, whereas `SURF-1` bans only a member that no user need earns. If uuid-first were ever wanted, the two-tier structure makes it a reskin, not a rewrite. The typed-output change is breaking, so it rolls out resource by resource behind the stable facade, with Card first. The resource sequence is tracked in the typed-output rollout epic.
 
 The current rules live in [`conventions.md`](../conventions.md).

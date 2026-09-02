@@ -27,15 +27,15 @@ That release fails by default: a client that declares no capability gets an erro
 
 A resolver runs again on each round, and an answer counts only for a question that renders identically, so a schema built at runtime needs a stable rendering. The migration is deferred: two tools ask today, and one holds state across its `await`, which makes it the honest first case.
 
-Consent leaves the server, so the toolkit gains no way to stop a destructive call that a client approved. That is the trade rather than an oversight: a consumer who set an auto-approval list gets what they set, and no run blocks on an answer that nobody is there to give.
+Consent leaves the server, so the toolkit gains no way to stop a destructive call that a client approved. That satisfies `QR-25` and is not an oversight: a consumer who set an auto-approval list gets what they set, and no run blocks on an answer that nobody is there to give, which satisfies `QR-3`. What `QR-6` still owes a caller moves into the dry run, so `QR-5` is partly satisfied instead, because a caller who wants the reach pays a round trip and a caller who does not pays nothing.
 
-An annotation is fixed at registration and cannot read an argument, so a tool whose reach depends on a string declares its worst case. The raw GraphQL escape hatch is that tool. The cost is permanent, so it is a property of the function and not a gap.
+An annotation is fixed at registration and cannot read an argument, so a tool whose reach depends on a string declares its worst case, which partly satisfies `QR-6`. The raw GraphQL escape hatch is that tool. The cost is permanent, so it is a property of the function and not a gap.
 
 The two escape hatches therefore disagree on purpose. The CLI refuses a raw mutation until the consumer passes a flag, and the MCP tool refuses nothing. A refusal in the CLI is the party in front of the human refusing, and the same refusal in the MCP server would override a policy the consumer already set.
 
 Clients do not read the declaration the same way. Some key on the tool name alone and read no annotation, so a description that omits the permanence carries that omission to the person. The description is therefore the load-bearing half, and the annotation is the half a policy engine can act on.
 
-The gate that ships today is the reverse of this decision, so the migration breaks the contract of every destructive tool. It is cheapest before v1.0, because a break after that owes a deprecation period first.
+The gate that ships today is the reverse of this decision, so the migration breaks the contract of every destructive tool. It is cheapest before v1.0, because a break after that violates `QR-11` and owes a deprecation period first.
 
 The current rules live in [`conventions.md`](../conventions.md).
 

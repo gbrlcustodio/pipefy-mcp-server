@@ -2,7 +2,7 @@
 
 ## Introduction and goals
 
-This document maps the architecture. This section holds the forces that shape the map. It names why the toolkit exists and what it must do, which qualities outrank the rest, and who holds a stake in either.
+This document maps the architecture of the AI Toolkit. The toolkit is an MCP server, a CLI, and the SDK that both build on, over Pipefy's public API.
 
 ### Requirements overview
 

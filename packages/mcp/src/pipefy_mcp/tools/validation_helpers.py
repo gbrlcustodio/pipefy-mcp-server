@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, TypeVar
+
+from pipefy_sdk.graphql_inputs import GraphQLInput, describe_input_rejection
+from pydantic import ValidationError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error
+
+InputT = TypeVar("InputT", bound=GraphQLInput)
 
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -85,6 +91,34 @@ def validate_optional_tool_id(
     return True, cleaned, None
 
 
+def build_graphql_input(
+    model: type[InputT],
+    fields: Mapping[str, Any],
+    *,
+    operation: str,
+) -> tuple[InputT | None, dict[str, object] | None]:
+    """Build a typed GraphQL input, turning a rejection into a tool error payload.
+
+    Pipefy rejects an unknown input field itself, so this only moves that
+    rejection to before the request, where the message can name the field.
+    The offending value is never repeated back, so a wrong field carrying a
+    secret does not reach the transcript.
+
+    The payload carries ``INVALID_ARGUMENTS``, the code every other pre-API
+    argument-shape failure uses, so a client cannot tell a rejected
+    ``extra_input`` key from a rejected declared argument.
+
+    Returns ``(model, None)`` on success or ``(None, error_payload)``.
+    """
+    try:
+        return model(**fields), None
+    except ValidationError as exc:
+        return None, tool_error(
+            f"Invalid arguments for {operation}: {describe_input_rejection(exc)}.",
+            code="INVALID_ARGUMENTS",
+        )
+
+
 def validate_optional_tool_id_list(
     values: list[str | int] | None,
     label: str = "ids",
@@ -137,6 +171,7 @@ def mutation_error_if_not_optional_dict(
 
 __all__ = [
     "UUID_RE",
+    "build_graphql_input",
     "mutation_error_if_not_optional_dict",
     "valid_repo_id",
     "validate_optional_tool_id",

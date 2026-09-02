@@ -10,6 +10,16 @@ from _mcp_compat import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient, PipefyGraphQLError
+from pipefy_sdk.graphql_inputs import (
+    CreateFieldConditionInput,
+    CreatePhaseFieldInput,
+    UpdateFieldConditionInput,
+    UpdateLabelInput,
+    UpdatePhaseFieldInput,
+    UpdatePhaseInput,
+    UpdatePipeInput,
+)
+from pipefy_sdk.utils import normalize_field_condition_fields
 
 from pipefy_mcp.core.tool_error_envelope import tool_error, tool_error_message
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
@@ -182,7 +192,7 @@ async def test_update_pipe_success(
 
     assert result.is_error is False
     mock_pipe_config_client.update_pipe.assert_awaited_once_with(
-        "2", name="X", icon=None, color=None, preferences=None
+        UpdatePipeInput(id="2", name="X")
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -348,8 +358,7 @@ async def test_update_phase_with_explicit_name(
 
     mock_pipe_config_client.get_phase_fields.assert_not_called()
     mock_pipe_config_client.update_phase.assert_awaited_once_with(
-        "10",
-        name="New",
+        UpdatePhaseInput(id="10", name="New")
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -376,9 +385,7 @@ async def test_update_phase_resolves_name_from_get_phase_fields(
 
     mock_pipe_config_client.get_phase_fields.assert_awaited_once_with("10")
     mock_pipe_config_client.update_phase.assert_awaited_once_with(
-        "10",
-        name="Old",
-        done=True,
+        UpdatePhaseInput(id="10", name="Old", done=True)
     )
     assert extract_payload(result)["success"] is True
 
@@ -669,10 +676,9 @@ async def test_create_phase_field_success(
         )
 
     mock_pipe_config_client.create_phase_field.assert_awaited_once_with(
-        "1",
-        "Email",
-        "email",
-        description="Contact",
+        CreatePhaseFieldInput(
+            phase_id="1", label="Email", type="email", description="Contact"
+        )
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -706,10 +712,12 @@ async def test_create_phase_field_with_options(
         )
 
     mock_pipe_config_client.create_phase_field.assert_awaited_once_with(
-        "1",
-        "Prioridade",
-        "select",
-        options=["Alta", "Média", "Baixa"],
+        CreatePhaseFieldInput(
+            phase_id="1",
+            label="Prioridade",
+            type="select",
+            options=["Alta", "Média", "Baixa"],
+        )
     )
     assert extract_payload(result)["success"] is True
 
@@ -731,8 +739,9 @@ async def test_update_phase_field_success(
         )
 
     mock_pipe_config_client.update_phase_field.assert_awaited_once_with(
-        "9",
-        label="Renamed",
+        UpdatePhaseFieldInput(id="9", label="Renamed"),
+        phase_id=None,
+        pipe_id=None,
     )
     assert extract_payload(result)["success"] is True
 
@@ -758,8 +767,9 @@ async def test_update_phase_field_success_with_string_slug(
         )
 
     mock_pipe_config_client.update_phase_field.assert_awaited_once_with(
-        "detalhe_mcp",
-        label="Renamed",
+        UpdatePhaseFieldInput(id="detalhe_mcp", label="Renamed"),
+        phase_id=None,
+        pipe_id=None,
     )
     assert extract_payload(result)["success"] is True
 
@@ -789,11 +799,92 @@ async def test_update_phase_field_with_uuid_for_disambiguation(
         )
 
     mock_pipe_config_client.update_phase_field.assert_awaited_once_with(
-        "prioridade",
-        label="Nível de Urgência",
-        uuid="a796cc44-6568-4bfb-9c09-2b903eb7bff2",
+        UpdatePhaseFieldInput(
+            id="prioridade",
+            label="Nível de Urgência",
+            uuid="a796cc44-6568-4bfb-9c09-2b903eb7bff2",
+        ),
+        phase_id=None,
+        pipe_id=None,
     )
     assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+async def test_update_phase_field_lifts_slug_hints_out_of_extra_input(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """``phase_id`` in ``extra_input`` still narrows the slug lookup.
+
+    ``UpdatePhaseFieldInput`` has no such field, so it cannot be sent. Lifting
+    it into the SDK keyword argument keeps the path working rather than
+    rejecting it as an unknown field.
+    """
+    mock_pipe_config_client.update_phase_field.return_value = {
+        "updatePhaseField": {"phase_field": {"id": "prioridade"}},
+    }
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "update_phase_field",
+            {
+                "field_id": "prioridade",
+                "label": "Prioridade",
+                "extra_input": {"phase_id": "343162749"},
+            },
+        )
+
+    mock_pipe_config_client.update_phase_field.assert_awaited_once_with(
+        UpdatePhaseFieldInput(id="prioridade", label="Prioridade"),
+        phase_id="343162749",
+        pipe_id=None,
+    )
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+async def test_update_phase_field_rejects_an_unknown_extra_input_key(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """The rejection names the field and never reaches the API."""
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "update_phase_field",
+            {
+                "field_id": "prioridade",
+                "label": "Prioridade",
+                "extra_input": {"requred": True},
+            },
+        )
+
+    mock_pipe_config_client.update_phase_field.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "'requred' is not an accepted field" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+async def test_update_pipe_rejects_an_unknown_nested_preference(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """A nested rejection is reported by its path, not attributed to the outer input.
+
+    Pipefy answers the same payload with ``InputObject 'RepoPreferenceInput'
+    doesn't accept argument 'findabl'``, so nothing that used to work is lost.
+    """
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "update_pipe",
+            {"pipe_id": "2", "preferences": {"findabl": True}},
+        )
+
+    mock_pipe_config_client.update_pipe.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "'preferences.findabl' is not an accepted field" in tool_error_message(
+        payload
+    )
 
 
 @pytest.mark.anyio
@@ -1230,7 +1321,7 @@ async def test_update_label_success(
         )
 
     mock_pipe_config_client.update_label.assert_awaited_once_with(
-        "3", name="Story", color="#0000FF"
+        UpdateLabelInput(id="3", name="Story", color="#0000FF")
     )
     assert extract_payload(result)["success"] is True
 
@@ -1253,9 +1344,7 @@ async def test_update_label_strips_id_from_extra_input__no_integration(
             },
         )
     mock_pipe_config_client.update_label.assert_awaited_once_with(
-        "3",
-        name="X",
-        color="#0000FF",
+        UpdateLabelInput(id="3", name="X", color="#0000FF")
     )
     assert extract_payload(result)["success"] is True
 
@@ -1805,10 +1894,9 @@ async def test_create_phase_field_strips_reserved_keys_from_extra_input__no_inte
         )
     assert extract_payload(result)["success"] is True
     mock_pipe_config_client.create_phase_field.assert_awaited_once_with(
-        "1",
-        "Email",
-        "email",
-        description="Kept",
+        CreatePhaseFieldInput(
+            phase_id="1", label="Email", type="email", description="Kept"
+        )
     )
 
 
@@ -1947,10 +2035,16 @@ async def test_create_field_condition_success(
 
     assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        "pf-99",
-        expr_input,
-        actions,
-        name="R1",
+        CreateFieldConditionInput(
+            **normalize_field_condition_fields(
+                {
+                    "phaseId": "pf-99",
+                    "condition": expr_input,
+                    "actions": actions,
+                    "name": "R1",
+                }
+            )
+        )
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -2020,10 +2114,9 @@ async def test_create_field_condition_top_level_name__no_integration(
         )
     assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        "pf-99",
-        expr,
-        actions,
-        name="Top-level name",
+        CreateFieldConditionInput(
+            phaseId="pf-99", condition=expr, actions=actions, name="Top-level name"
+        )
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -2057,11 +2150,13 @@ async def test_create_field_condition_top_level_name_wins_over_extra_input__no_i
         )
     assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        "pf-99",
-        expr,
-        actions,
-        index=3,
-        name="Top wins",
+        CreateFieldConditionInput(
+            phaseId="pf-99",
+            condition=expr,
+            actions=actions,
+            index=3,
+            name="Top wins",
+        )
     )
     assert extract_payload(result)["verified"] is True
 
@@ -2198,10 +2293,9 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
         )
     assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        "1",
-        expr,
-        actions,
-        name="R",
+        CreateFieldConditionInput(
+            phaseId="1", condition=expr, actions=actions, name="R"
+        )
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -2212,7 +2306,13 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
 async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    """MCP forwards actions verbatim; SDK service normalizes ``hidden`` → ``hide``."""
+    """``actionId: "hidden"`` reaches the SDK canonicalized to ``"hide"``.
+
+    The tool normalizes before it parses, because the typed input mirrors the
+    schema and would otherwise refuse shapes the API accepts. The SDK service
+    normalizes again on the serialized payload, which is idempotent, so a direct
+    SDK caller gets the same repair.
+    """
     expr = {
         "expressions": [{"field_address": "a", "operation": "equals", "value": "1"}]
     }
@@ -2232,10 +2332,22 @@ async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
         )
     assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        "1",
-        expr,
-        actions_in,
-        name="R",
+        CreateFieldConditionInput(
+            **normalize_field_condition_fields(
+                {
+                    "phaseId": "1",
+                    "condition": expr,
+                    "actions": actions_in,
+                    "name": "R",
+                }
+            )
+        )
+    )
+    assert (
+        mock_pipe_config_client.create_field_condition.await_args[0][0]
+        .actions[0]
+        .actionId
+        == "hide"
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -2246,7 +2358,12 @@ async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
 async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    """MCP forwards condition verbatim; SDK service strips persisted expression ids."""
+    """A persisted ``expression.id`` is stripped before the input reaches the SDK.
+
+    The tool normalizes before it parses, for the same reason the actions are
+    normalized there. The SDK service repeats the pass on the serialized payload
+    for direct SDK callers; it is idempotent.
+    """
     expr_with_id = {
         "expressions": [
             {
@@ -2278,15 +2395,58 @@ async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
         )
     assert result.is_error is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        "1",
-        expr_with_id,
-        actions,
-        name="R",
+        CreateFieldConditionInput(
+            **normalize_field_condition_fields(
+                {
+                    "phaseId": "1",
+                    "condition": expr_with_id,
+                    "actions": actions,
+                    "name": "R",
+                }
+            )
+        )
     )
+    sent = mock_pipe_config_client.create_field_condition.await_args[0][0]
+    assert sent.condition.expressions[0].id is None
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["condition_id"] == "cond-stripped"
     assert payload["verified"] is True
+
+
+@pytest.mark.anyio
+async def test_create_field_condition_accepts_a_flat_expressions_structure(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """GraphQL coerces a bare value into a single-item list, so the tool must too.
+
+    The API stores ``expressions_structure: [0, 1]`` as ``[["0"], ["1"]]``.
+    ``CreateFieldConditionInput`` mirrors ``[[ID]]`` and would refuse the flat
+    form, so the shape is repaired before the input is parsed.
+    """
+    mock_pipe_config_client.create_field_condition.return_value = {
+        "createFieldCondition": {"fieldCondition": {"id": "cond-flat"}},
+    }
+    async with pipe_config_session as session:
+        await session.call_tool(
+            "create_field_condition",
+            {
+                "phase_id": "1",
+                "name": "R",
+                "condition": {
+                    "expressions": [
+                        {"field_address": "a", "operation": "equals", "value": "1"}
+                    ],
+                    "expressions_structure": [0, 1],
+                },
+                "actions": [{"phaseFieldId": "2", "actionId": "show"}],
+            },
+        )
+
+    # The verify step's outcome is not what this test is about: the point is
+    # that the input parsed at all, and reached the SDK in the wrapped shape.
+    sent = mock_pipe_config_client.create_field_condition.await_args[0][0]
+    assert sent.condition.expressions_structure == [[0], [1]]
 
 
 @pytest.mark.anyio
@@ -2340,8 +2500,7 @@ async def test_update_field_condition_success(
 
     assert result.is_error is False
     mock_pipe_config_client.update_field_condition.assert_awaited_once_with(
-        "cond-2",
-        name="Patched",
+        UpdateFieldConditionInput(id="cond-2", name="Patched")
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -2377,10 +2536,16 @@ async def test_update_field_condition_success_with_explicit_condition_and_action
 
     assert result.is_error is False
     mock_pipe_config_client.update_field_condition.assert_awaited_once_with(
-        "cond-7",
-        name="N7",
-        condition=condition_in,
-        actions=actions_in,
+        UpdateFieldConditionInput(
+            **normalize_field_condition_fields(
+                {
+                    "id": "cond-7",
+                    "name": "N7",
+                    "condition": condition_in,
+                    "actions": actions_in,
+                }
+            )
+        )
     )
     assert extract_payload(result)["success"] is True
 
@@ -2401,8 +2566,7 @@ async def test_update_field_condition_top_level_name__no_integration(
 
     assert result.is_error is False
     mock_pipe_config_client.update_field_condition.assert_awaited_once_with(
-        "cond-8",
-        name="Top name",
+        UpdateFieldConditionInput(id="cond-8", name="Top name")
     )
     assert extract_payload(result)["success"] is True
 

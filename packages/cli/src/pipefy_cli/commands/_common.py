@@ -6,7 +6,7 @@ import asyncio
 import json
 import math
 import sys
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, TypeVar
 
 import typer
@@ -18,8 +18,10 @@ from pipefy_sdk import (
     stream_bytes,
 )
 from pipefy_sdk.exceptions import PipefyError
+from pipefy_sdk.graphql_inputs import GraphQLInput, describe_input_rejection
 from pipefy_sdk.label_color import normalize_label_color
 from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
+from pydantic import ValidationError
 
 from pipefy_cli.auth import (
     AuthContext,
@@ -306,6 +308,52 @@ def parse_json_object(raw: str | None, option_name: str) -> dict[str, Any] | Non
     if not isinstance(parsed, dict):
         raise typer.BadParameter(f"{option_name} must be a JSON object")
     return parsed
+
+
+InputT = TypeVar("InputT", bound=GraphQLInput)
+
+
+def reject_reserved_extra_keys(
+    extra: Mapping[str, Any] | None,
+    *,
+    reserved: frozenset[str],
+    option_name: str = "--extra",
+) -> dict[str, Any]:
+    """Return ``extra`` after refusing any key a dedicated argument already sets.
+
+    A typed input is one flat mapping, so a reserved key in ``extra`` would
+    simply overwrite the value the positional argument supplied — a rule created
+    on the wrong phase, or an update applied to the wrong condition. Refusing is
+    what the SDK used to do before the input became one model, and it stays here
+    rather than dropping the key silently: the caller typed it deliberately.
+    """
+    present = sorted(key for key in (extra or {}) if key in reserved)
+    if present:
+        raise typer.BadParameter(
+            f"{option_name} may not set {', '.join(repr(k) for k in present)}; "
+            "pass the dedicated argument instead."
+        )
+    return dict(extra or {})
+
+
+def graphql_input_or_bad_parameter(
+    model: type[InputT],
+    fields: Mapping[str, Any],
+) -> InputT:
+    """Build a typed GraphQL input, reporting a rejection as a usage error.
+
+    Pipefy rejects an unknown input field itself, so this only moves that
+    rejection to argument-parsing time, where the message can name the field and
+    the command exits 2 without opening a connection. The offending value is not
+    echoed, so a wrong field carrying a secret stays out of the shell log.
+
+    No ``param_hint`` is passed: several options feed one model on most of these
+    commands, so naming one would be a guess. The message names the field.
+    """
+    try:
+        return model(**fields)
+    except ValidationError as exc:
+        raise typer.BadParameter(f"{describe_input_rejection(exc)}.") from exc
 
 
 def merge_extra_attrs(

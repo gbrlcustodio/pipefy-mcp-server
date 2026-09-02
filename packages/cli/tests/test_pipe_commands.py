@@ -5,6 +5,11 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from pipefy_sdk.graphql_inputs import (
+    RepoPreferenceInput,
+    UpdatePipeInput,
+)
+
 from pipefy_cli.main import app
 
 
@@ -172,7 +177,9 @@ def test_pipe_update_preferences_json(runner, clean_pipefy_env, saved_cwd, oauth
     payload = {"updatePipe": {"pipe": {"id": "10"}}}
     mock_client = MagicMock()
     mock_client.update_pipe = AsyncMock(return_value=payload)
-    prefs = {"foo": "bar"}
+    # A real RepoPreferenceInput field: the typed input rejects anything else
+    # by name, which is what Pipefy does with the payload anyway.
+    prefs = {"findable": True}
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -190,7 +197,7 @@ def test_pipe_update_preferences_json(runner, clean_pipefy_env, saved_cwd, oauth
         )
     assert result.exit_code == 0
     mock_client.update_pipe.assert_awaited_once_with(
-        "10", name=None, icon=None, color=None, preferences=prefs
+        UpdatePipeInput(id="10", preferences=RepoPreferenceInput(findable=True))
     )
 
 

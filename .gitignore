@@ -51,6 +51,7 @@ RALPH_TASK.md
 # Tracked release tooling only (ignore ad-hoc local scripts and smoke artifacts)
 scripts/*
 !scripts/bump_version.py
+!scripts/generate_graphql_inputs.py
 !scripts/release.py
 !scripts/smoke_entry_points.py
 

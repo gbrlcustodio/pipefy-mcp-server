@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import typer
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.graphql_inputs import (
+    UpdatePipeInput,
+)
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    graphql_input_or_bad_parameter,
     parse_json_object,
     resource_id_argument,
     run_cli_command,
@@ -133,14 +137,19 @@ def pipe_update(
             "Provide at least one of: --name, --icon, --color, --preferences (non-empty)."
         )
 
+    update_input = graphql_input_or_bad_parameter(
+        UpdatePipeInput,
+        {
+            "id": pipe_id,
+            "name": name,
+            "icon": icon,
+            "color": color,
+            "preferences": preferences,
+        },
+    )
+
     async def factory(client: PipefyClient):
-        return await client.update_pipe(
-            pipe_id,
-            name=name,
-            icon=icon,
-            color=color,
-            preferences=preferences,
-        )
+        return await client.update_pipe(update_input)
 
     run_cli_command(ctx, json_out, factory)
 

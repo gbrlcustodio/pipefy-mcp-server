@@ -56,8 +56,9 @@ def normalize_field_condition_payload(
        integers; sending strings or mixed types triggers an opaque 500 instead of
        a clean validation error. Coerce both to ``int`` when possible.
 
-    Unknown top-level keys on the condition (e.g. ``index``) are preserved so the
-    helper stays forward-compatible.
+    Unknown top-level keys on the condition are passed through, but a caller that
+    reaches this through :class:`ConditionInput` cannot supply one: that model
+    forbids extras, exactly as ``InputObject 'ConditionInput'`` does on the wire.
 
     Args:
         condition: Caller-provided ``ConditionInput`` dict (typically with
@@ -126,6 +127,30 @@ def normalize_field_condition_actions(
             row["actionId"] = "hide"
         normalized.append(row)
     return normalized
+
+
+def normalize_field_condition_fields(fields: dict[str, Any]) -> dict[str, Any]:
+    """Repair the ``condition`` / ``actions`` entries of a raw mutation input.
+
+    Runs before the input is parsed into ``CreateFieldConditionInput`` or
+    ``UpdateFieldConditionInput``, because two shapes the API accepts do not
+    match the schema those models mirror. GraphQL coerces a bare value into a
+    single-item list, so ``expressions_structure: [0]`` is a legal way to write
+    ``[[0]]`` on the wire, and a model typed from ``[[ID]]`` would refuse it.
+    Repairing first keeps the models a faithful mirror without narrowing what a
+    caller may send.
+
+    Both helpers it calls are idempotent, so the service running them again on
+    the serialized payload changes nothing.
+    """
+    repaired = dict(fields)
+    condition = repaired.get("condition")
+    if isinstance(condition, dict):
+        repaired["condition"] = normalize_field_condition_payload(condition)
+    actions = repaired.get("actions")
+    if isinstance(actions, list):
+        repaired["actions"] = normalize_field_condition_actions(actions)
+    return repaired
 
 
 def convert_values_to_camel_case(values: list[dict[str, Any]]) -> list[dict[str, Any]]:

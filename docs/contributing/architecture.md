@@ -1,4 +1,4 @@
-# Architecture
+# AI Toolkit architecture
 
 ## Introduction and goals
 

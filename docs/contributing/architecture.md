@@ -42,8 +42,6 @@ These qualities dominate every decision on this map. Where two of them conflict,
 
 ### Stakeholders
 
-These roles hold a stake in the architecture and in the documents that describe it. [Requirements overview](#requirements-overview) and [Quality requirements](#quality-requirements) state what the toolkit owes them.
-
 The contributor row also holds what a tester, a code reviewer, and a developer would ask for, because this project has nobody who plays those parts separately. A contributor can be an agent rather than a person, which is what [`AGENTS.md`](../../AGENTS.md) exists for.
 
 | Role/Name | Contact | Expectations |

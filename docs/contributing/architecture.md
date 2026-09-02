@@ -494,9 +494,9 @@ No global choice sets the identifier form, because each package that a consumer 
 
 A tool faces two kinds of question that look alike, although it must treat them differently. A question about data asks what to act on, whereas a question about permission asks whether to act at all. Only the first kind ever reaches the caller.
 
-Where a tool lacks an input it needs, it asks the caller for that input, which is what `QR-22` demands. Because not every client can take a question, [Known gaps](#known-gaps) names which callers a tool can ask, and what a tool does with the rest.
+Where a tool lacks an input it needs, it asks the caller for that input, which is what `QR-22` demands. A question the model must answer costs a round trip, whereas a question that goes to the client costs `QR-5` nothing, so `QR-22` is the cheap way to satisfy `QR-5` and not a rival to it. Because not every client can take a question, [Known gaps](#known-gaps) names which callers a tool can ask, and what a tool does with the rest.
 
-When the consumer sets up their client, they settle permission for good, so `QR-25` leaves that decision where they made it. `QR-3` rules the question out in any case, because no run waits for an answer when nobody is present to give one.
+When the consumer sets up their client, they settle permission for good, so `QR-25` leaves that decision where they made it. `QR-3` rules out any wait for an answer when nobody is present, and a question about permission survives that, because the consumer settled it before the run began. A question about data does not survive, because nobody can settle a value in advance, so there `QR-22` conflicts with `QR-3`.
 
 Each party does the one thing it alone can do:
 
@@ -619,11 +619,6 @@ Each row belongs to one or more categories, and [`quality.arc42.org`](https://qu
 | `QR-14` | A merged change never breaks the layer order | A merge that inverts the role direction fails a build check |
 | `QR-21` | A deployment picks which tools it exposes by configuration, and never by changing the source | A deployment changes its tool set without a release |
 | `QR-26` | A change to a behavior that more than one application uses lands as one reviewed change, tested against all of them | One test run gates the change, and no application ships it separately |
-
-A demand can read as a rival to another demand:
-
-- A question the model must answer costs a round trip, so `QR-5` is partly satisfied. A question that goes to the client costs `QR-5` nothing, which is why `QR-22` is the cheap way to satisfy `QR-5` and not a rival to it.
-- `QR-3` holds when no human is present, so nothing the toolkit runs can wait for an answer. A question about permission survives that, because the consumer settled it before the run began, and `QR-25` puts their client in charge of it. A question about data does not survive, because nobody can settle a value in advance. There `QR-22` conflicts with `QR-3`, and [Known gaps](#known-gaps) states what a tool does instead.
 
 ## Known gaps
 

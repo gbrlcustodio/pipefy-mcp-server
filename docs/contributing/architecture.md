@@ -38,7 +38,7 @@ These qualities dominate every decision on this map. Where two of them conflict,
 | 2 | Resource utilization | A model asks for one card by name. One tool call answers it, and no second call is needed to get there. (`QR-5`) |
 | 3 | Diagnosability | A GraphQL call is denied. The response names the likely cause, whether a retry can succeed, and the next step. (`QR-8`) |
 | 4 | Stability | Pipefy reshapes a GraphQL response. The change never reaches the consumer's code. (`QR-2`) |
-| 5 | Backward compatibility | After v1.0, a release deprecates a public SDK function. A warning comes first, the function works for two more minor releases, and `DEPRECATION.md` sets that period. (`QR-11`) |
+| 5 | Backward compatibility | After v1.0, a release deprecates a public SDK function. A warning comes first, and the function works for two more minor releases. (`QR-11`) |
 
 ### Stakeholders
 

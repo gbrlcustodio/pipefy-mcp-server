@@ -11,7 +11,7 @@ Pipefy is fully invested in the AI ecosystem. Its own AI agents already do the w
 **Toolkit functions.** A consumer comes to the toolkit for these. Each one is work that Pipefy's API leaves to the consumer, or does not offer at all.
 
 - `FR-1` Persistent sign-in. A consumer signs in through a browser once, and later calls need no second sign-in.
-- `FR-2` Name resolution. When a consumer names a resource instead of its id, the toolkit finds that resource, and an incomplete or misspelled name still finds it.
+- `FR-2` Address by name. When a consumer identifies a resource by its name instead of its id, the toolkit finds that resource.
 - `FR-3` Validation without execution. Before a consumer applies a change, the toolkit reports what would fail. The check changes nothing.
 - `FR-4` Escape hatch. When no tool wraps an operation, a consumer still reaches it, and can discover what the API offers.
 - `FR-5` iPaaS reach. A consumer reaches the flows of a pipe's iPaaS workspace, and needs no second credential for the engine behind them.
@@ -473,6 +473,8 @@ No global choice sets the identifier form, because each package that a consumer 
 
 `QR-7` demands that an identifier which fits more than one resource never resolves silently. Rather than pick one resource for an ambiguous name, the MCP server returns every match.
 
+`QR-28` demands that an inexact name still finds its resource. A pipe search and a table search take a substring first, and then a similarity score above a threshold.
+
 `ARG-1` in [`conventions.md`](conventions.md) holds each argument to one form, while [`docs/mcp/tools/identifiers.md`](../mcp/tools/identifiers.md) names which form each MCP tool and argument takes. These identifier rules come from the decision record [ADR-0002](adr/0002-typed-single-form-contract.md).
 
 ### Asking the caller
@@ -563,8 +565,8 @@ Each row belongs to one or more categories, and [`quality.arc42.org`](https://qu
 | `#reliable` | `QR-1`, `QR-2`, `QR-6`, `QR-7`, `QR-8`, `QR-9`, `QR-11`, `QR-12` |
 | `#safe` | `QR-6`, `QR-25` |
 | `#secure` | `QR-4`, `QR-15`, `QR-16`, `QR-24`, `QR-27` |
-| `#suitable` | `QR-7`, `QR-9`, `QR-13` |
-| `#usable` | `QR-3`, `QR-7`, `QR-9`, `QR-11`, `QR-17`, `QR-19`, `QR-20`, `QR-21`, `QR-22`, `QR-23` |
+| `#suitable` | `QR-7`, `QR-9`, `QR-13`, `QR-28` |
+| `#usable` | `QR-3`, `QR-7`, `QR-9`, `QR-11`, `QR-17`, `QR-19`, `QR-20`, `QR-21`, `QR-22`, `QR-23`, `QR-28` |
 
 ### Quality scenarios
 
@@ -595,6 +597,7 @@ A row states its demand, unless [Quality goals](#quality-goals) ranks that row, 
 | `QR-24` | A credential the toolkit stores is usable only by whoever it was issued to | A file the toolkit creates for a credential is readable by its owner alone |
 | `QR-25` | A consumer is stopped for approval only where they chose to be stopped | A consumer is stopped where their client's settings say, and nowhere else |
 | `QR-27` | A logout ends the credential, and only a token already issued outlives it, until that token expires | After a logout, no new token can be issued, and the last one stops at its own expiry |
+| `QR-28` | A name that is incomplete or misspelled still finds the resource | An inexact name returns the resource, or the matches that `QR-7` demands |
 
 **Change.** A demand that a holder has when the system, or something it depends on, changes.
 

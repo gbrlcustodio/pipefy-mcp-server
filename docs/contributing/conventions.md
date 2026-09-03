@@ -400,21 +400,22 @@ Do not
 
 Why: a test that constructs the app and invokes the tool handler walks the same path a client walks.
 
-## A constraint is a refactor candidate
+## A precedent is a refactor candidate
 
-**CONS-1. A constraint we own is a refactor candidate.**
+**PREC-1. A precedent we set is a refactor candidate.**
 
 Do
 
-- Remove the rule when it blocks a better name or a cleaner structure.
+- Remove the precedent when it blocks a better name, a cleaner structure, or a better abstraction.
 - Free a held name by renaming, rather than settle for a second-best term.
+- Reopen a decision an ADR records with a new ADR, not with a refactor.
 
 Do not
 
-- Rename because a constraint feels imperfect. It must actually block something.
+- Rename because a precedent feels imperfect. It must actually block something.
 
 Why: the default is to fix the rule, not to accept the worse option. Weigh the churn before a wide rename.
 
-**CONS-2. A constraint set by a vendor or the runtime is not ours to lift.**
+**PREC-2. A constraint a vendor or the runtime set is not a precedent, so it is not ours to lift.**
 
-Why: the rule above applies only to constraints we imposed on ourselves.
+Why: the rule above applies only to a precedent we set ourselves.

@@ -65,7 +65,7 @@ Each Pipefy party confirmed its own row. The consumer rows are our reading of wh
 
 ## Architecture constraints
 
-Every decision on this map works inside these limits. Each row names the limit and what follows from it. A limit we imposed on our own code is a refactor candidate instead, under `CONS-1` in [`conventions.md`](conventions.md).
+Every decision on this map works inside these limits. Each row names the limit and what follows from it. A limit we imposed on our own code is a refactor candidate instead, under `PREC-1` in [`conventions.md`](conventions.md).
 
 **Technical.**
 

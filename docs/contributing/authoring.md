@@ -22,7 +22,7 @@ A decision record is contributor explanation of a distinct kind: one architectur
 
 A reviewer settles a point with an ID rather than an argument. Three families exist, and each one has one home:
 
-- A convention ID, such as `PARSE-3`, names how we write code, and [`conventions.md`](conventions.md) is the reference.
+- A convention ID, such as `PARSE-3`, names a rule for how we write code, and [`conventions.md`](conventions.md) is the reference.
 - An `FR` ID names a function the toolkit delivers, and `Requirements overview` in [`architecture.md`](architecture.md) is the list.
 - A `QR` ID names a demand the code must meet, and `Quality requirements` in [`architecture.md`](architecture.md) is the list.
 
@@ -117,7 +117,7 @@ Change the order when something outside this file changes what matters:
 - The second test is the loose one. A decision that matters inside one application only fails it, and the section that owns that application takes it instead.
 - One table, because arc42's own first column holds a goal, a requirement, or a constraint. A second table would put a second grammar in one section, and a narrative above it would restate the rows below.
 - Every row states a driver, because arc42 asks this section to justify each decision. A driver says what happens, in words a person would say, and a compressed noun phrase hides whether the row answers the whole demand or half of it. Open the cell with the phrase and put a `QR` handle in parentheses after it, the way `Quality goals` cites its rows.
-- A driver names what drove the decision, and never the category it falls in. "A smaller learning curve for a contributor" is a driver, and "a technology decision" is not.
+- A driver states what drove the decision, and never the category it falls in. "A smaller learning curve for a contributor" is a driver, and "a technology decision" is not.
 - A driver that no `QR` carries is still a driver, and a stakeholder expectation is one place to find it. Write it out rather than borrow the nearest `QR`, because a borrowed handle sends the reader to a demand the row does not answer.
 - Where a `QR` admits more than one mechanism, the driver says which demand rules the others out. A `QR` that a manual process could meet leaves an automated answer unjustified.
 - A decision and the check that keeps it true are two rows. One row for both puts several sections in the last column, and the driver then covers half of what the cell claims.
@@ -136,7 +136,7 @@ A decision here is a settled choice, and a concept at arc42 8 is a standing rule
 - Every part the diagram draws carries a responsibility line, because arc42 counts those lines as part of the level. A drawn part with no line leaves the level incomplete, which is how `pipefy-auth` and `pipefy-infra` went undescribed.
 - The reason says why the decomposition has these parts. A rule that the structure obeys fails as a reason, such as the import direction that `Package decomposition` gave, because every correct split obeys it.
 - Where the level needs a fact another document owns, it names the fact and points there. The kinds come from the scope list in [`DEPRECATION.md`](../DEPRECATION.md). The interface column says a check holds the SDK root closed, and it names no banned module, because `Dependency rule` owns those lists. Arc42's quality and open-issues blackbox fields stay out, because `Identity lifetime` and `Risks and technical debt` own them.
-- `Requirements overview` states what the toolkit does, and this level states which block does it. Where a function text names a package, the naming belongs here instead.
+- `Requirements overview` states what the toolkit does, and this level states which block does it. Where a function text names a package, that name belongs here instead.
 - This level draws the external partners, although the HtmlSanityCheck, Traffic Pursuit Unit, and biking2 examples each draw internal blocks alone. It is the only place that says which package performs a crossing, whereas [Context and scope](architecture.md#context-and-scope) says which install reaches a partner.
 
 **`Quality requirements`, arc42 10.** Two subsections, as arc42 10.1 and 10.2 divide it. An overview by category, then the scenarios in arc42's two categories: a reaction while the system runs, and a change to the system or to what it depends on.

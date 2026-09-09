@@ -399,7 +399,10 @@ class IpaasTools:
 
             return await _run_ipaas_tool(ctx, pipe_id, work)
 
-        @mcp.tool(annotations=ToolAnnotations(openWorldHint=True), meta=REMOTE)
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=True),
+            meta=REMOTE,
+        )
         async def create_ipaas_connection(
             pipe_id: PipefyId,
             piece_name: str,

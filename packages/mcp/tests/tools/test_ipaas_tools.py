@@ -1441,6 +1441,9 @@ async def test_connection_auth_url_is_not_read_only(mock_client, mock_gateway):
     auth_url = by_name["get_ipaas_connection_auth_url"]
     assert auth_url.annotations is not None
     assert auth_url.annotations.read_only_hint is False
+    create_conn = by_name["create_ipaas_connection"]
+    assert create_conn.annotations is not None
+    assert create_conn.annotations.read_only_hint is False
     # The discovery meta-tool stays a genuine read.
     assert by_name["get_ipaas_tools"].annotations.read_only_hint is True
 
